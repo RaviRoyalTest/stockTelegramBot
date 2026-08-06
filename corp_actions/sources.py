@@ -117,7 +117,11 @@ def get_quote(exchange: str, symbol: str) -> dict | None:
         }
         _quote_cache[(exchange, symbol)] = {"ts": now, "data": data}
         return data
-    except Exception:
+    except Exception as exc:
+        log.info(
+            "quote lookup failed for %s:%s (Yahoo %s) - %s",
+            exchange, symbol, suffix, exc,
+        )
         return None
 
 
@@ -173,7 +177,8 @@ def search_stocks(query: str, limit: int = 10) -> list[dict]:
     q = (query or "").upper()
     try:
         stocks = get_nse_stock_list_cached()
-    except SourceError:
+    except SourceError as exc:
+        log.warning("NSE stock list unavailable for search: %s", exc)
         return []
     matches = [
         s for s in stocks

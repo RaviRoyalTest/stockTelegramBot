@@ -153,6 +153,11 @@ def main():
         "SHA is older, deploy latest main and the timeout will clear)",
         _deployed_commit(),
     )
+    log.info(
+        "Owner TELEGRAM_CHAT_ID=%s - /add from the owner updates "
+        "watchlist.json; other chats update subscriptions.json",
+        config.TELEGRAM_CHAT_ID or "NOT SET",
+    )
     if not os.getenv("GH_TOKEN") or not os.getenv("GITHUB_REPOSITORY"):
         log.warning(
             "GH_TOKEN / GITHUB_REPOSITORY not set: watchlist and subscription "
@@ -175,6 +180,7 @@ def main():
                 if not text.startswith("/"):
                     continue
                 cmd = text.strip().lower()
+                log.info("command from chat %s: %s", chat_id, text)
                 if cmd == "/checknow":
                     handle_command(chat_id, text)
                     try:
@@ -183,39 +189,59 @@ def main():
                     except Exception as exc:  # keep the loop alive
                         reply(chat_id, f"Check failed: {exc}")
                 else:
-                    handle_command(chat_id, text)
-                    # Persist write commands back to GitHub so workflow re-runs
-                    # and redeploys never lose what users added. Read-only
-                    # commands (/list, /status, /next, /help) never push or
-                    # reset - a failed push from a previous write stays on the
-                    # disk instead of being wiped by reset --hard, and /list
-                    # always reflects the latest local state.
-                    if cmd in WRITE_COMMANDS:
-                        try:
-                            ok = push_state()
-                            if ok:
-                                # Pull anything the cron pushed so we never
-                                # overwrite newer commits.
-                                sync_state()
-                            else:
+                    try:
+                        handle_command(chat_id, text)
+                        # Persist write commands back to GitHub so workflow
+                        # re-runs and redeploys never lose what users added.
+                        # Read-only commands (/list, /status, /next, /help)
+                        # never push or reset - a failed push from a previous
+                        # write stays on the disk instead of being wiped by
+                        # reset --hard, and /list always reflects the latest
+                        # local state.
+                        if cmd in WRITE_COMMANDS:
+                            try:
+                                ok = push_state()
+                                if ok:
+                                    log.info(
+                                        "State pushed to GitHub after %s "
+                                        "(chat %s)",
+                                        cmd, chat_id,
+                                    )
+                                    # Pull anything the cron pushed so we
+                                    # never overwrite newer commits.
+                                    sync_state()
+                                else:
+                                    log.warning(
+                                        "State NOT pushed for %s - change is "
+                                        "saved locally but will be LOST on "
+                                        "redeploy unless GH_TOKEN/"
+                                        "GITHUB_REPOSITORY are set.",
+                                        cmd,
+                                    )
+                                    reply(
+                                        chat_id,
+                                        "⚠️ Your change was saved only on this "
+                                        "server's disk, NOT pushed to GitHub. "
+                                        "It will be LOST on the next redeploy. "
+                                        "Run /status to check the GitHub push "
+                                        "configuration (GH_TOKEN / "
+                                        "GITHUB_REPOSITORY must be set on this "
+                                        "host).",
+                                    )
+                            except Exception as exc:
                                 log.warning(
-                                    "State NOT pushed for %s - your change is "
-                                    "saved locally but will be LOST on redeploy "
-                                    "unless GH_TOKEN/GITHUB_REPOSITORY are set.",
-                                    cmd,
+                                    "state push failed: %s", config.redact(exc)
                                 )
-                                reply(
-                                    chat_id,
-                                    "⚠️ Your change was saved only on this "
-                                    "server's disk, NOT pushed to GitHub. It "
-                                    "will be LOST on the next redeploy. Run "
-                                    "/status to check the GitHub push "
-                                    "configuration (GH_TOKEN / "
-                                    "GITHUB_REPOSITORY must be set on this "
-                                    "host).",
-                                )
-                        except Exception as exc:
-                            log.warning("state push failed: %s", config.redact(exc))
+                    except Exception as exc:
+                        log.warning(
+                            "command %s from chat %s failed: %s",
+                            cmd, chat_id, config.redact(exc),
+                        )
+                        reply(
+                            chat_id,
+                            "Command failed on the server: "
+                            f"{config.redact(exc)}. Use /help.",
+                        )
                 offset = update["update_id"] + 1
         except Exception as exc:
             err = config.redact(exc)

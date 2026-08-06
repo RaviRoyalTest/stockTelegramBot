@@ -56,7 +56,9 @@ HELP_TEXT = (
     "/alert PCT - alert me when a stock moves +/-PCT% in a day (/alert off)\n"
     "/status - show where your list is saved and if GitHub push is on\n"
     "/checknow - force a check and re-send all matching alerts\n"
-    "/help - this message\n\n"
+    "/help - this message\n"
+    "/start - this message\n"
+    "(tip: type / alone to see this help)\n\n"
     "Examples:\n/add RELIANCE NSE\n/add PGINVIT NSE\n/remove TCS\n"
     "/filter dividend,bonus\n/alert 3"
 )
@@ -89,8 +91,9 @@ def handle_command(chat_id, text):
     if not parts:
         return
     cmd = parts[0].lower()
+    log.info("command from chat %s: %s", chat_id, text)
 
-    if cmd in ("/start", "/help"):
+    if cmd in ("/start", "/help", "/"):
         reply(chat_id, HELP_TEXT)
         return
 
@@ -163,6 +166,10 @@ def handle_command(chat_id, text):
                     bad.append(token)
         settings["action_filters"] = chosen
         storage.save_user_settings(chat_id, settings)
+        log.info(
+            "chat %s filters set to: %s",
+            chat_id, ", ".join(chosen) if chosen else "all types",
+        )
         msg = "Filters set to: " + (", ".join(chosen) if chosen else "all types")
         if bad:
             msg += f"\nIgnored unknown type(s): {', '.join(bad)}"
@@ -192,6 +199,10 @@ def handle_command(chat_id, text):
                 val = None
         settings["price_alert_pct"] = val
         storage.save_user_settings(chat_id, settings)
+        log.info(
+            "chat %s price-alert threshold set to: %s",
+            chat_id, "off" if val is None else f"{val:g}%",
+        )
         reply(chat_id, f"Price alerts {'off' if val is None else 'set to ' + format(val, 'g') + '%'}.")
         return
 
@@ -232,16 +243,47 @@ def handle_command(chat_id, text):
 
     if cmd == "/add":
         quote = sources.get_quote(exchange, symbol)
-        if quote is None:
+        company = quote.get("name", "") if quote else ""
+        validated = quote is not None
+        if not validated and exchange == "NSE":
+            # Yahoo can be flaky from datacenter IPs (e.g. Render). Fall back
+            # to the NSE stock list so valid tickers still get added even when
+            # the live quote is unavailable.
+            exact = next(
+                (
+                    s for s in sources.search_stocks(symbol, limit=5)
+                    if s["symbol"].upper() == symbol
+                ),
+                None,
+            )
+            if exact is not None:
+                company = exact["company"]
+                validated = True
+                log.info(
+                    "Yahoo quote unavailable for %s:%s; validated via NSE stock list",
+                    exchange, symbol,
+                )
+        if not validated:
             _reply_suggestions(chat_id, symbol)
             return
         storage.add_to_user_list(
             chat_id,
-            {"symbol": symbol, "company": quote.get("name", ""), "exchange": exchange},
+            {"symbol": symbol, "company": company, "exchange": exchange},
         )
-        reply(chat_id, f"Added {symbol} ({exchange}). Alerts will come to this chat.")
+        where = (
+            "watchlist.json (owner's list)"
+            if storage.is_owner(chat_id)
+            else f"subscriptions.json (chat {chat_id})"
+        )
+        log.info("Added %s (%s) for chat %s -> %s", symbol, exchange, chat_id, where)
+        reply(
+            chat_id,
+            f"Added {symbol} ({exchange}). Alerts will come to this chat.\n"
+            f"Saved in: {where}.",
+        )
     elif cmd == "/remove":
         storage.remove_from_user_list(chat_id, symbol, exchange)
+        log.info("Removed %s (%s) for chat %s", symbol, exchange, chat_id)
         reply(chat_id, f"Removed {symbol} ({exchange}) if it was present.")
     else:
         reply(chat_id, HELP_TEXT)
@@ -251,6 +293,9 @@ def _reply_suggestions(chat_id, query):
     """Reply with matching stocks from the NSE list when an exact symbol fails."""
     matches = sources.search_stocks(query, limit=10)
     if not matches:
+        log.info(
+            "No stock matched '%s' for chat %s - nothing added", query, chat_id
+        )
         reply(chat_id, f"No stocks match '{query}'.")
         return
     lines = [f"'{query}' not found as an exact symbol. Did you mean (NSE):"]
@@ -383,7 +428,8 @@ def push_state() -> bool:
             added.stderr.strip()[-300:],
         )
         return False
-    if _git("git", "diff", "--cached", "--quiet").returncode == 0:
+    staged = _git("git", "diff", "--cached", "--name-only").stdout.strip()
+    if not staged:
         # Nothing staged. But there may be local commits from a previous run
         # that failed to push. If we are ahead of origin, retry the push
         # instead of claiming "in sync" - otherwise a later sync_state()'s
@@ -400,6 +446,9 @@ def push_state() -> bool:
             return False
         log.info("No state change to push")
         return True
+    log.info(
+        "Staged state files: %s", ", ".join(staged.splitlines())
+    )
 
     commit = _git("git", "commit", "-m", "chore: update watchlist from Telegram")
     if commit.returncode != 0:

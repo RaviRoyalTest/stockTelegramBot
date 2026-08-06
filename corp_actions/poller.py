@@ -285,6 +285,11 @@ class Poller:
             f"Checked {target_count} list(s) against [{active}], sent {sent} new.",
         )
         self._incr("cycle")
+        log.info(
+            "poll cycle finished: %d list(s) against [%s], sent %d new "
+            "message(s), %d error(s)",
+            target_count, active, sent, len(errors),
+        )
         return sent
 
     # -------------------------------------------------------------- helpers

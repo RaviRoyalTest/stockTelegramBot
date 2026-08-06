@@ -1,9 +1,12 @@
 """Persistent storage for the selected watchlist and de-duplication cache."""
 import json
+import logging
 import threading
 from pathlib import Path
 
 from . import config
+
+log = logging.getLogger(__name__)
 
 _lock = threading.Lock()
 
@@ -17,15 +20,31 @@ def _read_json(path: Path, default):
                     return data
                 if isinstance(data, dict):
                     return data
-    except (OSError, ValueError):
-        pass
+    except (OSError, ValueError) as exc:
+        log.warning("Failed to read %s: %s", path.name, exc)
     return default
 
 
 def _write_json(path: Path, data) -> None:
+    """Write data to disk, logging only when the content actually changed.
+
+    Skipping identical writes keeps the logs quiet - the Streamlit UI persists
+    the watchlist on every rerun, and a rewrite with the same content would
+    otherwise spam "Saved ..." lines and touch the file needlessly.
+    """
+    payload = json.dumps(data, ensure_ascii=False, indent=2)
+    try:
+        if path.exists() and path.read_text(encoding="utf-8") == payload:
+            return
+    except OSError:
+        pass
     path.parent.mkdir(parents=True, exist_ok=True)
     with open(path, "w", encoding="utf-8") as fh:
-        json.dump(data, fh, ensure_ascii=False, indent=2)
+        fh.write(payload)
+    if isinstance(data, list):
+        log.info("Saved %s: %d item(s)", path.name, len(data))
+    elif isinstance(data, dict):
+        log.info("Saved %s: %d user(s)", path.name, len(data))
 
 
 # ----------------------------------------------------------------- watchlist
@@ -50,20 +69,33 @@ def add_to_watchlist(items: list[dict]) -> list[dict]:
     """Add entries, de-duplicating on (exchange, symbol). Returns new list."""
     with _lock:
         current = _read_json(config.WATCHLIST_FILE, [])
+    before = len(current)
     seen = {_watchlist_key(i) for i in current}
+    added_keys, skipped = [], []
     for item in items:
         key = _watchlist_key(item)
         if key not in seen and item.get("symbol"):
             current.append(item)
             seen.add(key)
+            added_keys.append(key)
+        elif key in seen:
+            skipped.append(key)
     with _lock:
         _write_json(config.WATCHLIST_FILE, current)
+    log.info(
+        "watchlist.json: %d -> %d item(s) | added: %s | skipped (already present): %s",
+        before,
+        len(current),
+        ", ".join(f"{k[0]}:{k[1]}" for k in added_keys) or "none",
+        ", ".join(f"{k[0]}:{k[1]}" for k in skipped) or "none",
+    )
     return current
 
 
 def remove_from_watchlist(symbol: str, exchange: str) -> list[dict]:
     with _lock:
         current = _read_json(config.WATCHLIST_FILE, [])
+    before = len(current)
     kept = [
         i
         for i in current
@@ -72,6 +104,10 @@ def remove_from_watchlist(symbol: str, exchange: str) -> list[dict]:
     ]
     with _lock:
         _write_json(config.WATCHLIST_FILE, kept)
+    log.info(
+        "watchlist.json: %d -> %d item(s) | removed %s:%s",
+        before, len(kept), exchange.upper(), symbol.upper(),
+    )
     return kept
 
 
@@ -104,12 +140,21 @@ def add_to_user_list(chat_id, item: dict) -> list:
     subs = load_subscriptions()
     key = str(chat_id)
     current = subs.get(key, [])
+    before = len(current)
     seen = {_watchlist_key(i) for i in current}
-    if item.get("symbol") and _watchlist_key(item) not in seen:
+    added = item.get("symbol") and _watchlist_key(item) not in seen
+    if added:
         current.append(item)
     subs[key] = current
     with _lock:
         _write_json(config.SUBSCRIPTIONS_FILE, subs)
+    log.info(
+        "subscriptions.json: chat %s %d -> %d item(s) | %s %s:%s",
+        key, before, len(current),
+        "added" if added else "skipped (already present)",
+        item.get("exchange", "").upper(),
+        item.get("symbol", "").upper(),
+    )
     return current
 
 
@@ -118,6 +163,7 @@ def remove_from_user_list(chat_id, symbol: str, exchange: str) -> list:
         return remove_from_watchlist(symbol, exchange)
     subs = load_subscriptions()
     key = str(chat_id)
+    before = len(subs.get(key, []))
     current = [
         i for i in subs.get(key, [])
         if not (i.get("symbol", "").upper() == symbol.upper()
@@ -126,6 +172,10 @@ def remove_from_user_list(chat_id, symbol: str, exchange: str) -> list:
     subs[key] = current
     with _lock:
         _write_json(config.SUBSCRIPTIONS_FILE, subs)
+    log.info(
+        "subscriptions.json: chat %s %d -> %d item(s) | removed %s:%s",
+        key, before, len(current), exchange.upper(), symbol.upper(),
+    )
     return current
 
 
@@ -153,6 +203,7 @@ def save_user_settings(chat_id, settings: dict) -> None:
     current[str(chat_id)] = settings
     with _lock:
         _write_json(config.SETTINGS_FILE, current)
+    log.info("settings.json: chat %s settings = %s", chat_id, settings)
 
 
 # ---------------------------------------------------------------- seen cache
