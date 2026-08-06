@@ -16,6 +16,11 @@
       "symbol": "HDFCBANK",
       "company": "HDFC Bank Limited",
       "exchange": "NSE"
+    },
+    {
+      "symbol": "GENESYS",
+      "company": "Genesys International Corporation Limited",
+      "exchange": "NSE"
     }
   ]
 }
