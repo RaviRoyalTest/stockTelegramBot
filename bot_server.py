@@ -11,7 +11,7 @@ import sys
 import time
 
 from corp_actions.poller import poller
-from run_bot import get_updates, handle_command, reply
+from run_bot import get_updates, handle_command, push_state, reply
 
 logging.basicConfig(level=logging.INFO, format="%(levelname)s %(message)s", stream=sys.stdout)
 log = logging.getLogger("bot_server")
@@ -39,6 +39,12 @@ def main():
                         reply(chat_id, f"Check failed: {exc}")
                 else:
                     handle_command(chat_id, text)
+                # Persist any watchlist/subscription change back to GitHub so
+                # workflow re-runs never lose what users added.
+                try:
+                    push_state()
+                except Exception as exc:
+                    log.warning("state push failed: %s", exc)
                 offset = update["update_id"] + 1
         except Exception as exc:
             log.warning("poll error (retrying): %s", exc)

@@ -145,6 +145,20 @@ def process_commands():
 
 
 # ----------------------------------------------------------------------- git
+def _remote_default_branch(remote_url) -> str:
+    try:
+        out = subprocess.run(
+            ["git", "ls-remote", "--symref", remote_url, "HEAD"],
+            capture_output=True, text=True, check=False,
+        ).stdout
+        for line in out.splitlines():
+            if line.strip().startswith("ref:"):
+                return line.split()[-1].rsplit("/", 1)[-1]
+    except Exception:
+        pass
+    return ""
+
+
 def push_state():
     """Commit and push watchlist/seen state back to the repo, if changed."""
     token = os.getenv("GH_TOKEN")
@@ -164,13 +178,19 @@ def push_state():
     if not has_diff:
         log.info("No state change to push")
         return
-    branch = subprocess.run(
-        ["git", "symbolic-ref", "--short", "HEAD"],
-        capture_output=True, text=True, check=False,
-    ).stdout.strip() or "main"
+    remote_url = f"https://x-access-token:{token}@github.com/{repo}.git"
+    branch = os.getenv("GH_PUSH_BRANCH") or ""
+    if not branch:
+        branch = subprocess.run(
+            ["git", "symbolic-ref", "--short", "HEAD"],
+            capture_output=True, text=True, check=False,
+        ).stdout.strip()
+    if not branch:
+        branch = _remote_default_branch(remote_url)
+    branch = branch or "main"
     subprocess.run(["git", "commit", "-m", "chore: update watchlist from Telegram"], check=False)
     push = subprocess.run(
-        ["git", "push", f"https://x-access-token:{token}@github.com/{repo}.git", f"HEAD:{branch}"],
+        ["git", "push", remote_url, f"HEAD:{branch}"],
         capture_output=True, text=True, check=False,
     )
     if push.returncode == 0:
