@@ -22,7 +22,26 @@ import corp_actions.poller as poller_mod
 from corp_actions import config, notifier, sources, storage
 from corp_actions.poller import poller
 
-logging.basicConfig(level=logging.INFO, format="%(levelname)s %(message)s", stream=sys.stdout)
+
+class _ImmediateStreamHandler(logging.StreamHandler):
+    """Flush after every record so Render / PaaS logs appear immediately.
+
+    When stdout is piped (not a TTY - the norm on Render), Python enables
+    block buffering, so logs written with the default StreamHandler sit in
+    the buffer and Render shows nothing for a long time. Flushing on every
+    emit makes each log line appear in the dashboard right away.
+    """
+
+    def emit(self, record):
+        super().emit(record)
+        self.flush()
+
+
+logging.basicConfig(
+    level=logging.INFO,
+    format="%(levelname)s %(message)s",
+    handlers=[_ImmediateStreamHandler(sys.stdout)],
+)
 log = logging.getLogger("run_bot")
 
 HELP_TEXT = (
