@@ -372,15 +372,25 @@ def process_commands():
 # ----------------------------------------------------------------------- git
 def _remote_default_branch(remote_url) -> str:
     try:
-        out = subprocess.run(
-            ["git", "ls-remote", "--symref", remote_url, "HEAD"],
-            capture_output=True, text=True, check=False,
-        ).stdout
+        out = _git("git", "ls-remote", "--symref", remote_url, "HEAD").stdout
         for line in out.splitlines():
             if line.strip().startswith("ref:"):
-                return line.split()[-1].rsplit("/", 1)[-1]
+                # Line looks like:  ref: refs/heads/main\tHEAD
+                # The ref path is the SECOND token; the trailing "HEAD" is
+                # only the name of the ref being described. Taking the LAST
+                # token here returns "HEAD", which turns the push refspec
+                # into HEAD:HEAD and fails every push from a detached
+                # checkout (e.g. Render) with "You must fully qualify the
+                # ref" - the exact bug that made stocks vanish on redeploy.
+                return line.split()[1].removeprefix("refs/heads/")
     except Exception:
         pass
+    if remote_url:
+        log.warning(
+            "Could not determine the remote default branch (git ls-remote "
+            "failed) - state will be pushed to 'main'. If the repo's "
+            "default branch is not 'main', set GH_PUSH_BRANCH to override."
+        )
     return ""
 
 
@@ -388,12 +398,15 @@ def _push_branch(remote_url: str) -> str:
     """Resolve the branch that state is pushed to / synced from."""
     branch = os.getenv("GH_PUSH_BRANCH") or ""
     if not branch:
-        branch = subprocess.run(
-            ["git", "symbolic-ref", "--short", "HEAD"],
-            capture_output=True, text=True, check=False,
-        ).stdout.strip()
+        branch = _git("git", "symbolic-ref", "--short", "HEAD").stdout.strip()
     if not branch:
         branch = _remote_default_branch(remote_url)
+    if branch == "HEAD":
+        # "HEAD" can never be a real branch name - it means resolution
+        # leaked/parsed incorrectly. Falling back to main keeps the push
+        # refspec valid instead of pushing HEAD:HEAD and failing.
+        log.warning("Push branch resolved as 'HEAD' - falling back to main")
+        branch = "main"
     return branch or "main"
 
 
