@@ -1,0 +1,37 @@
+[
+  {
+    "symbol": "GENESYS",
+    "company": "Genesys International Corporation Limited",
+    "exchange": "NSE"
+  },
+  {
+    "symbol": "ITC",
+    "company": "ITC Limited",
+    "exchange": "NSE"
+  },
+  {
+    "symbol": "MARUTI",
+    "company": "Maruti Suzuki India Limited",
+    "exchange": "NSE"
+  },
+  {
+    "symbol": "COALINDIA",
+    "company": "Coal India Limited",
+    "exchange": "NSE"
+  },
+  {
+    "symbol": "GRASIM",
+    "company": "Grasim Industries Limited",
+    "exchange": "NSE"
+  },
+  {
+    "symbol": "IPCALAB",
+    "company": "IPCA Laboratories Limited",
+    "exchange": "NSE"
+  },
+  {
+    "symbol": "PGINVIT",
+    "company": "PGINVIT.NS,0P0001MGQ9,2267108",
+    "exchange": "NSE"
+  }
+]

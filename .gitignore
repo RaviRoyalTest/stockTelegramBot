@@ -111,6 +111,10 @@
 *.pem
 *.key
 
+# App runtime state is committed so the GitHub Actions poller can
+# persist the watchlist and de-duplication cache across runs.
+
+
 # Temporary files
 *.tmp
 *.temp
