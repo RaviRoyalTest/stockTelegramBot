@@ -109,6 +109,28 @@ watchlist persists and survives restarts.
 - Free tier: public repos get ~2000 minutes/month — one hourly run (~30s)
   uses only a few hours per month.
 
+## Always-on Telegram bot (bot_server.py)
+
+For instant `/add`, `/remove`, `/list` and `/checknow` replies, run
+`bot_server.py` on an always-on host such as a Render Web Service:
+
+- **Service type:** Web Service (not Cron Job / Background Worker).
+- **Start command:** `python bot_server.py`
+- **Health Check Path:** `/` (default). Render marks a deploy complete only
+  when the service answers HTTP on `$PORT` - the long-polling loop alone is
+  not enough, so `bot_server.py` starts a tiny health server on `$PORT`
+  before polling. If a deploy times out while the logs show `Starting
+  long-polling bot (instant responses)...`, look for `Health server
+  listening on http://0.0.0.0:<PORT>/` just above that line; if it is
+  missing, the deployed code predates the health-server commit (commit
+  `b7231ef` adds it) or the port is taken. If instead you see
+  `DEPLOYMENT WILL TIMEOUT: could not bind health server on port...`,
+  another process holds `$PORT` - free it and redeploy.
+- **Env vars:** `TELEGRAM_BOT_TOKEN`, `TELEGRAM_CHAT_ID`, and to survive
+  redeploys also `GH_TOKEN` + `GITHUB_REPOSITORY` (see Notes below).
+- Keep the GitHub Actions cron's `PROCESS_COMMANDS=false` so only this
+  server polls Telegram commands (avoids 409 conflicts / double replies).
+
 ## Project layout
 
 ```

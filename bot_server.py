@@ -15,6 +15,7 @@ import http.server
 import logging
 import os
 import socketserver
+import subprocess
 import sys
 import threading
 import time
@@ -45,9 +46,14 @@ logging.basicConfig(
 )
 log = logging.getLogger("bot_server")
 
-
 # Commands that modify state and therefore need to be pushed back to GitHub.
 WRITE_COMMANDS = {"/add", "/remove", "/filter", "/alert"}
+
+# Bind retry for the health server: PaaS instance swaps can briefly leave
+# the port held by the previous process, and Render only waits ~90s for the
+# first health check before timing the deploy out.
+_BIND_ATTEMPTS = 10
+_BIND_RETRY_DELAY = 3  # seconds between attempts
 
 
 class _ThreadingHTTPServer(socketserver.ThreadingMixIn, http.server.HTTPServer):
@@ -82,28 +88,71 @@ def start_health_server():
 
     Render's Web Service health check requires the process to listen on
     $PORT; without this, deployments time out even though the Telegram bot
-    is running fine. Returns the port bound, or None if it could not bind
-    (the bot still runs either way).
+    is running fine. The bind is retried for ~30s to survive transient
+    port conflicts during instance swaps. Returns the port bound, or None
+    if it could not bind (the bot still runs either way, but the deploy
+    will report a timeout).
     """
-    port = int(os.getenv("PORT", "10000"))
     try:
-        server = _ThreadingHTTPServer(("0.0.0.0", port), _HealthHandler)
-    except OSError as exc:
+        port = int(os.getenv("PORT", "10000"))
+    except (TypeError, ValueError):
         log.warning(
-            "Could not bind health server on port %s (%s). Deployment may "
-            "still report a timeout on Render. Shutting down any other "
-            "process on the port or picking a free $PORT fixes it.",
-            port,
-            exc,
+            "Invalid PORT env %r - falling back to 10000",
+            os.getenv("PORT"),
+        )
+        port = 10000
+    server = None
+    last_error = None
+    for attempt in range(1, _BIND_ATTEMPTS + 1):
+        try:
+            server = _ThreadingHTTPServer(("0.0.0.0", port), _HealthHandler)
+            break
+        except OSError as exc:
+            last_error = exc
+            if attempt < _BIND_ATTEMPTS:
+                log.warning(
+                    "Health server bind attempt %s/%s failed on port %s "
+                    "(%s) - retrying...",
+                    attempt, _BIND_ATTEMPTS, port, exc,
+                )
+                time.sleep(_BIND_RETRY_DELAY)
+    if server is None:
+        log.error(
+            "DEPLOYMENT WILL TIMEOUT: could not bind health server on "
+            "port %s after %s attempts (%s). Render only marks a Web "
+            "Service deploy complete once that port answers HTTP. Free "
+            "the port or set a free $PORT, then redeploy.",
+            port, _BIND_ATTEMPTS, last_error,
         )
         return None
     thread = threading.Thread(target=server.serve_forever, daemon=True, name="health-http")
     thread.start()
-    log.info("Health server listening on http://0.0.0.0:%s/", port)
+    log.info(
+        "Health server listening on http://0.0.0.0:%s/ - Render deploy "
+        "health check will pass",
+        port,
+    )
     return port
 
 
+def _deployed_commit() -> str:
+    """Short SHA of the code this process is running (for log diagnosis)."""
+    try:
+        out = subprocess.run(
+            ["git", "rev-parse", "--short", "HEAD"],
+            capture_output=True, text=True, check=False, timeout=5,
+        ).stdout.strip()
+        return out or "unknown"
+    except Exception:
+        return "unknown"
+
+
 def main():
+    log.info(
+        "Deployed commit %s (health server was added in b7231ef - if this "
+        "SHA is older, deploy latest main and the timeout will clear)",
+        _deployed_commit(),
+    )
     if not os.getenv("GH_TOKEN") or not os.getenv("GITHUB_REPOSITORY"):
         log.warning(
             "GH_TOKEN / GITHUB_REPOSITORY not set: watchlist and subscription "
