@@ -4,11 +4,19 @@ Run it on any always-on host (or locally / in the current environment).
 The GitHub Actions cron continues to work 24/7 as a fallback; this process
 just makes responses to /add, /remove, /list, /checknow, /help instant.
 
+Render treats this as a Web Service and requires the process to bind to
+$PORT (default 10000). This script starts a tiny HTTP health-check server
+on that port in a background thread so deployment succeeds; the Telegram
+long-polling loop runs in the main thread.
+
 Usage:  python bot_server.py
 """
+import http.server
 import logging
 import os
+import socketserver
 import sys
+import threading
 import time
 
 from corp_actions import config
@@ -42,6 +50,59 @@ log = logging.getLogger("bot_server")
 WRITE_COMMANDS = {"/add", "/remove", "/filter", "/alert"}
 
 
+class _ThreadingHTTPServer(socketserver.ThreadingMixIn, http.server.HTTPServer):
+    """Threaded HTTP server so a slow health probe never blocks anything."""
+    daemon_threads = True
+
+
+class _HealthHandler(http.server.BaseHTTPRequestHandler):
+    """Minimal handler that lets Render / uptime checks know we're alive."""
+
+    def do_GET(self):
+        body = b"ok"
+        self.send_response(200)
+        self.send_header("Content-Type", "text/plain")
+        self.send_header("Content-Length", str(len(body)))
+        self.end_headers()
+        self.wfile.write(body)
+
+    def do_HEAD(self):
+        self.send_response(200)
+        self.send_header("Content-Type", "text/plain")
+        self.send_header("Content-Length", "2")
+        self.end_headers()
+
+    def log_message(self, format, *args):
+        # Keep health probes out of the logs (Render pings this every ~5s).
+        return
+
+
+def start_health_server():
+    """Bind an HTTP health endpoint on $PORT (Render default 10000).
+
+    Render's Web Service health check requires the process to listen on
+    $PORT; without this, deployments time out even though the Telegram bot
+    is running fine. Returns the port bound, or None if it could not bind
+    (the bot still runs either way).
+    """
+    port = int(os.getenv("PORT", "10000"))
+    try:
+        server = _ThreadingHTTPServer(("0.0.0.0", port), _HealthHandler)
+    except OSError as exc:
+        log.warning(
+            "Could not bind health server on port %s (%s). Deployment may "
+            "still report a timeout on Render. Shutting down any other "
+            "process on the port or picking a free $PORT fixes it.",
+            port,
+            exc,
+        )
+        return None
+    thread = threading.Thread(target=server.serve_forever, daemon=True, name="health-http")
+    thread.start()
+    log.info("Health server listening on http://0.0.0.0:%s/", port)
+    return port
+
+
 def main():
     if not os.getenv("GH_TOKEN") or not os.getenv("GITHUB_REPOSITORY"):
         log.warning(
@@ -51,6 +112,7 @@ def main():
             "environment to persist state, then use /status in Telegram to "
             "confirm."
         )
+    start_health_server()
     log.info("Starting long-polling bot (instant responses)...")
     sync_state()
     offset = None
