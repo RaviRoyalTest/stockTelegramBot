@@ -129,6 +129,43 @@ with st.sidebar:
             st.error(str(exc))
         st.rerun()
 
+    st.header("Alert Settings")
+    owner_key = str(config.TELEGRAM_CHAT_ID) or "local"
+    ui_settings = storage.get_user_settings(owner_key)
+    ui_filters = [
+        f for f in (ui_settings.get("action_filters") or [])
+        if f in sources.ACTION_TYPES
+    ]
+    sel_types = st.multiselect(
+        "Only these action types (empty = all)",
+        options=list(sources.ACTION_TYPES),
+        default=ui_filters,
+        format_func=lambda t: sources.TYPE_LABELS.get(t, t),
+        key="action_type_filter",
+    )
+    stored_thresh = float(ui_settings.get("price_alert_pct") or 0.0)
+    thresh = st.number_input(
+        "Price-move alert threshold (%)",
+        min_value=0.0,
+        max_value=50.0,
+        step=0.5,
+        value=min(max(stored_thresh, 0.0), 50.0),
+        key="price_alert_threshold",
+    )
+    if (
+        (ui_settings.get("action_filters") or []) != sel_types
+        or stored_thresh != thresh
+    ):
+        storage.save_user_settings(
+            owner_key,
+            {
+                "action_filters": sel_types,
+                "price_alert_pct": thresh if thresh > 0 else None,
+            },
+        )
+    st.caption(f"Ex-date reminders: {config.REMINDER_DAYS} days ahead "
+               f"(env REMINDER_DAYS, 0 disables).")
+
 # --------------------------------------------------------------- status row
 status = poller.status
 st.subheader("Status")

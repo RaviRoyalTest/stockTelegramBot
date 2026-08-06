@@ -16,6 +16,7 @@ import sys
 
 import requests
 
+import corp_actions.poller as poller_mod
 from corp_actions import config, notifier, sources, storage
 from corp_actions.poller import poller
 
@@ -28,9 +29,14 @@ HELP_TEXT = (
     "/add SYMBOL [NSE|BSE] - add a stock to the watchlist\n"
     "/remove SYMBOL [NSE|BSE] - remove a stock\n"
     "/list - show the watchlist\n"
+    "/next - show upcoming ex-dates for your watchlist\n"
+    "/filter TYPE,TYPE - only receive these action types\n"
+    "   types: dividend, bonus, split, rights, buyback (or /filter all)\n"
+    "/alert PCT - alert me when a stock moves +/-PCT% in a day (/alert off)\n"
     "/checknow - force a check and re-send all matching alerts\n"
     "/help - this message\n\n"
-    "Examples:\n/add RELIANCE NSE\n/add PGINVIT NSE\n/remove TCS"
+    "Examples:\n/add RELIANCE NSE\n/add PGINVIT NSE\n/remove TCS\n"
+    "/filter dividend,bonus\n/alert 3"
 )
 
 
@@ -72,6 +78,78 @@ def handle_command(chat_id, text):
 
     if cmd == "/checknow":
         reply(chat_id, "Running a forced check now - re-sending all matching alerts shortly.")
+        return
+
+    if cmd == "/next":
+        items = storage.get_user_list(chat_id)
+        if not items:
+            reply(chat_id, "Your watchlist is empty.")
+            return
+        try:
+            matching = poller_mod.fetch_matching(items)
+        except Exception as exc:
+            reply(chat_id, f"Could not fetch corporate actions: {exc}")
+            return
+        upcoming = [
+            a for a in matching if poller_mod.within_reminder_window(a.get("ex_date"))
+        ]
+        reply(chat_id, notifier.format_upcoming_list(upcoming))
+        return
+
+    if cmd == "/filter":
+        settings = storage.get_user_settings(chat_id)
+        current = settings.get("action_filters") or []
+        if len(parts) < 2:
+            reply(
+                chat_id,
+                "Current filters: " + (", ".join(current) if current else "all types")
+                + "\nUsage: /filter dividend,bonus  or  /filter all",
+            )
+            return
+        raw = parts[1].lower()
+        bad = []
+        if raw in ("all", "off", "none", "-"):
+            chosen = []
+        else:
+            chosen = []
+            for token in raw.split(","):
+                token = token.strip()
+                if token in sources.ACTION_TYPES:
+                    chosen.append(token)
+                elif token:
+                    bad.append(token)
+        settings["action_filters"] = chosen
+        storage.save_user_settings(chat_id, settings)
+        msg = "Filters set to: " + (", ".join(chosen) if chosen else "all types")
+        if bad:
+            msg += f"\nIgnored unknown type(s): {', '.join(bad)}"
+            msg += f" (valid: {', '.join(sources.ACTION_TYPES)})"
+        reply(chat_id, msg)
+        return
+
+    if cmd == "/alert":
+        settings = storage.get_user_settings(chat_id)
+        current = settings.get("price_alert_pct")
+        if len(parts) < 2:
+            if current:
+                reply(chat_id, f"Current price-alert threshold: {current:g}%")
+            else:
+                reply(chat_id, "Price alerts are off.\nUsage: /alert 3  (percent move)  or  /alert off")
+            return
+        raw = parts[1].lower()
+        if raw in ("off", "none", "0", "0%"):
+            val = None
+        else:
+            try:
+                val = abs(float(raw.strip().rstrip("%")))
+            except ValueError:
+                reply(chat_id, "Usage: /alert 3  (e.g. 3%)  or  /alert off")
+                return
+            if val == 0:
+                val = None
+        settings["price_alert_pct"] = val
+        storage.save_user_settings(chat_id, settings)
+        reply(chat_id, f"Price alerts {'off' if val is None else 'set to ' + format(val, 'g') + '%'}.")
         return
 
     if len(parts) < 2:
@@ -169,7 +247,14 @@ def push_state():
     subprocess.run(["git", "config", "user.email", "actions@github.com"], check=False)
     subprocess.run(["git", "config", "user.name", "github-actions"], check=False)
     subprocess.run(
-        ["git", "add", str(config.WATCHLIST_FILE), str(config.SEEN_FILE), str(config.SUBSCRIPTIONS_FILE)],
+        [
+            "git",
+            "add",
+            str(config.WATCHLIST_FILE),
+            str(config.SEEN_FILE),
+            str(config.SUBSCRIPTIONS_FILE),
+            str(config.SETTINGS_FILE),
+        ],
         check=False,
     )
     has_diff = subprocess.run(

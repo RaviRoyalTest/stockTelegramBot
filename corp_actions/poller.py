@@ -2,11 +2,16 @@
 
 The poller runs in a daemon thread, reads the persisted watchlist every cycle,
 and keeps a status dict that the Streamlit UI can display.
+
+Beyond new-action alerts it also supports:
+  * ex-date reminders (warn N days before the ex-date, once per action)
+  * price-move alerts (notify when a watched stock moves beyond a threshold)
+  * per-user action-type filters (dividend/bonus/split/rights/buyback only)
 """
 import logging
 import threading
 import time
-from datetime import datetime
+from datetime import date, datetime, timedelta
 
 from . import config, notifier, sources, storage
 
@@ -32,6 +37,66 @@ def event_key(action: dict) -> str:
             action.get("record_date", ""),
         ]
     )
+
+
+def fetch_all_actions() -> tuple[list[dict], list[str], list[str]]:
+    """Fetch corporate actions from all enabled sources.
+
+    Returns (actions, errors, warnings). Source failures degrade gracefully:
+    BSE is a warning, anything else is an error.
+    """
+    errors, warnings, all_actions = [], [], []
+    for exchange, fetcher in _active_fetchers().items():
+        try:
+            actions = fetcher()
+            for a in actions:
+                a["exchange"] = exchange
+            all_actions.extend(actions)
+        except sources.SourceError as exc:
+            if exchange == "BSE":
+                warnings.append(f"BSE unavailable (blocked by their WAF): {exc}")
+            else:
+                errors.append(f"{exchange}: {exc}")
+    return all_actions, errors, warnings
+
+
+def fetch_matching(watchlist: list[dict]) -> list[dict]:
+    """Fetch all actions and return only those matching the watchlist.
+
+    Never sends anything - used by the /next command and tests.
+    """
+    all_actions, _errors, _warnings = fetch_all_actions()
+    wanted = {
+        (w.get("exchange", "").upper(), w.get("symbol", "").upper())
+        for w in watchlist
+    }
+    return [
+        a
+        for a in all_actions
+        if (a.get("exchange", "").upper(), a.get("symbol", "").upper()) in wanted
+    ]
+
+
+def parse_ex_date(value) -> date | None:
+    """Parse an ISO ex-date, returning None when unset/invalid."""
+    try:
+        return date.fromisoformat(str(value).strip())
+    except (TypeError, ValueError):
+        return None
+
+
+def within_reminder_window(
+    ex_date, today: date | None = None, days: int | None = None
+) -> bool:
+    """True when ex_date is today or within the reminder window ahead."""
+    parsed = parse_ex_date(ex_date)
+    if parsed is None:
+        return False
+    today = today or date.today()
+    days = config.REMINDER_DAYS if days is None else days
+    if days <= 0:
+        return False
+    return today <= parsed <= today + timedelta(days=days)
 
 
 class Poller:
@@ -76,6 +141,20 @@ class Poller:
                 log.exception("poll cycle failed")
             self._stop.wait(config.POLL_INTERVAL_SECONDS)
 
+    def _collect_targets(self, only_chat: str | None) -> list[tuple[str, list]]:
+        """Return [(chat_id, watchlist), ...] for every chat with a list."""
+        targets = []
+        app_watchlist = storage.load_watchlist()
+        owner = str(config.TELEGRAM_CHAT_ID)
+        if app_watchlist:
+            targets.append((owner, app_watchlist))
+        for chat_id, items in storage.load_subscriptions().items():
+            if items and str(chat_id) != owner:
+                targets.append((str(chat_id), items))
+        if only_chat:
+            targets = [(c, w) for c, w in targets if c == str(only_chat)]
+        return targets
+
     def run_once(self, force: bool = False, only_chat: str | None = None) -> int:
         """Fetch, filter and notify. Returns number of messages sent.
 
@@ -84,17 +163,8 @@ class Poller:
         With only_chat set, only that chat's own list is checked and alerted
         (so /checknow only re-sends to the person who asked).
         """
-        targets = []  # (chat_id, watchlist)
-        app_watchlist = storage.load_watchlist()
+        targets = self._collect_targets(only_chat)
         owner = str(config.TELEGRAM_CHAT_ID)
-        if app_watchlist:
-            targets.append((owner, app_watchlist))
-        for chat_id, items in storage.load_subscriptions().items():
-            if items and str(chat_id) != owner:
-                targets.append((str(chat_id), items))
-
-        if only_chat:
-            targets = [(c, w) for c, w in targets if c == str(only_chat)]
 
         if not targets:
             self._set("last_message", "Watchlist is empty - nothing to check")
@@ -102,36 +172,36 @@ class Poller:
             self._incr("cycle")
             return 0
 
-        errors = []
-        warnings = []
-        all_actions = []
-        for exchange, fetcher in _active_fetchers().items():
-            try:
-                actions = fetcher()
-                for a in actions:
-                    a["exchange"] = exchange
-                all_actions.extend(actions)
-            except sources.SourceError as exc:
-                if exchange == "BSE":
-                    warnings.append(f"BSE unavailable (blocked by their WAF): {exc}")
-                else:
-                    errors.append(f"{exchange}: {exc}")
-
+        all_actions, errors, warnings = fetch_all_actions()
         sent = 0
-        owner_results = []
+        today = date.today()
+
         for chat_id, watchlist in targets:
-            wanted = {(w["exchange"].upper(), w["symbol"].upper()) for w in watchlist}
-            matching = [
-                a for a in all_actions
-                if (a.get("exchange", "").upper(), a.get("symbol", "").upper()) in wanted
+            settings = storage.get_user_settings(chat_id)
+            filters = [
+                f.strip().lower()
+                for f in settings.get("action_filters") or []
+                if f.strip().lower() in sources.ACTION_TYPES
             ]
-            if chat_id == owner:
-                owner_results = matching
+
+            # -------------------------------------------------- action alerts
+            wanted = {
+                (w["exchange"].upper(), w["symbol"].upper()) for w in watchlist
+            }
+            matching = [
+                a
+                for a in all_actions
+                if (a.get("exchange", "").upper(), a.get("symbol", "").upper())
+                in wanted
+                and (not filters or sources.action_type(a.get("subject")) in filters)
+            ]
+            if str(chat_id) == owner:
+                self._set("last_results", matching)
 
             for action in matching:
                 base = event_key(action)
                 key = f"{chat_id}|{base}"
-                already = key in self._seen or (chat_id == owner and base in self._seen)
+                already = key in self._seen or (str(chat_id) == owner and base in self._seen)
                 action["new"] = not already
                 if already and not force:
                     continue
@@ -143,12 +213,62 @@ class Poller:
                         notifier.format_corporate_action(action), chat_id=chat_id
                     )
                     self._seen.add(key)
-                    if chat_id == owner:
+                    if str(chat_id) == owner:
                         self._seen.add(base)
                     sent += 1
                 except notifier.NotifierError as exc:
                     errors.append(f"Telegram: {exc}")
                     break  # token misconfiguration - stop hammering the API
+
+            # --------------------------------------------- ex-date reminders
+            if config.REMINDER_DAYS > 0:
+                for action in matching:
+                    if not within_reminder_window(action.get("ex_date"), today):
+                        continue
+                    remind_key = f"remind|{chat_id}|{event_key(action)}"
+                    if remind_key in self._seen and not force:
+                        continue
+                    quote = sources.get_quote(action["exchange"], action["symbol"])
+                    if quote:
+                        action["quote"] = quote
+                    try:
+                        notifier.send_message(
+                            notifier.format_reminder(action), chat_id=chat_id
+                        )
+                        self._seen.add(remind_key)
+                        sent += 1
+                    except notifier.NotifierError as exc:
+                        errors.append(f"Telegram: {exc}")
+                        break
+
+            # -------------------------------------------------- price alerts
+            try:
+                threshold = float(settings.get("price_alert_pct") or 0.0)
+            except (TypeError, ValueError):
+                threshold = 0.0
+            if threshold > 0:
+                for item in watchlist:
+                    day_key = (
+                        f"price|{chat_id}|{item['exchange'].upper()}"
+                        f"|{item['symbol'].upper()}|{today.isoformat()}"
+                    )
+                    if day_key in self._seen and not force:
+                        continue
+                    quote = sources.get_quote(item["exchange"], item["symbol"])
+                    if not quote or quote.get("change_pct") is None:
+                        continue
+                    if abs(quote["change_pct"]) < threshold:
+                        continue
+                    try:
+                        notifier.send_message(
+                            notifier.format_price_alert(item, quote, threshold),
+                            chat_id=chat_id,
+                        )
+                        self._seen.add(day_key)
+                        sent += 1
+                    except notifier.NotifierError as exc:
+                        errors.append(f"Telegram: {exc}")
+                        break
 
         if self._seen:
             storage.save_seen(self._seen)
@@ -164,7 +284,6 @@ class Poller:
             "last_message",
             f"Checked {target_count} list(s) against [{active}], sent {sent} new.",
         )
-        self._set("last_results", owner_results)
         self._incr("cycle")
         return sent
 

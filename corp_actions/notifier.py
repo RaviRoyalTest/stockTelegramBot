@@ -3,7 +3,7 @@ import logging
 
 import requests
 
-from . import config
+from . import config, sources
 
 log = logging.getLogger(__name__)
 
@@ -48,11 +48,14 @@ def format_corporate_action(action: dict) -> str:
     record_date = action.get("record_date") or "-"
     exchange = action.get("exchange") or "-"
 
+    typ = sources.action_type(subject)
     lines = [
         f"<b>Corporate Action Alert</b>",
         f"<b>{symbol}</b> ({exchange}) - {company}",
         f"Subject: {subject}",
     ]
+    if typ != "other":
+        lines.append(f"Type: {sources.TYPE_LABELS.get(typ, typ)}")
     quote = action.get("quote")
     if quote and quote.get("price") is not None:
         price = quote["price"]
@@ -70,4 +73,73 @@ def format_corporate_action(action: dict) -> str:
     isin = action.get("isin")
     if isin and isin != "-":
         lines.append(f"ISIN: {isin}")
+    return "\n".join(lines)
+
+
+def format_reminder(action: dict) -> str:
+    """Render an 'ex-date approaching' reminder as an HTML Telegram message."""
+    symbol = action.get("symbol") or "-"
+    company = action.get("company") or "-"
+    subject = action.get("subject") or "-"
+    ex_date = action.get("ex_date") or "-"
+    record_date = action.get("record_date") or "-"
+    exchange = action.get("exchange") or "-"
+
+    lines = [
+        "\u23f0 <b>Ex-date reminder</b>",
+        f"<b>{symbol}</b> ({exchange}) - {company}",
+        f"Subject: {subject}",
+        f"Ex-Date: <b>{ex_date}</b>",
+    ]
+    if record_date and record_date != "-":
+        lines.append(f"Record Date: {record_date}")
+    quote = action.get("quote")
+    if quote and quote.get("price") is not None:
+        currency = quote.get("currency", "INR")
+        lines.append(f"Current Price: <b>{quote['price']:.2f} {currency}</b>")
+    return "\n".join(lines)
+
+
+def format_price_alert(item: dict, quote: dict, threshold: float) -> str:
+    """Render a price-move alert for a watched stock."""
+    symbol = item.get("symbol") or "-"
+    exchange = item.get("exchange") or "-"
+    company = item.get("company") or "-"
+    price = quote.get("price")
+    change = quote.get("change_pct")
+    currency = quote.get("currency", "INR")
+
+    if price is None:
+        price_txt = "n/a"
+    else:
+        price_txt = f"{price:.2f} {currency}"
+    arrow = ""
+    if change is not None:
+        sign = "+" if change >= 0 else ""
+        arrow = "\u25b2" if change >= 0 else "\u25bc"
+        change_txt = f"({sign}{change:.2f}% today) {arrow}"
+    else:
+        change_txt = ""
+
+    return "\n".join(
+        [
+            f"<b>Price Alert</b> {arrow}".strip(),
+            f"<b>{symbol}</b> ({exchange}) - {company}",
+            f"Price: <b>{price_txt}</b> {change_txt}".strip(),
+            f"Moved beyond your {threshold:g}% alert threshold.",
+        ]
+    )
+
+
+def format_upcoming_list(actions: list[dict]) -> str:
+    """Render a compact list of upcoming ex-dates for Telegram (/next)."""
+    if not actions:
+        return "No upcoming ex-dates in the reminder window."
+    lines = ["<b>Upcoming ex-dates</b>"]
+    for action in sorted(actions, key=lambda a: a.get("ex_date") or "9999-99-99"):
+        typ = sources.action_type(action.get("subject"))
+        lines.append(
+            f"\u2022 <b>{action.get('symbol')}</b> ({action.get('exchange')}) - "
+            f"{action.get('ex_date')} [{sources.TYPE_LABELS.get(typ, typ)}]"
+        )
     return "\n".join(lines)

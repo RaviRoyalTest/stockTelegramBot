@@ -12,6 +12,14 @@ dropdown, then continuously polls both exchanges for corporate actions
 - Persistent watchlist (`watchlist.json`) — survives restarts.
 - Background poller sends **new** corporate actions to Telegram (de-duplicated
   via `seen_actions.json` so nothing is re-sent across restarts).
+- **Ex-date reminders** - warned once when an action's ex-date is `REMINDER_DAYS`
+  (default 5) days away, so you're alerted before the event, not just at the
+  announcement.
+- **Action-type filters** - per-user, receive only the types you care about
+  (dividend / bonus / split / rights / buyback) via `/filter` or the web UI.
+- **Price-move alerts** - get a Telegram alert when a watched stock moves
+  beyond a threshold (e.g. ±3% in a day) via `/alert 3` or the web UI.
+- `/next` bot command - instantly list upcoming ex-dates for your watchlist.
 - "Check now" button to force an immediate poll.
 - Graceful handling when a source is unavailable (e.g. BSE is Cloudflare-blocked
   from datacenter IPs).
@@ -46,6 +54,7 @@ Open the URL shown in the terminal, then:
 | `TELEGRAM_CHAT_ID`      | -       | Chat/group id to receive alerts (required) |
 | `POLL_INTERVAL_SECONDS` | `3600`  | Seconds between polls (>= ~300 to respect Telegram limits) |
 | `LOOKBACK_DAYS`         | `30`    | Past-days window used for BSE fetch      |
+| `REMINDER_DAYS`         | `5`     | Days ahead of ex-date to send a reminder (`0` = off) |
 
 ## Deploy free on GitHub Actions (24/7 polling, no server)
 
@@ -81,6 +90,9 @@ Send these to your bot:
 | `/add SYMBOL [NSE/BSE]` | `/add RELIANCE NSE` | Add a stock (validated via Yahoo) |
 | `/remove SYMBOL [NSE/BSE]` | `/remove TCS` | Remove a stock |
 | `/list` | `/list` | Show the current watchlist |
+| `/next` | `/next` | List upcoming ex-dates (next `REMINDER_DAYS` days) |
+| `/filter TYPE,...` | `/filter dividend,bonus` | Only receive these action types (`/filter all` resets) |
+| `/alert PCT` | `/alert 3` | Alert on daily moves of ±PCT% (`/alert off` disables) |
 | `/help` | `/help` | Show commands |
 
 Changes are committed to the repo automatically on the next run, so the
@@ -88,8 +100,10 @@ watchlist persists and survives restarts.
 
 ### Notes for GitHub Actions
 
-- `watchlist.json` and `seen_actions.json` are tracked on purpose: the seen
-  cache prevents re-sending the same alert every hour.
+- `watchlist.json`, `seen_actions.json`, `subscriptions.json` and
+  `settings.json` are tracked on purpose: the seen cache prevents re-sending
+  the same alert every hour, and the settings file persists per-user filters
+  and alert thresholds across runs.
 - BSE will typically be 403-blocked (datacenter IPs); NSE + Yahoo prices work.
 - Free tier: public repos get ~2000 minutes/month — one hourly run (~30s)
   uses only a few hours per month.

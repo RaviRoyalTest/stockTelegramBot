@@ -28,6 +28,37 @@ def _session() -> requests.Session:
 
 # ---------------------------------------------------------------- utilities
 
+# ------------------------------------------------------------------ action types
+# Corporate actions are classified from the subject line into broad buckets so
+# users can filter which alerts they receive (e.g. dividends only).
+
+ACTION_TYPES = ("dividend", "bonus", "split", "rights", "buyback", "other")
+TYPE_LABELS = {
+    "dividend": "Dividend",
+    "bonus": "Bonus",
+    "split": "Split",
+    "rights": "Rights",
+    "buyback": "Buy-back",
+    "other": "Other",
+}
+
+
+def action_type(subject) -> str:
+    """Classify a corporate-action subject into one of ACTION_TYPES."""
+    text = (subject or "").lower()
+    if "dividend" in text:
+        return "dividend"
+    if "bonus" in text:
+        return "bonus"
+    if "split" in text or "sub-division" in text or "sub division" in text:
+        return "split"
+    if "rights" in text or "right issue" in text:
+        return "rights"
+    if "buy back" in text or "buyback" in text:
+        return "buyback"
+    return "other"
+
+
 def _parse_nse_date(value: str) -> str:
     """Normalise NSE date strings like '06-Aug-2026' to ISO '2026-08-06'."""
     for fmt in ("%d-%b-%Y", "%d-%b-%y"):

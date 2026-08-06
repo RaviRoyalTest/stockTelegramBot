@@ -16,11 +16,14 @@ TELEGRAM_CHAT_ID = os.getenv("TELEGRAM_CHAT_ID", "").strip()
 
 POLL_INTERVAL_SECONDS = int(os.getenv("POLL_INTERVAL_SECONDS", "3600"))
 LOOKBACK_DAYS = int(os.getenv("LOOKBACK_DAYS", "30"))
+# How many days ahead of the ex-date a reminder is sent (0 disables reminders).
+REMINDER_DAYS = int(os.getenv("REMINDER_DAYS", "5"))
 HTTP_TIMEOUT = int(os.getenv("HTTP_TIMEOUT", "20"))
 ENABLE_BSE = os.getenv("ENABLE_BSE", "true").strip().lower() in ("1", "true", "yes", "on")
 
 WATCHLIST_FILE = Path(os.getenv("WATCHLIST_FILE", str(BASE_DIR / "watchlist.json")))
 SUBSCRIPTIONS_FILE = Path(os.getenv("SUBSCRIPTIONS_FILE", str(BASE_DIR / "subscriptions.json")))
+SETTINGS_FILE = Path(os.getenv("SETTINGS_FILE", str(BASE_DIR / "settings.json")))
 SEEN_FILE = Path(os.getenv("SEEN_FILE", str(BASE_DIR / "seen_actions.json")))
 
 USER_AGENT = (
