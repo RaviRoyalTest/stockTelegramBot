@@ -22,7 +22,17 @@ import time
 
 from corp_actions import config
 from corp_actions.poller import poller
-from run_bot import get_updates, handle_command, push_state, reply, sync_state
+from run_bot import (
+    _ahead_of_origin,
+    _push_branch,
+    get_updates,
+    github_push_configured,
+    handle_command,
+    pending_state_changes,
+    push_state,
+    reply,
+    sync_state,
+)
 
 
 class _ImmediateStreamHandler(logging.StreamHandler):
@@ -48,6 +58,12 @@ log = logging.getLogger("bot_server")
 
 # Commands that modify state and therefore need to be pushed back to GitHub.
 WRITE_COMMANDS = {"/add", "/remove", "/filter", "/alert"}
+
+# How often to retry pushing state that did not reach GitHub (seconds). A
+# failed push is retried automatically so a transient GitHub hiccup never
+# leaves data stuck on the ephemeral disk until the next command - that is
+# exactly how a stock can 'vanish' on the next redeploy.
+PUSH_FLUSH_SECONDS = int(os.getenv("PUSH_FLUSH_SECONDS", "180"))
 
 # Bind retry for the health server: PaaS instance swaps can briefly leave
 # the port held by the previous process, and Render only waits ~90s for the
@@ -135,6 +151,44 @@ def start_health_server():
     return port
 
 
+def flush_pending_state() -> None:
+    """Push state that was written but never made it to GitHub.
+
+    Catches two silent data-loss cases:
+      * uncommitted changes left on the ephemeral disk (e.g. a previous
+        push failed and was rolled back), and
+      * local commits that were never pushed - the worktree looks clean,
+        but the branch is ahead of origin, so the data is still wiped on
+        redeploy.
+    """
+    if not github_push_configured():
+        # No credentials - there is nothing to retry, and push_state already
+        # logged the missing-GH_TOKEN warning once. Skipping avoids log spam
+        # every cycle while the problem is unconfigured.
+        return
+    branch = _push_branch("")
+    pending = pending_state_changes()
+    ahead = _ahead_of_origin(branch)
+    if not pending and not ahead:
+        return
+    log.info(
+        "Flushing state to GitHub (branch %s): %s%s",
+        branch,
+        pending or "no uncommitted changes",
+        " | unpushed local commits" if ahead else "",
+    )
+    try:
+        if push_state():
+            log.info("State flushed to GitHub")
+            sync_state()
+        else:
+            log.warning(
+                "Flush push failed - will retry in %ss", PUSH_FLUSH_SECONDS
+            )
+    except Exception as exc:
+        log.warning("Flush push failed: %s", config.redact(exc))
+
+
 def _deployed_commit() -> str:
     """Short SHA of the code this process is running (for log diagnosis)."""
     try:
@@ -169,6 +223,10 @@ def main():
     start_health_server()
     log.info("Starting long-polling bot (instant responses)...")
     sync_state()
+    # Push anything a previous run left behind (failed push, crash before
+    # push) before serving commands.
+    flush_pending_state()
+    last_flush = time.monotonic()
     offset = None
     while True:
         try:
@@ -243,6 +301,10 @@ def main():
                             f"{config.redact(exc)}. Use /help.",
                         )
                 offset = update["update_id"] + 1
+            now = time.monotonic()
+            if now - last_flush >= PUSH_FLUSH_SECONDS:
+                last_flush = now
+                flush_pending_state()
         except Exception as exc:
             err = config.redact(exc)
             if "409" in err:

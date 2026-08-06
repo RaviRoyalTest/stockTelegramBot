@@ -131,6 +131,41 @@ For instant `/add`, `/remove`, `/list` and `/checknow` replies, run
 - Keep the GitHub Actions cron's `PROCESS_COMMANDS=false` so only this
   server polls Telegram commands (avoids 409 conflicts / double replies).
 
+## "My stocks vanish on redeploy" - how persistence works
+
+Render's disk is **ephemeral**: anything written only to the server's
+filesystem is wiped on the next deployment/restart. Your watchlist survives
+only because the bot pushes the JSON state files back to the GitHub repo,
+which is exactly what the next deploy is built from.
+
+To make `/add` stick across redeploys:
+
+1. **Deploy the latest code.** The startup log prints
+   `Deployed commit <sha>` - if it is older than the current `main`, redeploy.
+2. **Set two environment variables** on the Render service:
+   - `GH_TOKEN` - a fine-grained personal access token for the repo with
+     **Contents: Read and write** (GitHub → Settings → Developer settings →
+     Fine-grained tokens), or a classic token with `repo` scope.
+   - `GITHUB_REPOSITORY` - e.g. `RaviRoyalTest/stockTelegramBot`.
+   Then redeploy.
+3. **Verify** - on Render's Shell tab run:
+   ```bash
+   python run_bot.py --check
+   ```
+   A green verdict means `/add`, `/remove`, `/filter` and `/alert` changes
+   will reach GitHub and survive redeploys. You can also send `/status` to
+   the bot in Telegram.
+
+The always-on server pushes state to GitHub right after every write command
+**and** re-checks every `PUSH_FLUSH_SECONDS` (default 180) for anything left
+unpushed (e.g. after a transient push failure), so a single failed push
+self-heals instead of silently losing your stock on the next redeploy. The
+GitHub Actions cron is a second safety net that commits state every hour.
+
+> Paid alternative: mount a Render **Persistent Disk** and point
+> `WATCHLIST_FILE`/`SUBSCRIPTIONS_FILE`/`SETTINGS_FILE`/`SEEN_FILE` at it
+> (env vars) - then state lives on the disk and does not need GitHub.
+
 ## Project layout
 
 ```

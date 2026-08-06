@@ -15,12 +15,28 @@ import logging
 import os
 import subprocess
 import sys
+from pathlib import Path
 
-import requests
+from corp_actions import config  # no third-party deps - always importable
 
-import corp_actions.poller as poller_mod
-from corp_actions import config, notifier, sources, storage
-from corp_actions.poller import poller
+try:
+    import requests
+
+    import corp_actions.poller as poller_mod
+    from corp_actions import notifier, sources, storage
+    from corp_actions.poller import poller
+except ImportError:
+    # The dependency-light --check diagnostic must still run when
+    # requirements.txt hasn't been installed yet. Anything that actually
+    # needs the missing deps fails later with a clear error.
+    if not any(a.lower() == "--check" for a in sys.argv[1:]):
+        raise
+    print(
+        "Note: some dependencies are missing - running in dependency-light "
+        "diagnostic mode. Install them for the full bot: "
+        "pip install -r requirements.txt",
+        file=sys.stderr,
+    )
 
 
 class _ImmediateStreamHandler(logging.StreamHandler):
@@ -214,11 +230,23 @@ def handle_command(chat_id, text):
             if owner
             else f"subscriptions.json (your chat {chat_id})"
         )
-        push_status = (
-            "configured - your changes are pushed to GitHub after each command"
-            if gh_configured
-            else "NOT set - your changes stay only on this host's disk (lost on redeploy)"
-        )
+        if gh_configured:
+            branch = _push_branch("")
+            pending = pending_state_changes()
+            push_status = (
+                f"configured - changes are pushed to GitHub (branch {branch}) "
+                "after each command"
+            )
+            sync_line = (
+                "Local state vs GitHub: "
+                + (pending or "in sync (nothing uncommitted)")
+            )
+        else:
+            push_status = (
+                "NOT set - your changes stay only on this host's disk (lost "
+                "on redeploy). Set GH_TOKEN + GITHUB_REPOSITORY on this host."
+            )
+            sync_line = "Local state vs GitHub: unknown (no GitHub credentials)"
         reply(
             chat_id,
             "\n".join(
@@ -227,6 +255,7 @@ def handle_command(chat_id, text):
                     f"Role: {'owner' if owner else 'subscriber'}",
                     f"Your list is saved in: {location}",
                     f"GitHub push: {push_status}",
+                    sync_line,
                     "Run /list to see your current watchlist.",
                 ]
             ),
@@ -317,8 +346,8 @@ def process_commands():
         return None
     try:
         updates = get_updates()
-    except requests.RequestException as exc:
-        log.warning("getUpdates failed: %s", config.redact(exc))
+    except Exception as exc:  # broad on purpose: never let a getUpdates hiccup kill the run
+        log.warning("getUpdates failed: %s", config.redact(exc), exc_info=True)
         return None
 
     checknow_chat = None
@@ -368,8 +397,43 @@ def _push_branch(remote_url: str) -> str:
     return branch or "main"
 
 
-def _git(*args: str) -> subprocess.CompletedProcess:
-    return subprocess.run(list(args), capture_output=True, text=True, check=False)
+def _git(*args: str, timeout: int = 30) -> subprocess.CompletedProcess:
+    try:
+        return subprocess.run(
+            list(args), capture_output=True, text=True, check=False, timeout=timeout
+        )
+    except subprocess.TimeoutExpired as exc:
+        return subprocess.CompletedProcess(
+            list(args), 124, stdout="", stderr=f"command timed out after {timeout}s"
+        )
+
+
+# The four state files that must reach GitHub to survive a redeploy.
+STATE_FILES = (
+    config.WATCHLIST_FILE,
+    config.SUBSCRIPTIONS_FILE,
+    config.SETTINGS_FILE,
+    config.SEEN_FILE,
+)
+
+
+def pending_state_changes() -> str:
+    """Comma-separated names of state files with uncommitted changes.
+
+    Empty string means the worktree is clean. Used by /status and by the
+    always-on server's periodic flush to decide whether a push is needed.
+    """
+    res = _git(
+        "git", "status", "--porcelain", "--untracked-files=no",
+        *[str(f) for f in STATE_FILES],
+    )
+    if res.returncode != 0:
+        return ""
+    names = []
+    for line in res.stdout.splitlines():
+        path = line[3:].strip().strip('"')
+        names.append(Path(path).name)
+    return ", ".join(sorted(set(names)))
 
 
 def _ahead_of_origin(branch: str) -> bool:
@@ -414,14 +478,7 @@ def push_state() -> bool:
 
     _git("git", "config", "user.email", "actions@github.com")
     _git("git", "config", "user.name", "github-actions")
-    added = _git(
-        "git",
-        "add",
-        str(config.WATCHLIST_FILE),
-        str(config.SEEN_FILE),
-        str(config.SUBSCRIPTIONS_FILE),
-        str(config.SETTINGS_FILE),
-    )
+    added = _git("git", "add", *[str(f) for f in STATE_FILES])
     if added.returncode != 0:
         log.warning(
             "git add failed - state NOT pushed (local changes kept): %s",
@@ -528,8 +585,89 @@ def sync_state() -> bool:
         return False
 
 
+# ------------------------------------------------------------------- diag
+def main_check() -> int:
+    """Diagnostic for the 'my changes vanish on redeploy' problem.
+
+    Prints whether the GitHub push is configured, whether the token can
+    actually read/write the repo, which branch state is pushed to, and
+    whether any state is currently unsaved. Exit code 0 = persistence OK.
+
+    Run on the host itself (e.g. Render's Shell tab):
+        python run_bot.py --check
+    """
+    print("=" * 62)
+    print("Persistence diagnostic - will /add survive a redeploy?")
+    print("=" * 62)
+
+    token = os.getenv("GH_TOKEN")
+    repo = os.getenv("GITHUB_REPOSITORY")
+    ok = bool(token and repo)
+
+    print("\n[1] Environment")
+    print(
+        "  GH_TOKEN            : "
+        + (f"SET ({token[:4]}...)" if token else "NOT SET")
+    )
+    print(f"  GITHUB_REPOSITORY   : {repo or 'NOT SET'}")
+
+    sha = _git("git", "rev-parse", "--short", "HEAD").stdout.strip() or "unknown"
+    sym = _git("git", "symbolic-ref", "--short", "HEAD").stdout.strip()
+    branch = _push_branch("")
+    detached = not sym
+    print("\n[2] Git")
+    print(
+        f"  HEAD                : {sha} "
+        f"({'detached HEAD' if detached else 'on branch ' + sym})"
+    )
+    print(f"  Push/sync branch    : {branch}")
+    for f in STATE_FILES:
+        tracked = _git("git", "ls-files", "--error-unmatch", str(f)).returncode == 0
+        status = "tracked" if tracked else "NOT tracked - push_state cannot save it"
+        print(f"  {f.name:<22}: {status}")
+        if not tracked:
+            ok = False
+    pending = pending_state_changes()
+    print(f"  Uncommitted state   : {pending or 'none'}")
+
+    if token and repo:
+        url = f"https://x-access-token:{token}@github.com/{repo}.git"
+        print(f"\n[3] GitHub access via GH_TOKEN (repo: {repo})")
+        ls = _git("git", "ls-remote", url, "HEAD")
+        if ls.returncode == 0:
+            print("  read  (ls-remote)    : OK")
+        else:
+            print(f"  read  (ls-remote)    : FAILED - {ls.stderr.strip()[-200:]}")
+            ok = False
+        dry = _git("git", "push", "--dry-run", url, "HEAD:refs/heads/__state_check__")
+        if dry.returncode == 0:
+            print(
+                "  write (push dry-run) : OK - a push would be accepted "
+                "(no branch created)"
+            )
+        else:
+            print(f"  write (push dry-run) : FAILED - {dry.stderr.strip()[-300:]}")
+            ok = False
+    else:
+        print("\n[3] GitHub access: skipped (set GH_TOKEN and GITHUB_REPOSITORY first)")
+
+    print("\n[4] Verdict")
+    if ok:
+        print(f"  OK - state is pushed to GitHub ({repo}, branch {branch}) and")
+        print("  WILL survive redeploys. Confirm in Telegram with /status.")
+    else:
+        print("  NOT OK - changes saved here will be LOST on redeploy.")
+        print("  Fix the items above, then re-run:  python run_bot.py --check")
+        print("  (On Render: set GH_TOKEN + GITHUB_REPOSITORY in the service's")
+        print("   environment, redeploy, and run this again from the Shell tab.)")
+    print()
+    return 0 if ok else 1
+
+
 # ------------------------------------------------------------------------- main
 def main():
+    if any(a.lower() == "--check" for a in sys.argv[1:]):
+        sys.exit(main_check())
     log.info("Processing Telegram commands...")
     checknow_chat = process_commands()
     log.info("Running poll cycle%s...", f" (forced for {checknow_chat})" if checknow_chat else "")
