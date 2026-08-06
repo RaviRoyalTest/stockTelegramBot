@@ -1,9 +1,11 @@
 """Entry point for running in a GitHub Actions cron job.
 
 Two jobs, one run:
-  1. Process Telegram bot commands (/add, /remove, /list, /help) so the
-     watchlist can be managed from Telegram. Any change is committed and
-     pushed back to the repo using GH_TOKEN.
+  1. Optionally process Telegram bot commands (/add, /remove, /list, /help)
+     when PROCESS_COMMANDS=true (default). Set PROCESS_COMMANDS=false in the
+     GitHub Actions cron so the always-on bot server is the only process that
+     polls getUpdates (avoids double replies and 409 conflicts). Any change
+     is committed and pushed back to the repo using GH_TOKEN.
   2. Run one poll cycle: fetch corporate actions, filter to the watchlist,
      and send new ones to Telegram.
 
@@ -195,12 +197,15 @@ def process_commands():
 
     Returns the chat_id that requested /checknow, or None.
     """
+    if not config.PROCESS_COMMANDS:
+        log.info("PROCESS_COMMANDS=false - skipping Telegram command processing")
+        return None
     if not notifier.is_configured():
         return None
     try:
         updates = get_updates()
     except requests.RequestException as exc:
-        log.warning("getUpdates failed: %s", exc)
+        log.warning("getUpdates failed: %s", config.redact(exc))
         return None
 
     checknow_chat = None
@@ -237,33 +242,8 @@ def _remote_default_branch(remote_url) -> str:
     return ""
 
 
-def push_state():
-    """Commit and push watchlist/seen state back to the repo, if changed."""
-    token = os.getenv("GH_TOKEN")
-    repo = os.getenv("GITHUB_REPOSITORY")
-    if not token or not repo:
-        log.info("GH_TOKEN/GITHUB_REPOSITORY not set - skipping push")
-        return
-    subprocess.run(["git", "config", "user.email", "actions@github.com"], check=False)
-    subprocess.run(["git", "config", "user.name", "github-actions"], check=False)
-    subprocess.run(
-        [
-            "git",
-            "add",
-            str(config.WATCHLIST_FILE),
-            str(config.SEEN_FILE),
-            str(config.SUBSCRIPTIONS_FILE),
-            str(config.SETTINGS_FILE),
-        ],
-        check=False,
-    )
-    has_diff = subprocess.run(
-        ["git", "diff", "--cached", "--quiet"], check=False
-    ).returncode != 0
-    if not has_diff:
-        log.info("No state change to push")
-        return
-    remote_url = f"https://x-access-token:{token}@github.com/{repo}.git"
+def _push_branch(remote_url: str) -> str:
+    """Resolve the branch that state is pushed to / synced from."""
     branch = os.getenv("GH_PUSH_BRANCH") or ""
     if not branch:
         branch = subprocess.run(
@@ -272,16 +252,113 @@ def push_state():
         ).stdout.strip()
     if not branch:
         branch = _remote_default_branch(remote_url)
-    branch = branch or "main"
-    subprocess.run(["git", "commit", "-m", "chore: update watchlist from Telegram"], check=False)
-    push = subprocess.run(
-        ["git", "push", remote_url, f"HEAD:{branch}"],
-        capture_output=True, text=True, check=False,
+    return branch or "main"
+
+
+def _git(*args: str) -> subprocess.CompletedProcess:
+    return subprocess.run(list(args), capture_output=True, text=True, check=False)
+
+
+def push_state() -> bool:
+    """Commit and push watchlist/seen state back to the repo, if changed.
+
+    Returns True when the repo is in sync (pushed, or nothing to push).
+    Returns False when credentials are missing or the push failed - callers
+    should NOT discard local state in that case.
+
+    Handles the expected race with the hourly cron (both push to the same
+    branch): on a rejected push it fetches, rebases onto the remote and
+    retries once.
+    """
+    token = os.getenv("GH_TOKEN")
+    repo = os.getenv("GITHUB_REPOSITORY")
+    if not token or not repo:
+        log.info("GH_TOKEN/GITHUB_REPOSITORY not set - skipping push")
+        return False
+    remote_url = f"https://x-access-token:{token}@github.com/{repo}.git"
+    branch = _push_branch(remote_url)
+
+    _git("git", "config", "user.email", "actions@github.com")
+    _git("git", "config", "user.name", "github-actions")
+    _git(
+        "git",
+        "add",
+        str(config.WATCHLIST_FILE),
+        str(config.SEEN_FILE),
+        str(config.SUBSCRIPTIONS_FILE),
+        str(config.SETTINGS_FILE),
     )
+    if _git("git", "diff", "--cached", "--quiet").returncode == 0:
+        log.info("No state change to push")
+        return True
+
+    commit = _git("git", "commit", "-m", "chore: update watchlist from Telegram")
+    if commit.returncode != 0:
+        # Keep the changes in the worktree instead of the index so a later
+        # sync (reset --hard) refuses to wipe them.
+        log.warning("State commit failed: %s", commit.stderr.strip()[-300:])
+        _git("git", "reset")
+        return False
+
+    push = _git("git", "push", remote_url, f"HEAD:{branch}")
     if push.returncode == 0:
         log.info("Pushed state to %s", branch)
-    else:
-        log.warning("Push failed: %s", push.stderr.strip()[-500:])
+        return True
+
+    # Expected race with the cron: retry once after rebasing onto remote.
+    _git("git", "fetch", "origin")
+    rebase = _git("git", "rebase", f"origin/{branch}")
+    if rebase.returncode != 0:
+        _git("git", "rebase", "--abort")
+        log.warning(
+            "Push failed and rebase aborted (conflict): %s",
+            push.stderr.strip()[-300:],
+        )
+        return False
+    push2 = _git("git", "push", remote_url, f"HEAD:{branch}")
+    if push2.returncode == 0:
+        log.info("Pushed state to %s (after rebase)", branch)
+        return True
+    log.warning("Push failed after rebase: %s", push2.stderr.strip()[-500:])
+    return False
+
+
+def sync_state() -> bool:
+    """Pull the latest committed state from GitHub before handling commands.
+
+    GitHub is the source of truth; an always-on server's local copy is just a
+    working checkout whose disk is ephemeral. Sync before serving commands so
+    the server never answers with stale data or overwrites newer state.
+    Never resets when the working tree has uncommitted changes (a failed push
+    from a previous run) - that would wipe data.
+    Returns True when synced or skipped safely (no credentials / dirty tree).
+    """
+    token = os.getenv("GH_TOKEN")
+    repo = os.getenv("GITHUB_REPOSITORY")
+    if not token or not repo:
+        log.info("GH_TOKEN/GITHUB_REPOSITORY not set - skipping state sync")
+        return True
+    try:
+        remote_url = f"https://x-access-token:{token}@github.com/{repo}.git"
+        branch = _push_branch(remote_url)
+        dirty = _git("git", "status", "--porcelain").stdout.strip()
+        if dirty:
+            log.warning(
+                "State sync skipped: uncommitted changes present - push them "
+                "first (dirty: %s)",
+                dirty[:200],
+            )
+            return True
+        _git("git", "fetch", "origin")
+        res = _git("git", "reset", "--hard", f"origin/{branch}")
+        if res.returncode == 0:
+            log.info("State synced from origin/%s", branch)
+            return True
+        log.warning("State sync failed: %s", res.stderr.strip()[-300:])
+        return False
+    except Exception as exc:
+        log.warning("State sync failed: %s", exc)
+        return False
 
 
 # ------------------------------------------------------------------------- main

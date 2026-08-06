@@ -19,4 +19,8 @@ jobs:
           TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
           TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          # The always-on bot server (bot_server.py, e.g. on Render) is the
+          # only process that should poll Telegram commands. Keeping this off
+          # in the cron prevents double replies and 409 getUpdates conflicts.
+          PROCESS_COMMANDS: "false"
         run: python run_bot.py

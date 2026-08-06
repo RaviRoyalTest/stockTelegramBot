@@ -7,18 +7,28 @@ just makes responses to /add, /remove, /list, /checknow, /help instant.
 Usage:  python bot_server.py
 """
 import logging
+import os
 import sys
 import time
 
+from corp_actions import config
 from corp_actions.poller import poller
-from run_bot import get_updates, handle_command, push_state, reply
+from run_bot import get_updates, handle_command, push_state, reply, sync_state
 
 logging.basicConfig(level=logging.INFO, format="%(levelname)s %(message)s", stream=sys.stdout)
 log = logging.getLogger("bot_server")
 
 
 def main():
+    if not os.getenv("GH_TOKEN") or not os.getenv("GITHUB_REPOSITORY"):
+        log.warning(
+            "GH_TOKEN / GITHUB_REPOSITORY not set: watchlist and subscription "
+            "changes will NOT be pushed to GitHub and WILL BE LOST on redeploy. "
+            "Set both (a fine-grained PAT with Contents:write) in the host's "
+            "environment to persist state."
+        )
     log.info("Starting long-polling bot (instant responses)...")
+    sync_state()
     offset = None
     while True:
         try:
@@ -40,14 +50,28 @@ def main():
                 else:
                     handle_command(chat_id, text)
                 # Persist any watchlist/subscription change back to GitHub so
-                # workflow re-runs never lose what users added.
+                # workflow re-runs and redeploys never lose what users added.
                 try:
-                    push_state()
+                    ok = push_state()
+                    if ok:
+                        # Pull anything the cron pushed so we never serve
+                        # stale state or overwrite newer commits.
+                        sync_state()
                 except Exception as exc:
-                    log.warning("state push failed: %s", exc)
+                    log.warning("state push failed: %s", config.redact(exc))
                 offset = update["update_id"] + 1
         except Exception as exc:
-            log.warning("poll error (retrying): %s", exc)
+            err = config.redact(exc)
+            if "409" in err:
+                log.warning(
+                    "409 Conflict: another process is polling this bot token. "
+                    "Only ONE process may call getUpdates - stop the other "
+                    "bot_server.py / disable command processing in the GitHub "
+                    "Actions cron (PROCESS_COMMANDS=false). %s",
+                    err,
+                )
+            else:
+                log.warning("poll error (retrying): %s", err)
         time.sleep(1)
 
 

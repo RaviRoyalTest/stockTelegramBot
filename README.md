@@ -124,6 +124,22 @@ corp_actions/
 
 ## Notes
 
+- **Only one process may poll the bot.** Telegram allows a single `getUpdates`
+  consumer per token. If you run `bot_server.py` on an always-on host (e.g.
+  Render) *and* the GitHub Actions cron both handle commands, you get double
+  replies and `409 Conflict` errors in the logs. The workflow sets
+  `PROCESS_COMMANDS=false` so it only polls alerts; the always-on server is
+  the sole command responder. Never run two `bot_server.py` processes.
+- **Where the watchlist lives.** The repo's `watchlist.json` /
+  `subscriptions.json` / `settings.json` / `seen_actions.json` are the source
+  of truth, committed and pushed by the always-on server after every command
+  (`push_state`) and by the workflow cron after every poll. Always-on hosts
+  like Render have **ephemeral disks** - anything written but not pushed is
+  wiped on redeploy. To persist changes from Render, set these env vars:
+  - `GH_TOKEN` - a fine-grained PAT (repo → Contents: Read and write)
+  - `GITHUB_REPOSITORY` - e.g. `RaviRoyalTest/stockTelegramBot`
+  `bot_server.py` warns loudly at startup if they are missing, syncs the
+  latest state from GitHub on boot, and pushes after each command.
 - NSE endpoints are open and tested. BSE's `api.bseindia.com` sits behind
   Cloudflare and commonly returns `403` from datacenter/VPN IPs; from a normal
   residential network it usually works. When blocked, the app warns and simply

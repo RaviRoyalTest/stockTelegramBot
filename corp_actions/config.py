@@ -20,6 +20,14 @@ LOOKBACK_DAYS = int(os.getenv("LOOKBACK_DAYS", "30"))
 REMINDER_DAYS = int(os.getenv("REMINDER_DAYS", "5"))
 HTTP_TIMEOUT = int(os.getenv("HTTP_TIMEOUT", "20"))
 ENABLE_BSE = os.getenv("ENABLE_BSE", "true").strip().lower() in ("1", "true", "yes", "on")
+# Only ONE process may poll Telegram's getUpdates for a bot token at a time.
+# The always-on server (bot_server.py) handles commands; the GitHub Actions
+# cron sets PROCESS_COMMANDS=false so two pollers never fight (double replies
+# and HTTP 409 conflicts).
+PROCESS_COMMANDS = (
+    os.getenv("PROCESS_COMMANDS", "true").strip().lower()
+    in ("1", "true", "yes", "on")
+)
 
 WATCHLIST_FILE = Path(os.getenv("WATCHLIST_FILE", str(BASE_DIR / "watchlist.json")))
 SUBSCRIPTIONS_FILE = Path(os.getenv("SUBSCRIPTIONS_FILE", str(BASE_DIR / "subscriptions.json")))
@@ -46,3 +54,11 @@ BSE_LIST_URL = (
     "?Group=Main&Scripcode=&Debttype=Equity&industry=&segment=Equity&Status=Active"
 )
 BSE_ACTIONS_URL = "https://api.bseindia.com/BseIndiaAPI/api/CorpActionAnncmentW/w"
+
+
+def redact(text) -> str:
+    """Strip the bot token from any string before it reaches logs."""
+    s = str(text)
+    if TELEGRAM_BOT_TOKEN:
+        s = s.replace(TELEGRAM_BOT_TOKEN, "***")
+    return s
