@@ -1,1 +1,21 @@
-{}
+{
+  "6090749599": [
+    {
+      "symbol": "ITC",
+      "company": "ITC Limited",
+      "exchange": "NSE"
+    },
+    {
+      "symbol": "GENESYS",
+      "company": "Genesys International Corporation Limited",
+      "exchange": "NSE"
+    }
+  ],
+  "999888777": [
+    {
+      "symbol": "TESTSTOCK",
+      "company": "Test",
+      "exchange": "NSE"
+    }
+  ]
+}
