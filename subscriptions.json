@@ -12,20 +12,49 @@
     }
   ],
   "862087765": [
-    {
-      "symbol": "HDFCBANK",
-      "company": "HDFC Bank Limited",
-      "exchange": "NSE"
-    },
-    {
-      "symbol": "GENESYS",
-      "company": "Genesys International Corporation Limited",
-      "exchange": "NSE"
-    },
-    {
-      "symbol": "ASHOKLEY",
-      "company": "Ashok Leyland Limited",
-      "exchange": "NSE"
-    }
+  { "symbol": "AMBER", "company": "Amber Enterprises India Limited", "exchange": "NSE" },
+  { "symbol": "ASHOKLEY", "company": "Ashok Leyland Limited", "exchange": "NSE" },
+  { "symbol": "ASKAUTOLTD", "company": "ASK Automotive Limited", "exchange": "NSE" },
+  { "symbol": "AUTOBEES", "company": "Nippon India ETF Nifty Auto BeES", "exchange": "NSE" },
+  { "symbol": "BSE", "company": "BSE Limited", "exchange": "NSE" },
+  { "symbol": "CANBK", "company": "Canara Bank", "exchange": "NSE" },
+  { "symbol": "CAPINVIT-IV", "company": "Capital Infra Trust InvIT", "exchange": "NSE" },
+  { "symbol": "CHOLAFIN", "company": "Cholamandalam Investment and Finance Company Limited", "exchange": "NSE" },
+  { "symbol": "COALINDIA", "company": "Coal India Limited", "exchange": "NSE" },
+  { "symbol": "DRREDDY", "company": "Dr. Reddy's Laboratories Limited", "exchange": "NSE" },
+  { "symbol": "ELITECON", "company": "Elitecon International Limited", "exchange": "NSE" },
+  { "symbol": "GENESYS", "company": "Genesys International Corporation Limited", "exchange": "NSE" },
+  { "symbol": "GOLDBEES", "company": "Nippon India ETF Gold BeES", "exchange": "NSE" },
+  { "symbol": "GOLDCASE", "company": "Groww Gold ETF", "exchange": "NSE" },
+  { "symbol": "GRSE", "company": "Garden Reach Shipbuilders & Engineers Limited", "exchange": "NSE" },
+  { "symbol": "HAPPSTMNDS", "company": "Happiest Minds Technologies Limited", "exchange": "NSE" },
+  { "symbol": "INFY", "company": "Infosys Limited", "exchange": "NSE" },
+  { "symbol": "IRCTC", "company": "Indian Railway Catering and Tourism Corporation Limited", "exchange": "NSE" },
+  { "symbol": "ITBEES", "company": "Nippon India ETF Nifty BeES", "exchange": "NSE" },
+  { "symbol": "ITC", "company": "ITC Limited", "exchange": "NSE" },
+  { "symbol": "JSWCEMENT", "company": "JSW Cement Limited", "exchange": "NSE" },
+  { "symbol": "KPITTECH", "company": "KPIT Technologies Limited", "exchange": "NSE" },
+  { "symbol": "MAGNUS", "company": "Magnus Ventures Limited", "exchange": "NSE" },
+  { "symbol": "MARUTI", "company": "Maruti Suzuki India Limited", "exchange": "NSE" },
+  { "symbol": "MCX", "company": "Multi Commodity Exchange of India Limited", "exchange": "NSE" },
+  { "symbol": "MODEFENCE", "company": "Modern Defence Technologies Limited", "exchange": "NSE" },
+  { "symbol": "MOTILALOFS", "company": "Motilal Oswal Financial Services Limited", "exchange": "NSE" },
+  { "symbol": "NATCOPHARM", "company": "Natco Pharma Limited", "exchange": "NSE" },
+  { "symbol": "NATIONALUM", "company": "National Aluminium Company Limited", "exchange": "NSE" },
+  { "symbol": "NMDC", "company": "NMDC Limited", "exchange": "NSE" },
+  { "symbol": "PGINVIT", "company": "PowerGrid Infrastructure Investment Trust", "exchange": "NSE" },
+  { "symbol": "RELIANCE", "company": "Reliance Industries Limited", "exchange": "NSE" },
+  { "symbol": "SGBDE31III-GB", "company": "Sovereign Gold Bond", "exchange": "NSE" },
+  { "symbol": "SHAKTIPUMP", "company": "Shakti Pumps (India) Limited", "exchange": "NSE" },
+  { "symbol": "SHRIRAMFIN", "company": "Shriram Finance Limited", "exchange": "NSE" },
+  { "symbol": "SILVERBEES", "company": "Nippon India ETF Silver BeES", "exchange": "NSE" },
+  { "symbol": "SILVERCASE", "company": "Groww Silver ETF", "exchange": "NSE" },
+  { "symbol": "SOUTHBANK", "company": "The South Indian Bank Limited", "exchange": "NSE" },
+  { "symbol": "SPRIGHT", "company": "Spright Agro Limited", "exchange": "NSE" },
+  { "symbol": "SUZLON", "company": "Suzlon Energy Limited", "exchange": "NSE" },
+  { "symbol": "TAJGVK", "company": "Taj GVK Hotels & Resorts Limited", "exchange": "NSE" },
+  { "symbol": "TEXRAIL", "company": "Texmaco Rail & Engineering Limited", "exchange": "NSE" },
+  { "symbol": "UNIONBANK", "company": "Union Bank of India", "exchange": "NSE" },
+  { "symbol": "VBL", "company": "Varun Beverages Limited", "exchange": "NSE" }
   ]
 }
