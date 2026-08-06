@@ -76,8 +76,12 @@ class Poller:
                 log.exception("poll cycle failed")
             self._stop.wait(config.POLL_INTERVAL_SECONDS)
 
-    def run_once(self) -> int:
-        """Fetch, filter and notify. Returns number of messages sent."""
+    def run_once(self, force: bool = False) -> int:
+        """Fetch, filter and notify. Returns number of messages sent.
+
+        With force=True every matching action is sent again, even if it was
+        already notified in the past (used by the /checknow command).
+        """
         watchlist = storage.load_watchlist()
         if not watchlist:
             self._set("last_message", "Watchlist is empty - nothing to check")
@@ -116,7 +120,7 @@ class Poller:
         for action in matching:
             key = event_key(action)
             action["new"] = key not in self._seen
-            if key in self._seen:
+            if key in self._seen and not force:
                 continue
             try:
                 notifier.send_message(notifier.format_corporate_action(action))

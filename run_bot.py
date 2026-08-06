@@ -28,6 +28,7 @@ HELP_TEXT = (
     "/add SYMBOL [NSE|BSE] - add a stock to the watchlist\n"
     "/remove SYMBOL [NSE|BSE] - remove a stock\n"
     "/list - show the watchlist\n"
+    "/checknow - force a check and re-send all matching alerts\n"
     "/help - this message\n\n"
     "Examples:\n/add RELIANCE NSE\n/add PGINVIT NSE\n/remove TCS"
 )
@@ -69,6 +70,10 @@ def handle_command(chat_id, text):
             reply(chat_id, "Watchlist:\n" + "\n".join(lines))
         return
 
+    if cmd == "/checknow":
+        reply(chat_id, "Running a forced check now - re-sending all matching alerts shortly.")
+        return
+
     if len(parts) < 2:
         reply(chat_id, "Usage: /add SYMBOL [NSE|BSE]  or  /remove SYMBOL [NSE|BSE]")
         return
@@ -94,7 +99,10 @@ def handle_command(chat_id, text):
 
 
 def process_commands():
-    """Process any pending Telegram command updates. Returns True if changed."""
+    """Process any pending Telegram command updates.
+
+    Returns True if a /checknow (forced re-send) was requested.
+    """
     if not notifier.is_configured():
         return False
     try:
@@ -103,6 +111,7 @@ def process_commands():
         log.warning("getUpdates failed: %s", exc)
         return False
 
+    checknow = False
     changed = False
     max_offset = 0
     for update in updates:
@@ -113,6 +122,8 @@ def process_commands():
         chat_id = (message.get("chat") or {}).get("id")
         if not text.startswith("/"):
             continue
+        if text.strip().lower() == "/checknow":
+            checknow = True
         before = len(storage.load_watchlist())
         handle_command(chat_id, text)
         if len(storage.load_watchlist()) != before:
@@ -120,7 +131,7 @@ def process_commands():
     if max_offset:
         # Mark updates as consumed.
         get_updates(offset=max_offset + 1)
-    return changed
+    return checknow
 
 
 # ----------------------------------------------------------------------- git
@@ -160,9 +171,9 @@ def push_state():
 # ------------------------------------------------------------------------- main
 def main():
     log.info("Processing Telegram commands...")
-    process_commands()
-    log.info("Running poll cycle...")
-    sent = poller.run_once()
+    checknow = process_commands()
+    log.info("Running poll cycle%s...", " (forced)" if checknow else "")
+    sent = poller.run_once(force=checknow)
     log.info("Pushing state if changed...")
     push_state()
     log.info("Done. Sent %s alert(s).", sent)
