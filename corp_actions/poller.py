@@ -76,11 +76,13 @@ class Poller:
                 log.exception("poll cycle failed")
             self._stop.wait(config.POLL_INTERVAL_SECONDS)
 
-    def run_once(self, force: bool = False) -> int:
+    def run_once(self, force: bool = False, only_chat: str | None = None) -> int:
         """Fetch, filter and notify. Returns number of messages sent.
 
         With force=True every matching action is sent again, even if it was
         already notified in the past (used by the /checknow command).
+        With only_chat set, only that chat's own list is checked and alerted
+        (so /checknow only re-sends to the person who asked).
         """
         targets = []  # (chat_id, watchlist)
         app_watchlist = storage.load_watchlist()
@@ -90,6 +92,9 @@ class Poller:
         for chat_id, items in storage.load_subscriptions().items():
             if items and str(chat_id) != owner:
                 targets.append((str(chat_id), items))
+
+        if only_chat:
+            targets = [(c, w) for c, w in targets if c == str(only_chat)]
 
         if not targets:
             self._set("last_message", "Watchlist is empty - nothing to check")

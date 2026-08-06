@@ -115,18 +115,17 @@ def _reply_suggestions(chat_id, query):
 def process_commands():
     """Process any pending Telegram command updates.
 
-    Returns True if a /checknow (forced re-send) was requested.
+    Returns the chat_id that requested /checknow, or None.
     """
     if not notifier.is_configured():
-        return False
+        return None
     try:
         updates = get_updates()
     except requests.RequestException as exc:
         log.warning("getUpdates failed: %s", exc)
-        return False
+        return None
 
-    checknow = False
-    changed = False
+    checknow_chat = None
     max_offset = 0
     for update in updates:
         update_id = update.get("update_id", 0)
@@ -137,15 +136,12 @@ def process_commands():
         if not text.startswith("/"):
             continue
         if text.strip().lower() == "/checknow":
-            checknow = True
-        before = len(storage.load_watchlist())
+            checknow_chat = str(chat_id)
         handle_command(chat_id, text)
-        if len(storage.load_watchlist()) != before:
-            changed = True
     if max_offset:
         # Mark updates as consumed.
         get_updates(offset=max_offset + 1)
-    return checknow
+    return checknow_chat
 
 
 # ----------------------------------------------------------------------- git
@@ -186,9 +182,9 @@ def push_state():
 # ------------------------------------------------------------------------- main
 def main():
     log.info("Processing Telegram commands...")
-    checknow = process_commands()
-    log.info("Running poll cycle%s...", " (forced)" if checknow else "")
-    sent = poller.run_once(force=checknow)
+    checknow_chat = process_commands()
+    log.info("Running poll cycle%s...", f" (forced for {checknow_chat})" if checknow_chat else "")
+    sent = poller.run_once(force=bool(checknow_chat), only_chat=checknow_chat)
     log.info("Pushing state if changed...")
     push_state()
     log.info("Done. Sent %s alert(s).", sent)
