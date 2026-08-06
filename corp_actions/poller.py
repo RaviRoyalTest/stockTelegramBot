@@ -82,14 +82,20 @@ class Poller:
         With force=True every matching action is sent again, even if it was
         already notified in the past (used by the /checknow command).
         """
-        watchlist = storage.load_watchlist()
-        if not watchlist:
+        targets = []  # (chat_id, watchlist)
+        app_watchlist = storage.load_watchlist()
+        owner = str(config.TELEGRAM_CHAT_ID)
+        if app_watchlist:
+            targets.append((owner, app_watchlist))
+        for chat_id, items in storage.load_subscriptions().items():
+            if items and str(chat_id) != owner:
+                targets.append((str(chat_id), items))
+
+        if not targets:
             self._set("last_message", "Watchlist is empty - nothing to check")
             self._set("last_run", datetime.now().strftime("%Y-%m-%d %H:%M:%S"))
             self._incr("cycle")
             return 0
-
-        wanted = {(w["exchange"].upper(), w["symbol"].upper()) for w in watchlist}
 
         errors = []
         warnings = []
@@ -106,29 +112,38 @@ class Poller:
                 else:
                     errors.append(f"{exchange}: {exc}")
 
-        matching = [
-            a for a in all_actions
-            if (a.get("exchange", "").upper(), a.get("symbol", "").upper()) in wanted
-        ]
-
-        for action in matching:
-            quote = sources.get_quote(action["exchange"], action["symbol"])
-            if quote:
-                action["quote"] = quote
-
         sent = 0
-        for action in matching:
-            key = event_key(action)
-            action["new"] = key not in self._seen
-            if key in self._seen and not force:
-                continue
-            try:
-                notifier.send_message(notifier.format_corporate_action(action))
-                self._seen.add(key)
-                sent += 1
-            except notifier.NotifierError as exc:
-                errors.append(f"Telegram: {exc}")
-                break  # token misconfiguration - stop hammering the API
+        owner_results = []
+        for chat_id, watchlist in targets:
+            wanted = {(w["exchange"].upper(), w["symbol"].upper()) for w in watchlist}
+            matching = [
+                a for a in all_actions
+                if (a.get("exchange", "").upper(), a.get("symbol", "").upper()) in wanted
+            ]
+            if chat_id == owner:
+                owner_results = matching
+
+            for action in matching:
+                base = event_key(action)
+                key = f"{chat_id}|{base}"
+                already = key in self._seen or (chat_id == owner and base in self._seen)
+                action["new"] = not already
+                if already and not force:
+                    continue
+                quote = sources.get_quote(action["exchange"], action["symbol"])
+                if quote:
+                    action["quote"] = quote
+                try:
+                    notifier.send_message(
+                        notifier.format_corporate_action(action), chat_id=chat_id
+                    )
+                    self._seen.add(key)
+                    if chat_id == owner:
+                        self._seen.add(base)
+                    sent += 1
+                except notifier.NotifierError as exc:
+                    errors.append(f"Telegram: {exc}")
+                    break  # token misconfiguration - stop hammering the API
 
         if self._seen:
             storage.save_seen(self._seen)
@@ -139,12 +154,12 @@ class Poller:
         self._set("last_error", "; ".join(errors) if errors else None)
         self._set("warnings", warnings)
         active = ", ".join(_active_fetchers().keys()) or "none"
+        target_count = len(targets)
         self._set(
             "last_message",
-            f"Checked {len(watchlist)} watchlist item(s) against [{active}], "
-            f"found {len(matching)} matching action(s), sent {sent} new.",
+            f"Checked {target_count} list(s) against [{active}], sent {sent} new.",
         )
-        self._set("last_results", matching)
+        self._set("last_results", owner_results)
         self._incr("cycle")
         return sent
 

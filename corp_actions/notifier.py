@@ -16,15 +16,16 @@ def is_configured() -> bool:
     return bool(config.TELEGRAM_BOT_TOKEN and config.TELEGRAM_CHAT_ID)
 
 
-def send_message(text: str, parse_mode: str = "HTML") -> dict:
-    """Send a text message to the configured chat. Returns Telegram response."""
+def send_message(text: str, parse_mode: str = "HTML", chat_id: str | None = None) -> dict:
+    """Send a text message to a chat. Returns Telegram response."""
     if not is_configured():
         raise NotifierError(
             "Telegram not configured: set TELEGRAM_BOT_TOKEN and "
             "TELEGRAM_CHAT_ID in the .env file."
         )
+    target = chat_id or config.TELEGRAM_CHAT_ID
     url = f"https://api.telegram.org/bot{config.TELEGRAM_BOT_TOKEN}/sendMessage"
-    payload = {"chat_id": config.TELEGRAM_CHAT_ID, "text": text}
+    payload = {"chat_id": target, "text": text}
     if parse_mode:
         payload["parse_mode"] = parse_mode
     try:

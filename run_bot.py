@@ -62,12 +62,12 @@ def handle_command(chat_id, text):
         return
 
     if cmd == "/list":
-        items = storage.load_watchlist()
+        items = storage.get_user_list(chat_id)
         if not items:
-            reply(chat_id, "Watchlist is empty.")
+            reply(chat_id, "Your watchlist is empty.")
         else:
             lines = [f"{i['symbol']} ({i['exchange']})" for i in items]
-            reply(chat_id, "Watchlist:\n" + "\n".join(lines))
+            reply(chat_id, "Your watchlist:\n" + "\n".join(lines))
         return
 
     if cmd == "/checknow":
@@ -85,17 +85,31 @@ def handle_command(chat_id, text):
     if cmd == "/add":
         quote = sources.get_quote(exchange, symbol)
         if quote is None:
-            reply(chat_id, f"Could not validate {symbol} ({exchange}) - check the ticker.")
+            _reply_suggestions(chat_id, symbol)
             return
-        storage.add_to_watchlist(
-            [{"symbol": symbol, "company": quote.get("name", ""), "exchange": exchange}]
+        storage.add_to_user_list(
+            chat_id,
+            {"symbol": symbol, "company": quote.get("name", ""), "exchange": exchange},
         )
-        reply(chat_id, f"Added {symbol} ({exchange}).")
+        reply(chat_id, f"Added {symbol} ({exchange}). Alerts will come to this chat.")
     elif cmd == "/remove":
-        storage.remove_from_watchlist(symbol, exchange)
+        storage.remove_from_user_list(chat_id, symbol, exchange)
         reply(chat_id, f"Removed {symbol} ({exchange}) if it was present.")
     else:
         reply(chat_id, HELP_TEXT)
+
+
+def _reply_suggestions(chat_id, query):
+    """Reply with matching stocks from the NSE list when an exact symbol fails."""
+    matches = sources.search_stocks(query, limit=10)
+    if not matches:
+        reply(chat_id, f"No stocks match '{query}'.")
+        return
+    lines = [f"'{query}' not found as an exact symbol. Did you mean (NSE):"]
+    for m in matches:
+        company = m["company"] or ""
+        lines.append(f"  /add {m['symbol']} NSE  - {company}")
+    reply(chat_id, "\n".join(lines))
 
 
 def process_commands():
@@ -145,7 +159,8 @@ def push_state():
     subprocess.run(["git", "config", "user.email", "actions@github.com"], check=False)
     subprocess.run(["git", "config", "user.name", "github-actions"], check=False)
     subprocess.run(
-        ["git", "add", str(config.WATCHLIST_FILE), str(config.SEEN_FILE)], check=False
+        ["git", "add", str(config.WATCHLIST_FILE), str(config.SEEN_FILE), str(config.SUBSCRIPTIONS_FILE)],
+        check=False,
     )
     has_diff = subprocess.run(
         ["git", "diff", "--cached", "--quiet"], check=False

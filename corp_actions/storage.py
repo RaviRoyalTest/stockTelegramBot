@@ -75,6 +75,60 @@ def remove_from_watchlist(symbol: str, exchange: str) -> list[dict]:
     return kept
 
 
+# ------------------------------------------------------------------ users
+# The owner's list is the app watchlist (watchlist.json). Other Telegram users
+# each get their own subscription (subscriptions.json) and receive alerts in
+# their own chat.
+
+def is_owner(chat_id) -> bool:
+    return str(chat_id) == str(config.TELEGRAM_CHAT_ID)
+
+
+def load_subscriptions() -> dict:
+    """Return {chat_id(str): [item, ...]} for non-owner users."""
+    with _lock:
+        data = _read_json(config.SUBSCRIPTIONS_FILE, {})
+    return {str(k): v for k, v in data.items() if isinstance(v, list)}
+
+
+def get_user_list(chat_id) -> list:
+    if is_owner(chat_id):
+        return load_watchlist()
+    subs = load_subscriptions()
+    return subs.get(str(chat_id), [])
+
+
+def add_to_user_list(chat_id, item: dict) -> list:
+    if is_owner(chat_id):
+        return add_to_watchlist([item])
+    subs = load_subscriptions()
+    key = str(chat_id)
+    current = subs.get(key, [])
+    seen = {_watchlist_key(i) for i in current}
+    if item.get("symbol") and _watchlist_key(item) not in seen:
+        current.append(item)
+    subs[key] = current
+    with _lock:
+        _write_json(config.SUBSCRIPTIONS_FILE, subs)
+    return current
+
+
+def remove_from_user_list(chat_id, symbol: str, exchange: str) -> list:
+    if is_owner(chat_id):
+        return remove_from_watchlist(symbol, exchange)
+    subs = load_subscriptions()
+    key = str(chat_id)
+    current = [
+        i for i in subs.get(key, [])
+        if not (i.get("symbol", "").upper() == symbol.upper()
+                and i.get("exchange", "").upper() == exchange.upper())
+    ]
+    subs[key] = current
+    with _lock:
+        _write_json(config.SUBSCRIPTIONS_FILE, subs)
+    return current
+
+
 # ---------------------------------------------------------------- seen cache
 
 def load_seen() -> set:

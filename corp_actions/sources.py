@@ -121,6 +121,36 @@ def get_nse_stock_list() -> list[dict]:
         raise SourceError(f"NSE stock list parse failed: {exc}") from exc
 
 
+_nse_list_cache = None
+_nse_list_cache_ts = 0.0
+_NSE_LIST_TTL = 3600  # seconds
+
+
+def get_nse_stock_list_cached() -> list[dict]:
+    """NSE stock list with a 1h in-process cache (used by the bot's search)."""
+    global _nse_list_cache, _nse_list_cache_ts
+    now = time.time()
+    if _nse_list_cache and now - _nse_list_cache_ts < _NSE_LIST_TTL:
+        return _nse_list_cache
+    _nse_list_cache = get_nse_stock_list()
+    _nse_list_cache_ts = now
+    return _nse_list_cache
+
+
+def search_stocks(query: str, limit: int = 10) -> list[dict]:
+    """Fuzzy search the NSE list by symbol or company name (case-insensitive)."""
+    q = (query or "").upper()
+    try:
+        stocks = get_nse_stock_list_cached()
+    except SourceError:
+        return []
+    matches = [
+        s for s in stocks
+        if q in s["symbol"].upper() or q in s["company"].upper()
+    ]
+    return matches[:limit]
+
+
 def get_nse_corporate_actions() -> list[dict]:
     """Return corporate actions announced on NSE, normalised records."""
     try:
