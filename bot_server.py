@@ -237,7 +237,14 @@ def main():
                 chat_id = (message.get("chat") or {}).get("id")
                 if not text.startswith("/"):
                     continue
-                cmd = text.strip().lower()
+                # The bare command name only (e.g. "/add" for "/add HDFCBANK")
+                # so write-command detection below actually matches. Comparing
+                # the full text - as before - meant "/add hdfcbank" never
+                # equalled "/add", so the immediate GitHub push after a write
+                # command never happened and state only reached GitHub via the
+                # periodic flush (or was lost on redeploy).
+                parts = text.strip().split()
+                cmd = parts[0].lower() if parts else ""
                 log.info("command from chat %s: %s", chat_id, text)
                 if cmd == "/checknow":
                     handle_command(chat_id, text)
