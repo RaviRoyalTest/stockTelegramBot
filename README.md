@@ -93,6 +93,7 @@ Send these to your bot:
 | `/next` | `/next` | List upcoming ex-dates (next `REMINDER_DAYS` days) |
 | `/filter TYPE,...` | `/filter dividend,bonus` | Only receive these action types (`/filter all` resets) |
 | `/alert PCT` | `/alert 3` | Alert on daily moves of ±PCT% (`/alert off` disables) |
+| `/status` | `/status` | Show where your list is saved and whether GitHub push is configured |
 | `/help` | `/help` | Show commands |
 
 Changes are committed to the repo automatically on the next run, so the
@@ -132,14 +133,19 @@ corp_actions/
   the sole command responder. Never run two `bot_server.py` processes.
 - **Where the watchlist lives.** The repo's `watchlist.json` /
   `subscriptions.json` / `settings.json` / `seen_actions.json` are the source
-  of truth, committed and pushed by the always-on server after every command
-  (`push_state`) and by the workflow cron after every poll. Always-on hosts
-  like Render have **ephemeral disks** - anything written but not pushed is
-  wiped on redeploy. To persist changes from Render, set these env vars:
+  of truth, committed and pushed by the always-on server after every WRITE
+  command (`/add`, `/remove`, `/filter`, `/alert`) and by the workflow cron
+  after every poll. Read-only commands (`/list`, `/status`, `/next`) never
+  push or reset. Always-on hosts like Render have **ephemeral disks** -
+  anything written but not pushed is wiped on redeploy. To persist changes
+  from Render, set these env vars:
   - `GH_TOKEN` - a fine-grained PAT (repo → Contents: Read and write)
   - `GITHUB_REPOSITORY` - e.g. `RaviRoyalTest/stockTelegramBot`
   `bot_server.py` warns loudly at startup if they are missing, syncs the
-  latest state from GitHub on boot, and pushes after each command.
+  latest state from GitHub on boot, and pushes after each write command.
+  Run `/status` in Telegram to confirm your chat's list location
+  (`watchlist.json` for the owner, `subscriptions.json` for other users) and
+  whether GitHub push is configured.
 - NSE endpoints are open and tested. BSE's `api.bseindia.com` sits behind
   Cloudflare and commonly returns `403` from datacenter/VPN IPs; from a normal
   residential network it usually works. When blocked, the app warns and simply

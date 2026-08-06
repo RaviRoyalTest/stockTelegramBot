@@ -35,6 +35,7 @@ HELP_TEXT = (
     "/filter TYPE,TYPE - only receive these action types\n"
     "   types: dividend, bonus, split, rights, buyback (or /filter all)\n"
     "/alert PCT - alert me when a stock moves +/-PCT% in a day (/alert off)\n"
+    "/status - show where your list is saved and if GitHub push is on\n"
     "/checknow - force a check and re-send all matching alerts\n"
     "/help - this message\n\n"
     "Examples:\n/add RELIANCE NSE\n/add PGINVIT NSE\n/remove TCS\n"
@@ -75,7 +76,17 @@ def handle_command(chat_id, text):
             reply(chat_id, "Your watchlist is empty.")
         else:
             lines = [f"{i['symbol']} ({i['exchange']})" for i in items]
-            reply(chat_id, "Your watchlist:\n" + "\n".join(lines))
+            where = (
+                "watchlist.json (owner's list)"
+                if storage.is_owner(chat_id)
+                else f"subscriptions.json (your chat {chat_id})"
+            )
+            reply(
+                chat_id,
+                "Your watchlist:\n"
+                + "\n".join(lines)
+                + f"\n\nSaved in: {where} - pushed to GitHub so it survives redeploys.",
+            )
         return
 
     if cmd == "/checknow":
@@ -152,6 +163,33 @@ def handle_command(chat_id, text):
         settings["price_alert_pct"] = val
         storage.save_user_settings(chat_id, settings)
         reply(chat_id, f"Price alerts {'off' if val is None else 'set to ' + format(val, 'g') + '%'}.")
+        return
+
+    if cmd == "/status":
+        gh_configured = bool(os.getenv("GH_TOKEN") and os.getenv("GITHUB_REPOSITORY"))
+        owner = storage.is_owner(chat_id)
+        location = (
+            "watchlist.json (the owner's list)"
+            if owner
+            else f"subscriptions.json (your chat {chat_id})"
+        )
+        push_status = (
+            "configured - your changes are pushed to GitHub after each command"
+            if gh_configured
+            else "NOT set - your changes stay only on this host's disk (lost on redeploy)"
+        )
+        reply(
+            chat_id,
+            "\n".join(
+                [
+                    f"Your chat id: {chat_id}",
+                    f"Role: {'owner' if owner else 'subscriber'}",
+                    f"Your list is saved in: {location}",
+                    f"GitHub push: {push_status}",
+                    "Run /list to see your current watchlist.",
+                ]
+            ),
+        )
         return
 
     if len(parts) < 2:
@@ -259,6 +297,21 @@ def _git(*args: str) -> subprocess.CompletedProcess:
     return subprocess.run(list(args), capture_output=True, text=True, check=False)
 
 
+def _ahead_of_origin(branch: str) -> bool:
+    """True when the local branch has commits not present on origin/{branch}.
+
+    This is the signal that a previous commit was never pushed - pushing
+    again is required; a hard reset at this point would destroy data.
+    """
+    res = _git("git", "rev-list", "--count", f"origin/{branch}..HEAD")
+    if res.returncode != 0:
+        return False
+    try:
+        return int(res.stdout.strip()) > 0
+    except ValueError:
+        return False
+
+
 def push_state() -> bool:
     """Commit and push watchlist/seen state back to the repo, if changed.
 
@@ -273,14 +326,20 @@ def push_state() -> bool:
     token = os.getenv("GH_TOKEN")
     repo = os.getenv("GITHUB_REPOSITORY")
     if not token or not repo:
-        log.info("GH_TOKEN/GITHUB_REPOSITORY not set - skipping push")
+        log.warning(
+            "GH_TOKEN/GITHUB_REPOSITORY not set - skipping push. State is "
+            "only on this host's disk and WILL BE LOST on redeploy. Set "
+            "GH_TOKEN (fine-grained PAT, Contents: Read and write) and "
+            "GITHUB_REPOSITORY (e.g. RaviRoyalTest/stockTelegramBot) in the "
+            "host environment."
+        )
         return False
     remote_url = f"https://x-access-token:{token}@github.com/{repo}.git"
     branch = _push_branch(remote_url)
 
     _git("git", "config", "user.email", "actions@github.com")
     _git("git", "config", "user.name", "github-actions")
-    _git(
+    added = _git(
         "git",
         "add",
         str(config.WATCHLIST_FILE),
@@ -288,7 +347,27 @@ def push_state() -> bool:
         str(config.SUBSCRIPTIONS_FILE),
         str(config.SETTINGS_FILE),
     )
+    if added.returncode != 0:
+        log.warning(
+            "git add failed - state NOT pushed (local changes kept): %s",
+            added.stderr.strip()[-300:],
+        )
+        return False
     if _git("git", "diff", "--cached", "--quiet").returncode == 0:
+        # Nothing staged. But there may be local commits from a previous run
+        # that failed to push. If we are ahead of origin, retry the push
+        # instead of claiming "in sync" - otherwise a later sync_state()'s
+        # reset --hard would silently destroy those commits.
+        if _ahead_of_origin(branch):
+            push = _git("git", "push", remote_url, f"HEAD:{branch}")
+            if push.returncode == 0:
+                log.info("Pushed previously-unpushed state to %s", branch)
+                return True
+            log.warning(
+                "Retry push of existing local commits failed: %s",
+                push.stderr.strip()[-300:],
+            )
+            return False
         log.info("No state change to push")
         return True
 
@@ -350,6 +429,15 @@ def sync_state() -> bool:
             )
             return True
         _git("git", "fetch", "origin")
+        if _ahead_of_origin(branch):
+            # Local commits exist that were never pushed. A hard reset here
+            # would silently destroy them - push them first instead.
+            log.warning(
+                "State sync skipped: local branch is ahead of origin/%s "
+                "(unpushed commits). Run push_state or fix credentials first.",
+                branch,
+            )
+            return True
         res = _git("git", "reset", "--hard", f"origin/{branch}")
         if res.returncode == 0:
             log.info("State synced from origin/%s", branch)

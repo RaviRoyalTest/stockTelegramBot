@@ -19,13 +19,18 @@ logging.basicConfig(level=logging.INFO, format="%(levelname)s %(message)s", stre
 log = logging.getLogger("bot_server")
 
 
+# Commands that modify state and therefore need to be pushed back to GitHub.
+WRITE_COMMANDS = {"/add", "/remove", "/filter", "/alert"}
+
+
 def main():
     if not os.getenv("GH_TOKEN") or not os.getenv("GITHUB_REPOSITORY"):
         log.warning(
             "GH_TOKEN / GITHUB_REPOSITORY not set: watchlist and subscription "
             "changes will NOT be pushed to GitHub and WILL BE LOST on redeploy. "
             "Set both (a fine-grained PAT with Contents:write) in the host's "
-            "environment to persist state."
+            "environment to persist state, then use /status in Telegram to "
+            "confirm."
         )
     log.info("Starting long-polling bot (instant responses)...")
     sync_state()
@@ -49,16 +54,28 @@ def main():
                         reply(chat_id, f"Check failed: {exc}")
                 else:
                     handle_command(chat_id, text)
-                # Persist any watchlist/subscription change back to GitHub so
-                # workflow re-runs and redeploys never lose what users added.
-                try:
-                    ok = push_state()
-                    if ok:
-                        # Pull anything the cron pushed so we never serve
-                        # stale state or overwrite newer commits.
-                        sync_state()
-                except Exception as exc:
-                    log.warning("state push failed: %s", config.redact(exc))
+                    # Persist write commands back to GitHub so workflow re-runs
+                    # and redeploys never lose what users added. Read-only
+                    # commands (/list, /status, /next, /help) never push or
+                    # reset - a failed push from a previous write stays on the
+                    # disk instead of being wiped by reset --hard, and /list
+                    # always reflects the latest local state.
+                    if cmd in WRITE_COMMANDS:
+                        try:
+                            ok = push_state()
+                            if ok:
+                                # Pull anything the cron pushed so we never
+                                # overwrite newer commits.
+                                sync_state()
+                            else:
+                                log.warning(
+                                    "State NOT pushed for %s - your change is "
+                                    "saved locally but will be LOST on redeploy "
+                                    "unless GH_TOKEN/GITHUB_REPOSITORY are set.",
+                                    cmd,
+                                )
+                        except Exception as exc:
+                            log.warning("state push failed: %s", config.redact(exc))
                 offset = update["update_id"] + 1
         except Exception as exc:
             err = config.redact(exc)
