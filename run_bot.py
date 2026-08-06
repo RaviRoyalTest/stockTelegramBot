@@ -59,6 +59,11 @@ def reply(chat_id, text):
     requests.post(url, json={"chat_id": chat_id, "text": text}, timeout=config.HTTP_TIMEOUT)
 
 
+def github_push_configured() -> bool:
+    """True only when the host can actually push state back to GitHub."""
+    return bool(os.getenv("GH_TOKEN") and os.getenv("GITHUB_REPOSITORY"))
+
+
 # ----------------------------------------------------------------- watchlist
 def handle_command(chat_id, text):
     parts = (text or "").strip().split()
@@ -81,11 +86,17 @@ def handle_command(chat_id, text):
                 if storage.is_owner(chat_id)
                 else f"subscriptions.json (your chat {chat_id})"
             )
+            persistence = (
+                "pushed to GitHub - it survives redeploys."
+                if github_push_configured()
+                else "NOT pushed to GitHub - it is only on this host's disk "
+                "and WILL BE LOST on redeploy. Run /status to confirm."
+            )
             reply(
                 chat_id,
                 "Your watchlist:\n"
                 + "\n".join(lines)
-                + f"\n\nSaved in: {where} - pushed to GitHub so it survives redeploys.",
+                + f"\n\nSaved in: {where} - {persistence}",
             )
         return
 
@@ -166,7 +177,7 @@ def handle_command(chat_id, text):
         return
 
     if cmd == "/status":
-        gh_configured = bool(os.getenv("GH_TOKEN") and os.getenv("GITHUB_REPOSITORY"))
+        gh_configured = github_push_configured()
         owner = storage.is_owner(chat_id)
         location = (
             "watchlist.json (the owner's list)"

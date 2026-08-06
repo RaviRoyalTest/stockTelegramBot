@@ -74,6 +74,16 @@ def main():
                                     "unless GH_TOKEN/GITHUB_REPOSITORY are set.",
                                     cmd,
                                 )
+                                reply(
+                                    chat_id,
+                                    "⚠️ Your change was saved only on this "
+                                    "server's disk, NOT pushed to GitHub. It "
+                                    "will be LOST on the next redeploy. Run "
+                                    "/status to check the GitHub push "
+                                    "configuration (GH_TOKEN / "
+                                    "GITHUB_REPOSITORY must be set on this "
+                                    "host).",
+                                )
                         except Exception as exc:
                             log.warning("state push failed: %s", config.redact(exc))
                 offset = update["update_id"] + 1
