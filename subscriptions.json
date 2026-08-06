@@ -21,6 +21,11 @@
       "symbol": "GENESYS",
       "company": "Genesys International Corporation Limited",
       "exchange": "NSE"
+    },
+    {
+      "symbol": "ASHOKLEY",
+      "company": "Ashok Leyland Limited",
+      "exchange": "NSE"
     }
   ]
 }
