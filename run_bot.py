@@ -15,6 +15,9 @@ import logging
 import os
 import subprocess
 import sys
+from concurrent.futures import ThreadPoolExecutor, as_completed
+from datetime import date, timedelta
+from time import monotonic
 from pathlib import Path
 
 from corp_actions import config  # no third-party deps - always importable
@@ -63,39 +66,74 @@ log = logging.getLogger("run_bot")
 import html
 
 HELP_TEXT = (
-    "<b>🔔 Corporate Action Alerts Bot</b>\n\n"
-    "Monitor NSE & BSE corporate actions (dividends, splits, bonus, rights, buybacks) "
-    "and daily price alerts directly in Telegram.\n\n"
-    "<b>📋 WATCHLIST COMMANDS</b>\n"
-    "• <code>/add SYMBOL [EXCHANGE]</code> - Add stock to watchlist\n"
-    "  <i>Examples:</i>\n"
-    "  • <code>/add RELIANCE</code> (Default: NSE)\n"
-    "  • <code>/add TCS BSE</code>\n"
-    "  • <code>/add PGINVIT NSE</code> (InvITs & REITs)\n"
-    "• <code>/remove SYMBOL [EXCHANGE]</code> - Remove stock from watchlist\n"
-    "  <i>Examples:</i>\n"
-    "  • <code>/remove TCS</code>\n"
-    "  • <code>/remove RELIANCE BSE</code>\n"
-    "• <code>/list</code> - View your current stock watchlist\n\n"
-    "<b>📅 EVENTS & ALERTS</b>\n"
-    "• <code>/next</code> - Show upcoming ex-dates for your watchlist\n"
-    "• <code>/checknow</code> - Force check now & re-send matching alerts\n\n"
-    "<b>⚙️ FILTERS & SETTINGS</b>\n"
-    "• <code>/filter TYPES</code> - Receive only specific action types\n"
-    "  <i>Types:</i> dividend, bonus, split, rights, buyback, other, all\n"
-    "  <i>Examples:</i>\n"
-    "  • <code>/filter dividend</code>\n"
-    "  • <code>/filter dividend,bonus,split</code>\n"
-    "  • <code>/filter all</code>\n"
-    "• <code>/alert PCT</code> - Set daily price move threshold (%)\n"
-    "  <i>Examples:</i>\n"
-    "  • <code>/alert 3</code> (Alert on +/-3% daily price move)\n"
-    "  • <code>/alert 5%</code>\n"
-    "  • <code>/alert off</code> (Turn off price alerts)\n\n"
-    "<b>📊 STATUS & HELP</b>\n"
-    "• <code>/status</code> - View chat ID, role, storage & GitHub sync status\n"
-    "• <code>/help</code> - Show this detailed guide\n\n"
-    "💡 <i>Tip: Type <code>/</code> alone to quickly access all commands.</i>"
+    "\U0001F4CA <b>Corporate Action Alerts</b>\n"
+    "<i>NSE + BSE alerts, market screens and news - right in Telegram.</i>\n\n"
+    "------------------------------------\n"
+    "\U0001F4C8 <b>Market</b>\n"
+    "/ca [type|SYMBOL|N|today] \u2014 corporate actions, all NSE + BSE\n"
+    "   \u2022 /ca dividend \u00b7 /ca bonus \u00b7 /ca split \u00b7 /ca rights \u00b7 /ca buyback\n"
+    "   \u2022 /ca increase \u2014 shareholder increase (bonus + split + rights)\n"
+    "   \u2022 /ca today \u00b7 /ca 7 \u2014 ex-date today / within 7 days\n"
+    "   \u2022 /ca RELIANCE \u2014 full details for one symbol\n"
+    "   \u2022 /ca TATA \u2014 keyword search in company / subject\n"
+    "/exdate [today|N] \u2014 all actions by ex-date window (default 5 days)\n"
+    "/summary \u2014 counts by exchange &amp; type, plus next ex-dates\n"
+    "/movers | /gainers | /losers [period] [direction] [N] [100|500]\n"
+    "   \u2014 movement screens over NIFTY 100 or NIFTY 500 stocks\n"
+    "   \u2022 /movers 1h gainers 10 500 \u00b7 /gainers 2d 100 (top 100)\n"
+    "   \u2022 /losers 1mo 100 (top 100) \u00b7 /losers 30m 5 nifty100\n"
+    "   \u2022 /movers 500 (NIFTY 500) \u00b7 /gainers 1w nifty500\n\n"
+    "\u2B50 <b>Watchlist</b>\n"
+    "/add SYMBOL [NSE|BSE] \u2014 add a stock you hold\n"
+    "/remove SYMBOL \u2014 remove a stock\n"
+    "/list \u2014 show your watchlist\n"
+    "/next \u2014 upcoming ex-dates for your watchlist\n"
+    "/news [N|SYMBOL] \u2014 latest headlines for your stocks\n"
+    "   \u2022 /news \u00b7 /news 5 \u00b7 /news RELIANCE\n\n"
+    "\u2699\ufe0f <b>Personalize</b>\n"
+    "/filter TYPE,TYPE \u2014 only receive chosen action types\n"
+    "   \u2022 types: dividend, bonus, split, rights, buyback (/filter all resets)\n"
+    "   \u2022 /filter dividend,bonus \u00b7 /filter all\n"
+    "/alert PCT \u2014 alert when a stock moves \u00b1PCT% in a day (/alert off)\n"
+    "   \u2022 /alert 3 \u00b7 /alert 1.5 \u00b7 /alert off\n"
+    "/settings \u2014 show your current filters &amp; alert settings\n\n"
+    "\U0001F6E0\ufe0f <b>System</b>\n"
+    "/status \u2014 where your list is saved &amp; GitHub push status\n"
+    "/checknow \u2014 force a check and re-send your alerts\n"
+    "/help \u00b7 /start \u2014 this message\n\n"
+    "------------------------------------\n"
+    "\U0001F4A1 <b>Tips</b>\n"
+    "\u2022 Just ask in plain text: \u201ccorporate action\u201d, \u201cshareholder "
+    "increase\u201d, \u201cdividends\u201d, \u201cex-date today\u201d, \u201cgainers\u201d, \u201cnews\u201d.\n"
+    "\u2022 Periods for /movers, /gainers, /losers:\n"
+    "   intraday 5m \u00b7 15m \u00b7 30m \u00b7 1h \u00b7 2h \u00b7 4h\n"
+    "   daily 1d(today) \u00b7 2d \u00b7 3d \u00b7 5d \u00b7 7d \u00b7 1w \u00b7 2w \u00b7 1mo \u00b7 3mo \u00b7 6mo \u00b7 1y\n"
+    "\u2022 Index: /movers 100 or 500, or the nifty100 / nifty500 keywords, pick the universe.\n"
+    "\u2022 For /gainers and /losers a bare 100 or 500 is a count (top N); use nifty100/nifty500 for the index.\n"
+    "\u2022 Direction: gainers / losers / all; count 1-100 (gainers/losers default 30).\n"
+    "\u2022 Each stock shows P/E, sector P/E, 52-week high/low, dividend yield,\n"
+    "   promoter/FII/DII holding and debt/equity when available.\n"
+    "\u2022 Type / alone to see this help again.\n\n"
+    "\U0001F4C5 <b>Examples</b>\n"
+    "<b>Watchlist:</b>  /add RELIANCE NSE  \u00b7  /add PGINVIT NSE  \u00b7  /remove TCS\n"
+    "<b>Corporate actions:</b>  /ca  \u00b7  /ca dividend  \u00b7  /ca increase  \u00b7  /ca 7  \u00b7  /ca RELIANCE\n"
+    "<b>Ex-dates:</b>  /exdate today  \u00b7  /exdate 10  \u00b7  /next\n"
+    "<b>Movers:</b>  /movers 30m  \u00b7  /movers 1h gainers 10 500  \u00b7  /movers 2d  \u00b7  /movers 1w 500\n"
+    "<b>Gainers:</b>  /gainers  \u00b7  /gainers 50  \u00b7  /gainers 2d 100  \u00b7  /gainers 1h nifty500\n"
+    "<b>Losers:</b>  /losers  \u00b7  /losers 1mo 100  \u00b7  /losers 30m 5 nifty100  \u00b7  /losers 1w nifty500\n"
+    "<b>News:</b>  /news  \u00b7  /news 5  \u00b7  /news RELIANCE\n"
+    "<b>Personalize:</b>  /filter dividend,bonus  \u00b7  /alert 3  \u00b7  /settings"
+)
+
+CA_HELP = (
+    "Corporate Action queries (/ca):\n"
+    "/ca - overview of all NSE + BSE actions\n"
+    "/ca dividend | bonus | split | rights | buyback - one action type\n"
+    "/ca increase - shareholder increase (bonus + split + rights)\n"
+    "/ca today - ex-date today\n"
+    "/ca 7 - ex-date within 7 days\n"
+    "/ca RELIANCE - details for one symbol\n"
+    "/ca TATA - keyword search in company name / subject"
 )
 
 
@@ -107,7 +145,9 @@ def get_updates(offset=None):
         params["offset"] = offset
     resp = requests.get(url, params=params, timeout=config.HTTP_TIMEOUT)
     resp.raise_for_status()
-    return resp.json().get("result", [])
+    updates = resp.json().get("result", [])
+    log.info("getUpdates(offset=%s) -> %d update(s)", offset, len(updates))
+    return updates
 
 
 def reply(chat_id, text, parse_mode="HTML"):
@@ -118,13 +158,33 @@ def reply(chat_id, text, parse_mode="HTML"):
     try:
         resp = requests.post(url, json=payload, timeout=config.HTTP_TIMEOUT)
         resp.raise_for_status()
+        log.info(
+            "reply to chat %s: %d chars -> %s",
+            chat_id, len(text), text[:100].replace("\n", " "),
+        )
     except Exception as exc:
         if parse_mode:
             payload.pop("parse_mode", None)
             try:
-                requests.post(url, json=payload, timeout=config.HTTP_TIMEOUT)
+                resp = requests.post(url, json=payload, timeout=config.HTTP_TIMEOUT)
+                resp.raise_for_status()
+                log.info("reply (plain) to chat %s: %d chars", chat_id, len(text))
+                return
             except Exception:
                 pass
+        log.warning(
+            "reply to chat %s failed: %s (text: %s)",
+            chat_id, config.redact(exc), text[:100].replace("\n", " "),
+        )
+
+
+def send_help(chat_id):
+    """Send the styled HTML help message (/help, /start, unknown commands)."""
+    try:
+        notifier.send_message(HELP_TEXT, chat_id=chat_id)
+    except notifier.NotifierError as exc:
+        log.warning("help send failed for chat %s: %s", chat_id, exc)
+        reply(chat_id, "Could not send help. Use /help later.")
 
 
 def github_push_configured() -> bool:
@@ -141,7 +201,7 @@ def handle_command(chat_id, text):
     log.info("command from chat %s: %s", chat_id, text)
 
     if cmd in ("/start", "/help", "/"):
-        reply(chat_id, HELP_TEXT)
+        send_help(chat_id)
         return
 
     if cmd == "/list":
@@ -293,6 +353,54 @@ def handle_command(chat_id, text):
         )
         return
 
+    if cmd in ("/ca", "/corpactions", "/actions", "/shareholder", "/increase"):
+        if cmd in ("/shareholder", "/increase"):
+            descriptor = {"mode": "types", "types": list(sources.INCREASE_TYPES)}
+        elif len(parts) > 1:
+            descriptor = _parse_ca_arg(parts[1])
+        else:
+            descriptor = {"mode": "overview"}
+        if descriptor is None:
+            reply(chat_id, CA_HELP)
+        else:
+            run_ca_query(chat_id, descriptor)
+        return
+
+    if cmd == "/exdate":
+        days = config.REMINDER_DAYS
+        if len(parts) > 1:
+            if parts[1].lower() == "today":
+                days = 0
+            else:
+                try:
+                    days = max(0, int(parts[1]))
+                except ValueError:
+                    reply(chat_id, "Usage: /exdate today  or  /exdate 7")
+                    return
+        run_ca_query(chat_id, {"mode": "exdate", "days": days})
+        return
+
+    if cmd == "/summary":
+        run_ca_query(chat_id, {"mode": "overview"})
+        return
+
+    if cmd == "/settings":
+        reply(chat_id, format_settings(chat_id))
+        return
+
+    if cmd == "/news":
+        handle_news(chat_id, parts)
+        return
+
+    if cmd == "/movers":
+        handle_movers(chat_id, parts)
+        return
+
+    if cmd in ("/gainers", "/losers"):
+        direction = "gainers" if cmd == "/gainers" else "losers"
+        handle_gainers_losers(chat_id, parts, direction)
+        return
+
     if len(parts) < 2:
         reply(chat_id, "Usage: <code>/add SYMBOL [NSE|BSE]</code> or <code>/remove SYMBOL [NSE|BSE]</code>")
         return
@@ -365,7 +473,7 @@ def handle_command(chat_id, text):
         log.info("Removed %s (%s) for chat %s", symbol, exchange, chat_id)
         reply(chat_id, f"Removed <b>{symbol}</b> ({exchange}) if it was present.")
     else:
-        reply(chat_id, HELP_TEXT)
+        send_help(chat_id)
 
 
 def _reply_suggestions(chat_id, query):
@@ -382,6 +490,737 @@ def _reply_suggestions(chat_id, query):
         company = m["company"] or ""
         lines.append(f"  /add {m['symbol']} NSE  - {company}")
     reply(chat_id, "\n".join(lines))
+
+
+# ------------------------------------------------------------ query engine
+# On-demand corporate action queries across ALL NSE + BSE stocks (not just the
+# watchlist). Every query fetches the live feed and filters it in memory, so
+# the results are always fresh. Replies are split into Telegram-sized chunks.
+
+MAX_QUERY_ITEMS = 20  # entries per message batch
+MAX_NEWS_STOCKS = 10  # stocks processed by /news per request
+
+
+def _split_messages(lines: list[str], max_len: int = 3800) -> list[str]:
+    """Split text lines into messages under Telegram's 4096-char limit."""
+    messages, current, size = [], [], 0
+    for line in lines:
+        line_len = len(line) + 1
+        if current and size + line_len > max_len:
+            messages.append("\n".join(current))
+            current, size = [], 0
+        current.append(line)
+        size += line_len
+    if current:
+        messages.append("\n".join(current))
+    return messages or [""]
+
+
+def _reply_messages(chat_id, messages: list[str]) -> None:
+    for msg in messages:
+        try:
+            notifier.send_message(msg, chat_id=chat_id)
+        except notifier.NotifierError as exc:
+            log.warning("query reply failed for chat %s: %s", chat_id, exc)
+            return
+
+
+def _attach_quotes(actions: list[dict], max_workers: int = 6) -> None:
+    """Fetch current prices for the actions in parallel and attach them."""
+    if not actions:
+        return
+    for a in actions:
+        a.pop("quote", None)
+    with ThreadPoolExecutor(max_workers=max_workers) as ex:
+        results = list(
+            ex.map(
+                lambda a: (a, sources.get_quote(a["exchange"], a["symbol"])),
+                list(actions),
+            )
+        )
+    attached = 0
+    for action, quote in results:
+        if quote:
+            action["quote"] = quote
+            attached += 1
+    log.info(
+        "attach_quotes: %d/%d quotes fetched", attached, len(actions)
+    )
+
+
+def _norm_type(token: str) -> str | None:
+    """Normalize an action-type token (handles plurals like 'splits')."""
+    t = token.strip().lower()
+    if t in sources.ACTION_TYPES:
+        return t
+    if t.endswith("s") and t[:-1] in sources.ACTION_TYPES:
+        return t[:-1]
+    return None
+
+
+def _parse_ca_arg(arg: str) -> dict | None:
+    """Map one /ca argument to a query descriptor, or None when unclear."""
+    raw = (arg or "").strip()
+    token = raw.lower()
+    if not raw:
+        return None
+    if token in ("increase", "shareholder", "shareholders", "shares", "share-holder"):
+        return {"mode": "types", "types": list(sources.INCREASE_TYPES)}
+    if (t := _norm_type(token)):
+        return {"mode": "types", "types": [t]}
+    if token in ("all", "list", "overview", "everything"):
+        return {"mode": "overview"}
+    if token in ("today", "tomorrow"):
+        return {"mode": "exdate", "days": 0}
+    try:
+        return {"mode": "exdate", "days": max(0, int(token))}
+    except ValueError:
+        pass
+    if "," in raw:  # e.g. /ca dividend,bonus
+        wanted = [t for p in token.split(",") if (t := _norm_type(p))]
+        if wanted:
+            return {"mode": "types", "types": wanted}
+    return {"mode": "term", "term": raw}
+
+
+def _footnote(warnings: list, errors: list) -> list[str]:
+    """BSE/network warnings shown as a note on overview queries."""
+    notes = [n for n in (warnings or [])] + [n for n in (errors or [])]
+    return [f"\u26a0\ufe0f {n}" for n in notes if n]
+
+
+def run_ca_query(chat_id, descriptor: dict) -> bool:
+    """Fetch all NSE+BSE actions, filter per descriptor, and reply."""
+    log.info("ca_query: chat %s mode=%s", chat_id, descriptor.get("mode"))
+    t0 = monotonic()
+    try:
+        all_actions, errors, warnings = poller_mod.fetch_all_actions()
+    except Exception as exc:
+        reply(chat_id, f"Could not fetch corporate actions: {config.redact(exc)}")
+        return True
+    log.info(
+        "ca_query: fetched %d corporate action(s) in %.1fs (errors=%d, warnings=%d)",
+        len(all_actions), monotonic() - t0, len(errors), len(warnings),
+    )
+    if not all_actions:
+        note = "\n" + "\n".join(_footnote(warnings, errors)) if (warnings or errors) else ""
+        reply(chat_id, "No corporate actions found right now." + note)
+        return True
+
+    mode = descriptor.get("mode")
+    title = "<b>Corporate Actions</b> (all NSE + BSE)"
+    results = None
+
+    if mode == "overview":
+        by_ex, by_type = {}, {}
+        for a in all_actions:
+            ex = a.get("exchange") or "?"
+            by_ex[ex] = by_ex.get(ex, 0) + 1
+            t = sources.action_type(a.get("subject"))
+            by_type[t] = by_type.get(t, 0) + 1
+        lines = [title]
+        lines.append("Count by exchange: " + " | ".join(f"{k}: {v}" for k, v in by_ex.items()))
+        type_summary = ", ".join(
+            f"{sources.TYPE_LABELS.get(t, t)} {by_type.get(t, 0)}"
+            for t in sources.ACTION_TYPES
+            if by_type.get(t)
+        )
+        lines.append("Count by type: " + (type_summary or "none"))
+        dated = sorted(
+            (a for a in all_actions if poller_mod.parse_ex_date(a.get("ex_date"))),
+            key=lambda a: a.get("ex_date"),
+        )
+        if dated:
+            lines.append("\n<b>Next ex-dates:</b>")
+            _attach_quotes(dated[:15])
+            for a in dated[:15]:
+                lines.append(notifier.format_action_entry(a))
+        else:
+            lines.append("\nNo ex-dates in the current feed.")
+        messages = _split_messages(lines)
+        if warnings or errors:
+            messages.append("\n".join(_footnote(warnings, errors)))
+        _reply_messages(chat_id, messages)
+        return True
+
+    if mode == "types":
+        wanted = set(descriptor.get("types") or [])
+        if len(wanted) == 1:
+            label = sources.TYPE_LABELS.get(next(iter(wanted)), "Action")
+        else:
+            label = " + ".join(sources.TYPE_LABELS.get(t, t) for t in wanted)
+        title = f"<b>{label} actions</b> (NSE + BSE)"
+        results = [a for a in all_actions if sources.action_type(a.get("subject")) in wanted]
+
+    elif mode == "exdate":
+        days = int(descriptor.get("days", config.REMINDER_DAYS))
+        today = date.today()
+        cutoff = today + timedelta(days=days)
+        results = [
+            a for a in all_actions
+            if (d := poller_mod.parse_ex_date(a.get("ex_date"))) and today <= d <= cutoff
+        ]
+        label = "today" if days == 0 else f"within {days} day(s)"
+        title = f"<b>Ex-date {label}</b> (NSE + BSE)"
+
+    else:  # mode == "term": exact symbol first, then keyword search
+        term = descriptor.get("term", "").strip()
+        symbol_matches = [
+            a for a in all_actions
+            if (a.get("symbol") or "").upper() == term.upper()
+        ]
+        if symbol_matches:
+            _attach_quotes(symbol_matches)
+            messages = [f"<b>Corporate actions for {notifier.escape(term.upper())}</b>"]
+            for a in sorted(symbol_matches, key=lambda x: x.get("ex_date") or "9999-99-99"):
+                messages.append(notifier.format_action_detail(a))
+            _reply_messages(chat_id, messages)
+            return True
+        q = term.lower()
+        results = [
+            a for a in all_actions
+            if q in (a.get("company") or "").lower()
+            or q in (a.get("subject") or "").lower()
+        ]
+        title = f"<b>Search results for '{notifier.escape(term)}'</b> (NSE + BSE)"
+
+    if not results:
+        reply(chat_id, f"No corporate actions match this query.\n\n{CA_HELP}")
+        return True
+
+    ordered = sorted(
+        results,
+        key=lambda a: (a.get("ex_date") or "9999-99-99", (a.get("symbol") or "").upper()),
+    )
+    shown = ordered[:MAX_QUERY_ITEMS]
+    _attach_quotes(shown)
+    lines = [title, f"{len(ordered)} action(s) found."]
+    for a in shown:
+        lines.append(notifier.format_action_entry(a))
+    if len(ordered) > MAX_QUERY_ITEMS:
+        lines.append(
+            f"... and {len(ordered) - MAX_QUERY_ITEMS} more (limit "
+            f"{MAX_QUERY_ITEMS}). Narrow it down with /ca dividend, /ca 7, "
+            "or /ca SYMBOL."
+        )
+    _reply_messages(chat_id, _split_messages(lines))
+    return True
+
+
+def format_settings(chat_id) -> str:
+    """Render the per-chat customization settings (/settings)."""
+    settings = storage.get_user_settings(chat_id)
+    filters = settings.get("action_filters") or []
+    alert = settings.get("price_alert_pct")
+    owner = storage.is_owner(chat_id)
+    where = (
+        "watchlist.json (owner's list)"
+        if owner
+        else f"subscriptions.json (chat {chat_id})"
+    )
+    return "\n".join(
+        [
+            "<b>Your settings</b>",
+            f"Chat id: {chat_id}",
+            f"Role: {'owner' if owner else 'subscriber'}",
+            "Action filters: " + (", ".join(filters) if filters else "all types"),
+            "Price alert: " + ("off" if not alert else f"{float(alert):g}%"),
+            f"Your list is saved in: {where}",
+            "Customize with /filter and /alert.",
+        ]
+    )
+
+
+def handle_news(chat_id, parts) -> None:
+    """Latest news for the stocks in the requester's watchlist.
+
+    /news           -> up to 3 headlines per watchlist stock
+    /news N         -> up to N headlines per stock (1-5)
+    /news SYMBOL    -> news for one symbol instead of the whole list
+    """
+    per_stock = 3
+    if len(parts) > 1 and parts[1].isdigit():
+        per_stock = max(1, min(5, int(parts[1])))
+        target = None
+    elif len(parts) > 1:
+        target = parts[1].upper()
+    else:
+        target = None
+
+    if target:
+        items = [{"symbol": target, "exchange": "NSE", "company": target}]
+    else:
+        items = storage.get_user_list(chat_id)
+        if not items:
+            reply(
+                chat_id,
+                "Your watchlist is empty. Add stocks with /add SYMBOL NSE, "
+                "then /news.",
+            )
+            return
+    log.info(
+        "news: chat %s target=%s per_stock=%d from %d stock(s)",
+        chat_id, target or "watchlist", per_stock, len(items),
+    )
+
+    truncated = len(items) > MAX_NEWS_STOCKS
+    items = items[:MAX_NEWS_STOCKS]
+
+    def _fetch(item):
+        try:
+            news = sources.get_stock_news(item["exchange"], item["symbol"], per_stock)
+            return item, news
+        except Exception as exc:  # a failing stock must not break the batch
+            log.info("news fetch failed for %s: %s", item.get("symbol"), exc)
+            return item, []
+
+    with ThreadPoolExecutor(max_workers=6) as ex:
+        fetched = list(ex.map(_fetch, items))
+    log.info("news: fetched headlines for %d/%d stock(s)", len(fetched), len(items))
+
+    for item, news in fetched:
+        try:
+            notifier.send_message(
+                notifier.format_news_list(item["symbol"], item["exchange"], news),
+                chat_id=chat_id,
+            )
+        except notifier.NotifierError as exc:
+            log.warning("news reply failed for chat %s: %s", chat_id, exc)
+            return
+    if truncated:
+        reply(chat_id, f"(showing news for the first {MAX_NEWS_STOCKS} stocks)")
+
+
+MOVERS_PERIODS = {
+    # intraday: ("intraday", minutes)
+    "5m": ("intraday", 5), "10m": ("intraday", 10), "15m": ("intraday", 15),
+    "30m": ("intraday", 30), "45m": ("intraday", 45),
+    "1h": ("intraday", 60), "2h": ("intraday", 120), "4h": ("intraday", 240),
+    # multi-day: ("days", N)
+    "today": ("days", 1), "day": ("days", 1), "1d": ("days", 1),
+    "2d": ("days", 2), "3d": ("days", 3), "5d": ("days", 5), "7d": ("days", 7),
+    "1w": ("days", 7), "week": ("days", 7), "2w": ("days", 14),
+    "1mo": ("days", 30), "month": ("days", 30), "3mo": ("days", 90),
+    "6mo": ("days", 180), "1y": ("days", 365), "year": ("days", 365),
+}
+
+
+def _period_label(kind: str, value: int) -> str:
+    """Human label for a period, e.g. ('intraday', 60) -> 'last 1h'."""
+    if kind == "intraday":
+        if value % 60 == 0:
+            return f"last {value // 60}h"
+        return f"last {value}m"
+    if value == 1:
+        return "today"
+    if value == 7:
+        return "last 1 week"
+    if value == 14:
+        return "last 2 weeks"
+    if value == 30:
+        return "last 1 month"
+    if value == 90:
+        return "last 3 months"
+    if value == 180:
+        return "last 6 months"
+    if value == 365:
+        return "last 1 year"
+    return f"last {value} days"
+
+
+def _fetch_period_change(sym: str, period: tuple) -> dict | None:
+    """Dispatch a (kind, value) period to the right Yahoo fetcher."""
+    kind, value = period
+    if kind == "intraday":
+        return sources.get_intraday_change("NSE", sym, value)
+    return sources.get_daily_change("NSE", sym, value)
+
+
+def _parse_screen_parts(parts, default_period, default_direction,
+                        default_count, default_universe) -> tuple:
+    """Extract (period, direction, count, universe) from screen command args.
+
+    One shared parser backs /movers, /gainers and /losers so they all accept
+    the same tokens in any order:
+      periods   5m 15m 30m 1h 2h 4h today 2d 3d 5d 1w 2w 1mo 3mo 6mo 1y
+      direction gainers/losers/all
+      count     any number 1-100
+      universe  nifty100 / nifty500 keywords, or a second number after a count
+
+    A bare `100`/`500` means the index universe for /movers (which shows all
+    stocks anyway) but a *count* for /gainers and /losers, so `/losers 1mo
+    100` means "top 100 losers" while `/movers 500` means "NIFTY 500".
+    """
+    period, direction, count, universe = (
+        default_period, default_direction, default_count, default_universe)
+    explicit_count = False
+    for token in parts[1:]:
+        t = token.lower()
+        if t in MOVERS_PERIODS:
+            period = MOVERS_PERIODS[t]
+        elif t in ("gainers", "gainer", "positive", "up"):
+            direction = "gainers"
+        elif t in ("losers", "loser", "negative", "down"):
+            direction = "losers"
+        elif t in ("all", "both", "mixed"):
+            direction = "all"
+        elif t in ("100", "nifty100", "nifty-100", "nifty 100"):
+            if t == "100" and not explicit_count and default_count is not None:
+                count = 100
+                explicit_count = True
+            else:
+                universe = "nifty100"
+        elif t in ("500", "allstocks", "all-stocks", "nifty500", "nifty-500",
+                   "nifty 500"):
+            if t == "500" and not explicit_count and default_count is not None:
+                count = 100
+                explicit_count = True
+            else:
+                universe = "nifty500"
+        else:
+            try:
+                count = max(1, min(100, int(t)))
+                explicit_count = True
+            except ValueError:
+                pass
+    return period, direction, count, universe
+
+
+def handle_market_screen(chat_id, parts, default_direction="all",
+                         default_period=("intraday", 60), default_count=None,
+                         default_universe="nifty100") -> None:
+    """Screen an index universe by price movement over a time window.
+
+    One implementation backs /movers, /gainers and /losers so all three stay
+    feature-identical. Every command understands the shared options:
+      /movers 1h gainers 10 500   period, direction, count, index universe
+      /gainers 2d 100            top 100 gainers over 2 days
+      /losers 30m 5 500          top 5 losers over 30 min, NIFTY 500
+    Gainers/losers sort by size (best first); the movers "all" view sorts
+    lower -> higher.
+    """
+    period, direction, count, universe = _parse_screen_parts(
+        parts, default_period, default_direction, default_count,
+        default_universe)
+
+    universe_label = "NIFTY 500" if universe == "nifty500" else "NIFTY 100"
+    period_label = _period_label(*period)
+    t0 = monotonic()
+    log.info(
+        "screen %s: period=%s direction=%s count=%s universe=%s",
+        parts[0], period_label, direction, count, universe_label,
+    )
+
+    # Phase 0 - acknowledge immediately so the user never waits blind while
+    # the universe + quotes are fetched (NIFTY 500 can take a minute or two).
+    reply(
+        chat_id,
+        f"Scanning {universe_label} over {period_label} for {direction}... "
+        "This can take a minute or two.",
+    )
+    log.info("screen %s: sent initial acknowledgment", parts[0])
+
+    symbols = sources.get_index_universe(universe)
+    if not symbols:
+        log.warning("screen %s: no symbols loaded for universe %s", parts[0], universe)
+        reply(chat_id, "Could not load the stock universe right now. Try again in a minute.")
+        return
+    log.info(
+        "screen %s: universe loaded (%d symbols) in %.1fs",
+        parts[0], len(symbols), monotonic() - t0,
+    )
+
+    def _fetch(sym):
+        return sym, _fetch_period_change(sym, period)
+
+    fetched = []
+    with ThreadPoolExecutor(max_workers=20) as ex:
+        futures = {ex.submit(_fetch, sym): sym for sym in symbols}
+        done = 0
+        for fut in as_completed(futures):
+            done += 1
+            sym = futures[fut]
+            try:
+                data = fut.result()[1]
+            except Exception as exc:  # one bad symbol must not kill the batch
+                data = None
+                log.info(
+                    "screen %s: change fetch failed for %s: %s",
+                    parts[0], sym, exc,
+                )
+            fetched.append((sym, data))
+            if done % 100 == 0 or done == len(symbols):
+                log.info(
+                    "screen %s: change fetch progress %d/%d symbols",
+                    parts[0], done, len(symbols),
+                )
+    log.info(
+        "screen %s: change fetch complete (%d symbols) in %.1fs",
+        parts[0], len(symbols), monotonic() - t0,
+    )
+
+    rows = [(sym, d) for sym, d in fetched if d and d.get("change_pct") is not None]
+    if direction == "gainers":
+        rows = [r for r in rows if r[1]["change_pct"] > 0]
+        rows.sort(key=lambda r: r[1]["change_pct"], reverse=True)  # highest first
+        title = f"<b>Top Gainers - {period_label}</b>"
+    elif direction == "losers":
+        rows = [r for r in rows if r[1]["change_pct"] < 0]
+        rows.sort(key=lambda r: r[1]["change_pct"])  # most negative first
+        title = f"<b>Top Losers - {period_label}</b>"
+    else:
+        rows.sort(key=lambda r: r[1]["change_pct"])  # lower -> higher
+        title = f"<b>Movers - {period_label}</b> · {direction} (lower \u2192 higher)"
+
+    if count:
+        rows = rows[:count]
+    failed = len(fetched) - sum(1 for _, d in fetched if d and d.get("change_pct") is not None)
+    if not rows:
+        ok = len(fetched) - failed
+        log.warning(
+            "screen %s: no %s in %s over %s (universe=%d, quotes ok=%d/%d) - "
+            "market may be closed or everything moved the other way",
+            parts[0], direction, universe_label, period_label,
+            len(symbols), ok, len(fetched),
+        )
+        reply(chat_id, f"No movement data found for {period_label} ({universe_label}).")
+        return
+
+    header = f"{title} · {universe_label}"
+    if count:
+        header += f" · top {len(rows)}"
+
+    def _row_line(idx, sym, d) -> str:
+        change = d["change_pct"]
+        arrow = "\u25b2" if change >= 0 else "\u25bc"
+        sign = "+" if change >= 0 else ""
+        return (
+            f"{idx}. {arrow} <b>{notifier.escape(sym)}</b> "
+            f"{notifier.fmt_money(d['price'])} <b>{sign}{change:.2f}%</b>"
+        )
+
+    # Phase 1 - the initial report: movers and their current price only, so
+    # the user gets actionable numbers now instead of waiting for the slower
+    # fundamentals enrichment.
+    lines = [header]
+    for idx, (sym, d) in enumerate(rows, 1):
+        lines.append(_row_line(idx, sym, d))
+    if failed:
+        lines.append(f"({failed} of {len(symbols)} stocks could not be loaded)")
+    lines.append("")
+    lines.append(
+        "Fetching stock details (P/E, sector P/E, 52-week range, dividend "
+        "yield, holdings, D/E)... the full updated report follows shortly."
+    )
+    _reply_messages(chat_id, _split_messages(lines))
+    log.info(
+        "screen %s: initial report sent (%d rows) in %.1fs",
+        parts[0], len(rows), monotonic() - t0,
+    )
+
+    # Phase 2 - fundamentals enrichment, then the full updated report.
+    def _fund_fetch(sym, with_screener):
+        return sym, sources.get_fundamentals(sym, with_screener=with_screener)
+
+    t_fund = monotonic()
+    fund_by_sym = {}
+    tasks = [
+        (sym, i < sources.FUND_MAX_ROWS)
+        for i, (sym, _) in enumerate(rows)
+    ]
+    with ThreadPoolExecutor(max_workers=12) as ex:
+        futures = {
+            ex.submit(_fund_fetch, sym, with_screener): (sym, with_screener)
+            for sym, with_screener in tasks
+        }
+        done = 0
+        for fut in as_completed(futures):
+            done += 1
+            sym, _ = futures[fut]
+            try:
+                fund = fut.result()[1]
+            except Exception as exc:  # fundamentals are best-effort
+                fund = None
+                log.info(
+                    "screen %s: fundamentals failed for %s: %s",
+                    parts[0], sym, exc,
+                )
+            fund_by_sym[sym] = fund
+            if done % 10 == 0 or done == len(tasks):
+                log.info(
+                    "screen %s: fundamentals progress %d/%d rows",
+                    parts[0], done, len(tasks),
+                )
+    log.info(
+        "screen %s: fundamentals fetch complete (%d rows) in %.1fs",
+        parts[0], len(tasks), monotonic() - t_fund,
+    )
+
+    lines = [header]
+    for idx, (sym, d) in enumerate(rows, 1):
+        lines.append(_row_line(idx, sym, d))
+        fund_line = _fundamentals_line(fund_by_sym.get(sym))
+        if fund_line:
+            lines.append("   " + fund_line)
+    if len(rows) > sources.FUND_MAX_ROWS:
+        lines.append(
+            f"(fundamentals detail shown for the first {sources.FUND_MAX_ROWS} stocks)"
+        )
+    if failed:
+        lines.append(f"({failed} of {len(symbols)} stocks could not be loaded)")
+    _reply_messages(chat_id, _split_messages(lines))
+    log.info(
+        "screen %s: final report sent (%d rows) in %.1fs (total %.1fs), "
+        "quote failures=%d, fundamentals cached=%d",
+        parts[0], len(rows), monotonic() - t_fund, monotonic() - t0,
+        failed, len(fund_by_sym),
+    )
+
+
+def _fundamentals_line(fund: dict | None) -> str:
+    """One compact fundamentals line for a stock, or '' when nothing to show."""
+    if not fund:
+        return ""
+
+    def _num(value, nd: int) -> str:
+        s = f"{value:.{nd}f}"
+        return s.rstrip("0").rstrip(".") if "." in s else s
+
+    parts = []
+    if fund.get("pe"):
+        parts.append(f"P/E {_num(fund['pe'], 1)}")
+    if fund.get("sector_pe"):
+        parts.append(f"Sec P/E {_num(fund['sector_pe'], 1)}")
+    if fund.get("wk52_high") is not None and fund.get("wk52_low") is not None:
+        parts.append(
+            f"52w {notifier.fmt_money(fund['wk52_low'])}\u2013"
+            f"{notifier.fmt_money(fund['wk52_high'])}"
+        )
+    if fund.get("div_yield") is not None:
+        parts.append(f"Div {_num(fund['div_yield'], 2)}%")
+    if any(fund.get(k) for k in ("promoter_pct", "fii_pct", "dii_pct")):
+        bits = []
+        for key, label in (("promoter_pct", "Prom"), ("fii_pct", "FII"), ("dii_pct", "DII")):
+            if fund.get(key):
+                bits.append(f"{label} {fund[key]}")
+        parts.append(" \u00b7 ".join(bits))
+    if fund.get("debt_to_equity") is not None:
+        parts.append(f"D/E {_num(fund['debt_to_equity'], 2)}")
+    return " | ".join(parts)
+
+
+def handle_movers(chat_id, parts) -> None:
+    """Movement screen over an index (default NIFTY 100, all directions)."""
+    handle_market_screen(
+        chat_id, parts,
+        default_direction="all",
+        default_period=("intraday", 60),
+        default_count=None,
+        default_universe="nifty100",
+    )
+
+
+def handle_gainers_losers(chat_id, parts, direction: str) -> None:
+    """Top gainers / losers over an index (default NIFTY 500, top 30, today)."""
+    handle_market_screen(
+        chat_id, parts,
+        default_direction=direction,
+        default_period=("days", 1),
+        default_count=30,
+        default_universe="nifty500",
+    )
+
+
+def handle_query_text(chat_id, text) -> bool:
+    """Answer natural-language questions about corporate actions.
+
+    Returns True when the message matched a known query pattern (a reply was
+    sent). Deliberately conservative so random chat messages are ignored.
+    """
+    if not config.NATURAL_QUERIES:
+        return False
+    low = (text or "").strip().lower()
+    if not low:
+        return False
+    keywords = (
+        "corporate action", "corporate-action",
+        "ex-date", "ex date",
+        "dividend", "bonus", "split", "rights", "buyback", "buy back",
+        "shareholder increase", "share holder increase", "shares increase",
+        "increase", "actions", "news", "movers", "movement", "gainers", "losers",
+    )
+    if not any(k in low for k in keywords):
+        return False
+    if "gainers" in low or "gainer" in low:
+        handle_gainers_losers(chat_id, ["/gainers"], "gainers")
+        return True
+    if "losers" in low or "loser" in low:
+        handle_gainers_losers(chat_id, ["/losers"], "losers")
+        return True
+    if any(w in low for w in ("movers", "movement", "stock movement", "market movement")):
+        handle_movers(chat_id, ["/movers"])
+        return True
+    if "news" in low and any(
+        w in low for w in ("stock", "latest", "market", "watchlist", "list",
+                           "hold", "holding", "share", "company")
+    ):
+        handle_news(chat_id, ["/news"])
+        return True
+    if "increase" in low and ("share" in low or "holder" in low):
+        descriptor = {"mode": "types", "types": list(sources.INCREASE_TYPES)}
+    elif "ex-date" in low or "ex date" in low or "upcoming" in low:
+        descriptor = {"mode": "exdate", "days": config.REMINDER_DAYS}
+    elif "dividend" in low:
+        descriptor = {"mode": "types", "types": ["dividend"]}
+    elif "bonus" in low:
+        descriptor = {"mode": "types", "types": ["bonus"]}
+    elif "split" in low:
+        descriptor = {"mode": "types", "types": ["split"]}
+    elif "rights" in low:
+        descriptor = {"mode": "types", "types": ["rights"]}
+    elif "buyback" in low or "buy back" in low:
+        descriptor = {"mode": "types", "types": ["buyback"]}
+    elif "corporate action" in low or "actions" in low or low.strip().startswith("ca "):
+        descriptor = {"mode": "overview"}
+    else:
+        return False
+    run_ca_query(chat_id, descriptor)
+    return True
+
+
+def register_commands() -> bool:
+    """Publish the bot's command menu via Telegram setMyCommands."""
+    if not notifier.is_configured():
+        return False
+    menu = [
+        {"command": "ca", "description": "Corporate actions all NSE+BSE: /ca [type]"},
+        {"command": "exdate", "description": "Ex-dates: /exdate today or /exdate 7"},
+        {"command": "summary", "description": "Market snapshot: counts + next ex-dates"},
+        {"command": "news", "description": "Latest news for your watchlist stocks"},
+        {"command": "movers", "description": "Movers + fundamentals: /movers 1h gainers 10"},
+        {"command": "gainers", "description": "Top gainers + fundamentals: /gainers 1h 50"},
+        {"command": "losers", "description": "Top losers + fundamentals: /losers 1w 100"},
+        {"command": "add", "description": "Add stock to watchlist: /add RELIANCE NSE"},
+        {"command": "remove", "description": "Remove stock from watchlist"},
+        {"command": "list", "description": "Show your watchlist"},
+        {"command": "next", "description": "Upcoming ex-dates for your watchlist"},
+        {"command": "filter", "description": "Receive only chosen action types"},
+        {"command": "alert", "description": "Price-move alert threshold percent"},
+        {"command": "settings", "description": "Show your current settings"},
+        {"command": "status", "description": "Check persistence / GitHub push"},
+        {"command": "checknow", "description": "Force a check and resend alerts"},
+        {"command": "help", "description": "Show all commands and examples"},
+    ]
+    url = f"https://api.telegram.org/bot{config.TELEGRAM_BOT_TOKEN}/setMyCommands"
+    try:
+        resp = requests.post(url, json={"commands": menu}, timeout=config.HTTP_TIMEOUT)
+        resp.raise_for_status()
+        ok = bool(resp.json().get("ok"))
+        log.info("setMyCommands %s", "ok" if ok else "failed")
+        return ok
+    except Exception as exc:
+        log.warning("setMyCommands failed: %s", config.redact(exc))
+        return False
 
 
 def process_commands():
@@ -409,6 +1248,10 @@ def process_commands():
         text = (message.get("text") or "").strip()
         chat_id = (message.get("chat") or {}).get("id")
         if not text.startswith("/"):
+            try:
+                handle_query_text(chat_id, text)
+            except Exception as exc:  # a bad query must never break the loop
+                log.warning("natural query failed: %s", config.redact(exc))
             continue
         if text.strip().lower() == "/checknow":
             checknow_chat = str(chat_id)
@@ -732,6 +1575,7 @@ def main():
     if any(a.lower() == "--check" for a in sys.argv[1:]):
         sys.exit(main_check())
     log.info("Processing Telegram commands...")
+    register_commands()
     checknow_chat = process_commands()
     log.info("Running poll cycle%s...", f" (forced for {checknow_chat})" if checknow_chat else "")
     sent = poller.run_once(force=bool(checknow_chat), only_chat=checknow_chat)

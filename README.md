@@ -87,14 +87,31 @@ Send these to your bot:
 
 | Command | Example | What it does |
 | ------- | ------- | ------------ |
+| `/ca [TYPE\|SYMBOL\|N\|today]` | `/ca increase` | Query corporate actions across ALL NSE+BSE stocks, not just the watchlist. No arg = overview; `dividend`/`bonus`/`split`/`rights`/`buyback` filter by type; `increase` = shareholder increase (bonus + split + rights); `today`/`7` = ex-date window; a symbol (e.g. `RELIANCE`) = full detail; any other word = keyword search. |
+| `/exdate [today\|N]` | `/exdate 7` | All actions whose ex-date is today or within N days (default `REMINDER_DAYS`) |
+| `/summary` | `/summary` | Market snapshot: counts by exchange and type, plus the next ex-dates |
+| `/news [N\|SYMBOL]` | `/news 5` | Latest news headlines for the stocks in your list (up to N each, 1-5). `/news RELIANCE` = one symbol. Sources: Google News RSS, Yahoo fallback |
+| `/movers [period] [direction] [N] [100\|500]` | `/movers 1h gainers 10 500` | Screen an index (NIFTY 100/500) by price movement over a window, sorted lower → higher. Periods: `5m 15m 30m 1h 2h 4h today 2d 1w 1mo` (default 1h). Direction: `gainers`/`losers`/`all`; `N` = max rows; a bare `100`/`500` picks the index (default 100). E.g. `/movers 1w 500`. Each row also shows P/E, sector P/E, 52-week high/low, dividend yield, promoter/FII/DII holding and debt/equity when available |
+| `/gainers [period] [N] [100\|500]` | `/gainers 2d 100` | Top N gainers over an index (default NIFTY 500, top 30). Here a bare `100`/`500` means **top N** — to pick the index use `nifty100`/`nifty500` or a second number after a count (e.g. `/gainers 1h 50 500`). Fundamentals shown per row |
+| `/losers [period] [N] [100\|500]` | `/losers 1mo 100` | Top N losers over an index (same options and fundamentals as `/gainers`). E.g. `/losers 1w 20 500`, `/losers 30m 5 nifty100` |
+
+Every `/ca`, `/exdate` and `/summary` result includes the current price
+(₹ with today's % change) and clearly printed Ex-date / Record date /
+Announced date. `/ca SYMBOL` shows full detail (face value, series, ISIN).
 | `/add SYMBOL [NSE/BSE]` | `/add RELIANCE NSE` | Add a stock (validated via Yahoo) |
 | `/remove SYMBOL [NSE/BSE]` | `/remove TCS` | Remove a stock |
 | `/list` | `/list` | Show the current watchlist |
 | `/next` | `/next` | List upcoming ex-dates (next `REMINDER_DAYS` days) |
 | `/filter TYPE,...` | `/filter dividend,bonus` | Only receive these action types (`/filter all` resets) |
 | `/alert PCT` | `/alert 3` | Alert on daily moves of ±PCT% (`/alert off` disables) |
+| `/settings` | `/settings` | Show your current filters, price-alert and list location |
 | `/status` | `/status` | Show where your list is saved and whether GitHub push is configured |
+| `/checknow` | `/checknow` | Force a check and re-send all matching alerts to your chat |
 | `/help` | `/help` | Show commands |
+
+You can also ask in plain text without a slash, e.g. "corporate action",
+"shareholder increase", "dividends", or "ex-date today" — the bot answers
+with the same live query results (toggle with `NATURAL_QUERIES=false`).
 
 Changes are committed to the repo automatically on the next run, so the
 watchlist persists and survives restarts.
@@ -207,6 +224,20 @@ corp_actions/
   Cloudflare and commonly returns `403` from datacenter/VPN IPs; from a normal
   residential network it usually works. When blocked, the app warns and simply
   uses NSE data.
+- `/movers`, `/gainers` and `/losers` show fundamentals per stock: P/E and
+  sector P/E, 52-week high/low, dividend yield, promoter / FII / DII holding
+  and debt-to-equity. Fundamentals come from Yahoo Finance (price, 52w range,
+  P/E, dividend, D/E) plus screener.in (sector P/E, holdings), are cached for
+  24h, and are shown best-effort — if a source is down or rate-limited, the
+  affected fields are simply omitted. To protect against screener.in's
+  aggressive rate limiting, its enrichment is paced (a few requests/second)
+  and capped at the first 40 listed stocks.
+- The movement screens reply in two stages so you are never left waiting
+  blind: an immediate acknowledgment, then the initial report (movers +
+  current price) as soon as quotes are in, and finally an updated full
+  report with the fundamentals. The deployed bot logs every stage in
+  realtime (ack, universe load, change-fetch progress, initial/final report,
+  per-row failures, timings) so you can watch what the pipeline is doing.
 - To mute one source entirely (e.g. run NSE-only), the poller only iterates
   the exchanges it knows about — edit `FETCHERS` in `corp_actions/poller.py`.
 - Data comes from public NSE/BSE endpoints; use for informational purposes.

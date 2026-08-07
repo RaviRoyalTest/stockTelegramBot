@@ -167,12 +167,22 @@ class Poller:
         owner = str(config.TELEGRAM_CHAT_ID)
 
         if not targets:
+            log.info("poll cycle: no watchlists to check (only_chat=%s)", only_chat)
             self._set("last_message", "Watchlist is empty - nothing to check")
             self._set("last_run", datetime.now().strftime("%Y-%m-%d %H:%M:%S"))
             self._incr("cycle")
             return 0
 
+        log.info(
+            "poll cycle start: %d list(s) to check (only_chat=%s, force=%s)",
+            len(targets), only_chat, force,
+        )
+        t0 = time.monotonic()
         all_actions, errors, warnings = fetch_all_actions()
+        log.info(
+            "poll cycle: fetched %d corporate action(s) in %.1fs (errors=%d, warnings=%d)",
+            len(all_actions), time.monotonic() - t0, len(errors), len(warnings),
+        )
         sent = 0
         today = date.today()
 
@@ -183,6 +193,10 @@ class Poller:
                 for f in settings.get("action_filters") or []
                 if f.strip().lower() in sources.ACTION_TYPES
             ]
+            log.info(
+                "poll cycle: processing chat %s watchlist (%d stock(s), filters=%s)",
+                chat_id, len(watchlist), ", ".join(filters) if filters else "all types",
+            )
 
             # -------------------------------------------------- action alerts
             wanted = {
@@ -195,6 +209,10 @@ class Poller:
                 in wanted
                 and (not filters or sources.action_type(a.get("subject")) in filters)
             ]
+            log.info(
+                "poll cycle: chat %s has %d matching corporate action(s)",
+                chat_id, len(matching),
+            )
             if str(chat_id) == owner:
                 self._set("last_results", matching)
 
@@ -247,6 +265,10 @@ class Poller:
             except (TypeError, ValueError):
                 threshold = 0.0
             if threshold > 0:
+                log.info(
+                    "poll cycle: price alerts active for chat %s at +/-%.2f%%",
+                    chat_id, threshold,
+                )
                 for item in watchlist:
                     day_key = (
                         f"price|{chat_id}|{item['exchange'].upper()}"
