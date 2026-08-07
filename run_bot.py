@@ -79,6 +79,14 @@ HELP_TEXT = (
     "\u26a0\ufe0f <b>High Zone</b>  = Near 52-week HIGH (65\u201385%)\n"
     "\U0001F6AB <b>Avoid</b>     = At/near 52-week HIGH (\u226585%)\n\n"
     "━━━━━━━━━━━━━━━━━━━━\n"
+    "\U0001F50D <b>Single Stock Deep Analysis</b>\n"
+    "━━━━━━━━━━━━━━━━━━━━\n"
+    "/stock <i>SYMBOL</i>  (or /fund <i>SYMBOL</i>)\n"
+    "  Full deep-dive report for any single stock:\n"
+    "  /stock TATATECH  \u2192 Tata Tech valuation, technicals &amp; QoQ holding\n"
+    "  /stock RELIANCE  \u2192 Reliance P/E, 52W signal &amp; Shareholding\n"
+    "  /stock CGCL      \u2192 CGCL complete fundamental summary card\n\n"
+    "━━━━━━━━━━━━━━━━━━━━\n"
     "\U0001F4C8 <b>Market Screens</b>\n"
     "━━━━━━━━━━━━━━━━━━━━\n"
     "/movers <i>[period] [N] [100|500]</i>\n"
@@ -433,6 +441,10 @@ def handle_command(chat_id, text):
     if cmd in ("/gainers", "/losers"):
         direction = "gainers" if cmd == "/gainers" else "losers"
         handle_gainers_losers(chat_id, parts, direction)
+        return
+
+    if cmd in ("/stock", "/fund", "/info", "/quote"):
+        handle_single_stock_analysis(chat_id, parts)
         return
 
     if len(parts) < 2:
@@ -1188,6 +1200,134 @@ def _fundamentals_lines(fund: dict | None, price=None) -> list[str]:
     return lines
 
 
+def handle_single_stock_analysis(chat_id, parts) -> None:
+    """Fetch and display deep fundamentals and summary card for a single stock.
+
+    Usage: /stock TATATECH  or  /fund RELIANCE  or  /stock CGCL
+    """
+    if len(parts) < 2:
+        reply(
+            chat_id,
+            "Usage: <code>/stock SYMBOL</code> (e.g. <code>/stock TATATECH</code> or <code>/stock RELIANCE</code>)",
+        )
+        return
+
+    raw_sym = parts[1].upper().strip().removesuffix(".NS").removesuffix(".BO")
+    t0 = monotonic()
+    log.info("handle_single_stock: fetching full details for %s for chat %s", raw_sym, chat_id)
+
+    # 1. Fetch quote data (price, change, volume, name)
+    quote = sources.get_quote("NSE", raw_sym) or sources.get_quote("BSE", raw_sym) or {}
+    price = quote.get("price")
+    change_pct = quote.get("change_pct")
+    change_abs = quote.get("change")
+    comp_name = quote.get("name") or raw_sym
+
+    # 2. Fetch full fundamentals + screener + RSI
+    fund = sources.get_fundamentals(raw_sym, with_screener=True) or {}
+
+    if price is None and not fund:
+        _reply_suggestions(chat_id, raw_sym)
+        return
+
+    def _num(value, nd: int) -> str:
+        s = f"{value:.{nd}f}"
+        return s.rstrip("0").rstrip(".") if "." in s else s
+
+    lines = []
+    sec_name = notifier.escape(fund.get("sector") or "Indian Equity")
+    lines.append(f"\U0001F4CA <b>{notifier.escape(comp_name.upper())}</b> (<code>{notifier.escape(raw_sym)}</code>)")
+    lines.append(f"Sector: <i>{sec_name}</i>")
+    lines.append("")
+
+    # Section 1: Price & Today's Movement
+    lines.append("<b>\U0001F4B0 PRICE & MOVEMENT</b>")
+    if price is not None:
+        p_str = notifier.fmt_money(price)
+        if change_pct is not None:
+            sign = "+" if change_pct >= 0 else ""
+            abs_str = f" ({sign}{notifier.fmt_money(change_abs)})" if change_abs is not None else ""
+            chg_badge = f"<b>{sign}{change_pct:.2f}%</b>{abs_str}"
+            lines.append(f"Current Price: <b>{p_str}</b>  {chg_badge}")
+        else:
+            lines.append(f"Current Price: <b>{p_str}</b>")
+
+    sig_emoji, range_tag = _wk52_signal(price, fund)
+    rsi_tag = _rsi_signal(fund.get("rsi"))
+
+    if fund.get("wk52_high") is not None and fund.get("wk52_low") is not None:
+        hi, lo = fund["wk52_high"], fund["wk52_low"]
+        lines.append(f"\U0001F4C8 52w Range: {notifier.fmt_money(lo)} \u2013 {notifier.fmt_money(hi)}")
+        if price:
+            try:
+                dist_lo = ((float(price) - lo) / lo) * 100
+                dist_hi = ((hi - float(price)) / hi) * 100
+                lines.append(f"📍 Distance: +{dist_lo:.1f}% from 52w Low  \u00b7  -{dist_hi:.1f}% from 52w High")
+            except (ValueError, TypeError, ZeroDivisionError):
+                pass
+
+    if range_tag or rsi_tag:
+        t_bits = [b for b in (range_tag, rsi_tag) if b]
+        lines.append(f"\u26a1 Technicals: {'  \u2022  '.join(t_bits)}")
+    lines.append("")
+
+    # Section 2: Valuation & Ratios
+    lines.append("<b>\U0001F3F7\ufe0f VALUATION & RATIOS</b>")
+    val_parts = []
+    if fund.get("pe"):
+        val_parts.append(f"Stock P/E: <b>{_num(fund['pe'], 1)}</b>")
+    else:
+        val_parts.append("Stock P/E: <b>N/A (Loss)</b>")
+
+    if fund.get("sector_pe"):
+        val_parts.append(f"Sec P/E: <b>{_num(fund['sector_pe'], 1)}</b>")
+
+    if fund.get("market_cap") is not None:
+        val_parts.append(f"MCap: <b>\u20b9{fund['market_cap']:,.0f}Cr</b>")
+
+    if fund.get("debt_to_equity") is not None:
+        val_parts.append(f"D/E: <b>{_num(fund['debt_to_equity'], 2)}</b>")
+
+    if fund.get("div_yield") is not None:
+        val_parts.append(f"Div Yield: <b>{_num(fund['div_yield'], 2)}%</b>")
+
+    lines.append("  \u00b7  ".join(val_parts))
+    lines.append("")
+
+    # Section 3: Profitability & Returns
+    lines.append("<b>\U0001F3AF PROFITABILITY & RETURNS</b>")
+    ret_parts = []
+    if fund.get("roce") is not None:
+        ret_parts.append(f"ROCE: <b>{_num(fund['roce'], 1)}%</b>")
+    if fund.get("roe") is not None:
+        ret_parts.append(f"ROE: <b>{_num(fund['roe'], 1)}%</b>")
+    if ret_parts:
+        lines.append("  \u00b7  ".join(ret_parts))
+    else:
+        lines.append("Full financial statement trends available on Screener.in")
+    lines.append("")
+
+    # Section 4: Shareholding Pattern (QoQ Trend)
+    lines.append("<b>\U0001F4BC SHAREHOLDING PATTERN (QoQ TREND)</b>")
+    if any(fund.get(k) for k in ("promoter_pct", "fii_pct", "dii_pct", "public_pct")):
+        if fund.get("promoter_pct"):
+            lines.append(f"\U0001F451 Promoter: {notifier.escape(fund['promoter_pct'])}")
+        if fund.get("fii_pct"):
+            lines.append(f"\U0001F30D FII: {notifier.escape(fund['fii_pct'])}")
+        if fund.get("dii_pct"):
+            lines.append(f"\U0001F3DB\ufe0f DII: {notifier.escape(fund['dii_pct'])}")
+        if fund.get("public_pct"):
+            lines.append(f"\U0001F465 Public: {notifier.escape(fund['public_pct'])}")
+    else:
+        lines.append("No shareholding breakdown available.")
+
+    lines.append("")
+    lines.append(f"\U0001F4A1 <i>Tip: Track this stock with /add {raw_sym} NSE</i>")
+
+    _reply_messages(chat_id, ["\n".join(lines)])
+    log.info("handle_single_stock: completed for %s in %.1fs", raw_sym, monotonic() - t0)
+
+
 def handle_movers(chat_id, parts) -> None:
     """Movement screen over an index (default NIFTY 100, all directions)."""
     handle_market_screen(
@@ -1276,6 +1416,8 @@ def register_commands() -> bool:
         {"command": "exdate", "description": "Ex-dates: /exdate today or /exdate 7"},
         {"command": "summary", "description": "Market snapshot: counts + next ex-dates"},
         {"command": "news", "description": "Latest news for your watchlist stocks"},
+        {"command": "stock", "description": "Full stock summary: /stock TATATECH"},
+        {"command": "fund", "description": "Deep stock fundamentals: /fund RELIANCE"},
         {"command": "movers", "description": "Movers + fundamentals: /movers 1h gainers 10"},
         {"command": "gainers", "description": "Top gainers + fundamentals: /gainers 1h 50"},
         {"command": "losers", "description": "Top losers + fundamentals: /losers 1w 100"},
