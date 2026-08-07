@@ -703,7 +703,7 @@ def _screener_get(url: str) -> str | None:
             time.sleep(wait)
         _last_screener_req = time.time()
     try:
-        resp = _session().get(url, timeout=config.HTTP_TIMEOUT)
+        resp = _session().get(url, timeout=3.0)
         resp.raise_for_status()
         text = resp.text
     except Exception as exc:

@@ -920,6 +920,71 @@ def _parse_screen_parts(parts, default_period, default_direction,
     return period, direction, count, universe
 
 
+def _format_price_movers_report(rows: list, header: str) -> str:
+    """Format the fast initial price-only movers report (Phase 1)."""
+    lines = [header]
+    for idx, (sym, d) in enumerate(rows, 1):
+        change = d["change_pct"]
+        price = d.get("price")
+        if change >= 3.0:
+            move_icon = "\U0001F7E2\u25b2\u25b2"   # 🟢▲▲ strong up
+        elif change >= 1.0:
+            move_icon = "\U0001F7E2\u25b2"          # 🟢▲ up
+        elif change <= -3.0:
+            move_icon = "\U0001F534\u25bc\u25bc"   # 🔴▼▼ strong down
+        elif change <= -1.0:
+            move_icon = "\U0001F534\u25bc"          # 🔴▼ down
+        elif change >= 0:
+            move_icon = "\U0001F7E1\u25b2"          # 🟡▲ small up
+        else:
+            move_icon = "\U0001F7E1\u25bc"          # 🟡▼ small down
+        sign = "+" if change >= 0 else ""
+        lines.append(
+            f"{idx}. {move_icon} <b>{notifier.escape(sym)}</b>  "
+            f"{notifier.fmt_money(price)}  <b>{sign}{change:.2f}%</b>"
+        )
+    lines.append("")
+    lines.append(
+        f"\u23f3 Price data loaded for {len(rows)} stocks. "
+        "Fetching 52W range, RSI, P/E &amp; fundamentals... "
+        "Updated report coming in a few seconds."
+    )
+    return "\n".join(lines)
+
+
+def _format_enriched_movers_report(rows: list, header: str, fund_by_sym: dict) -> str:
+    """Format the full enriched fundamentals movers report (Phase 2)."""
+    enriched_lines = [header + "  \U0001F4CA"]
+    for idx, (sym, d) in enumerate(rows, 1):
+        change = d["change_pct"]
+        price = d.get("price")
+        fund = fund_by_sym.get(sym)
+        if change >= 3.0:
+            move_icon = "\U0001F7E2\u25b2\u25b2"
+        elif change >= 1.0:
+            move_icon = "\U0001F7E2\u25b2"
+        elif change <= -3.0:
+            move_icon = "\U0001F534\u25bc\u25bc"
+        elif change <= -1.0:
+            move_icon = "\U0001F534\u25bc"
+        elif change >= 0:
+            move_icon = "\U0001F7E1\u25b2"
+        else:
+            move_icon = "\U0001F7E1\u25bc"
+        sign = "+" if change >= 0 else ""
+        chg_str = f"{sign}{change:.2f}%"
+        sig_emoji, _ = _wk52_signal(price, fund)
+        sig_prefix = f" {sig_emoji}" if sig_emoji else ""
+        enriched_lines.append(
+            f"{idx}. {move_icon}{sig_prefix} <b>{notifier.escape(sym)}</b>  "
+            f"{notifier.fmt_money(price)}  <b>{chg_str}</b>"
+        )
+        fund_line = _fundamentals_line(fund, price)
+        if fund_line:
+            enriched_lines.append("   " + fund_line)
+    return "\n".join(enriched_lines)
+
+
 def handle_market_screen(chat_id, parts, default_direction="all",
                          default_period=("intraday", 60), default_count=15,
                          default_universe="nifty100") -> None:
@@ -983,35 +1048,8 @@ def handle_market_screen(chat_id, parts, default_direction="all",
     header = f"{title} · {universe_label} (Top {len(rows)})"
 
     # ── Phase 1: send instant price-only list so user gets immediate data ──
-    def _row_line_simple(idx, sym, d) -> str:
-        change = d["change_pct"]
-        price = d.get("price")
-        if change >= 3.0:
-            move_icon = "\U0001F7E2\u25b2\u25b2"   # 🟢▲▲ strong up
-        elif change >= 1.0:
-            move_icon = "\U0001F7E2\u25b2"          # 🟢▲ up
-        elif change <= -3.0:
-            move_icon = "\U0001F534\u25bc\u25bc"   # 🔴▼▼ strong down
-        elif change <= -1.0:
-            move_icon = "\U0001F534\u25bc"          # 🔴▼ down
-        elif change >= 0:
-            move_icon = "\U0001F7E1\u25b2"          # 🟡▲ small up
-        else:
-            move_icon = "\U0001F7E1\u25bc"          # 🟡▼ small down
-        sign = "+" if change >= 0 else ""
-        return (
-            f"{idx}. {move_icon} <b>{notifier.escape(sym)}</b>  "
-            f"{notifier.fmt_money(price)}  <b>{sign}{change:.2f}%</b>"
-        )
-
-    phase1_lines = [header]
-    for idx, (sym, d) in enumerate(rows, 1):
-        phase1_lines.append(_row_line_simple(idx, sym, d))
-    phase1_lines.append("")
-    phase1_lines.append(
-        "\u23f3 Fetching 52W high/low, P/E and fundamentals... updated report coming shortly."
-    )
-    _reply_messages(chat_id, _split_messages(phase1_lines))
+    phase1_text = _format_price_movers_report(rows, header)
+    _reply_messages(chat_id, _split_messages(phase1_text.split("\n")))
     log.info(
         "screen %s: phase-1 sent (%d rows) in %.1fs",
         parts[0], len(rows), monotonic() - t0,
@@ -1041,36 +1079,8 @@ def handle_market_screen(chat_id, parts, default_direction="all",
             parts[0], monotonic() - t1,
         )
 
-        enriched_lines = [header + "  \U0001F4CA"]
-        for idx, (sym, d) in enumerate(rows, 1):
-            change = d["change_pct"]
-            price = d.get("price")
-            fund = fund_by_sym.get(sym)
-            if change >= 3.0:
-                move_icon = "\U0001F7E2\u25b2\u25b2"
-            elif change >= 1.0:
-                move_icon = "\U0001F7E2\u25b2"
-            elif change <= -3.0:
-                move_icon = "\U0001F534\u25bc\u25bc"
-            elif change <= -1.0:
-                move_icon = "\U0001F534\u25bc"
-            elif change >= 0:
-                move_icon = "\U0001F7E1\u25b2"
-            else:
-                move_icon = "\U0001F7E1\u25bc"
-            sign = "+" if change >= 0 else ""
-            chg_str = f"{sign}{change:.2f}%"
-            sig_emoji, _ = _wk52_signal(price, fund)
-            sig_prefix = f" {sig_emoji}" if sig_emoji else ""
-            enriched_lines.append(
-                f"{idx}. {move_icon}{sig_prefix} <b>{notifier.escape(sym)}</b>  "
-                f"{notifier.fmt_money(price)}  <b>{chg_str}</b>"
-            )
-            fund_line = _fundamentals_line(fund, price)
-            if fund_line:
-                enriched_lines.append("   " + fund_line)
-
-        _reply_messages(chat_id, _split_messages(enriched_lines))
+        phase2_text = _format_enriched_movers_report(rows, header, fund_by_sym)
+        _reply_messages(chat_id, _split_messages(phase2_text.split("\n")))
         log.info(
             "screen %s: phase-2 enriched report sent in %.1fs (total %.1fs)",
             parts[0], monotonic() - t1, monotonic() - t0,
