@@ -1189,7 +1189,7 @@ def _fundamentals_line(fund: dict | None, price=None) -> str:
         bits = []
         for key, label in (("promoter_pct", "Prom"), ("fii_pct", "FII"), ("dii_pct", "DII")):
             if fund.get(key):
-                bits.append(f"{label} {fund[key]}")
+                bits.append(f"{label} {notifier.escape(fund[key])}")
         parts.append(" \u00b7 ".join(bits))
     return " | ".join(parts)
 

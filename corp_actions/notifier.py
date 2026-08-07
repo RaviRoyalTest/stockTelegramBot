@@ -1,6 +1,7 @@
 """Telegram notification sending and message formatting."""
 import html
 import logging
+import re
 from datetime import datetime, timedelta
 
 import requests
@@ -94,6 +95,18 @@ def send_message(text: str, parse_mode: str = "HTML", chat_id: str | None = None
         )
         return data
     except requests.RequestException as exc:
+        # Fall back to plain text if HTML parsing failed (HTTP 400)
+        if parse_mode and ("400" in str(exc) or "parse" in str(exc).lower()):
+            log.warning("Telegram HTML parse failed for chat %s — retrying plain text fallback", target)
+            plain_text = re.sub(r"<[^>]+>", "", text)
+            plain_payload = {"chat_id": target, "text": plain_text}
+            try:
+                resp2 = requests.post(url, json=plain_payload, timeout=config.HTTP_TIMEOUT)
+                resp2.raise_for_status()
+                log.info("Telegram plain text fallback succeeded for chat %s", target)
+                return resp2.json()
+            except Exception as exc2:
+                log.warning("Telegram plain text fallback also failed: %s", exc2)
         log.warning("Telegram send to chat %s failed: %s", target, exc)
         raise NotifierError(f"Telegram send failed: {exc}") from exc
 
