@@ -1023,7 +1023,7 @@ def handle_market_screen(chat_id, parts, default_direction="all",
         log.info("screen %s: phase-2 fundamentals start for %d rows", parts[0], len(rows))
 
         def _fund_fetch(sym):
-            return sym, sources.get_fundamentals(sym, with_screener=False)
+            return sym, sources.get_fundamentals(sym, with_screener=True)
 
         fund_by_sym = {}
         with ThreadPoolExecutor(max_workers=10) as ex:
@@ -1142,14 +1142,18 @@ def _fundamentals_line(fund: dict | None, price=None) -> str:
         )
     if fund.get("div_yield") is not None:
         parts.append(f"Div {_num(fund['div_yield'], 2)}%")
+    if fund.get("debt_to_equity") is not None:
+        parts.append(f"D/E {_num(fund['debt_to_equity'], 2)}")
+    if fund.get("roce") is not None:
+        parts.append(f"ROCE {_num(fund['roce'], 1)}%")
+    if fund.get("roe") is not None:
+        parts.append(f"ROE {_num(fund['roe'], 1)}%")
     if any(fund.get(k) for k in ("promoter_pct", "fii_pct", "dii_pct")):
         bits = []
         for key, label in (("promoter_pct", "Prom"), ("fii_pct", "FII"), ("dii_pct", "DII")):
             if fund.get(key):
                 bits.append(f"{label} {fund[key]}")
         parts.append(" \u00b7 ".join(bits))
-    if fund.get("debt_to_equity") is not None:
-        parts.append(f"D/E {_num(fund['debt_to_equity'], 2)}")
     return " | ".join(parts)
 
 

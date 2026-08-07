@@ -872,7 +872,7 @@ def get_sector_pe(slug: str) -> float | None:
 
 
 def _parse_screener_fundamentals(symbol: str) -> dict | None:
-    """Best-effort promoter/FII/DII holding + sector P/E from screener.in."""
+    """Best-effort ratios (P/E, Div, D/E, 52W range) + holding + sector P/E from screener.in."""
     page = _screener_get(f"https://www.screener.in/company/{quote(symbol)}/")
     if not page:
         return None
@@ -889,6 +889,34 @@ def _parse_screener_fundamentals(symbol: str) -> dict | None:
             )
             out["sector_pe"] = get_sector_pe(link.group(1))
             break
+
+    # Parse top ratios list (Stock P/E, Dividend Yield, Debt to equity, High / Low, ROCE, ROE)
+    top_ratios = re.search(r'<ul id="top-ratios"[^>]*>(.*?)</ul>', page, re.S)
+    if top_ratios:
+        for item in re.findall(r'<li[^>]*>(.*?)</li>', top_ratios.group(1), re.S):
+            name_m = re.search(r'<span class="name"[^>]*>(.*?)</span>', item, re.S)
+            num_m = re.findall(r'<span class="number"[^>]*>(.*?)</span>', item, re.S)
+            if name_m and num_m:
+                name = re.sub(r'<[^>]+>|\s+', ' ', name_m.group(1)).strip().lower()
+                vals = [re.sub(r'<[^>]+>|\s+|,|₹', '', v).strip() for v in num_m]
+                try:
+                    if 'stock p/e' in name or name == 'p/e':
+                        out['pe'] = float(vals[0])
+                    elif 'dividend yield' in name:
+                        out['div_yield'] = float(vals[0])
+                    elif 'debt to equity' in name:
+                        out['debt_to_equity'] = float(vals[0])
+                    elif 'roce' in name:
+                        out['roce'] = float(vals[0])
+                    elif 'roe' in name:
+                        out['roe'] = float(vals[0])
+                    elif 'high / low' in name or 'high/low' in name:
+                        if len(vals) >= 2:
+                            out['wk52_high'] = float(vals[0])
+                            out['wk52_low'] = float(vals[1])
+                except (ValueError, IndexError):
+                    pass
+
     i = page.find('<div id="quarterly-shp"')
     j = page.find('<div id="yearly-shp"')
     seg = page[i:j] if i > 0 and j > i else ""
