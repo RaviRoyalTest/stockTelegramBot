@@ -723,38 +723,44 @@ def _screener_get(url: str) -> str | None:
     return text
 
 
+_fund_lock = threading.Lock()
+_global_fund_sess = None
+_global_fund_crumb = ""
+_global_fund_crumb_ts = 0.0
+_CRUMB_TTL = 3600  # 1 hour
+
+
 def _fund_session():
-    """A per-thread Yahoo session with its own cookie + crumb."""
-    sess = getattr(_tls, "fund_sess", None)
-    if sess is None:
-        sess = requests.Session()
-        sess.headers.update({"User-Agent": config.USER_AGENT})
-        try:
-            r = sess.get("https://fc.yahoo.com", timeout=config.HTTP_TIMEOUT)
-            log.info("fund_session: cookie consent ping -> status %s", r.status_code)
-        except Exception as exc:
-            log.info("fund_session: cookie consent ping failed: %s", exc)
-        _tls.fund_sess = sess
-    crumb = getattr(_tls, "fund_crumb", "")
-    if not crumb:
-        for crumb_host in (
-            "https://query1.finance.yahoo.com/v1/test/getcrumb",
-            "https://query2.finance.yahoo.com/v1/test/getcrumb",
-        ):
+    """A thread-safe global Yahoo session with cached crumb (prevents HTTP 429)."""
+    global _global_fund_sess, _global_fund_crumb, _global_fund_crumb_ts
+    now = time.time()
+    with _fund_lock:
+        if _global_fund_sess is None:
+            _global_fund_sess = requests.Session()
+            _global_fund_sess.headers.update({"User-Agent": config.USER_AGENT})
             try:
-                resp = sess.get(crumb_host, timeout=config.HTTP_TIMEOUT)
-                if resp.status_code == 200 and resp.text.strip():
-                    crumb = resp.text.strip()
-                    _tls.fund_crumb = crumb
-                    log.info("fund_session: crumb obtained from %s", crumb_host)
-                    break
-                log.info(
-                    "fund_session: crumb from %s -> status %s body=%r",
-                    crumb_host, resp.status_code, resp.text[:80],
-                )
+                r = _global_fund_sess.get("https://fc.yahoo.com", timeout=config.HTTP_TIMEOUT)
+                log.info("fund_session: cookie consent ping -> status %s", r.status_code)
             except Exception as exc:
-                log.info("fund_session: crumb request to %s failed: %s", crumb_host, exc)
-    return sess, crumb
+                log.info("fund_session: cookie consent ping failed: %s", exc)
+
+        if not _global_fund_crumb or now - _global_fund_crumb_ts > _CRUMB_TTL:
+            for crumb_host in (
+                "https://query1.finance.yahoo.com/v1/test/getcrumb",
+                "https://query2.finance.yahoo.com/v1/test/getcrumb",
+            ):
+                try:
+                    resp = _global_fund_sess.get(crumb_host, timeout=config.HTTP_TIMEOUT)
+                    if resp.status_code == 200 and resp.text.strip():
+                        _global_fund_crumb = resp.text.strip()
+                        _global_fund_crumb_ts = now
+                        log.info("fund_session: crumb obtained from %s -> %s...", crumb_host, _global_fund_crumb[:6])
+                        break
+                    log.info("fund_session: crumb from %s -> status %s", crumb_host, resp.status_code)
+                except Exception as exc:
+                    log.info("fund_session: crumb request to %s failed: %s", crumb_host, exc)
+
+        return _global_fund_sess, _global_fund_crumb
 
 
 def _quote_summary(symbol: str) -> dict | None:
