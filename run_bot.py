@@ -15,6 +15,7 @@ import logging
 import os
 import subprocess
 import sys
+from concurrent.futures import ThreadPoolExecutor
 from datetime import date, timedelta
 from pathlib import Path
 
@@ -73,6 +74,10 @@ HELP_TEXT = (
     "   /ca TATA         keyword search in company name / subject\n"
     "/exdate [today|N] - all actions whose ex-date is today or within N days\n"
     "/summary - counts by exchange and type, plus next ex-dates\n"
+    "/news [N|SYMBOL] - latest news for the stocks in your list\n"
+    "   /news         up to 3 headlines per watchlist stock\n"
+    "   /news 5       up to 5 headlines per stock\n"
+    "   /news RELIANCE  news for one symbol\n"
     "/add SYMBOL [NSE|BSE] - add a stock to the watchlist\n"
     "/remove SYMBOL [NSE|BSE] - remove a stock\n"
     "/list - show the watchlist\n"
@@ -321,6 +326,10 @@ def handle_command(chat_id, text):
         reply(chat_id, format_settings(chat_id))
         return
 
+    if cmd == "/news":
+        handle_news(chat_id, parts)
+        return
+
     if len(parts) < 2:
         reply(chat_id, "Usage: /add SYMBOL [NSE|BSE]  or  /remove SYMBOL [NSE|BSE]")
         return
@@ -399,6 +408,7 @@ def _reply_suggestions(chat_id, query):
 # the results are always fresh. Replies are split into Telegram-sized chunks.
 
 MAX_QUERY_ITEMS = 20  # entries per message batch
+MAX_NEWS_STOCKS = 10  # stocks processed by /news per request
 
 
 def _split_messages(lines: list[str], max_len: int = 3800) -> list[str]:
@@ -423,6 +433,24 @@ def _reply_messages(chat_id, messages: list[str]) -> None:
         except notifier.NotifierError as exc:
             log.warning("query reply failed for chat %s: %s", chat_id, exc)
             return
+
+
+def _attach_quotes(actions: list[dict], max_workers: int = 6) -> None:
+    """Fetch current prices for the actions in parallel and attach them."""
+    if not actions:
+        return
+    for a in actions:
+        a.pop("quote", None)
+    with ThreadPoolExecutor(max_workers=max_workers) as ex:
+        results = list(
+            ex.map(
+                lambda a: (a, sources.get_quote(a["exchange"], a["symbol"])),
+                list(actions),
+            )
+        )
+    for action, quote in results:
+        if quote:
+            action["quote"] = quote
 
 
 def _norm_type(token: str) -> str | None:
@@ -503,6 +531,7 @@ def run_ca_query(chat_id, descriptor: dict) -> bool:
         )
         if dated:
             lines.append("\n<b>Next ex-dates:</b>")
+            _attach_quotes(dated[:15])
             for a in dated[:15]:
                 lines.append(notifier.format_action_entry(a))
         else:
@@ -540,11 +569,9 @@ def run_ca_query(chat_id, descriptor: dict) -> bool:
             if (a.get("symbol") or "").upper() == term.upper()
         ]
         if symbol_matches:
+            _attach_quotes(symbol_matches)
             messages = [f"<b>Corporate actions for {notifier.escape(term.upper())}</b>"]
             for a in sorted(symbol_matches, key=lambda x: x.get("ex_date") or "9999-99-99"):
-                quote = sources.get_quote(a["exchange"], a["symbol"])
-                if quote:
-                    a["quote"] = quote
                 messages.append(notifier.format_action_detail(a))
             _reply_messages(chat_id, messages)
             return True
@@ -564,8 +591,10 @@ def run_ca_query(chat_id, descriptor: dict) -> bool:
         results,
         key=lambda a: (a.get("ex_date") or "9999-99-99", (a.get("symbol") or "").upper()),
     )
+    shown = ordered[:MAX_QUERY_ITEMS]
+    _attach_quotes(shown)
     lines = [title, f"{len(ordered)} action(s) found."]
-    for a in ordered[:MAX_QUERY_ITEMS]:
+    for a in shown:
         lines.append(notifier.format_action_entry(a))
     if len(ordered) > MAX_QUERY_ITEMS:
         lines.append(
@@ -601,6 +630,61 @@ def format_settings(chat_id) -> str:
     )
 
 
+def handle_news(chat_id, parts) -> None:
+    """Latest news for the stocks in the requester's watchlist.
+
+    /news           -> up to 3 headlines per watchlist stock
+    /news N         -> up to N headlines per stock (1-5)
+    /news SYMBOL    -> news for one symbol instead of the whole list
+    """
+    per_stock = 3
+    if len(parts) > 1 and parts[1].isdigit():
+        per_stock = max(1, min(5, int(parts[1])))
+        target = None
+    elif len(parts) > 1:
+        target = parts[1].upper()
+    else:
+        target = None
+
+    if target:
+        items = [{"symbol": target, "exchange": "NSE", "company": target}]
+    else:
+        items = storage.get_user_list(chat_id)
+        if not items:
+            reply(
+                chat_id,
+                "Your watchlist is empty. Add stocks with /add SYMBOL NSE, "
+                "then /news.",
+            )
+            return
+
+    truncated = len(items) > MAX_NEWS_STOCKS
+    items = items[:MAX_NEWS_STOCKS]
+
+    def _fetch(item):
+        try:
+            news = sources.get_stock_news(item["exchange"], item["symbol"], per_stock)
+            return item, news
+        except Exception as exc:  # a failing stock must not break the batch
+            log.info("news fetch failed for %s: %s", item.get("symbol"), exc)
+            return item, []
+
+    with ThreadPoolExecutor(max_workers=6) as ex:
+        fetched = list(ex.map(_fetch, items))
+
+    for item, news in fetched:
+        try:
+            notifier.send_message(
+                notifier.format_news_list(item["symbol"], item["exchange"], news),
+                chat_id=chat_id,
+            )
+        except notifier.NotifierError as exc:
+            log.warning("news reply failed for chat %s: %s", chat_id, exc)
+            return
+    if truncated:
+        reply(chat_id, f"(showing news for the first {MAX_NEWS_STOCKS} stocks)")
+
+
 def handle_query_text(chat_id, text) -> bool:
     """Answer natural-language questions about corporate actions.
 
@@ -617,10 +701,16 @@ def handle_query_text(chat_id, text) -> bool:
         "ex-date", "ex date",
         "dividend", "bonus", "split", "rights", "buyback", "buy back",
         "shareholder increase", "share holder increase", "shares increase",
-        "increase", "actions",
+        "increase", "actions", "news",
     )
     if not any(k in low for k in keywords):
         return False
+    if "news" in low and any(
+        w in low for w in ("stock", "latest", "market", "watchlist", "list",
+                           "hold", "holding", "share", "company")
+    ):
+        handle_news(chat_id, ["/news"])
+        return True
     if "increase" in low and ("share" in low or "holder" in low):
         descriptor = {"mode": "types", "types": list(sources.INCREASE_TYPES)}
     elif "ex-date" in low or "ex date" in low or "upcoming" in low:
@@ -651,6 +741,7 @@ def register_commands() -> bool:
         {"command": "ca", "description": "Corporate actions all NSE+BSE: /ca [type]"},
         {"command": "exdate", "description": "Ex-dates: /exdate today or /exdate 7"},
         {"command": "summary", "description": "Market snapshot: counts + next ex-dates"},
+        {"command": "news", "description": "Latest news for your watchlist stocks"},
         {"command": "add", "description": "Add stock to watchlist: /add RELIANCE NSE"},
         {"command": "remove", "description": "Remove stock from watchlist"},
         {"command": "list", "description": "Show your watchlist"},

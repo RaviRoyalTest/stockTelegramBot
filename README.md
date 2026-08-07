@@ -90,6 +90,11 @@ Send these to your bot:
 | `/ca [TYPE\|SYMBOL\|N\|today]` | `/ca increase` | Query corporate actions across ALL NSE+BSE stocks, not just the watchlist. No arg = overview; `dividend`/`bonus`/`split`/`rights`/`buyback` filter by type; `increase` = shareholder increase (bonus + split + rights); `today`/`7` = ex-date window; a symbol (e.g. `RELIANCE`) = full detail; any other word = keyword search. |
 | `/exdate [today\|N]` | `/exdate 7` | All actions whose ex-date is today or within N days (default `REMINDER_DAYS`) |
 | `/summary` | `/summary` | Market snapshot: counts by exchange and type, plus the next ex-dates |
+| `/news [N\|SYMBOL]` | `/news 5` | Latest news headlines for the stocks in your list (up to N each, 1-5). `/news RELIANCE` = one symbol. Sources: Google News RSS, Yahoo fallback |
+
+Every `/ca`, `/exdate` and `/summary` result includes the current price
+(₹ with today's % change) and clearly printed Ex-date / Record date /
+Announced date. `/ca SYMBOL` shows full detail (face value, series, ISIN).
 | `/add SYMBOL [NSE/BSE]` | `/add RELIANCE NSE` | Add a stock (validated via Yahoo) |
 | `/remove SYMBOL [NSE/BSE]` | `/remove TCS` | Remove a stock |
 | `/list` | `/list` | Show the current watchlist |

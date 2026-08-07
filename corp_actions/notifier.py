@@ -1,6 +1,7 @@
 """Telegram notification sending and message formatting."""
 import html
 import logging
+from datetime import datetime, timedelta
 
 import requests
 
@@ -12,6 +13,43 @@ log = logging.getLogger(__name__)
 def escape(text) -> str:
     """Escape text for Telegram HTML parse mode."""
     return html.escape(str(text or ""), quote=False)
+
+
+def _fmt_date(value) -> str:
+    """Pretty-print an ISO date as '07-Aug-2026' (raw string if unparsable)."""
+    s = str(value or "")
+    try:
+        return datetime.strptime(s.strip(), "%Y-%m-%d").strftime("%d-%b-%Y")
+    except (ValueError, TypeError):
+        return s
+
+
+def _fmt_ts(ts) -> str:
+    """Format a unix timestamp as '07-Aug 14:30' (or empty when absent)."""
+    try:
+        return datetime.fromtimestamp(int(ts)).strftime("%d-%b %H:%M")
+    except (TypeError, ValueError, OSError):
+        return ""
+
+
+def _fmt_price(action) -> str:
+    """Compact price string from an attached quote, or '' when unavailable."""
+    quote = action.get("quote")
+    if not quote or quote.get("price") is None:
+        return ""
+    price = quote["price"]
+    currency = quote.get("currency", "INR")
+    if currency == "INR":
+        symbol = "\u20b9"
+    elif currency == "USD":
+        symbol = "$"
+    else:
+        symbol = f" {currency}"
+    change = quote.get("change_pct")
+    if change is not None:
+        sign = "+" if change >= 0 else ""
+        return f"{symbol}{price:,.2f} ({sign}{change:.2f}%)"
+    return f"{symbol}{price:,.2f}"
 
 
 class NotifierError(Exception):
@@ -152,25 +190,41 @@ def format_upcoming_list(actions: list[dict]) -> str:
 
 
 def format_action_entry(action: dict) -> str:
-    """Compact one-line entry used by /ca and /exdate query results."""
+    """Two-line entry used by /ca, /exdate and /summary query results.
+
+    Line 1: symbol, exchange, ex-date (pretty-printed).
+    Line 2: type, subject, current price, record date - clear and skimmable.
+    """
     symbol = action.get("symbol") or "-"
-    company = action.get("company") or "-"
+    exchange = action.get("exchange") or "-"
     subject = action.get("subject") or "-"
-    ex_date = action.get("ex_date") or "-"
     typ = sources.action_type(subject)
     label = sources.TYPE_LABELS.get(typ, typ)
-    return (
-        f"\u2022 <b>{escape(symbol)}</b> ({escape(action.get('exchange'))}) "
-        f"{escape(ex_date)} [{label}] - {escape(company)}"
-        + (f" | {escape(subject)}" if subject != "-" else "")
-    )
+    lines = [
+        f"\u2022 <b>{escape(symbol)}</b> ({escape(exchange)})  "
+        f"Ex-date: <b>{_fmt_date(action.get('ex_date'))}</b>"
+    ]
+    bits = []
+    if subject != "-":
+        bits.append(f"{label}: {escape(subject)}")
+    price = _fmt_price(action)
+    if price:
+        bits.append(f"Price: <b>{price}</b>")
+    rec = action.get("record_date")
+    if rec and str(rec).strip() not in ("", "-"):
+        bits.append(f"Record: {_fmt_date(rec)}")
+    if bits:
+        lines.append("   " + " | ".join(bits))
+    return "\n".join(lines)
 
 
 def format_action_detail(action: dict) -> str:
     """Full detail block for a single corporate action query result."""
+    symbol = action.get("symbol") or "-"
+    exchange = action.get("exchange") or "-"
+    company = action.get("company") or "-"
     lines = [
-        f"<b>{escape(action.get('symbol') or '-')}</b> "
-        f"({escape(action.get('exchange'))}) - {escape(action.get('company') or '-')}",
+        f"<b>{escape(symbol)}</b> ({escape(exchange)}) - {escape(company)}",
     ]
     subject = action.get("subject")
     if subject:
@@ -178,27 +232,39 @@ def format_action_detail(action: dict) -> str:
         typ = sources.action_type(subject)
         if typ != "other":
             lines.append(f"Type: {sources.TYPE_LABELS.get(typ, typ)}")
-    for label, key in (
-        ("Ex-Date", "ex_date"),
-        ("Record Date", "record_date"),
-        ("Announced", "announcement_date"),
-        ("Face Value", "face_value"),
-        ("Series", "series"),
-        ("ISIN", "isin"),
+    price = _fmt_price(action)
+    if price:
+        lines.append(f"Current Price: <b>{price}</b>")
+    for label, key, fmt in (
+        ("Ex-Date", "ex_date", "date"),
+        ("Record Date", "record_date", "date"),
+        ("Announced", "announcement_date", "date"),
+        ("Face Value", "face_value", None),
+        ("Series", "series", None),
+        ("ISIN", "isin", None),
     ):
         val = action.get(key)
         if val and str(val).strip() and str(val).strip() != "-":
-            lines.append(f"{label}: {escape(val)}")
-    quote = action.get("quote")
-    if quote and quote.get("price") is not None:
-        price = quote["price"]
-        currency = quote.get("currency", "INR")
-        change = quote.get("change_pct")
-        if change is not None:
-            sign = "+" if change >= 0 else ""
-            lines.append(
-                f"Current Price: <b>{price:.2f} {currency}</b> ({sign}{change:.2f}%)"
-            )
-        else:
-            lines.append(f"Current Price: <b>{price:.2f} {currency}</b>")
+            display = _fmt_date(val) if fmt == "date" else escape(val)
+            lines.append(f"{label}: {display}")
     return "\n".join(lines)
+
+
+def format_news_item(item: dict, index: int = 1) -> str:
+    """Render one news headline with source and publish time."""
+    title = escape(item.get("title") or "-")
+    link = (item.get("link") or "").strip()
+    pub = _fmt_ts(item.get("published_ts"))
+    publisher = escape(item.get("publisher") or "")
+    meta = " | ".join(p for p in (publisher, pub) if p)
+    head = f"<a href=\"{escape(link)}\">{title}</a>" if link else title
+    return "\n".join([f"{index}. {head}"] + ([f"   {meta}"] if meta else []))
+
+
+def format_news_list(symbol: str, exchange: str, items: list[dict]) -> str:
+    """Render the latest news for one stock as a Telegram HTML message."""
+    header = f"<b>Latest news - {escape(symbol)}</b> ({escape(exchange)})"
+    if not items:
+        return header + "\nNo recent news found."
+    body = [format_news_item(item, i) for i, item in enumerate(items, 1)]
+    return "\n".join([header] + body)
