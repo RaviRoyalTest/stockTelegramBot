@@ -6,6 +6,7 @@ so callers can surface warnings in the UI while keeping the app running.
 import csv
 import io
 import logging
+import threading
 import time
 from datetime import date, datetime, timedelta
 from time import mktime, strptime
@@ -92,6 +93,18 @@ def _pick(obj, *keys, default=""):
 _quote_cache: dict = {}
 _QUOTE_TTL = 60  # seconds
 
+_tls = threading.local()
+
+
+def _quote_session() -> requests.Session:
+    """A keep-alive session per thread (big speedup for bulk lookups)."""
+    sess = getattr(_tls, "sess", None)
+    if sess is None:
+        sess = requests.Session()
+        sess.headers.update({"User-Agent": config.USER_AGENT})
+        _tls.sess = sess
+    return sess
+
 
 def get_quote(exchange: str, symbol: str) -> dict | None:
     """Return {'price', 'prev_close', 'change_pct', 'currency'} or None."""
@@ -108,9 +121,7 @@ def get_quote(exchange: str, symbol: str) -> dict | None:
         "?range=1d&interval=1d"
     )
     try:
-        resp = requests.get(
-            url, headers={"User-Agent": config.USER_AGENT}, timeout=config.HTTP_TIMEOUT
-        )
+        resp = _quote_session().get(url, timeout=config.HTTP_TIMEOUT)
         resp.raise_for_status()
         meta = resp.json()["chart"]["result"][0]["meta"]
         price = meta.get("regularMarketPrice")
@@ -473,9 +484,7 @@ def get_intraday_change(exchange: str, symbol: str, period_minutes: int) -> dict
     )
     data = None
     try:
-        resp = requests.get(
-            url, headers={"User-Agent": config.USER_AGENT}, timeout=config.HTTP_TIMEOUT
-        )
+        resp = _quote_session().get(url, timeout=config.HTTP_TIMEOUT)
         resp.raise_for_status()
         res = resp.json()["chart"]["result"][0]
         meta = res.get("meta") or {}

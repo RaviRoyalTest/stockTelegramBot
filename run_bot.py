@@ -84,6 +84,10 @@ HELP_TEXT = (
     "   /movers 30m        last 30 min, all stocks\n"
     "   /movers 1h gainers 10   top 10 gainers over an hour\n"
     "   /movers losers 2h   losers over 2 hours\n"
+    "/gainers [N] - top N gainers across ALL stocks (NIFTY 500), today's move\n"
+    "   default 30, up to 100  (e.g. /gainers 50)\n"
+    "/losers [N] - top N losers across ALL stocks (NIFTY 500), today's move\n"
+    "   default 30, up to 100  (e.g. /losers 100)\n"
     "/add SYMBOL [NSE|BSE] - add a stock to the watchlist\n"
     "/remove SYMBOL [NSE|BSE] - remove a stock\n"
     "/list - show the watchlist\n"
@@ -338,6 +342,11 @@ def handle_command(chat_id, text):
 
     if cmd == "/movers":
         handle_movers(chat_id, parts)
+        return
+
+    if cmd in ("/gainers", "/losers"):
+        direction = "gainers" if cmd == "/gainers" else "losers"
+        handle_gainers_losers(chat_id, parts, direction)
         return
 
     if len(parts) < 2:
@@ -754,7 +763,7 @@ def handle_movers(chat_id, parts) -> None:
     def _fetch(sym):
         return sym, sources.get_intraday_change("NSE", sym, period)
 
-    with ThreadPoolExecutor(max_workers=8) as ex:
+    with ThreadPoolExecutor(max_workers=20) as ex:
         fetched = list(ex.map(_fetch, symbols))
 
     rows = [(sym, d) for sym, d in fetched if d and d.get("change_pct") is not None]
@@ -789,6 +798,65 @@ def handle_movers(chat_id, parts) -> None:
     _reply_messages(chat_id, _split_messages(lines))
 
 
+def handle_gainers_losers(chat_id, parts, direction: str) -> None:
+    """Overall-market top gainers / losers across all stocks (NIFTY 500).
+
+    Uses today's change vs previous close. Count defaults to 30; pass any
+    number up to 100 (e.g. /gainers 50, /losers 100).
+    """
+    count = 30
+    for token in parts[1:]:
+        try:
+            count = max(1, min(100, int(token)))
+        except ValueError:
+            pass
+    symbols = sources.get_index_universe("nifty500")
+    if not symbols:
+        reply(chat_id, "Could not load the stock universe right now. Try again in a minute.")
+        return
+
+    def _fetch(sym):
+        return sym, sources.get_quote("NSE", sym)
+
+    with ThreadPoolExecutor(max_workers=20) as ex:
+        fetched = list(ex.map(_fetch, symbols))
+
+    rows = []
+    for sym, q in fetched:
+        if not q or q.get("change_pct") is None:
+            continue
+        rows.append((sym, q["price"], q["change_pct"], q.get("currency", "INR")))
+
+    if direction == "gainers":
+        rows = [r for r in rows if r[2] > 0]
+        rows.sort(key=lambda r: r[2], reverse=True)  # highest first
+        title = "<b>Top Gainers - today</b>"
+    else:
+        rows = [r for r in rows if r[2] < 0]
+        rows.sort(key=lambda r: r[2])  # most negative first
+        title = "<b>Top Losers - today</b>"
+
+    rows = rows[:count]
+    if not rows:
+        reply(chat_id, f"No {direction} right now (market may be closed).")
+        return
+
+    failed = sum(
+        1 for _, q in fetched if not q or q.get("change_pct") is None
+    )
+    lines = [f"{title} · all NIFTY 500 stocks (top {len(rows)})"]
+    for idx, (sym, price, change, currency) in enumerate(rows, 1):
+        arrow = "\u25b2" if change >= 0 else "\u25bc"
+        sign = "+" if change >= 0 else ""
+        lines.append(
+            f"{idx}. {arrow} <b>{notifier.escape(sym)}</b> "
+            f"{notifier.fmt_money(price, currency)} <b>{sign}{change:.2f}%</b>"
+        )
+    if failed:
+        lines.append(f"({failed} of {len(symbols)} stocks could not be loaded)")
+    _reply_messages(chat_id, _split_messages(lines))
+
+
 def handle_query_text(chat_id, text) -> bool:
     """Answer natural-language questions about corporate actions.
 
@@ -809,10 +877,13 @@ def handle_query_text(chat_id, text) -> bool:
     )
     if not any(k in low for k in keywords):
         return False
-    if any(w in low for w in ("movers", "top gainers", "top losers", "top gainer", "top loser")):
-        handle_movers(chat_id, ["/movers"])
+    if "gainers" in low or "gainer" in low:
+        handle_gainers_losers(chat_id, ["/gainers"], "gainers")
         return True
-    if "movement" in low and any(w in low for w in ("stock", "share", "market", "today")):
+    if "losers" in low or "loser" in low:
+        handle_gainers_losers(chat_id, ["/losers"], "losers")
+        return True
+    if any(w in low for w in ("movers", "movement", "stock movement", "market movement")):
         handle_movers(chat_id, ["/movers"])
         return True
     if "news" in low and any(
@@ -853,6 +924,8 @@ def register_commands() -> bool:
         {"command": "summary", "description": "Market snapshot: counts + next ex-dates"},
         {"command": "news", "description": "Latest news for your watchlist stocks"},
         {"command": "movers", "description": "Movement screen: /movers 1h gainers 10"},
+        {"command": "gainers", "description": "Top gainers all stocks (NIFTY 500): /gainers 50"},
+        {"command": "losers", "description": "Top losers all stocks (NIFTY 500): /losers 50"},
         {"command": "add", "description": "Add stock to watchlist: /add RELIANCE NSE"},
         {"command": "remove", "description": "Remove stock from watchlist"},
         {"command": "list", "description": "Show your watchlist"},
