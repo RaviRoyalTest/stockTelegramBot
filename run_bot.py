@@ -66,63 +66,100 @@ log = logging.getLogger("run_bot")
 import html
 
 HELP_TEXT = (
-    "\U0001F4CA <b>Corporate Action Alerts</b>\n"
-    "<i>NSE + BSE alerts, market screens and news - right in Telegram.</i>\n\n"
-    "------------------------------------\n"
-    "\U0001F4C8 <b>Market</b>\n"
-    "/ca [type|SYMBOL|N|today] \u2014 corporate actions, all NSE + BSE\n"
-    "   \u2022 /ca dividend \u00b7 /ca bonus \u00b7 /ca split \u00b7 /ca rights \u00b7 /ca buyback\n"
-    "   \u2022 /ca increase \u2014 shareholder increase (bonus + split + rights)\n"
-    "   \u2022 /ca today \u00b7 /ca 7 \u2014 ex-date today / within 7 days\n"
-    "   \u2022 /ca RELIANCE \u2014 full details for one symbol\n"
-    "   \u2022 /ca TATA \u2014 keyword search in company / subject\n"
-    "/exdate [today|N] \u2014 all actions by ex-date window (default 5 days)\n"
-    "/summary \u2014 counts by exchange &amp; type, plus next ex-dates\n"
-    "/movers | /gainers | /losers [period] [direction] [N] [100|500]\n"
-    "   \u2014 movement screens over NIFTY 100 or NIFTY 500 stocks\n"
-    "   \u2022 /movers 1h gainers 10 500 \u00b7 /gainers 2d 100 (top 100)\n"
-    "   \u2022 /losers 1mo 100 (top 100) \u00b7 /losers 30m 5 nifty100\n"
-    "   \u2022 /movers 500 (NIFTY 500) \u00b7 /gainers 1w nifty500\n\n"
+    "\U0001F4CA <b>Stock Alert Bot \u2014 Command Guide</b>\n"
+    "<i>Real-time NSE/BSE corporate actions, market movers &amp; news</i>\n\n"
+    "━━━━━━━━━━━━━━━━━━━━\n"
+    "\U0001F3A8 <b>Colour &amp; Signal Legend</b>\n"
+    "\U0001F7E2\u25b2 Green + Up arrow = Stock gaining\n"
+    "\U0001F534\u25bc Red + Down arrow  = Stock falling\n"
+    "\u2705 <b>Strong Buy</b> = Near 52-week LOW (\u226415% from bottom)\n"
+    "\U0001F4C8 <b>Buy Zone</b>  = Low zone (15\u201335% from bottom)\n"
+    "\U0001F7E1 <b>Mid-Range</b> = Middle of 52-week range\n"
+    "\u26a0\ufe0f <b>High Zone</b>  = Near 52-week HIGH (65\u201385%)\n"
+    "\U0001F6AB <b>Avoid</b>     = At/near 52-week HIGH (\u226585%)\n\n"
+    "━━━━━━━━━━━━━━━━━━━━\n"
+    "\U0001F4C8 <b>Market Screens</b>\n"
+    "━━━━━━━━━━━━━━━━━━━━\n"
+    "/movers <i>[period] [N] [100|500]</i>\n"
+    "  Top movers (up &amp; down) in a time window.\n"
+    "  /movers          \u2192 last 1h, NIFTY 100\n"
+    "  /movers 30m      \u2192 last 30 minutes\n"
+    "  /movers 2d 500   \u2192 2-day movers, NIFTY 500\n"
+    "  /movers 1w 10    \u2192 top 10 movers this week\n\n"
+    "/gainers <i>[period] [N] [100|500]</i>\n"
+    "  Top rising stocks. Default: today, NIFTY 500, top 15.\n"
+    "  /gainers             \u2192 today's top gainers\n"
+    "  /gainers 1h          \u2192 last 1h gainers\n"
+    "  /gainers 1mo 20 500  \u2192 top 20 gainers this month, NIFTY 500\n"
+    "  /gainers 3mo nifty100\u2192 3-month gainers, NIFTY 100\n\n"
+    "/losers <i>[period] [N] [100|500]</i>\n"
+    "  Top falling stocks. Default: today, NIFTY 500, top 15.\n"
+    "  /losers             \u2192 today's top losers\n"
+    "  /losers 1h 10       \u2192 top 10 losers last hour\n"
+    "  /losers 1mo 500     \u2192 biggest losers this month, NIFTY 500\n"
+    "  /losers 1w nifty100 \u2192 weekly losers, NIFTY 100\n\n"
+    "Periods: 5m \u00b7 15m \u00b7 30m \u00b7 1h \u00b7 2h \u00b7 4h \u00b7 1d \u00b7 2d \u00b7 5d \u00b7 1w \u00b7 2w \u00b7 1mo \u00b7 3mo \u00b7 6mo \u00b7 1y\n"
+    "Universe: 100/nifty100=NIFTY 100 \u00b7 500/nifty500=NIFTY 500\n\n"
+    "━━━━━━━━━━━━━━━━━━━━\n"
+    "\U0001F4C5 <b>Corporate Actions (NSE + BSE)</b>\n"
+    "━━━━━━━━━━━━━━━━━━━━\n"
+    "/ca                  \u2192 overview of all upcoming actions\n"
+    "/ca dividend         \u2192 dividend announcements\n"
+    "/ca bonus            \u2192 bonus share issues\n"
+    "/ca split            \u2192 stock splits\n"
+    "/ca rights           \u2192 rights issues\n"
+    "/ca buyback          \u2192 buybacks\n"
+    "/ca increase         \u2192 bonus + split + rights combined\n"
+    "/ca today            \u2192 ex-dates due today\n"
+    "/ca 7                \u2192 ex-dates within next 7 days\n"
+    "/ca RELIANCE         \u2192 full details for one symbol\n"
+    "/ca TATA             \u2192 keyword search (company/subject)\n\n"
+    "/exdate [today|N]    \u2192 all actions by ex-date window (default 5 days)\n"
+    "  /exdate today      \u2192 ex-dates today\n"
+    "  /exdate 10         \u2192 ex-dates in next 10 days\n\n"
+    "/summary             \u2192 counts by type + next ex-dates\n\n"
+    "━━━━━━━━━━━━━━━━━━━━\n"
     "\u2B50 <b>Watchlist</b>\n"
-    "/add SYMBOL [NSE|BSE] \u2014 add a stock you hold\n"
-    "/remove SYMBOL \u2014 remove a stock\n"
-    "/list \u2014 show your watchlist\n"
-    "/next \u2014 upcoming ex-dates for your watchlist\n"
-    "/news [N|SYMBOL] \u2014 latest headlines for your stocks\n"
-    "   \u2022 /news \u00b7 /news 5 \u00b7 /news RELIANCE\n\n"
-    "\u2699\ufe0f <b>Personalize</b>\n"
-    "/filter TYPE,TYPE \u2014 only receive chosen action types\n"
-    "   \u2022 types: dividend, bonus, split, rights, buyback (/filter all resets)\n"
-    "   \u2022 /filter dividend,bonus \u00b7 /filter all\n"
-    "/alert PCT \u2014 alert when a stock moves \u00b1PCT% in a day (/alert off)\n"
-    "   \u2022 /alert 3 \u00b7 /alert 1.5 \u00b7 /alert off\n"
-    "/settings \u2014 show your current filters &amp; alert settings\n\n"
-    "\U0001F6E0\ufe0f <b>System</b>\n"
-    "/status \u2014 where your list is saved &amp; GitHub push status\n"
-    "/checknow \u2014 force a check and re-send your alerts\n"
-    "/help \u00b7 /start \u2014 this message\n\n"
-    "------------------------------------\n"
-    "\U0001F4A1 <b>Tips</b>\n"
-    "\u2022 Just ask in plain text: \u201ccorporate action\u201d, \u201cshareholder "
-    "increase\u201d, \u201cdividends\u201d, \u201cex-date today\u201d, \u201cgainers\u201d, \u201cnews\u201d.\n"
-    "\u2022 Periods for /movers, /gainers, /losers:\n"
-    "   intraday 5m \u00b7 15m \u00b7 30m \u00b7 1h \u00b7 2h \u00b7 4h\n"
-    "   daily 1d(today) \u00b7 2d \u00b7 3d \u00b7 5d \u00b7 7d \u00b7 1w \u00b7 2w \u00b7 1mo \u00b7 3mo \u00b7 6mo \u00b7 1y\n"
-    "\u2022 Index: /movers 100 or 500, or the nifty100 / nifty500 keywords, pick the universe.\n"
-    "\u2022 For /gainers and /losers a bare 100 or 500 is a count (top N); use nifty100/nifty500 for the index.\n"
-    "\u2022 Direction: gainers / losers / all; count 1-100 (gainers/losers default 30).\n"
-    "\u2022 Each stock shows P/E, sector P/E, 52-week high/low, dividend yield,\n"
-    "   promoter/FII/DII holding and debt/equity when available.\n"
-    "\u2022 Type / alone to see this help again.\n\n"
-    "\U0001F4C5 <b>Examples</b>\n"
-    "<b>Watchlist:</b>  /add RELIANCE NSE  \u00b7  /add PGINVIT NSE  \u00b7  /remove TCS\n"
-    "<b>Corporate actions:</b>  /ca  \u00b7  /ca dividend  \u00b7  /ca increase  \u00b7  /ca 7  \u00b7  /ca RELIANCE\n"
-    "<b>Ex-dates:</b>  /exdate today  \u00b7  /exdate 10  \u00b7  /next\n"
-    "<b>Movers:</b>  /movers 30m  \u00b7  /movers 1h gainers 10 500  \u00b7  /movers 2d  \u00b7  /movers 1w 500\n"
-    "<b>Gainers:</b>  /gainers  \u00b7  /gainers 50  \u00b7  /gainers 2d 100  \u00b7  /gainers 1h nifty500\n"
-    "<b>Losers:</b>  /losers  \u00b7  /losers 1mo 100  \u00b7  /losers 30m 5 nifty100  \u00b7  /losers 1w nifty500\n"
-    "<b>News:</b>  /news  \u00b7  /news 5  \u00b7  /news RELIANCE\n"
-    "<b>Personalize:</b>  /filter dividend,bonus  \u00b7  /alert 3  \u00b7  /settings"
+    "━━━━━━━━━━━━━━━━━━━━\n"
+    "/add SYMBOL [NSE|BSE]\u2192 add a stock (default NSE)\n"
+    "  /add RELIANCE NSE  \u00b7  /add PGINVIT\n"
+    "/remove SYMBOL       \u2192 remove from watchlist\n"
+    "  /remove TCS\n"
+    "/list                \u2192 view your full watchlist\n"
+    "/next                \u2192 upcoming ex-dates for your watchlist\n"
+    "/news [N|SYMBOL]     \u2192 latest headlines\n"
+    "  /news              \u2192 news for all watchlist stocks\n"
+    "  /news 5            \u2192 5 headlines per stock\n"
+    "  /news RELIANCE     \u2192 news for RELIANCE only\n\n"
+    "━━━━━━━━━━━━━━━━━━━━\n"
+    "\u2699\ufe0f <b>Personalise</b>\n"
+    "━━━━━━━━━━━━━━━━━━━━\n"
+    "/filter TYPE,TYPE    \u2192 receive only selected action types\n"
+    "  /filter dividend,bonus  \u00b7  /filter all (reset)\n"
+    "  Types: dividend \u00b7 bonus \u00b7 split \u00b7 rights \u00b7 buyback\n"
+    "/alert PCT           \u2192 alert when stock moves \u00b1PCT% in a day\n"
+    "  /alert 3           \u2192 alert on \u00b13% move\n"
+    "  /alert 1.5         \u00b7  /alert off (disable)\n"
+    "/settings            \u2192 view your current filter &amp; alert config\n\n"
+    "━━━━━━━━━━━━━━━━━━━━\n"
+    "\U0001F6E0 <b>System</b>\n"
+    "━━━━━━━━━━━━━━━━━━━━\n"
+    "/status              \u2192 where your watchlist is saved &amp; GitHub push status\n"
+    "/checknow            \u2192 force-run alerts and re-send all matches\n"
+    "/help \u00b7 /start       \u2192 show this guide\n\n"
+    "━━━━━━━━━━━━━━━━━━━━\n"
+    "\U0001F4A1 <b>Quick Examples</b>\n"
+    "━━━━━━━━━━━━━━━━━━━━\n"
+    "/gainers 1h 10          \u2192 Top 10 gainers last hour\n"
+    "/losers 1mo 500         \u2192 Monthly losers \u2014 NIFTY 500\n"
+    "/movers 2d 10 500       \u2192 2-day movers, top 10, NIFTY 500\n"
+    "/ca dividend            \u2192 Upcoming dividends\n"
+    "/ca RELIANCE            \u2192 RELIANCE corporate actions\n"
+    "/add INFY NSE           \u2192 Add INFY to watchlist\n"
+    "/news RELIANCE          \u2192 Latest RELIANCE headlines\n"
+    "/filter bonus,split     \u2192 Only bonus &amp; split alerts\n"
+    "/alert 2.5              \u2192 Alert on \u00b12.5% daily move\n"
+    "\U0001F4DD Type in plain text: \"gainers\", \"dividends\", \"ex-date today\", \"news\""
 )
 
 CA_HELP = (
@@ -961,13 +998,31 @@ def handle_market_screen(chat_id, parts, default_direction="all",
     lines = [header]
     for idx, (sym, d) in enumerate(rows, 1):
         change = d["change_pct"]
-        arrow = "\u25b2" if change >= 0 else "\u25bc"
+        price = d.get("price")
+        fund = fund_by_sym.get(sym)
+        # Color circle + arrow based on direction and magnitude
+        if change >= 3.0:
+            move_icon = "\U0001F7E2\u25b2\u25b2"   # 🟢▲▲ strong up
+        elif change >= 1.0:
+            move_icon = "\U0001F7E2\u25b2"          # 🟢▲ up
+        elif change <= -3.0:
+            move_icon = "\U0001F534\u25bc\u25bc"   # 🔴▼▼ strong down
+        elif change <= -1.0:
+            move_icon = "\U0001F534\u25bc"          # 🔴▼ down
+        elif change >= 0:
+            move_icon = "\U0001F7E1\u25b2"          # 🟡▲ small up
+        else:
+            move_icon = "\U0001F7E1\u25bc"          # 🟡▼ small down
         sign = "+" if change >= 0 else ""
+        chg_str = f"{sign}{change:.2f}%"
+        # 52-week zone signal emoji
+        sig_emoji, _ = _wk52_signal(price, fund)
+        sig_prefix = f" {sig_emoji}" if sig_emoji else ""
         lines.append(
-            f"{idx}. {arrow} <b>{notifier.escape(sym)}</b> "
-            f"{notifier.fmt_money(d['price'])} <b>{sign}{change:.2f}%</b>"
+            f"{idx}. {move_icon}{sig_prefix} <b>{notifier.escape(sym)}</b>  "
+            f"{notifier.fmt_money(price)}  <b>{chg_str}</b>"
         )
-        fund_line = _fundamentals_line(fund_by_sym.get(sym))
+        fund_line = _fundamentals_line(fund, price)
         if fund_line:
             lines.append("   " + fund_line)
 
@@ -978,8 +1033,45 @@ def handle_market_screen(chat_id, parts, default_direction="all",
     )
 
 
-def _fundamentals_line(fund: dict | None) -> str:
-    """One compact fundamentals line for a stock, or '' when nothing to show."""
+def _wk52_signal(price, fund: dict | None) -> tuple:
+    """Return (signal_emoji, range_tag) based on 52-week position of price.
+
+    Thresholds:
+      0-15%  from low  -> ✅ Strong Buy (near 52W low)
+      15-35% from low  -> 📈 Buy Zone
+      35-65% from low  -> 🟡 Mid-Range
+      65-85% from low  -> ⚠️ High Zone
+      85-100%from low  -> 🚫 Avoid (near 52W high)
+    """
+    if not fund:
+        return "", ""
+    lo = fund.get("wk52_low")
+    hi = fund.get("wk52_high")
+    if lo is None or hi is None or price is None:
+        return "", ""
+    try:
+        price = float(price)
+        lo = float(lo)
+        hi = float(hi)
+    except (TypeError, ValueError):
+        return "", ""
+    spread = hi - lo
+    if spread <= 0:
+        return "", ""
+    pct_pos = (price - lo) / spread  # 0.0 = at 52W low, 1.0 = at 52W high
+    if pct_pos <= 0.15:
+        return "\u2705", "\U0001F7E2 Near 52W Low"
+    if pct_pos <= 0.35:
+        return "\U0001F4C8", "\U0001F7E2 Low Zone"
+    if pct_pos >= 0.85:
+        return "\U0001F6AB", "\U0001F534 Near 52W High"
+    if pct_pos >= 0.65:
+        return "\u26a0\ufe0f", "\U0001F534 High Zone"
+    return "\U0001F7E1", "\U0001F7E1 Mid-Range"
+
+
+def _fundamentals_line(fund: dict | None, price=None) -> str:
+    """Compact fundamentals line with 52-week signal for a stock, or '' when nothing to show."""
     if not fund:
         return ""
 
@@ -987,7 +1079,10 @@ def _fundamentals_line(fund: dict | None) -> str:
         s = f"{value:.{nd}f}"
         return s.rstrip("0").rstrip(".") if "." in s else s
 
+    sig_emoji, range_tag = _wk52_signal(price, fund)
     parts = []
+    if range_tag:
+        parts.append(range_tag)
     if fund.get("pe"):
         parts.append(f"P/E {_num(fund['pe'], 1)}")
     if fund.get("sector_pe"):

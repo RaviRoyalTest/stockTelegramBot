@@ -98,6 +98,17 @@ def send_message(text: str, parse_mode: str = "HTML", chat_id: str | None = None
         raise NotifierError(f"Telegram send failed: {exc}") from exc
 
 
+# Emoji map for corporate action types
+_TYPE_EMOJI = {
+    "dividend": "\U0001F4B0",   # 💰
+    "bonus": "\U0001F381",       # 🎁
+    "split": "\u2702\ufe0f",     # ✂️
+    "rights": "\U0001F4DC",      # 📜
+    "buyback": "\U0001F501",     # 🔁
+    "other": "\U0001F4CB",       # 📋
+}
+
+
 def format_corporate_action(action: dict) -> str:
     """Render a corporate action record as an HTML Telegram message."""
     symbol = action.get("symbol") or "-"
@@ -108,10 +119,11 @@ def format_corporate_action(action: dict) -> str:
     exchange = action.get("exchange") or "-"
 
     typ = sources.action_type(subject)
+    type_emoji = _TYPE_EMOJI.get(typ, _TYPE_EMOJI["other"])
     lines = [
-        f"<b>Corporate Action Alert</b>",
-        f"<b>{symbol}</b> ({exchange}) - {company}",
-        f"Subject: {subject}",
+        f"{type_emoji} <b>Corporate Action Alert</b>",
+        f"<b>{escape(symbol)}</b> ({escape(exchange)}) \u2014 {escape(company)}",
+        f"Subject: {escape(subject)}",
     ]
     if typ != "other":
         lines.append(f"Type: {sources.TYPE_LABELS.get(typ, typ)}")
@@ -121,17 +133,22 @@ def format_corporate_action(action: dict) -> str:
         currency = quote.get("currency", "INR")
         change = quote.get("change_pct")
         if change is not None:
+            arrow = "\u25b2" if change >= 0 else "\u25bc"
+            color_icon = "\U0001F7E2" if change >= 0 else "\U0001F534"
             sign = "+" if change >= 0 else ""
-            lines.append(f"Current Price: <b>{price:.2f} {currency}</b> ({sign}{change:.2f}%)")
+            lines.append(
+                f"Price: <b>{fmt_money(price, currency)}</b>  "
+                f"{color_icon}{arrow} <b>{sign}{change:.2f}%</b>"
+            )
         else:
-            lines.append(f"Current Price: <b>{price:.2f} {currency}</b>")
+            lines.append(f"Price: <b>{fmt_money(price, currency)}</b>")
     if ex_date and ex_date != "-":
-        lines.append(f"Ex-Date: <b>{ex_date}</b>")
+        lines.append(f"\U0001F4C5 Ex-Date: <b>{_fmt_date(ex_date)}</b>")
     if record_date and record_date != "-":
-        lines.append(f"Record Date: {record_date}")
+        lines.append(f"Record Date: {_fmt_date(record_date)}")
     isin = action.get("isin")
     if isin and isin != "-":
-        lines.append(f"ISIN: {isin}")
+        lines.append(f"ISIN: {escape(isin)}")
     return "\n".join(lines)
 
 
@@ -168,24 +185,29 @@ def format_price_alert(item: dict, quote: dict, threshold: float) -> str:
     change = quote.get("change_pct")
     currency = quote.get("currency", "INR")
 
-    if price is None:
-        price_txt = "n/a"
+    if change is not None and change >= 0:
+        header_icon = "\U0001F7E2\u25b2"  # 🟢▲ up
+        sign = "+"
+    elif change is not None:
+        header_icon = "\U0001F534\u25bc"  # 🔴▼ down
+        sign = ""
     else:
-        price_txt = f"{price:.2f} {currency}"
-    arrow = ""
+        header_icon = "\u26a0\ufe0f"      # ⚠️ unknown
+        sign = ""
+
+    price_txt = fmt_money(price, currency) if price is not None else "n/a"
     if change is not None:
-        sign = "+" if change >= 0 else ""
-        arrow = "\u25b2" if change >= 0 else "\u25bc"
-        change_txt = f"({sign}{change:.2f}% today) {arrow}"
+        change_txt = f"{sign}{change:.2f}%"
+        detail_line = f"Price: <b>{price_txt}</b>  {header_icon} <b>{change_txt}</b> today"
     else:
-        change_txt = ""
+        detail_line = f"Price: <b>{price_txt}</b>"
 
     return "\n".join(
         [
-            f"<b>Price Alert</b> {arrow}".strip(),
-            f"<b>{symbol}</b> ({exchange}) - {company}",
-            f"Price: <b>{price_txt}</b> {change_txt}".strip(),
-            f"Moved beyond your {threshold:g}% alert threshold.",
+            f"{header_icon} <b>Price Alert \u2014 {escape(symbol)}</b>",
+            f"({escape(exchange)}) {escape(company)}",
+            detail_line,
+            f"Crossed your \u00b1{threshold:g}% daily alert threshold.",
         ]
     )
 
