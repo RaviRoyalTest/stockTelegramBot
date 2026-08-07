@@ -958,6 +958,20 @@ def _parse_screener_fundamentals(symbol: str) -> dict | None:
                     except (ValueError, IndexError):
                         pass
 
+    def _parse_chg(curr_str, prev_str):
+        try:
+            c = float(re.sub(r"[^\d\.-]", "", curr_str))
+            p = float(re.sub(r"[^\d\.-]", "", prev_str))
+            diff = round(c - p, 2)
+            if diff > 0:
+                return f"{curr_str} (\u25b2+{diff:.2f}%)"
+            elif diff < 0:
+                return f"{curr_str} (\u25bc{diff:.2f}%)"
+            else:
+                return curr_str
+        except Exception:
+            return curr_str
+
     i = page.find('<div id="quarterly-shp"')
     j = page.find('<div id="yearly-shp"')
     seg = page[i:j] if i > 0 and j > i else ""
@@ -970,13 +984,16 @@ def _parse_screener_fundamentals(symbol: str) -> dict | None:
             re.sub(r"<[^>]+>|\s+", " ", c).strip()
             for c in re.findall(r"<td[^>]*>(.*?)</td>", row, re.S)
         ]
-        last = cells[-1] if cells else ""
-        if label.startswith("promoter"):
-            out["promoter_pct"] = last
-        elif label.startswith("fii"):
-            out["fii_pct"] = last
-        elif label.startswith("dii"):
-            out["dii_pct"] = last
+        if cells:
+            curr = cells[-1]
+            prev = cells[-2] if len(cells) >= 2 else None
+            val_str = _parse_chg(curr, prev) if prev else curr
+            if label.startswith("promoter"):
+                out["promoter_pct"] = val_str
+            elif label.startswith("fii"):
+                out["fii_pct"] = val_str
+            elif label.startswith("dii"):
+                out["dii_pct"] = val_str
     return out or None
 
 

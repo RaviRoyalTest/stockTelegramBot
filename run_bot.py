@@ -953,8 +953,8 @@ def _format_price_movers_report(rows: list, header: str) -> str:
 
 
 def _format_enriched_movers_report(rows: list, header: str, fund_by_sym: dict) -> str:
-    """Format the full enriched fundamentals movers report."""
-    enriched_lines = [header]
+    """Format the full enriched fundamentals movers report with spacious card layout."""
+    enriched_lines = [header, ""]
     for idx, (sym, d) in enumerate(rows, 1):
         change = d["change_pct"]
         price = d.get("price")
@@ -979,9 +979,10 @@ def _format_enriched_movers_report(rows: list, header: str, fund_by_sym: dict) -
             f"{idx}. {move_icon}{sig_prefix} <b>{notifier.escape(sym)}</b>  "
             f"{notifier.fmt_money(price)}  <b>{chg_str}</b>"
         )
-        fund_line = _fundamentals_line(fund, price)
-        if fund_line:
-            enriched_lines.append("   " + fund_line)
+        fund_lines = _fundamentals_lines(fund, price)
+        for fl in fund_lines:
+            enriched_lines.append("   " + fl)
+        enriched_lines.append("")
     return "\n".join(enriched_lines)
 
 
@@ -1071,15 +1072,7 @@ def handle_market_screen(chat_id, parts, default_direction="all",
 
 
 def _wk52_signal(price, fund: dict | None) -> tuple:
-    """Return (signal_emoji, range_tag) based on 52-week position of price.
-
-    Thresholds:
-      0-15%  from low  -> ✅ Strong Buy (near 52W low)
-      15-35% from low  -> 📈 Buy Zone
-      35-65% from low  -> 🟡 Mid-Range
-      65-85% from low  -> ⚠️ High Zone
-      85-100%from low  -> 🚫 Avoid (near 52W high)
-    """
+    """Return (signal_emoji, range_tag) based on 52-week position of price."""
     if not fund:
         return "", ""
     lo = fund.get("wk52_low")
@@ -1122,10 +1115,10 @@ def _rsi_signal(rsi: float | None) -> str:
     return f"\U0001F7E1 RSI {rsi:g}"
 
 
-def _fundamentals_line(fund: dict | None, price=None) -> str:
-    """Compact fundamentals line with 52-week signal + RSI for a stock."""
+def _fundamentals_lines(fund: dict | None, price=None) -> list[str]:
+    """Format fundamentals as clean, spacious, structured lines."""
     if not fund:
-        return ""
+        return []
 
     def _num(value, nd: int) -> str:
         s = f"{value:.{nd}f}"
@@ -1134,42 +1127,60 @@ def _fundamentals_line(fund: dict | None, price=None) -> str:
     sig_emoji, range_tag = _wk52_signal(price, fund)
     rsi_tag = _rsi_signal(fund.get("rsi"))
 
-    parts = []
+    lines = []
+
+    # Line 1: Signals & Technicals
+    l1_parts = []
     if range_tag:
-        parts.append(range_tag)
+        l1_parts.append(range_tag)
     if rsi_tag:
-        parts.append(rsi_tag)
+        l1_parts.append(rsi_tag)
+    if l1_parts:
+        lines.append("  \u2022  ".join(l1_parts))
+
+    # Line 2: Valuation & Market Stats
+    l2_parts = []
     if fund.get("pe"):
-        parts.append(f"P/E {_num(fund['pe'], 1)}")
+        l2_parts.append(f"P/E {_num(fund['pe'], 1)}")
     else:
-        parts.append("P/E N/A (Loss)")
+        l2_parts.append("P/E N/A (Loss)")
     if fund.get("sector_pe"):
-        parts.append(f"Sec P/E {_num(fund['sector_pe'], 1)}")
+        l2_parts.append(f"Sec P/E {_num(fund['sector_pe'], 1)}")
+    if fund.get("market_cap") is not None:
+        l2_parts.append(f"MCap \u20b9{fund['market_cap']:,.0f}Cr")
+    if fund.get("debt_to_equity") is not None:
+        l2_parts.append(f"D/E {_num(fund['debt_to_equity'], 2)}")
+    if l2_parts:
+        lines.append("\U0001F4CA " + "  \u00b7  ".join(l2_parts))
+
+    # Line 3: 52-Week Range & Returns
+    l3_parts = []
     if fund.get("wk52_high") is not None and fund.get("wk52_low") is not None:
-        parts.append(
-            f"52w {notifier.fmt_money(fund['wk52_low'])}\u2013"
+        l3_parts.append(
+            f"52w Range: {notifier.fmt_money(fund['wk52_low'])} \u2013 "
             f"{notifier.fmt_money(fund['wk52_high'])}"
         )
     if fund.get("div_yield") is not None:
-        parts.append(f"Div {_num(fund['div_yield'], 2)}%")
-    if fund.get("debt_to_equity") is not None:
-        parts.append(f"D/E {_num(fund['debt_to_equity'], 2)}")
-    if fund.get("market_cap") is not None:
-        parts.append(f"MCap \u20b9{fund['market_cap']:,.0f}Cr")
+        l3_parts.append(f"Div Yield: {_num(fund['div_yield'], 2)}%")
     if fund.get("roce") is not None or fund.get("roe") is not None:
-        bits = []
+        r_bits = []
         if fund.get("roce"):
-            bits.append(f"ROCE {_num(fund['roce'], 1)}%")
+            r_bits.append(f"ROCE {_num(fund['roce'], 1)}%")
         if fund.get("roe"):
-            bits.append(f"ROE {_num(fund['roe'], 1)}%")
-        parts.append(" ".join(bits))
+            r_bits.append(f"ROE {_num(fund['roe'], 1)}%")
+        l3_parts.append(" ".join(r_bits))
+    if l3_parts:
+        lines.append("\U0001F4C8 " + "  \u00b7  ".join(l3_parts))
+
+    # Line 4: Shareholding Pattern (with QoQ trends!)
     if any(fund.get(k) for k in ("promoter_pct", "fii_pct", "dii_pct")):
-        bits = []
+        h_bits = []
         for key, label in (("promoter_pct", "Prom"), ("fii_pct", "FII"), ("dii_pct", "DII")):
             if fund.get(key):
-                bits.append(f"{label} {notifier.escape(fund[key])}")
-        parts.append(" \u00b7 ".join(bits))
-    return " | ".join(parts)
+                h_bits.append(f"{label} {notifier.escape(fund[key])}")
+        lines.append("\U0001F4BC Holding (QoQ): " + "  \u00b7  ".join(h_bits))
+
+    return lines
 
 
 def handle_movers(chat_id, parts) -> None:
