@@ -78,9 +78,11 @@ HELP_TEXT = (
     "/movers [period] [gainers|losers] [count] [100|500]\n"
     "   \u2014 movement screen, sorted lower \u2192 higher\n"
     "   \u2022 /movers 30m \u00b7 /movers 1h gainers 10 \u00b7 /movers losers 2h\n"
+    "   \u2022 /movers 2d \u00b7 /movers 1w \u00b7 /movers 500\n"
     "/gainers [period] [N] \u2014 top N gainers, all NIFTY 500 stocks\n"
     "/losers [period] [N] \u2014 top N losers, all NIFTY 500 stocks\n"
-    "   \u2022 /gainers 50 \u00b7 /gainers 1h \u00b7 /losers 30m 5 \u00b7 /losers 100\n\n"
+    "   \u2022 /gainers 50 \u00b7 /gainers 1h \u00b7 /gainers 2d \u00b7 /gainers 1w 100\n"
+    "   \u2022 /losers 30m 5 \u00b7 /losers 100 \u00b7 /losers 1mo \u00b7 /losers 3mo\n\n"
     "\u2B50 <b>Watchlist</b>\n"
     "/add SYMBOL [NSE|BSE] \u2014 add a stock you hold\n"
     "/remove SYMBOL \u2014 remove a stock\n"
@@ -91,7 +93,9 @@ HELP_TEXT = (
     "\u2699\ufe0f <b>Personalize</b>\n"
     "/filter TYPE,TYPE \u2014 only receive chosen action types\n"
     "   \u2022 types: dividend, bonus, split, rights, buyback (/filter all resets)\n"
+    "   \u2022 /filter dividend,bonus \u00b7 /filter all\n"
     "/alert PCT \u2014 alert when a stock moves \u00b1PCT% in a day (/alert off)\n"
+    "   \u2022 /alert 3 \u00b7 /alert 1.5 \u00b7 /alert off\n"
     "/settings \u2014 show your current filters &amp; alert settings\n\n"
     "\U0001F6E0\ufe0f <b>System</b>\n"
     "/status \u2014 where your list is saved &amp; GitHub push status\n"
@@ -101,15 +105,20 @@ HELP_TEXT = (
     "\U0001F4A1 <b>Tips</b>\n"
     "\u2022 Just ask in plain text: \u201ccorporate action\u201d, \u201cshareholder "
     "increase\u201d, \u201cdividends\u201d, \u201cex-date today\u201d, \u201cgainers\u201d, \u201cnews\u201d.\n"
-    "\u2022 Periods for /movers, /gainers, /losers: 5m 15m 30m 1h 2h 4h today\n"
+    "\u2022 Periods for /movers, /gainers, /losers:\n"
+    "   intraday 5m \u00b7 15m \u00b7 30m \u00b7 1h \u00b7 2h \u00b7 4h\n"
+    "   daily 1d(today) \u00b7 2d \u00b7 3d \u00b7 5d \u00b7 7d \u00b7 1w \u00b7 2w \u00b7 1mo \u00b7 3mo \u00b7 6mo \u00b7 1y\n"
     "\u2022 Gainers/losers default to top 30 (up to 100).\n"
     "\u2022 Type / alone to see this help again.\n\n"
     "\U0001F4C5 <b>Examples</b>\n"
-    "/add RELIANCE NSE\n"
-    "/ca increase\n"
-    "/movers 1h gainers 10\n"
-    "/gainers 50\n"
-    "/news 5"
+    "<b>Watchlist:</b>  /add RELIANCE NSE  \u00b7  /add PGINVIT NSE  \u00b7  /remove TCS\n"
+    "<b>Corporate actions:</b>  /ca  \u00b7  /ca dividend  \u00b7  /ca increase  \u00b7  /ca 7  \u00b7  /ca RELIANCE\n"
+    "<b>Ex-dates:</b>  /exdate today  \u00b7  /exdate 10  \u00b7  /next\n"
+    "<b>Movers:</b>  /movers 30m  \u00b7  /movers 1h gainers 10  \u00b7  /movers 2d  \u00b7  /movers 1w 500\n"
+    "<b>Gainers:</b>  /gainers  \u00b7  /gainers 50  \u00b7  /gainers 1h  \u00b7  /gainers 2d 100\n"
+    "<b>Losers:</b>  /losers  \u00b7  /losers 100  \u00b7  /losers 30m 5  \u00b7  /losers 1mo\n"
+    "<b>News:</b>  /news  \u00b7  /news 5  \u00b7  /news RELIANCE\n"
+    "<b>Personalize:</b>  /filter dividend,bonus  \u00b7  /alert 3  \u00b7  /settings"
 )
 
 CA_HELP = (
@@ -719,15 +728,53 @@ def handle_news(chat_id, parts) -> None:
 
 
 MOVERS_PERIODS = {
-    "5m": 5, "10m": 10, "15m": 15, "30m": 30, "45m": 45,
-    "1h": 60, "2h": 120, "4h": 240,
-    "today": 0, "1d": 0, "day": 0,
+    # intraday: ("intraday", minutes)
+    "5m": ("intraday", 5), "10m": ("intraday", 10), "15m": ("intraday", 15),
+    "30m": ("intraday", 30), "45m": ("intraday", 45),
+    "1h": ("intraday", 60), "2h": ("intraday", 120), "4h": ("intraday", 240),
+    # multi-day: ("days", N)
+    "today": ("days", 1), "day": ("days", 1), "1d": ("days", 1),
+    "2d": ("days", 2), "3d": ("days", 3), "5d": ("days", 5), "7d": ("days", 7),
+    "1w": ("days", 7), "week": ("days", 7), "2w": ("days", 14),
+    "1mo": ("days", 30), "month": ("days", 30), "3mo": ("days", 90),
+    "6mo": ("days", 180), "1y": ("days", 365), "year": ("days", 365),
 }
 
 
+def _period_label(kind: str, value: int) -> str:
+    """Human label for a period, e.g. ('intraday', 60) -> 'last 1h'."""
+    if kind == "intraday":
+        if value % 60 == 0:
+            return f"last {value // 60}h"
+        return f"last {value}m"
+    if value == 1:
+        return "today"
+    if value == 7:
+        return "last 1 week"
+    if value == 14:
+        return "last 2 weeks"
+    if value == 30:
+        return "last 1 month"
+    if value == 90:
+        return "last 3 months"
+    if value == 180:
+        return "last 6 months"
+    if value == 365:
+        return "last 1 year"
+    return f"last {value} days"
+
+
+def _fetch_period_change(sym: str, period: tuple) -> dict | None:
+    """Dispatch a (kind, value) period to the right Yahoo fetcher."""
+    kind, value = period
+    if kind == "intraday":
+        return sources.get_intraday_change("NSE", sym, value)
+    return sources.get_daily_change("NSE", sym, value)
+
+
 def _parse_movers_parts(parts) -> tuple:
-    """Extract (period_minutes, direction, count, universe) from /movers args."""
-    period, direction, count, universe = 60, "all", None, "nifty100"
+    """Extract (period, direction, count, universe) from /movers args."""
+    period, direction, count, universe = ("intraday", 60), "all", None, "nifty100"
     for token in parts[1:]:
         t = token.lower()
         if t in MOVERS_PERIODS:
@@ -758,6 +805,8 @@ def handle_movers(chat_id, parts) -> None:
       /movers 30m         last 30 minutes
       /movers 1h gainers  only gainers   (losers for the negative side)
       /movers 2h 20       top 20 lines
+      /movers 2d          last 2 days
+      /movers 1w          last 1 week
       /movers 500         use NIFTY 500 instead of NIFTY 100
     """
     period, direction, count, universe = _parse_movers_parts(parts)
@@ -767,15 +816,10 @@ def handle_movers(chat_id, parts) -> None:
         return
 
     universe_label = "NIFTY 500" if universe == "nifty500" else "NIFTY 100"
-    if period == 0:
-        period_label = "today"
-    elif period % 60 == 0:
-        period_label = f"last {period // 60}h"
-    else:
-        period_label = f"last {period}m"
+    period_label = _period_label(*period)
 
     def _fetch(sym):
-        return sym, sources.get_intraday_change("NSE", sym, period)
+        return sym, _fetch_period_change(sym, period)
 
     with ThreadPoolExecutor(max_workers=20) as ex:
         fetched = list(ex.map(_fetch, symbols))
@@ -815,12 +859,12 @@ def handle_movers(chat_id, parts) -> None:
 def handle_gainers_losers(chat_id, parts, direction: str) -> None:
     """Overall-market top gainers / losers across all stocks (NIFTY 500).
 
-    Time frame: none or 'today' = day change vs previous close; otherwise a
-    period from MOVERS_PERIODS (5m/15m/30m/1h/2h/4h). Count defaults to 30;
-    pass any number up to 100 (e.g. /gainers 50, /losers 1h 100).
+    Time frame: default today; any MOVERS_PERIODS token works, intraday
+    (5m/15m/30m/1h/2h/4h) or multi-day (2d/1w/1mo/3mo/1y). Count defaults
+    to 30; pass any number up to 100 (e.g. /gainers 50, /losers 1h 100).
     """
     count = 30
-    period = None  # None = today (day change)
+    period = ("days", 1)  # default = today's change
     for token in parts[1:]:
         t = token.lower()
         if t in MOVERS_PERIODS:
@@ -836,9 +880,7 @@ def handle_gainers_losers(chat_id, parts, direction: str) -> None:
         return
 
     def _fetch(sym):
-        if period is None:
-            return sym, sources.get_quote("NSE", sym)
-        return sym, sources.get_intraday_change("NSE", sym, period)
+        return sym, _fetch_period_change(sym, period)
 
     with ThreadPoolExecutor(max_workers=20) as ex:
         fetched = list(ex.map(_fetch, symbols))
@@ -858,12 +900,7 @@ def handle_gainers_losers(chat_id, parts, direction: str) -> None:
         rows.sort(key=lambda r: r[2])  # most negative first
         title = "<b>Top Losers"
 
-    if period is None or period == 0:
-        title += " - today</b>"
-    elif period % 60 == 0:
-        title += f" - last {period // 60}h</b>"
-    else:
-        title += f" - last {period}m</b>"
+    title += f" - {_period_label(*period)}</b>"
 
     rows = rows[:count]
     if not rows:
@@ -951,8 +988,8 @@ def register_commands() -> bool:
         {"command": "summary", "description": "Market snapshot: counts + next ex-dates"},
         {"command": "news", "description": "Latest news for your watchlist stocks"},
         {"command": "movers", "description": "Movement screen: /movers 1h gainers 10"},
-        {"command": "gainers", "description": "Top gainers all stocks (NIFTY 500): /gainers 50"},
-        {"command": "losers", "description": "Top losers all stocks (NIFTY 500): /losers 50"},
+        {"command": "gainers", "description": "Top gainers NIFTY 500: /gainers 1h 50 or 2d"},
+        {"command": "losers", "description": "Top losers NIFTY 500: /losers 1w 100 or 30m"},
         {"command": "add", "description": "Add stock to watchlist: /add RELIANCE NSE"},
         {"command": "remove", "description": "Remove stock from watchlist"},
         {"command": "list", "description": "Show your watchlist"},

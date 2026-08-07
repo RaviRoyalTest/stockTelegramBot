@@ -530,3 +530,78 @@ def get_intraday_change(exchange: str, symbol: str, period_minutes: int) -> dict
         log.info("intraday change failed for %s:%s - %s", exchange, symbol, exc)
     _intraday_cache[key] = {"ts": now, "data": data}
     return data
+
+
+_daily_cache: dict = {}
+_DAILY_TTL = 300  # seconds - daily moves change slowly
+
+
+def get_daily_change(exchange: str, symbol: str, days: int) -> dict | None:
+    """% move over the trailing N-day window using Yahoo daily bars, cached.
+
+    days=1 means vs the previous close ("today"). Returns
+    {'price', 'change_pct', 'days', 'name'} or None.
+    """
+    days = max(1, int(days))
+    key = (exchange.upper(), symbol.upper(), "d", days)
+    now = time.time()
+    cached = _daily_cache.get(key)
+    if cached and now - cached["ts"] < _DAILY_TTL:
+        return cached["data"]
+    if days <= 1:
+        rng = "1d"
+    elif days <= 5:
+        rng = "5d"
+    elif days <= 30:
+        rng = "1mo"
+    elif days <= 90:
+        rng = "3mo"
+    elif days <= 180:
+        rng = "6mo"
+    else:
+        rng = "1y"
+    suffix = ".BO" if exchange.upper() == "BSE" else ".NS"
+    url = (
+        f"https://query1.finance.yahoo.com/v8/finance/chart/{symbol}{suffix}"
+        f"?range={rng}&interval=1d"
+    )
+    data = None
+    try:
+        resp = _quote_session().get(url, timeout=config.HTTP_TIMEOUT)
+        resp.raise_for_status()
+        res = resp.json()["chart"]["result"][0]
+        meta = res.get("meta") or {}
+        price = meta.get("regularMarketPrice")
+        ts = res.get("timestamp") or []
+        quotes = (res.get("indicators") or {}).get("quote") or [{}]
+        closes = (quotes[0] or {}).get("close") or []
+        if price is None:  # market closed - fall back to the last close
+            for c in reversed(closes):
+                if c is not None:
+                    price = c
+                    break
+        name = meta.get("longName") or meta.get("shortName") or ""
+        if days <= 1:
+            base = meta.get("chartPreviousClose") or meta.get("previousClose")
+        else:
+            cutoff = now - days * 86400
+            base = None
+            for t, c in zip(ts, closes):
+                if c is None:
+                    continue
+                if t >= cutoff:
+                    base = c
+                    break
+            if base is None:
+                base = next((c for c in closes if c is not None), None)
+        if price and base:
+            data = {
+                "price": price,
+                "change_pct": (price / base - 1) * 100,
+                "days": days,
+                "name": name,
+            }
+    except Exception as exc:
+        log.info("daily change failed for %s:%s - %s", exchange, symbol, exc)
+    _daily_cache[key] = {"ts": now, "data": data}
+    return data
