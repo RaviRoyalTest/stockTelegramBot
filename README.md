@@ -91,9 +91,9 @@ Send these to your bot:
 | `/exdate [today\|N]` | `/exdate 7` | All actions whose ex-date is today or within N days (default `REMINDER_DAYS`) |
 | `/summary` | `/summary` | Market snapshot: counts by exchange and type, plus the next ex-dates |
 | `/news [N\|SYMBOL]` | `/news 5` | Latest news headlines for the stocks in your list (up to N each, 1-5). `/news RELIANCE` = one symbol. Sources: Google News RSS, Yahoo fallback |
-| `/movers [period] [gainers\|losers] [count] [100\|500]` | `/movers 30m` | Screen NIFTY 100/500 by price movement over a window, sorted lower → higher. Periods: `5m 15m 30m 1h 2h 4h today 2d 1w 1mo` (default 1h). E.g. `/movers 1h gainers 10` |
-| `/gainers [period] [N]` | `/gainers 1w 50` | Top N gainers across ALL NIFTY 500 stocks. Periods (intraday `5m 15m 30m 1h 2h 4h`; daily `today 2d 3d 5d 1w 2w 1mo 3mo 6mo 1y`). Default today, top 30, up to 100 |
-| `/losers [period] [N]` | `/losers 30m` | Top N losers across ALL NIFTY 500 stocks (same periods as `/gainers`, default today, top 30, up to 100) |
+| `/movers [period] [direction] [N] [100\|500]` | `/movers 1h gainers 10 500` | Screen an index (NIFTY 100/500) by price movement over a window, sorted lower → higher. Periods: `5m 15m 30m 1h 2h 4h today 2d 1w 1mo` (default 1h). Direction: `gainers`/`losers`/`all`; `N` = max rows; index `100` or `500` (default 100). E.g. `/movers 1w 500` |
+| `/gainers [period] [N] [100\|500]` | `/gainers 2d 100` | Top N gainers over an index (NIFTY 100/500, default 500). Same periods as `/movers`; default today, top 30, up to 100. E.g. `/gainers 1h 50 500` |
+| `/losers [period] [N] [100\|500]` | `/losers 30m 5 100` | Top N losers over an index (same options as `/gainers`). E.g. `/losers 1w 20 500` |
 
 Every `/ca`, `/exdate` and `/summary` result includes the current price
 (₹ with today's % change) and clearly printed Ex-date / Record date /

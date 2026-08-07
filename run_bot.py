@@ -75,14 +75,11 @@ HELP_TEXT = (
     "   \u2022 /ca TATA \u2014 keyword search in company / subject\n"
     "/exdate [today|N] \u2014 all actions by ex-date window (default 5 days)\n"
     "/summary \u2014 counts by exchange &amp; type, plus next ex-dates\n"
-    "/movers [period] [gainers|losers] [count] [100|500]\n"
-    "   \u2014 movement screen, sorted lower \u2192 higher\n"
-    "   \u2022 /movers 30m \u00b7 /movers 1h gainers 10 \u00b7 /movers losers 2h\n"
-    "   \u2022 /movers 2d \u00b7 /movers 1w \u00b7 /movers 500\n"
-    "/gainers [period] [N] \u2014 top N gainers, all NIFTY 500 stocks\n"
-    "/losers [period] [N] \u2014 top N losers, all NIFTY 500 stocks\n"
-    "   \u2022 /gainers 50 \u00b7 /gainers 1h \u00b7 /gainers 2d \u00b7 /gainers 1w 100\n"
-    "   \u2022 /losers 30m 5 \u00b7 /losers 100 \u00b7 /losers 1mo \u00b7 /losers 3mo\n\n"
+    "/movers | /gainers | /losers [period] [direction] [N] [100|500]\n"
+    "   \u2014 movement screens over NIFTY 100 or NIFTY 500 stocks\n"
+    "   \u2022 /movers 1h gainers 10 500 \u00b7 /movers 30m \u00b7 /movers 2d\n"
+    "   \u2022 /gainers 2d 100 \u00b7 /gainers 1h 50 500 \u00b7 /losers 30m 5 100\n"
+    "   \u2022 /movers 500 \u00b7 /gainers 1w \u00b7 /losers 1mo\n\n"
     "\u2B50 <b>Watchlist</b>\n"
     "/add SYMBOL [NSE|BSE] \u2014 add a stock you hold\n"
     "/remove SYMBOL \u2014 remove a stock\n"
@@ -108,15 +105,16 @@ HELP_TEXT = (
     "\u2022 Periods for /movers, /gainers, /losers:\n"
     "   intraday 5m \u00b7 15m \u00b7 30m \u00b7 1h \u00b7 2h \u00b7 4h\n"
     "   daily 1d(today) \u00b7 2d \u00b7 3d \u00b7 5d \u00b7 7d \u00b7 1w \u00b7 2w \u00b7 1mo \u00b7 3mo \u00b7 6mo \u00b7 1y\n"
-    "\u2022 Gainers/losers default to top 30 (up to 100).\n"
+    "\u2022 Index: 100 = NIFTY 100, 500 = NIFTY 500 (movers default 100, gainers/losers default 500).\n"
+    "\u2022 Direction: gainers / losers / all; count 1-100 (gainers/losers default 30).\n"
     "\u2022 Type / alone to see this help again.\n\n"
     "\U0001F4C5 <b>Examples</b>\n"
     "<b>Watchlist:</b>  /add RELIANCE NSE  \u00b7  /add PGINVIT NSE  \u00b7  /remove TCS\n"
     "<b>Corporate actions:</b>  /ca  \u00b7  /ca dividend  \u00b7  /ca increase  \u00b7  /ca 7  \u00b7  /ca RELIANCE\n"
     "<b>Ex-dates:</b>  /exdate today  \u00b7  /exdate 10  \u00b7  /next\n"
-    "<b>Movers:</b>  /movers 30m  \u00b7  /movers 1h gainers 10  \u00b7  /movers 2d  \u00b7  /movers 1w 500\n"
-    "<b>Gainers:</b>  /gainers  \u00b7  /gainers 50  \u00b7  /gainers 1h  \u00b7  /gainers 2d 100\n"
-    "<b>Losers:</b>  /losers  \u00b7  /losers 100  \u00b7  /losers 30m 5  \u00b7  /losers 1mo\n"
+    "<b>Movers:</b>  /movers 30m  \u00b7  /movers 1h gainers 10 500  \u00b7  /movers 2d  \u00b7  /movers 1w 500\n"
+    "<b>Gainers:</b>  /gainers  \u00b7  /gainers 50  \u00b7  /gainers 2d 100  \u00b7  /gainers 1h 500\n"
+    "<b>Losers:</b>  /losers  \u00b7  /losers 100  \u00b7  /losers 30m 5 500  \u00b7  /losers 1mo 100\n"
     "<b>News:</b>  /news  \u00b7  /news 5  \u00b7  /news RELIANCE\n"
     "<b>Personalize:</b>  /filter dividend,bonus  \u00b7  /alert 3  \u00b7  /settings"
 )
@@ -772,9 +770,19 @@ def _fetch_period_change(sym: str, period: tuple) -> dict | None:
     return sources.get_daily_change("NSE", sym, value)
 
 
-def _parse_movers_parts(parts) -> tuple:
-    """Extract (period, direction, count, universe) from /movers args."""
-    period, direction, count, universe = ("intraday", 60), "all", None, "nifty100"
+def _parse_screen_parts(parts, default_period, default_direction,
+                        default_count, default_universe) -> tuple:
+    """Extract (period, direction, count, universe) from screen command args.
+
+    One shared parser backs /movers, /gainers and /losers so they all accept
+    the same tokens in any order:
+      periods   5m 15m 30m 1h 2h 4h today 2d 3d 5d 1w 2w 1mo 3mo 6mo 1y
+      direction gainers/losers/all
+      count     any number 1-100
+      universe  100 = NIFTY 100, 500 = NIFTY 500
+    """
+    period, direction, count, universe = (
+        default_period, default_direction, default_count, default_universe)
     for token in parts[1:]:
         t = token.lower()
         if t in MOVERS_PERIODS:
@@ -783,33 +791,38 @@ def _parse_movers_parts(parts) -> tuple:
             direction = "gainers"
         elif t in ("losers", "loser", "negative", "down"):
             direction = "losers"
-        elif t == "all":
+        elif t in ("all", "both", "mixed"):
             direction = "all"
-        elif t in ("100", "nifty100", "nifty-100"):
+        elif t in ("100", "nifty100", "nifty-100", "nifty 100"):
             universe = "nifty100"
-        elif t in ("500", "allstocks", "all-stocks", "nifty500", "nifty-500"):
+        elif t in ("500", "allstocks", "all-stocks", "nifty500", "nifty-500",
+                   "nifty 500"):
             universe = "nifty500"
         else:
             try:
-                count = max(1, min(50, int(t)))
+                count = max(1, min(100, int(t)))
             except ValueError:
                 pass
     return period, direction, count, universe
 
 
-def handle_movers(chat_id, parts) -> None:
+def handle_market_screen(chat_id, parts, default_direction="all",
+                         default_period=("intraday", 60), default_count=None,
+                         default_universe="nifty100") -> None:
     """Screen an index universe by price movement over a time window.
 
-    Sorted from lower to higher change (most negative first). Options:
-      /movers             last 1 hour, whole NIFTY 100, all stocks
-      /movers 30m         last 30 minutes
-      /movers 1h gainers  only gainers   (losers for the negative side)
-      /movers 2h 20       top 20 lines
-      /movers 2d          last 2 days
-      /movers 1w          last 1 week
-      /movers 500         use NIFTY 500 instead of NIFTY 100
+    One implementation backs /movers, /gainers and /losers so all three stay
+    feature-identical. Every command understands the shared options:
+      /movers 1h gainers 10 500   period, direction, count, index universe
+      /gainers 2d 100            top 100 gainers over 2 days, NIFTY 100
+      /losers 30m 5 500          top 5 losers over 30 min, NIFTY 500
+    Gainers/losers sort by size (best first); the movers "all" view sorts
+    lower -> higher.
     """
-    period, direction, count, universe = _parse_movers_parts(parts)
+    period, direction, count, universe = _parse_screen_parts(
+        parts, default_period, default_direction, default_count,
+        default_universe)
+
     symbols = sources.get_index_universe(universe)
     if not symbols:
         reply(chat_id, "Could not load the stock universe right now. Try again in a minute.")
@@ -827,9 +840,15 @@ def handle_movers(chat_id, parts) -> None:
     rows = [(sym, d) for sym, d in fetched if d and d.get("change_pct") is not None]
     if direction == "gainers":
         rows = [r for r in rows if r[1]["change_pct"] > 0]
+        rows.sort(key=lambda r: r[1]["change_pct"], reverse=True)  # highest first
+        title = f"<b>Top Gainers - {period_label}</b>"
     elif direction == "losers":
         rows = [r for r in rows if r[1]["change_pct"] < 0]
-    rows.sort(key=lambda r: r[1]["change_pct"])  # lower -> higher
+        rows.sort(key=lambda r: r[1]["change_pct"])  # most negative first
+        title = f"<b>Top Losers - {period_label}</b>"
+    else:
+        rows.sort(key=lambda r: r[1]["change_pct"])  # lower -> higher
+        title = f"<b>Movers - {period_label}</b> · {direction} (lower \u2192 higher)"
 
     if count:
         rows = rows[:count]
@@ -838,11 +857,10 @@ def handle_movers(chat_id, parts) -> None:
         return
 
     failed = len(fetched) - sum(1 for _, d in fetched if d and d.get("change_pct") is not None)
-    title = (
-        f"<b>Movers - {period_label}</b> · {universe_label} · {direction}"
-        " (lower \u2192 higher)"
-    )
-    lines = [title]
+    header = f"{title} · {universe_label}"
+    if count:
+        header += f" · top {len(rows)}"
+    lines = [header]
     for idx, (sym, d) in enumerate(rows, 1):
         change = d["change_pct"]
         arrow = "\u25b2" if change >= 0 else "\u25bc"
@@ -856,69 +874,26 @@ def handle_movers(chat_id, parts) -> None:
     _reply_messages(chat_id, _split_messages(lines))
 
 
+def handle_movers(chat_id, parts) -> None:
+    """Movement screen over an index (default NIFTY 100, all directions)."""
+    handle_market_screen(
+        chat_id, parts,
+        default_direction="all",
+        default_period=("intraday", 60),
+        default_count=None,
+        default_universe="nifty100",
+    )
+
+
 def handle_gainers_losers(chat_id, parts, direction: str) -> None:
-    """Overall-market top gainers / losers across all stocks (NIFTY 500).
-
-    Time frame: default today; any MOVERS_PERIODS token works, intraday
-    (5m/15m/30m/1h/2h/4h) or multi-day (2d/1w/1mo/3mo/1y). Count defaults
-    to 30; pass any number up to 100 (e.g. /gainers 50, /losers 1h 100).
-    """
-    count = 30
-    period = ("days", 1)  # default = today's change
-    for token in parts[1:]:
-        t = token.lower()
-        if t in MOVERS_PERIODS:
-            period = MOVERS_PERIODS[t]
-            continue
-        try:
-            count = max(1, min(100, int(token)))
-        except ValueError:
-            pass
-    symbols = sources.get_index_universe("nifty500")
-    if not symbols:
-        reply(chat_id, "Could not load the stock universe right now. Try again in a minute.")
-        return
-
-    def _fetch(sym):
-        return sym, _fetch_period_change(sym, period)
-
-    with ThreadPoolExecutor(max_workers=20) as ex:
-        fetched = list(ex.map(_fetch, symbols))
-
-    rows = []
-    for sym, q in fetched:
-        if not q or q.get("change_pct") is None:
-            continue
-        rows.append((sym, q["price"], q["change_pct"], q.get("currency", "INR")))
-
-    if direction == "gainers":
-        rows = [r for r in rows if r[2] > 0]
-        rows.sort(key=lambda r: r[2], reverse=True)  # highest first
-        title = "<b>Top Gainers"
-    else:
-        rows = [r for r in rows if r[2] < 0]
-        rows.sort(key=lambda r: r[2])  # most negative first
-        title = "<b>Top Losers"
-
-    title += f" - {_period_label(*period)}</b>"
-
-    rows = rows[:count]
-    if not rows:
-        reply(chat_id, f"No {direction} right now (market may be closed).")
-        return
-
-    failed = sum(1 for _, q in fetched if not q or q.get("change_pct") is None)
-    lines = [f"{title} · all NIFTY 500 stocks (top {len(rows)})"]
-    for idx, (sym, price, change, currency) in enumerate(rows, 1):
-        arrow = "\u25b2" if change >= 0 else "\u25bc"
-        sign = "+" if change >= 0 else ""
-        lines.append(
-            f"{idx}. {arrow} <b>{notifier.escape(sym)}</b> "
-            f"{notifier.fmt_money(price, currency)} <b>{sign}{change:.2f}%</b>"
-        )
-    if failed:
-        lines.append(f"({failed} of {len(symbols)} stocks could not be loaded)")
-    _reply_messages(chat_id, _split_messages(lines))
+    """Top gainers / losers over an index (default NIFTY 500, top 30, today)."""
+    handle_market_screen(
+        chat_id, parts,
+        default_direction=direction,
+        default_period=("days", 1),
+        default_count=30,
+        default_universe="nifty500",
+    )
 
 
 def handle_query_text(chat_id, text) -> bool:
@@ -987,9 +962,9 @@ def register_commands() -> bool:
         {"command": "exdate", "description": "Ex-dates: /exdate today or /exdate 7"},
         {"command": "summary", "description": "Market snapshot: counts + next ex-dates"},
         {"command": "news", "description": "Latest news for your watchlist stocks"},
-        {"command": "movers", "description": "Movement screen: /movers 1h gainers 10"},
-        {"command": "gainers", "description": "Top gainers NIFTY 500: /gainers 1h 50 or 2d"},
-        {"command": "losers", "description": "Top losers NIFTY 500: /losers 1w 100 or 30m"},
+        {"command": "movers", "description": "Movement screen 100/500: /movers 1h gainers 10"},
+        {"command": "gainers", "description": "Top gainers 100/500: /gainers 1h 50 or 2d"},
+        {"command": "losers", "description": "Top losers 100/500: /losers 1w 100 or 30m"},
         {"command": "add", "description": "Add stock to watchlist: /add RELIANCE NSE"},
         {"command": "remove", "description": "Remove stock from watchlist"},
         {"command": "list", "description": "Show your watchlist"},
