@@ -1047,9 +1047,9 @@ def handle_market_screen(chat_id, parts, default_direction="all",
 
     header = f"{title} · {universe_label} (Top {len(rows)})"
 
-    # Fast fundamentals (Yahoo Finance chart + quote summary) for top N rows
+    # Full fundamentals (Screener + Yahoo Finance) for top N rows
     def _fund_fetch(sym):
-        return sym, sources.get_fundamentals(sym, with_screener=False)
+        return sym, sources.get_fundamentals(sym, with_screener=True)
 
     fund_by_sym = {}
     with ThreadPoolExecutor(max_workers=10) as ex:
@@ -1141,6 +1141,8 @@ def _fundamentals_line(fund: dict | None, price=None) -> str:
         parts.append(rsi_tag)
     if fund.get("pe"):
         parts.append(f"P/E {_num(fund['pe'], 1)}")
+    else:
+        parts.append("P/E N/A (Loss)")
     if fund.get("sector_pe"):
         parts.append(f"Sec P/E {_num(fund['sector_pe'], 1)}")
     if fund.get("wk52_high") is not None and fund.get("wk52_low") is not None:
