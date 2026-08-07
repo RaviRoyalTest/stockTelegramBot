@@ -63,50 +63,53 @@ logging.basicConfig(
 log = logging.getLogger("run_bot")
 
 HELP_TEXT = (
-    "Corporate Action Alerts bot.\n\n"
-    "Commands:\n"
-    "/ca [TYPE|SYMBOL|N|today] - corporate actions, all NSE + BSE\n"
-    "   /ca              overview of every current action\n"
-    "   /ca dividend     only dividends (/ca bonus /ca split /ca rights /ca buyback)\n"
-    "   /ca increase     shareholder increase (bonus + split + rights)\n"
-    "   /ca today        ex-date today   (/ca 7 = within 7 days)\n"
-    "   /ca RELIANCE     full details for one symbol\n"
-    "   /ca TATA         keyword search in company name / subject\n"
-    "/exdate [today|N] - all actions whose ex-date is today or within N days\n"
-    "/summary - counts by exchange and type, plus next ex-dates\n"
-    "/news [N|SYMBOL] - latest news for the stocks in your list\n"
-    "   /news         up to 3 headlines per watchlist stock\n"
-    "   /news 5       up to 5 headlines per stock\n"
-    "   /news RELIANCE  news for one symbol\n"
+    "\U0001F4CA <b>Corporate Action Alerts</b>\n"
+    "<i>NSE + BSE alerts, market screens and news - right in Telegram.</i>\n\n"
+    "------------------------------------\n"
+    "\U0001F4C8 <b>Market</b>\n"
+    "/ca [type|SYMBOL|N|today] \u2014 corporate actions, all NSE + BSE\n"
+    "   \u2022 /ca dividend \u00b7 /ca bonus \u00b7 /ca split \u00b7 /ca rights \u00b7 /ca buyback\n"
+    "   \u2022 /ca increase \u2014 shareholder increase (bonus + split + rights)\n"
+    "   \u2022 /ca today \u00b7 /ca 7 \u2014 ex-date today / within 7 days\n"
+    "   \u2022 /ca RELIANCE \u2014 full details for one symbol\n"
+    "   \u2022 /ca TATA \u2014 keyword search in company / subject\n"
+    "/exdate [today|N] \u2014 all actions by ex-date window (default 5 days)\n"
+    "/summary \u2014 counts by exchange &amp; type, plus next ex-dates\n"
     "/movers [period] [gainers|losers] [count] [100|500]\n"
-    "   screen NIFTY 100/500 by price movement, sorted lower to higher\n"
-    "   period: 5m 15m 30m 1h 2h 4h today (default 1h)\n"
-    "   /movers 30m        last 30 min, all stocks\n"
-    "   /movers 1h gainers 10   top 10 gainers over an hour\n"
-    "   /movers losers 2h   losers over 2 hours\n"
-    "/gainers [period] [N] - top N gainers across ALL stocks (NIFTY 500)\n"
-    "   default today's move, top 30 (up to 100)\n"
-    "   /gainers 50  /gainers 1h  /gainers 30m 100\n"
-    "/losers [period] [N] - top N losers across ALL stocks (NIFTY 500)\n"
-    "   /losers 100  /losers 5m  /losers 1h 50\n"
-    "   periods: 5m 15m 30m 1h 2h 4h today (default today)\n"
-    "/add SYMBOL [NSE|BSE] - add a stock to the watchlist\n"
-    "/remove SYMBOL [NSE|BSE] - remove a stock\n"
-    "/list - show the watchlist\n"
-    "/next - show upcoming ex-dates for your watchlist\n"
-    "/filter TYPE,TYPE - only receive these action types\n"
-    "   types: dividend, bonus, split, rights, buyback (or /filter all)\n"
-    "/alert PCT - alert me when a stock moves +/-PCT% in a day (/alert off)\n"
-    "/settings - show your current filters and alert settings\n"
-    "/status - show where your list is saved and if GitHub push is on\n"
-    "/checknow - force a check and re-send all matching alerts\n"
-    "/help - this message\n"
-    "/start - this message\n"
-    "(tip: type / alone to see this help)\n\n"
-    "You can also just ask in plain text, e.g. \"corporate action\",\n"
-    "\"shareholder increase\", \"dividends\", \"ex-date today\".\n\n"
-    "Examples:\n/add RELIANCE NSE\n/add PGINVIT NSE\n/remove TCS\n"
-    "/filter dividend,bonus\n/alert 3\n/ca increase\n/ca 7"
+    "   \u2014 movement screen, sorted lower \u2192 higher\n"
+    "   \u2022 /movers 30m \u00b7 /movers 1h gainers 10 \u00b7 /movers losers 2h\n"
+    "/gainers [period] [N] \u2014 top N gainers, all NIFTY 500 stocks\n"
+    "/losers [period] [N] \u2014 top N losers, all NIFTY 500 stocks\n"
+    "   \u2022 /gainers 50 \u00b7 /gainers 1h \u00b7 /losers 30m 5 \u00b7 /losers 100\n\n"
+    "\u2B50 <b>Watchlist</b>\n"
+    "/add SYMBOL [NSE|BSE] \u2014 add a stock you hold\n"
+    "/remove SYMBOL \u2014 remove a stock\n"
+    "/list \u2014 show your watchlist\n"
+    "/next \u2014 upcoming ex-dates for your watchlist\n"
+    "/news [N|SYMBOL] \u2014 latest headlines for your stocks\n"
+    "   \u2022 /news \u00b7 /news 5 \u00b7 /news RELIANCE\n\n"
+    "\u2699\ufe0f <b>Personalize</b>\n"
+    "/filter TYPE,TYPE \u2014 only receive chosen action types\n"
+    "   \u2022 types: dividend, bonus, split, rights, buyback (/filter all resets)\n"
+    "/alert PCT \u2014 alert when a stock moves \u00b1PCT% in a day (/alert off)\n"
+    "/settings \u2014 show your current filters &amp; alert settings\n\n"
+    "\U0001F6E0\ufe0f <b>System</b>\n"
+    "/status \u2014 where your list is saved &amp; GitHub push status\n"
+    "/checknow \u2014 force a check and re-send your alerts\n"
+    "/help \u00b7 /start \u2014 this message\n\n"
+    "------------------------------------\n"
+    "\U0001F4A1 <b>Tips</b>\n"
+    "\u2022 Just ask in plain text: \u201ccorporate action\u201d, \u201cshareholder "
+    "increase\u201d, \u201cdividends\u201d, \u201cex-date today\u201d, \u201cgainers\u201d, \u201cnews\u201d.\n"
+    "\u2022 Periods for /movers, /gainers, /losers: 5m 15m 30m 1h 2h 4h today\n"
+    "\u2022 Gainers/losers default to top 30 (up to 100).\n"
+    "\u2022 Type / alone to see this help again.\n\n"
+    "\U0001F4C5 <b>Examples</b>\n"
+    "/add RELIANCE NSE\n"
+    "/ca increase\n"
+    "/movers 1h gainers 10\n"
+    "/gainers 50\n"
+    "/news 5"
 )
 
 CA_HELP = (
@@ -137,6 +140,15 @@ def reply(chat_id, text):
     requests.post(url, json={"chat_id": chat_id, "text": text}, timeout=config.HTTP_TIMEOUT)
 
 
+def send_help(chat_id):
+    """Send the styled HTML help message (/help, /start, unknown commands)."""
+    try:
+        notifier.send_message(HELP_TEXT, chat_id=chat_id)
+    except notifier.NotifierError as exc:
+        log.warning("help send failed for chat %s: %s", chat_id, exc)
+        reply(chat_id, "Could not send help. Use /help later.")
+
+
 def github_push_configured() -> bool:
     """True only when the host can actually push state back to GitHub."""
     return bool(os.getenv("GH_TOKEN") and os.getenv("GITHUB_REPOSITORY"))
@@ -151,7 +163,7 @@ def handle_command(chat_id, text):
     log.info("command from chat %s: %s", chat_id, text)
 
     if cmd in ("/start", "/help", "/"):
-        reply(chat_id, HELP_TEXT)
+        send_help(chat_id)
         return
 
     if cmd == "/list":
@@ -404,7 +416,7 @@ def handle_command(chat_id, text):
         log.info("Removed %s (%s) for chat %s", symbol, exchange, chat_id)
         reply(chat_id, f"Removed {symbol} ({exchange}) if it was present.")
     else:
-        reply(chat_id, HELP_TEXT)
+        send_help(chat_id)
 
 
 def _reply_suggestions(chat_id, query):
