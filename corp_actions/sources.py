@@ -409,3 +409,115 @@ def _google_news(symbol: str, limit: int) -> list[dict]:
     except Exception as exc:
         log.info("Google News failed for %s - %s", symbol, exc)
         return []
+
+
+# ----------------------------------------------------------------- movers
+# Intraday movement screen. Universe = NSE index constituents from the public
+# NSE archives CSV (NIFTY 100 by default, NIFTY 500 opt-in). Per-symbol
+# movement comes from Yahoo 5-minute bars over the trailing window.
+
+_universe_cache: dict = {}
+_UNIVERSE_TTL = 86400  # 24h - index constituents change rarely
+
+_INDEX_CSV = {
+    "nifty100": "https://archives.nseindia.com/content/indices/ind_nifty100list.csv",
+    "nifty500": "https://archives.nseindia.com/content/indices/ind_nifty500list.csv",
+}
+
+
+def get_index_universe(index: str = "nifty100") -> list[str]:
+    """Return symbols for an NSE index, cached 24h. Empty list on failure."""
+    key = (index or "nifty100").lower()
+    url = _INDEX_CSV["nifty500"] if key in ("all", "500", "nifty500") else _INDEX_CSV["nifty100"]
+    now = time.time()
+    cached = _universe_cache.get(url)
+    if cached and now - cached["ts"] < _UNIVERSE_TTL:
+        return cached["data"]
+    symbols = []
+    try:
+        resp = _session().get(url, timeout=config.HTTP_TIMEOUT)
+        resp.raise_for_status()
+        text = resp.text
+        if text.startswith("\ufeff"):
+            text = text[1:]
+        for row in csv.DictReader(io.StringIO(text)):
+            sym = (row.get("Symbol") or "").strip()
+            if sym:
+                symbols.append(sym)
+    except Exception as exc:
+        log.warning("NSE index universe unavailable (%s): %s", index, exc)
+        symbols = []
+    _universe_cache[url] = {"ts": now, "data": symbols}
+    return symbols
+
+
+_intraday_cache: dict = {}
+_INTRADAY_TTL = 60  # seconds
+
+
+def get_intraday_change(exchange: str, symbol: str, period_minutes: int) -> dict | None:
+    """% move over the trailing window using Yahoo 5-minute bars, cached.
+
+    period_minutes <= 0 means "today" (vs the previous close). Returns
+    {'price', 'change_pct', 'period_minutes', 'name'} or None.
+    """
+    key = (exchange.upper(), symbol.upper(), int(period_minutes))
+    now = time.time()
+    cached = _intraday_cache.get(key)
+    if cached and now - cached["ts"] < _INTRADAY_TTL:
+        return cached["data"]
+    suffix = ".BO" if exchange.upper() == "BSE" else ".NS"
+    url = (
+        f"https://query1.finance.yahoo.com/v8/finance/chart/{symbol}{suffix}"
+        "?range=1d&interval=5m"
+    )
+    data = None
+    try:
+        resp = requests.get(
+            url, headers={"User-Agent": config.USER_AGENT}, timeout=config.HTTP_TIMEOUT
+        )
+        resp.raise_for_status()
+        res = resp.json()["chart"]["result"][0]
+        meta = res.get("meta") or {}
+        price = meta.get("regularMarketPrice")
+        ts = res.get("timestamp") or []
+        quotes = (res.get("indicators") or {}).get("quote") or [{}]
+        closes = (quotes[0] or {}).get("close") or []
+        name = meta.get("longName") or meta.get("shortName") or ""
+        if price is None:
+            data = None
+        elif period_minutes <= 0:
+            prev = (
+                meta.get("chartPreviousClose")
+                or meta.get("previousClose")
+                or (closes[0] if closes else None)
+            )
+            if prev:
+                data = {
+                    "price": price,
+                    "change_pct": (price / prev - 1) * 100,
+                    "period_minutes": 0,
+                    "name": name,
+                }
+        else:
+            cutoff = now - period_minutes * 60
+            base = None
+            for t, c in zip(ts, closes):
+                if c is None:
+                    continue
+                if t >= cutoff:
+                    base = c
+                    break
+            if base is None:
+                base = closes[0] if closes else None
+            if base:
+                data = {
+                    "price": price,
+                    "change_pct": (price / base - 1) * 100,
+                    "period_minutes": period_minutes,
+                    "name": name,
+                }
+    except Exception as exc:
+        log.info("intraday change failed for %s:%s - %s", exchange, symbol, exc)
+    _intraday_cache[key] = {"ts": now, "data": data}
+    return data

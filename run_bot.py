@@ -78,6 +78,12 @@ HELP_TEXT = (
     "   /news         up to 3 headlines per watchlist stock\n"
     "   /news 5       up to 5 headlines per stock\n"
     "   /news RELIANCE  news for one symbol\n"
+    "/movers [period] [gainers|losers] [count] [100|500]\n"
+    "   screen NIFTY 100/500 by price movement, sorted lower to higher\n"
+    "   period: 5m 15m 30m 1h 2h 4h today (default 1h)\n"
+    "   /movers 30m        last 30 min, all stocks\n"
+    "   /movers 1h gainers 10   top 10 gainers over an hour\n"
+    "   /movers losers 2h   losers over 2 hours\n"
     "/add SYMBOL [NSE|BSE] - add a stock to the watchlist\n"
     "/remove SYMBOL [NSE|BSE] - remove a stock\n"
     "/list - show the watchlist\n"
@@ -328,6 +334,10 @@ def handle_command(chat_id, text):
 
     if cmd == "/news":
         handle_news(chat_id, parts)
+        return
+
+    if cmd == "/movers":
+        handle_movers(chat_id, parts)
         return
 
     if len(parts) < 2:
@@ -685,6 +695,100 @@ def handle_news(chat_id, parts) -> None:
         reply(chat_id, f"(showing news for the first {MAX_NEWS_STOCKS} stocks)")
 
 
+MOVERS_PERIODS = {
+    "5m": 5, "10m": 10, "15m": 15, "30m": 30, "45m": 45,
+    "1h": 60, "2h": 120, "4h": 240,
+    "today": 0, "1d": 0, "day": 0,
+}
+
+
+def _parse_movers_parts(parts) -> tuple:
+    """Extract (period_minutes, direction, count, universe) from /movers args."""
+    period, direction, count, universe = 60, "all", None, "nifty100"
+    for token in parts[1:]:
+        t = token.lower()
+        if t in MOVERS_PERIODS:
+            period = MOVERS_PERIODS[t]
+        elif t in ("gainers", "gainer", "positive", "up"):
+            direction = "gainers"
+        elif t in ("losers", "loser", "negative", "down"):
+            direction = "losers"
+        elif t == "all":
+            direction = "all"
+        elif t in ("100", "nifty100", "nifty-100"):
+            universe = "nifty100"
+        elif t in ("500", "allstocks", "all-stocks", "nifty500", "nifty-500"):
+            universe = "nifty500"
+        else:
+            try:
+                count = max(1, min(50, int(t)))
+            except ValueError:
+                pass
+    return period, direction, count, universe
+
+
+def handle_movers(chat_id, parts) -> None:
+    """Screen an index universe by price movement over a time window.
+
+    Sorted from lower to higher change (most negative first). Options:
+      /movers             last 1 hour, whole NIFTY 100, all stocks
+      /movers 30m         last 30 minutes
+      /movers 1h gainers  only gainers   (losers for the negative side)
+      /movers 2h 20       top 20 lines
+      /movers 500         use NIFTY 500 instead of NIFTY 100
+    """
+    period, direction, count, universe = _parse_movers_parts(parts)
+    symbols = sources.get_index_universe(universe)
+    if not symbols:
+        reply(chat_id, "Could not load the stock universe right now. Try again in a minute.")
+        return
+
+    universe_label = "NIFTY 500" if universe == "nifty500" else "NIFTY 100"
+    if period == 0:
+        period_label = "today"
+    elif period % 60 == 0:
+        period_label = f"last {period // 60}h"
+    else:
+        period_label = f"last {period}m"
+
+    def _fetch(sym):
+        return sym, sources.get_intraday_change("NSE", sym, period)
+
+    with ThreadPoolExecutor(max_workers=8) as ex:
+        fetched = list(ex.map(_fetch, symbols))
+
+    rows = [(sym, d) for sym, d in fetched if d and d.get("change_pct") is not None]
+    if direction == "gainers":
+        rows = [r for r in rows if r[1]["change_pct"] > 0]
+    elif direction == "losers":
+        rows = [r for r in rows if r[1]["change_pct"] < 0]
+    rows.sort(key=lambda r: r[1]["change_pct"])  # lower -> higher
+
+    if count:
+        rows = rows[:count]
+    if not rows:
+        reply(chat_id, f"No movement data found for {period_label} ({universe_label}).")
+        return
+
+    failed = len(fetched) - sum(1 for _, d in fetched if d and d.get("change_pct") is not None)
+    title = (
+        f"<b>Movers - {period_label}</b> · {universe_label} · {direction}"
+        " (lower \u2192 higher)"
+    )
+    lines = [title]
+    for idx, (sym, d) in enumerate(rows, 1):
+        change = d["change_pct"]
+        arrow = "\u25b2" if change >= 0 else "\u25bc"
+        sign = "+" if change >= 0 else ""
+        lines.append(
+            f"{idx}. {arrow} <b>{notifier.escape(sym)}</b> "
+            f"{notifier.fmt_money(d['price'])} <b>{sign}{change:.2f}%</b>"
+        )
+    if failed:
+        lines.append(f"({failed} of {len(symbols)} stocks could not be loaded)")
+    _reply_messages(chat_id, _split_messages(lines))
+
+
 def handle_query_text(chat_id, text) -> bool:
     """Answer natural-language questions about corporate actions.
 
@@ -701,10 +805,16 @@ def handle_query_text(chat_id, text) -> bool:
         "ex-date", "ex date",
         "dividend", "bonus", "split", "rights", "buyback", "buy back",
         "shareholder increase", "share holder increase", "shares increase",
-        "increase", "actions", "news",
+        "increase", "actions", "news", "movers", "movement", "gainers", "losers",
     )
     if not any(k in low for k in keywords):
         return False
+    if any(w in low for w in ("movers", "top gainers", "top losers", "top gainer", "top loser")):
+        handle_movers(chat_id, ["/movers"])
+        return True
+    if "movement" in low and any(w in low for w in ("stock", "share", "market", "today")):
+        handle_movers(chat_id, ["/movers"])
+        return True
     if "news" in low and any(
         w in low for w in ("stock", "latest", "market", "watchlist", "list",
                            "hold", "holding", "share", "company")
@@ -742,6 +852,7 @@ def register_commands() -> bool:
         {"command": "exdate", "description": "Ex-dates: /exdate today or /exdate 7"},
         {"command": "summary", "description": "Market snapshot: counts + next ex-dates"},
         {"command": "news", "description": "Latest news for your watchlist stocks"},
+        {"command": "movers", "description": "Movement screen: /movers 1h gainers 10"},
         {"command": "add", "description": "Add stock to watchlist: /add RELIANCE NSE"},
         {"command": "remove", "description": "Remove stock from watchlist"},
         {"command": "list", "description": "Show your watchlist"},

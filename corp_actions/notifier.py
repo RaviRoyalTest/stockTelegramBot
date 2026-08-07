@@ -32,6 +32,21 @@ def _fmt_ts(ts) -> str:
         return ""
 
 
+def fmt_money(price, currency: str = "INR") -> str:
+    """Format a price with a currency symbol and thousands separators."""
+    try:
+        value = float(price)
+    except (TypeError, ValueError):
+        return f"{price}"
+    if currency == "INR":
+        symbol = "\u20b9"
+    elif currency == "USD":
+        symbol = "$"
+    else:
+        symbol = f" {currency}"
+    return f"{symbol}{value:,.2f}"
+
+
 def _fmt_price(action) -> str:
     """Compact price string from an attached quote, or '' when unavailable."""
     quote = action.get("quote")
@@ -39,17 +54,12 @@ def _fmt_price(action) -> str:
         return ""
     price = quote["price"]
     currency = quote.get("currency", "INR")
-    if currency == "INR":
-        symbol = "\u20b9"
-    elif currency == "USD":
-        symbol = "$"
-    else:
-        symbol = f" {currency}"
     change = quote.get("change_pct")
+    money = fmt_money(price, currency)
     if change is not None:
         sign = "+" if change >= 0 else ""
-        return f"{symbol}{price:,.2f} ({sign}{change:.2f}%)"
-    return f"{symbol}{price:,.2f}"
+        return f"{money} ({sign}{change:.2f}%)"
+    return money
 
 
 class NotifierError(Exception):
