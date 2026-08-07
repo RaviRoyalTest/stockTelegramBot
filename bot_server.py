@@ -28,8 +28,10 @@ from run_bot import (
     get_updates,
     github_push_configured,
     handle_command,
+    handle_query_text,
     pending_state_changes,
     push_state,
+    register_commands,
     reply,
     sync_state,
 )
@@ -221,6 +223,7 @@ def main():
             "confirm."
         )
     start_health_server()
+    register_commands()
     log.info("Starting long-polling bot (instant responses)...")
     sync_state()
     # Push anything a previous run left behind (failed push, crash before
@@ -236,6 +239,11 @@ def main():
                 text = (message.get("text") or "").strip()
                 chat_id = (message.get("chat") or {}).get("id")
                 if not text.startswith("/"):
+                    try:
+                        handle_query_text(chat_id, text)
+                    except Exception as exc:
+                        log.warning("natural query failed: %s", config.redact(exc))
+                    offset = update["update_id"] + 1
                     continue
                 # The bare command name only (e.g. "/add" for "/add HDFCBANK")
                 # so write-command detection below actually matches. Comparing

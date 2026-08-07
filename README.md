@@ -87,14 +87,23 @@ Send these to your bot:
 
 | Command | Example | What it does |
 | ------- | ------- | ------------ |
+| `/ca [TYPE\|SYMBOL\|N\|today]` | `/ca increase` | Query corporate actions across ALL NSE+BSE stocks, not just the watchlist. No arg = overview; `dividend`/`bonus`/`split`/`rights`/`buyback` filter by type; `increase` = shareholder increase (bonus + split + rights); `today`/`7` = ex-date window; a symbol (e.g. `RELIANCE`) = full detail; any other word = keyword search. |
+| `/exdate [today\|N]` | `/exdate 7` | All actions whose ex-date is today or within N days (default `REMINDER_DAYS`) |
+| `/summary` | `/summary` | Market snapshot: counts by exchange and type, plus the next ex-dates |
 | `/add SYMBOL [NSE/BSE]` | `/add RELIANCE NSE` | Add a stock (validated via Yahoo) |
 | `/remove SYMBOL [NSE/BSE]` | `/remove TCS` | Remove a stock |
 | `/list` | `/list` | Show the current watchlist |
 | `/next` | `/next` | List upcoming ex-dates (next `REMINDER_DAYS` days) |
 | `/filter TYPE,...` | `/filter dividend,bonus` | Only receive these action types (`/filter all` resets) |
 | `/alert PCT` | `/alert 3` | Alert on daily moves of ±PCT% (`/alert off` disables) |
+| `/settings` | `/settings` | Show your current filters, price-alert and list location |
 | `/status` | `/status` | Show where your list is saved and whether GitHub push is configured |
+| `/checknow` | `/checknow` | Force a check and re-send all matching alerts to your chat |
 | `/help` | `/help` | Show commands |
+
+You can also ask in plain text without a slash, e.g. "corporate action",
+"shareholder increase", "dividends", or "ex-date today" — the bot answers
+with the same live query results (toggle with `NATURAL_QUERIES=false`).
 
 Changes are committed to the repo automatically on the next run, so the
 watchlist persists and survives restarts.

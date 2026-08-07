@@ -42,6 +42,10 @@ TYPE_LABELS = {
     "other": "Other",
 }
 
+# Actions that INCREASE the number of shares a holder owns. Used by the
+# /ca increase query (bonus + split + rights are all share-count increasing).
+INCREASE_TYPES = ("bonus", "split", "rights")
+
 
 def action_type(subject) -> str:
     """Classify a corporate-action subject into one of ACTION_TYPES."""

@@ -15,6 +15,7 @@ import logging
 import os
 import subprocess
 import sys
+from datetime import date, timedelta
 from pathlib import Path
 
 from corp_actions import config  # no third-party deps - always importable
@@ -63,6 +64,15 @@ log = logging.getLogger("run_bot")
 HELP_TEXT = (
     "Corporate Action Alerts bot.\n\n"
     "Commands:\n"
+    "/ca [TYPE|SYMBOL|N|today] - corporate actions, all NSE + BSE\n"
+    "   /ca              overview of every current action\n"
+    "   /ca dividend     only dividends (/ca bonus /ca split /ca rights /ca buyback)\n"
+    "   /ca increase     shareholder increase (bonus + split + rights)\n"
+    "   /ca today        ex-date today   (/ca 7 = within 7 days)\n"
+    "   /ca RELIANCE     full details for one symbol\n"
+    "   /ca TATA         keyword search in company name / subject\n"
+    "/exdate [today|N] - all actions whose ex-date is today or within N days\n"
+    "/summary - counts by exchange and type, plus next ex-dates\n"
     "/add SYMBOL [NSE|BSE] - add a stock to the watchlist\n"
     "/remove SYMBOL [NSE|BSE] - remove a stock\n"
     "/list - show the watchlist\n"
@@ -70,13 +80,27 @@ HELP_TEXT = (
     "/filter TYPE,TYPE - only receive these action types\n"
     "   types: dividend, bonus, split, rights, buyback (or /filter all)\n"
     "/alert PCT - alert me when a stock moves +/-PCT% in a day (/alert off)\n"
+    "/settings - show your current filters and alert settings\n"
     "/status - show where your list is saved and if GitHub push is on\n"
     "/checknow - force a check and re-send all matching alerts\n"
     "/help - this message\n"
     "/start - this message\n"
     "(tip: type / alone to see this help)\n\n"
+    "You can also just ask in plain text, e.g. \"corporate action\",\n"
+    "\"shareholder increase\", \"dividends\", \"ex-date today\".\n\n"
     "Examples:\n/add RELIANCE NSE\n/add PGINVIT NSE\n/remove TCS\n"
-    "/filter dividend,bonus\n/alert 3"
+    "/filter dividend,bonus\n/alert 3\n/ca increase\n/ca 7"
+)
+
+CA_HELP = (
+    "Corporate Action queries (/ca):\n"
+    "/ca - overview of all NSE + BSE actions\n"
+    "/ca dividend | bonus | split | rights | buyback - one action type\n"
+    "/ca increase - shareholder increase (bonus + split + rights)\n"
+    "/ca today - ex-date today\n"
+    "/ca 7 - ex-date within 7 days\n"
+    "/ca RELIANCE - details for one symbol\n"
+    "/ca TATA - keyword search in company name / subject"
 )
 
 
@@ -262,6 +286,41 @@ def handle_command(chat_id, text):
         )
         return
 
+    if cmd in ("/ca", "/corpactions", "/actions", "/shareholder", "/increase"):
+        if cmd in ("/shareholder", "/increase"):
+            descriptor = {"mode": "types", "types": list(sources.INCREASE_TYPES)}
+        elif len(parts) > 1:
+            descriptor = _parse_ca_arg(parts[1])
+        else:
+            descriptor = {"mode": "overview"}
+        if descriptor is None:
+            reply(chat_id, CA_HELP)
+        else:
+            run_ca_query(chat_id, descriptor)
+        return
+
+    if cmd == "/exdate":
+        days = config.REMINDER_DAYS
+        if len(parts) > 1:
+            if parts[1].lower() == "today":
+                days = 0
+            else:
+                try:
+                    days = max(0, int(parts[1]))
+                except ValueError:
+                    reply(chat_id, "Usage: /exdate today  or  /exdate 7")
+                    return
+        run_ca_query(chat_id, {"mode": "exdate", "days": days})
+        return
+
+    if cmd == "/summary":
+        run_ca_query(chat_id, {"mode": "overview"})
+        return
+
+    if cmd == "/settings":
+        reply(chat_id, format_settings(chat_id))
+        return
+
     if len(parts) < 2:
         reply(chat_id, "Usage: /add SYMBOL [NSE|BSE]  or  /remove SYMBOL [NSE|BSE]")
         return
@@ -334,6 +393,287 @@ def _reply_suggestions(chat_id, query):
     reply(chat_id, "\n".join(lines))
 
 
+# ------------------------------------------------------------ query engine
+# On-demand corporate action queries across ALL NSE + BSE stocks (not just the
+# watchlist). Every query fetches the live feed and filters it in memory, so
+# the results are always fresh. Replies are split into Telegram-sized chunks.
+
+MAX_QUERY_ITEMS = 20  # entries per message batch
+
+
+def _split_messages(lines: list[str], max_len: int = 3800) -> list[str]:
+    """Split text lines into messages under Telegram's 4096-char limit."""
+    messages, current, size = [], [], 0
+    for line in lines:
+        line_len = len(line) + 1
+        if current and size + line_len > max_len:
+            messages.append("\n".join(current))
+            current, size = [], 0
+        current.append(line)
+        size += line_len
+    if current:
+        messages.append("\n".join(current))
+    return messages or [""]
+
+
+def _reply_messages(chat_id, messages: list[str]) -> None:
+    for msg in messages:
+        try:
+            notifier.send_message(msg, chat_id=chat_id)
+        except notifier.NotifierError as exc:
+            log.warning("query reply failed for chat %s: %s", chat_id, exc)
+            return
+
+
+def _norm_type(token: str) -> str | None:
+    """Normalize an action-type token (handles plurals like 'splits')."""
+    t = token.strip().lower()
+    if t in sources.ACTION_TYPES:
+        return t
+    if t.endswith("s") and t[:-1] in sources.ACTION_TYPES:
+        return t[:-1]
+    return None
+
+
+def _parse_ca_arg(arg: str) -> dict | None:
+    """Map one /ca argument to a query descriptor, or None when unclear."""
+    raw = (arg or "").strip()
+    token = raw.lower()
+    if not raw:
+        return None
+    if token in ("increase", "shareholder", "shareholders", "shares", "share-holder"):
+        return {"mode": "types", "types": list(sources.INCREASE_TYPES)}
+    if (t := _norm_type(token)):
+        return {"mode": "types", "types": [t]}
+    if token in ("all", "list", "overview", "everything"):
+        return {"mode": "overview"}
+    if token in ("today", "tomorrow"):
+        return {"mode": "exdate", "days": 0}
+    try:
+        return {"mode": "exdate", "days": max(0, int(token))}
+    except ValueError:
+        pass
+    if "," in raw:  # e.g. /ca dividend,bonus
+        wanted = [t for p in token.split(",") if (t := _norm_type(p))]
+        if wanted:
+            return {"mode": "types", "types": wanted}
+    return {"mode": "term", "term": raw}
+
+
+def _footnote(warnings: list, errors: list) -> list[str]:
+    """BSE/network warnings shown as a note on overview queries."""
+    notes = [n for n in (warnings or [])] + [n for n in (errors or [])]
+    return [f"\u26a0\ufe0f {n}" for n in notes if n]
+
+
+def run_ca_query(chat_id, descriptor: dict) -> bool:
+    """Fetch all NSE+BSE actions, filter per descriptor, and reply."""
+    try:
+        all_actions, errors, warnings = poller_mod.fetch_all_actions()
+    except Exception as exc:
+        reply(chat_id, f"Could not fetch corporate actions: {config.redact(exc)}")
+        return True
+    if not all_actions:
+        note = "\n" + "\n".join(_footnote(warnings, errors)) if (warnings or errors) else ""
+        reply(chat_id, "No corporate actions found right now." + note)
+        return True
+
+    mode = descriptor.get("mode")
+    title = "<b>Corporate Actions</b> (all NSE + BSE)"
+    results = None
+
+    if mode == "overview":
+        by_ex, by_type = {}, {}
+        for a in all_actions:
+            ex = a.get("exchange") or "?"
+            by_ex[ex] = by_ex.get(ex, 0) + 1
+            t = sources.action_type(a.get("subject"))
+            by_type[t] = by_type.get(t, 0) + 1
+        lines = [title]
+        lines.append("Count by exchange: " + " | ".join(f"{k}: {v}" for k, v in by_ex.items()))
+        type_summary = ", ".join(
+            f"{sources.TYPE_LABELS.get(t, t)} {by_type.get(t, 0)}"
+            for t in sources.ACTION_TYPES
+            if by_type.get(t)
+        )
+        lines.append("Count by type: " + (type_summary or "none"))
+        dated = sorted(
+            (a for a in all_actions if poller_mod.parse_ex_date(a.get("ex_date"))),
+            key=lambda a: a.get("ex_date"),
+        )
+        if dated:
+            lines.append("\n<b>Next ex-dates:</b>")
+            for a in dated[:15]:
+                lines.append(notifier.format_action_entry(a))
+        else:
+            lines.append("\nNo ex-dates in the current feed.")
+        messages = _split_messages(lines)
+        if warnings or errors:
+            messages.append("\n".join(_footnote(warnings, errors)))
+        _reply_messages(chat_id, messages)
+        return True
+
+    if mode == "types":
+        wanted = set(descriptor.get("types") or [])
+        if len(wanted) == 1:
+            label = sources.TYPE_LABELS.get(next(iter(wanted)), "Action")
+        else:
+            label = " + ".join(sources.TYPE_LABELS.get(t, t) for t in wanted)
+        title = f"<b>{label} actions</b> (NSE + BSE)"
+        results = [a for a in all_actions if sources.action_type(a.get("subject")) in wanted]
+
+    elif mode == "exdate":
+        days = int(descriptor.get("days", config.REMINDER_DAYS))
+        today = date.today()
+        cutoff = today + timedelta(days=days)
+        results = [
+            a for a in all_actions
+            if (d := poller_mod.parse_ex_date(a.get("ex_date"))) and today <= d <= cutoff
+        ]
+        label = "today" if days == 0 else f"within {days} day(s)"
+        title = f"<b>Ex-date {label}</b> (NSE + BSE)"
+
+    else:  # mode == "term": exact symbol first, then keyword search
+        term = descriptor.get("term", "").strip()
+        symbol_matches = [
+            a for a in all_actions
+            if (a.get("symbol") or "").upper() == term.upper()
+        ]
+        if symbol_matches:
+            messages = [f"<b>Corporate actions for {notifier.escape(term.upper())}</b>"]
+            for a in sorted(symbol_matches, key=lambda x: x.get("ex_date") or "9999-99-99"):
+                quote = sources.get_quote(a["exchange"], a["symbol"])
+                if quote:
+                    a["quote"] = quote
+                messages.append(notifier.format_action_detail(a))
+            _reply_messages(chat_id, messages)
+            return True
+        q = term.lower()
+        results = [
+            a for a in all_actions
+            if q in (a.get("company") or "").lower()
+            or q in (a.get("subject") or "").lower()
+        ]
+        title = f"<b>Search results for '{notifier.escape(term)}'</b> (NSE + BSE)"
+
+    if not results:
+        reply(chat_id, f"No corporate actions match this query.\n\n{CA_HELP}")
+        return True
+
+    ordered = sorted(
+        results,
+        key=lambda a: (a.get("ex_date") or "9999-99-99", (a.get("symbol") or "").upper()),
+    )
+    lines = [title, f"{len(ordered)} action(s) found."]
+    for a in ordered[:MAX_QUERY_ITEMS]:
+        lines.append(notifier.format_action_entry(a))
+    if len(ordered) > MAX_QUERY_ITEMS:
+        lines.append(
+            f"... and {len(ordered) - MAX_QUERY_ITEMS} more (limit "
+            f"{MAX_QUERY_ITEMS}). Narrow it down with /ca dividend, /ca 7, "
+            "or /ca SYMBOL."
+        )
+    _reply_messages(chat_id, _split_messages(lines))
+    return True
+
+
+def format_settings(chat_id) -> str:
+    """Render the per-chat customization settings (/settings)."""
+    settings = storage.get_user_settings(chat_id)
+    filters = settings.get("action_filters") or []
+    alert = settings.get("price_alert_pct")
+    owner = storage.is_owner(chat_id)
+    where = (
+        "watchlist.json (owner's list)"
+        if owner
+        else f"subscriptions.json (chat {chat_id})"
+    )
+    return "\n".join(
+        [
+            "<b>Your settings</b>",
+            f"Chat id: {chat_id}",
+            f"Role: {'owner' if owner else 'subscriber'}",
+            "Action filters: " + (", ".join(filters) if filters else "all types"),
+            "Price alert: " + ("off" if not alert else f"{float(alert):g}%"),
+            f"Your list is saved in: {where}",
+            "Customize with /filter and /alert.",
+        ]
+    )
+
+
+def handle_query_text(chat_id, text) -> bool:
+    """Answer natural-language questions about corporate actions.
+
+    Returns True when the message matched a known query pattern (a reply was
+    sent). Deliberately conservative so random chat messages are ignored.
+    """
+    if not config.NATURAL_QUERIES:
+        return False
+    low = (text or "").strip().lower()
+    if not low:
+        return False
+    keywords = (
+        "corporate action", "corporate-action",
+        "ex-date", "ex date",
+        "dividend", "bonus", "split", "rights", "buyback", "buy back",
+        "shareholder increase", "share holder increase", "shares increase",
+        "increase", "actions",
+    )
+    if not any(k in low for k in keywords):
+        return False
+    if "increase" in low and ("share" in low or "holder" in low):
+        descriptor = {"mode": "types", "types": list(sources.INCREASE_TYPES)}
+    elif "ex-date" in low or "ex date" in low or "upcoming" in low:
+        descriptor = {"mode": "exdate", "days": config.REMINDER_DAYS}
+    elif "dividend" in low:
+        descriptor = {"mode": "types", "types": ["dividend"]}
+    elif "bonus" in low:
+        descriptor = {"mode": "types", "types": ["bonus"]}
+    elif "split" in low:
+        descriptor = {"mode": "types", "types": ["split"]}
+    elif "rights" in low:
+        descriptor = {"mode": "types", "types": ["rights"]}
+    elif "buyback" in low or "buy back" in low:
+        descriptor = {"mode": "types", "types": ["buyback"]}
+    elif "corporate action" in low or "actions" in low or low.strip().startswith("ca "):
+        descriptor = {"mode": "overview"}
+    else:
+        return False
+    run_ca_query(chat_id, descriptor)
+    return True
+
+
+def register_commands() -> bool:
+    """Publish the bot's command menu via Telegram setMyCommands."""
+    if not notifier.is_configured():
+        return False
+    menu = [
+        {"command": "ca", "description": "Corporate actions all NSE+BSE: /ca [type]"},
+        {"command": "exdate", "description": "Ex-dates: /exdate today or /exdate 7"},
+        {"command": "summary", "description": "Market snapshot: counts + next ex-dates"},
+        {"command": "add", "description": "Add stock to watchlist: /add RELIANCE NSE"},
+        {"command": "remove", "description": "Remove stock from watchlist"},
+        {"command": "list", "description": "Show your watchlist"},
+        {"command": "next", "description": "Upcoming ex-dates for your watchlist"},
+        {"command": "filter", "description": "Receive only chosen action types"},
+        {"command": "alert", "description": "Price-move alert threshold percent"},
+        {"command": "settings", "description": "Show your current settings"},
+        {"command": "status", "description": "Check persistence / GitHub push"},
+        {"command": "checknow", "description": "Force a check and resend alerts"},
+        {"command": "help", "description": "Show all commands and examples"},
+    ]
+    url = f"https://api.telegram.org/bot{config.TELEGRAM_BOT_TOKEN}/setMyCommands"
+    try:
+        resp = requests.post(url, json={"commands": menu}, timeout=config.HTTP_TIMEOUT)
+        resp.raise_for_status()
+        ok = bool(resp.json().get("ok"))
+        log.info("setMyCommands %s", "ok" if ok else "failed")
+        return ok
+    except Exception as exc:
+        log.warning("setMyCommands failed: %s", config.redact(exc))
+        return False
+
+
 def process_commands():
     """Process any pending Telegram command updates.
 
@@ -359,6 +699,10 @@ def process_commands():
         text = (message.get("text") or "").strip()
         chat_id = (message.get("chat") or {}).get("id")
         if not text.startswith("/"):
+            try:
+                handle_query_text(chat_id, text)
+            except Exception as exc:  # a bad query must never break the loop
+                log.warning("natural query failed: %s", config.redact(exc))
             continue
         if text.strip().lower() == "/checknow":
             checknow_chat = str(chat_id)
@@ -682,6 +1026,7 @@ def main():
     if any(a.lower() == "--check" for a in sys.argv[1:]):
         sys.exit(main_check())
     log.info("Processing Telegram commands...")
+    register_commands()
     checknow_chat = process_commands()
     log.info("Running poll cycle%s...", f" (forced for {checknow_chat})" if checknow_chat else "")
     sent = poller.run_once(force=bool(checknow_chat), only_chat=checknow_chat)

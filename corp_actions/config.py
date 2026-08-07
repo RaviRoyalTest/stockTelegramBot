@@ -28,6 +28,13 @@ PROCESS_COMMANDS = (
     os.getenv("PROCESS_COMMANDS", "true").strip().lower()
     in ("1", "true", "yes", "on")
 )
+# When true, plain-text messages that mention corporate actions ("corporate
+# action", "dividends", "shareholder increase", "ex-date today", ...) are
+# answered with live query results, not just slash commands.
+NATURAL_QUERIES = (
+    os.getenv("NATURAL_QUERIES", "true").strip().lower()
+    in ("1", "true", "yes", "on")
+)
 
 WATCHLIST_FILE = Path(os.getenv("WATCHLIST_FILE", str(BASE_DIR / "watchlist.json")))
 SUBSCRIPTIONS_FILE = Path(os.getenv("SUBSCRIPTIONS_FILE", str(BASE_DIR / "subscriptions.json")))

@@ -1,4 +1,5 @@
 """Telegram notification sending and message formatting."""
+import html
 import logging
 
 import requests
@@ -6,6 +7,11 @@ import requests
 from . import config, sources
 
 log = logging.getLogger(__name__)
+
+
+def escape(text) -> str:
+    """Escape text for Telegram HTML parse mode."""
+    return html.escape(str(text or ""), quote=False)
 
 
 class NotifierError(Exception):
@@ -139,7 +145,60 @@ def format_upcoming_list(actions: list[dict]) -> str:
     for action in sorted(actions, key=lambda a: a.get("ex_date") or "9999-99-99"):
         typ = sources.action_type(action.get("subject"))
         lines.append(
-            f"\u2022 <b>{action.get('symbol')}</b> ({action.get('exchange')}) - "
-            f"{action.get('ex_date')} [{sources.TYPE_LABELS.get(typ, typ)}]"
+            f"\u2022 <b>{escape(action.get('symbol'))}</b> ({escape(action.get('exchange'))}) - "
+            f"{escape(action.get('ex_date'))} [{sources.TYPE_LABELS.get(typ, typ)}]"
         )
+    return "\n".join(lines)
+
+
+def format_action_entry(action: dict) -> str:
+    """Compact one-line entry used by /ca and /exdate query results."""
+    symbol = action.get("symbol") or "-"
+    company = action.get("company") or "-"
+    subject = action.get("subject") or "-"
+    ex_date = action.get("ex_date") or "-"
+    typ = sources.action_type(subject)
+    label = sources.TYPE_LABELS.get(typ, typ)
+    return (
+        f"\u2022 <b>{escape(symbol)}</b> ({escape(action.get('exchange'))}) "
+        f"{escape(ex_date)} [{label}] - {escape(company)}"
+        + (f" | {escape(subject)}" if subject != "-" else "")
+    )
+
+
+def format_action_detail(action: dict) -> str:
+    """Full detail block for a single corporate action query result."""
+    lines = [
+        f"<b>{escape(action.get('symbol') or '-')}</b> "
+        f"({escape(action.get('exchange'))}) - {escape(action.get('company') or '-')}",
+    ]
+    subject = action.get("subject")
+    if subject:
+        lines.append(f"Subject: {escape(subject)}")
+        typ = sources.action_type(subject)
+        if typ != "other":
+            lines.append(f"Type: {sources.TYPE_LABELS.get(typ, typ)}")
+    for label, key in (
+        ("Ex-Date", "ex_date"),
+        ("Record Date", "record_date"),
+        ("Announced", "announcement_date"),
+        ("Face Value", "face_value"),
+        ("Series", "series"),
+        ("ISIN", "isin"),
+    ):
+        val = action.get(key)
+        if val and str(val).strip() and str(val).strip() != "-":
+            lines.append(f"{label}: {escape(val)}")
+    quote = action.get("quote")
+    if quote and quote.get("price") is not None:
+        price = quote["price"]
+        currency = quote.get("currency", "INR")
+        change = quote.get("change_pct")
+        if change is not None:
+            sign = "+" if change >= 0 else ""
+            lines.append(
+                f"Current Price: <b>{price:.2f} {currency}</b> ({sign}{change:.2f}%)"
+            )
+        else:
+            lines.append(f"Current Price: <b>{price:.2f} {currency}</b>")
     return "\n".join(lines)
