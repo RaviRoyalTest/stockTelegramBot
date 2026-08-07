@@ -197,6 +197,11 @@ def get_updates(offset=None):
 
 
 def reply(chat_id, text, parse_mode="HTML"):
+    """Send a message to a chat, splitting into chunks if text exceeds Telegram limits."""
+    if len(text) > 3800:
+        msgs = _split_messages(text.split("\n"))
+        _reply_messages(chat_id, msgs)
+        return
     url = f"https://api.telegram.org/bot{config.TELEGRAM_BOT_TOKEN}/sendMessage"
     payload = {"chat_id": chat_id, "text": text}
     if parse_mode:
@@ -226,7 +231,7 @@ def reply(chat_id, text, parse_mode="HTML"):
 
 def send_help(chat_id):
     """Send the styled HTML help message (/help, /start, unknown commands)."""
-    reply(chat_id, HELP_TEXT)
+    _reply_messages(chat_id, _split_messages(HELP_TEXT.split("\n")))
 
 
 def github_push_configured() -> bool:
