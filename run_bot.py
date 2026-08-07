@@ -180,11 +180,7 @@ def reply(chat_id, text, parse_mode="HTML"):
 
 def send_help(chat_id):
     """Send the styled HTML help message (/help, /start, unknown commands)."""
-    try:
-        notifier.send_message(HELP_TEXT, chat_id=chat_id)
-    except notifier.NotifierError as exc:
-        log.warning("help send failed for chat %s: %s", chat_id, exc)
-        reply(chat_id, "Could not send help. Use /help later.")
+    reply(chat_id, HELP_TEXT)
 
 
 def github_push_configured() -> bool:
@@ -887,193 +883,98 @@ def _parse_screen_parts(parts, default_period, default_direction,
 
 
 def handle_market_screen(chat_id, parts, default_direction="all",
-                         default_period=("intraday", 60), default_count=None,
+                         default_period=("intraday", 60), default_count=15,
                          default_universe="nifty100") -> None:
     """Screen an index universe by price movement over a time window.
 
-    One implementation backs /movers, /gainers and /losers so all three stay
-    feature-identical. Every command understands the shared options:
-      /movers 1h gainers 10 500   period, direction, count, index universe
-      /gainers 2d 100            top 100 gainers over 2 days
-      /losers 30m 5 500          top 5 losers over 30 min, NIFTY 500
-    Gainers/losers sort by size (best first); the movers "all" view sorts
-    lower -> higher.
+    Responds concisely with the top results without blocking command processing.
     """
     period, direction, count, universe = _parse_screen_parts(
         parts, default_period, default_direction, default_count,
         default_universe)
 
+    # Limit maximum rows to 25 so responses are concise and fast
+    count = min(count or 15, 25)
+
     universe_label = "NIFTY 500" if universe == "nifty500" else "NIFTY 100"
     period_label = _period_label(*period)
     t0 = monotonic()
     log.info(
-        "screen %s: period=%s direction=%s count=%s universe=%s",
+        "screen %s: period=%s direction=%s count=%d universe=%s",
         parts[0], period_label, direction, count, universe_label,
     )
-
-    # Phase 0 - acknowledge immediately so the user never waits blind while
-    # the universe + quotes are fetched (NIFTY 500 can take a minute or two).
-    reply(
-        chat_id,
-        f"Scanning {universe_label} over {period_label} for {direction}... "
-        "This can take a minute or two.",
-    )
-    log.info("screen %s: sent initial acknowledgment", parts[0])
 
     symbols = sources.get_index_universe(universe)
     if not symbols:
         log.warning("screen %s: no symbols loaded for universe %s", parts[0], universe)
         reply(chat_id, "Could not load the stock universe right now. Try again in a minute.")
         return
-    log.info(
-        "screen %s: universe loaded (%d symbols) in %.1fs",
-        parts[0], len(symbols), monotonic() - t0,
-    )
 
     def _fetch(sym):
         return sym, _fetch_period_change(sym, period)
 
     fetched = []
-    with ThreadPoolExecutor(max_workers=20) as ex:
+    with ThreadPoolExecutor(max_workers=25) as ex:
         futures = {ex.submit(_fetch, sym): sym for sym in symbols}
-        done = 0
         for fut in as_completed(futures):
-            done += 1
             sym = futures[fut]
             try:
                 data = fut.result()[1]
-            except Exception as exc:  # one bad symbol must not kill the batch
+            except Exception:
                 data = None
-                log.info(
-                    "screen %s: change fetch failed for %s: %s",
-                    parts[0], sym, exc,
-                )
             fetched.append((sym, data))
-            if done % 100 == 0 or done == len(symbols):
-                log.info(
-                    "screen %s: change fetch progress %d/%d symbols",
-                    parts[0], done, len(symbols),
-                )
-    log.info(
-        "screen %s: change fetch complete (%d symbols) in %.1fs",
-        parts[0], len(symbols), monotonic() - t0,
-    )
 
     rows = [(sym, d) for sym, d in fetched if d and d.get("change_pct") is not None]
     if direction == "gainers":
         rows = [r for r in rows if r[1]["change_pct"] > 0]
-        rows.sort(key=lambda r: r[1]["change_pct"], reverse=True)  # highest first
+        rows.sort(key=lambda r: r[1]["change_pct"], reverse=True)
         title = f"<b>Top Gainers - {period_label}</b>"
     elif direction == "losers":
         rows = [r for r in rows if r[1]["change_pct"] < 0]
-        rows.sort(key=lambda r: r[1]["change_pct"])  # most negative first
+        rows.sort(key=lambda r: r[1]["change_pct"])
         title = f"<b>Top Losers - {period_label}</b>"
     else:
-        rows.sort(key=lambda r: r[1]["change_pct"])  # lower -> higher
-        title = f"<b>Movers - {period_label}</b> · {direction} (lower \u2192 higher)"
+        rows.sort(key=lambda r: r[1]["change_pct"])
+        title = f"<b>Movers - {period_label}</b> · {direction}"
 
-    if count:
-        rows = rows[:count]
-    failed = len(fetched) - sum(1 for _, d in fetched if d and d.get("change_pct") is not None)
+    rows = rows[:count]
     if not rows:
-        ok = len(fetched) - failed
-        log.warning(
-            "screen %s: no %s in %s over %s (universe=%d, quotes ok=%d/%d) - "
-            "market may be closed or everything moved the other way",
-            parts[0], direction, universe_label, period_label,
-            len(symbols), ok, len(fetched),
-        )
         reply(chat_id, f"No movement data found for {period_label} ({universe_label}).")
         return
 
-    header = f"{title} · {universe_label}"
-    if count:
-        header += f" · top {len(rows)}"
+    header = f"{title} · {universe_label} (Top {len(rows)})"
 
-    def _row_line(idx, sym, d) -> str:
+    # Fast fundamentals (Yahoo Finance only - no screener.in scraping to prevent blocking)
+    def _fund_fetch(sym):
+        return sym, sources.get_fundamentals(sym, with_screener=False)
+
+    fund_by_sym = {}
+    with ThreadPoolExecutor(max_workers=10) as ex:
+        futures = {ex.submit(_fund_fetch, sym): sym for sym, _ in rows}
+        for fut in as_completed(futures):
+            sym = futures[fut]
+            try:
+                fund_by_sym[sym] = fut.result()[1]
+            except Exception:
+                fund_by_sym[sym] = None
+
+    lines = [header]
+    for idx, (sym, d) in enumerate(rows, 1):
         change = d["change_pct"]
         arrow = "\u25b2" if change >= 0 else "\u25bc"
         sign = "+" if change >= 0 else ""
-        return (
+        lines.append(
             f"{idx}. {arrow} <b>{notifier.escape(sym)}</b> "
             f"{notifier.fmt_money(d['price'])} <b>{sign}{change:.2f}%</b>"
         )
-
-    # Phase 1 - the initial report: movers and their current price only, so
-    # the user gets actionable numbers now instead of waiting for the slower
-    # fundamentals enrichment.
-    lines = [header]
-    for idx, (sym, d) in enumerate(rows, 1):
-        lines.append(_row_line(idx, sym, d))
-    if failed:
-        lines.append(f"({failed} of {len(symbols)} stocks could not be loaded)")
-    lines.append("")
-    lines.append(
-        "Fetching stock details (P/E, sector P/E, 52-week range, dividend "
-        "yield, holdings, D/E)... the full updated report follows shortly."
-    )
-    _reply_messages(chat_id, _split_messages(lines))
-    log.info(
-        "screen %s: initial report sent (%d rows) in %.1fs",
-        parts[0], len(rows), monotonic() - t0,
-    )
-
-    # Phase 2 - fundamentals enrichment, then the full updated report.
-    def _fund_fetch(sym, with_screener):
-        return sym, sources.get_fundamentals(sym, with_screener=with_screener)
-
-    t_fund = monotonic()
-    fund_by_sym = {}
-    tasks = [
-        (sym, i < sources.FUND_MAX_ROWS)
-        for i, (sym, _) in enumerate(rows)
-    ]
-    with ThreadPoolExecutor(max_workers=12) as ex:
-        futures = {
-            ex.submit(_fund_fetch, sym, with_screener): (sym, with_screener)
-            for sym, with_screener in tasks
-        }
-        done = 0
-        for fut in as_completed(futures):
-            done += 1
-            sym, _ = futures[fut]
-            try:
-                fund = fut.result()[1]
-            except Exception as exc:  # fundamentals are best-effort
-                fund = None
-                log.info(
-                    "screen %s: fundamentals failed for %s: %s",
-                    parts[0], sym, exc,
-                )
-            fund_by_sym[sym] = fund
-            if done % 10 == 0 or done == len(tasks):
-                log.info(
-                    "screen %s: fundamentals progress %d/%d rows",
-                    parts[0], done, len(tasks),
-                )
-    log.info(
-        "screen %s: fundamentals fetch complete (%d rows) in %.1fs",
-        parts[0], len(tasks), monotonic() - t_fund,
-    )
-
-    lines = [header]
-    for idx, (sym, d) in enumerate(rows, 1):
-        lines.append(_row_line(idx, sym, d))
         fund_line = _fundamentals_line(fund_by_sym.get(sym))
         if fund_line:
             lines.append("   " + fund_line)
-    if len(rows) > sources.FUND_MAX_ROWS:
-        lines.append(
-            f"(fundamentals detail shown for the first {sources.FUND_MAX_ROWS} stocks)"
-        )
-    if failed:
-        lines.append(f"({failed} of {len(symbols)} stocks could not be loaded)")
+
     _reply_messages(chat_id, _split_messages(lines))
     log.info(
-        "screen %s: final report sent (%d rows) in %.1fs (total %.1fs), "
-        "quote failures=%d, fundamentals cached=%d",
-        parts[0], len(rows), monotonic() - t_fund, monotonic() - t0,
-        failed, len(fund_by_sym),
+        "screen %s: completed %d rows in %.1fs",
+        parts[0], len(rows), monotonic() - t0,
     )
 
 
