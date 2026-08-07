@@ -115,6 +115,7 @@ def get_quote(exchange: str, symbol: str) -> dict | None:
     now = time.time()
     cached = _quote_cache.get((exchange, symbol))
     if cached and now - cached["ts"] < _QUOTE_TTL:
+        log.debug("quote cache hit for %s:%s", exchange, symbol)
         return cached["data"]
 
     suffix = ".BO" if exchange == "BSE" else ".NS"
@@ -136,6 +137,7 @@ def get_quote(exchange: str, symbol: str) -> dict | None:
             "name": meta.get("longName") or meta.get("shortName") or "",
         }
         _quote_cache[(exchange, symbol)] = {"ts": now, "data": data}
+        log.debug("quote fetched for %s:%s", exchange, symbol)
         return data
     except Exception as exc:
         log.info(
@@ -167,6 +169,7 @@ def get_nse_stock_list() -> list[dict]:
                 )
         if not stocks:
             raise SourceError("NSE stock list parsed but empty")
+        log.info("NSE stock list loaded: %d equities", len(stocks))
         return stocks
     except SourceError:
         raise
@@ -241,6 +244,7 @@ def get_nse_corporate_actions() -> list[dict]:
                 "series": _pick(item, "series"),
             }
         )
+    log.info("NSE corporate actions fetched: %d record(s)", len(records))
     return records
 
 
@@ -280,6 +284,7 @@ def get_bse_stock_list() -> list[dict]:
         )
     if not stocks:
         raise SourceError("BSE stock list parsed but empty")
+    log.info("BSE stock list loaded: %d equities", len(stocks))
     return stocks
 
 
@@ -323,6 +328,7 @@ def get_bse_corporate_actions() -> list[dict]:
                 "series": _pick(item, "Series", "series"),
             }
         )
+    log.info("BSE corporate actions fetched: %d record(s)", len(records))
     return records
 
 
@@ -445,6 +451,7 @@ def get_index_universe(index: str = "nifty100") -> list[str]:
     now = time.time()
     cached = _universe_cache.get(url)
     if cached and now - cached["ts"] < _UNIVERSE_TTL:
+        log.debug("index universe cache hit for %s (%d symbols)", key, len(cached["data"]))
         return cached["data"]
     symbols = []
     try:
@@ -457,6 +464,7 @@ def get_index_universe(index: str = "nifty100") -> list[str]:
             sym = (row.get("Symbol") or "").strip()
             if sym:
                 symbols.append(sym)
+        log.info("index universe %s loaded fresh: %d symbols", key, len(symbols))
     except Exception as exc:
         log.warning("NSE index universe unavailable (%s): %s", index, exc)
         symbols = []
@@ -478,6 +486,7 @@ def get_intraday_change(exchange: str, symbol: str, period_minutes: int) -> dict
     now = time.time()
     cached = _intraday_cache.get(key)
     if cached and now - cached["ts"] < _INTRADAY_TTL:
+        log.debug("intraday cache hit for %s:%s", exchange, symbol)
         return cached["data"]
     suffix = ".BO" if exchange.upper() == "BSE" else ".NS"
     url = (
@@ -531,6 +540,7 @@ def get_intraday_change(exchange: str, symbol: str, period_minutes: int) -> dict
     except Exception as exc:
         log.info("intraday change failed for %s:%s - %s", exchange, symbol, exc)
     _intraday_cache[key] = {"ts": now, "data": data}
+    log.debug("intraday change fetched for %s:%s (%s)", exchange, symbol, "ok" if data else "no data")
     return data
 
 
@@ -549,6 +559,7 @@ def get_daily_change(exchange: str, symbol: str, days: int) -> dict | None:
     now = time.time()
     cached = _daily_cache.get(key)
     if cached and now - cached["ts"] < _DAILY_TTL:
+        log.debug("daily change cache hit for %s:%s (%d days)", exchange, symbol, days)
         return cached["data"]
     if days <= 1:
         rng = "1d"
@@ -606,6 +617,7 @@ def get_daily_change(exchange: str, symbol: str, days: int) -> dict | None:
     except Exception as exc:
         log.info("daily change failed for %s:%s - %s", exchange, symbol, exc)
     _daily_cache[key] = {"ts": now, "data": data}
+    log.debug("daily change fetched for %s:%s (%d days)", exchange, symbol, days)
     return data
 
 
@@ -810,6 +822,7 @@ def get_fundamentals(symbol: str, with_screener: bool = True) -> dict | None:
     now = time.time()
     cached = _fund_cache.get(key)
     if cached and now - cached["ts"] < cached["ttl"]:
+        log.debug("fundamentals cache hit for %s", key)
         return cached["data"]
     out = {}
     res = _quote_summary(key)
@@ -850,4 +863,8 @@ def get_fundamentals(symbol: str, with_screener: bool = True) -> dict | None:
     if with_screener and not (out.get("promoter_pct") or out.get("sector_pe")):
         ttl = _FUND_RETRY_TTL  # retry the rate-limited part sooner
     _fund_cache[key] = {"ts": now, "data": data, "ttl": ttl}
+    log.debug(
+        "fundamentals fetched for %s (screener=%s): %d field(s)",
+        key, with_screener, len(out),
+    )
     return data

@@ -15,8 +15,9 @@ import logging
 import os
 import subprocess
 import sys
-from concurrent.futures import ThreadPoolExecutor
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from datetime import date, timedelta
+from time import monotonic
 from pathlib import Path
 
 from corp_actions import config  # no third-party deps - always importable
@@ -142,12 +143,29 @@ def get_updates(offset=None):
         params["offset"] = offset
     resp = requests.get(url, params=params, timeout=config.HTTP_TIMEOUT)
     resp.raise_for_status()
-    return resp.json().get("result", [])
+    updates = resp.json().get("result", [])
+    log.info("getUpdates(offset=%s) -> %d update(s)", offset, len(updates))
+    return updates
 
 
 def reply(chat_id, text):
     url = f"https://api.telegram.org/bot{config.TELEGRAM_BOT_TOKEN}/sendMessage"
-    requests.post(url, json={"chat_id": chat_id, "text": text}, timeout=config.HTTP_TIMEOUT)
+    try:
+        resp = requests.post(
+            url,
+            json={"chat_id": chat_id, "text": text},
+            timeout=config.HTTP_TIMEOUT,
+        )
+        resp.raise_for_status()
+        log.info(
+            "reply to chat %s: %d chars -> %s",
+            chat_id, len(text), text[:100].replace("\n", " "),
+        )
+    except Exception as exc:
+        log.warning(
+            "reply to chat %s failed: %s (text: %s)",
+            chat_id, config.redact(exc), text[:100].replace("\n", " "),
+        )
 
 
 def send_help(chat_id):
@@ -491,9 +509,14 @@ def _attach_quotes(actions: list[dict], max_workers: int = 6) -> None:
                 list(actions),
             )
         )
+    attached = 0
     for action, quote in results:
         if quote:
             action["quote"] = quote
+            attached += 1
+    log.info(
+        "attach_quotes: %d/%d quotes fetched", attached, len(actions)
+    )
 
 
 def _norm_type(token: str) -> str | None:
@@ -539,11 +562,17 @@ def _footnote(warnings: list, errors: list) -> list[str]:
 
 def run_ca_query(chat_id, descriptor: dict) -> bool:
     """Fetch all NSE+BSE actions, filter per descriptor, and reply."""
+    log.info("ca_query: chat %s mode=%s", chat_id, descriptor.get("mode"))
+    t0 = monotonic()
     try:
         all_actions, errors, warnings = poller_mod.fetch_all_actions()
     except Exception as exc:
         reply(chat_id, f"Could not fetch corporate actions: {config.redact(exc)}")
         return True
+    log.info(
+        "ca_query: fetched %d corporate action(s) in %.1fs (errors=%d, warnings=%d)",
+        len(all_actions), monotonic() - t0, len(errors), len(warnings),
+    )
     if not all_actions:
         note = "\n" + "\n".join(_footnote(warnings, errors)) if (warnings or errors) else ""
         reply(chat_id, "No corporate actions found right now." + note)
@@ -700,6 +729,10 @@ def handle_news(chat_id, parts) -> None:
                 "then /news.",
             )
             return
+    log.info(
+        "news: chat %s target=%s per_stock=%d from %d stock(s)",
+        chat_id, target or "watchlist", per_stock, len(items),
+    )
 
     truncated = len(items) > MAX_NEWS_STOCKS
     items = items[:MAX_NEWS_STOCKS]
@@ -714,6 +747,7 @@ def handle_news(chat_id, parts) -> None:
 
     with ThreadPoolExecutor(max_workers=6) as ex:
         fetched = list(ex.map(_fetch, items))
+    log.info("news: fetched headlines for %d/%d stock(s)", len(fetched), len(items))
 
     for item, news in fetched:
         try:
@@ -842,22 +876,59 @@ def handle_market_screen(chat_id, parts, default_direction="all",
 
     universe_label = "NIFTY 500" if universe == "nifty500" else "NIFTY 100"
     period_label = _period_label(*period)
+    t0 = monotonic()
     log.info(
         "screen %s: period=%s direction=%s count=%s universe=%s",
         parts[0], period_label, direction, count, universe_label,
     )
+
+    # Phase 0 - acknowledge immediately so the user never waits blind while
+    # the universe + quotes are fetched (NIFTY 500 can take a minute or two).
+    reply(
+        chat_id,
+        f"Scanning {universe_label} over {period_label} for {direction}... "
+        "This can take a minute or two.",
+    )
+    log.info("screen %s: sent initial acknowledgment", parts[0])
 
     symbols = sources.get_index_universe(universe)
     if not symbols:
         log.warning("screen %s: no symbols loaded for universe %s", parts[0], universe)
         reply(chat_id, "Could not load the stock universe right now. Try again in a minute.")
         return
+    log.info(
+        "screen %s: universe loaded (%d symbols) in %.1fs",
+        parts[0], len(symbols), monotonic() - t0,
+    )
 
     def _fetch(sym):
         return sym, _fetch_period_change(sym, period)
 
+    fetched = []
     with ThreadPoolExecutor(max_workers=20) as ex:
-        fetched = list(ex.map(_fetch, symbols))
+        futures = {ex.submit(_fetch, sym): sym for sym in symbols}
+        done = 0
+        for fut in as_completed(futures):
+            done += 1
+            sym = futures[fut]
+            try:
+                data = fut.result()[1]
+            except Exception as exc:  # one bad symbol must not kill the batch
+                data = None
+                log.info(
+                    "screen %s: change fetch failed for %s: %s",
+                    parts[0], sym, exc,
+                )
+            fetched.append((sym, data))
+            if done % 100 == 0 or done == len(symbols):
+                log.info(
+                    "screen %s: change fetch progress %d/%d symbols",
+                    parts[0], done, len(symbols),
+                )
+    log.info(
+        "screen %s: change fetch complete (%d symbols) in %.1fs",
+        parts[0], len(symbols), monotonic() - t0,
+    )
 
     rows = [(sym, d) for sym, d in fetched if d and d.get("change_pct") is not None]
     if direction == "gainers":
@@ -874,8 +945,9 @@ def handle_market_screen(chat_id, parts, default_direction="all",
 
     if count:
         rows = rows[:count]
+    failed = len(fetched) - sum(1 for _, d in fetched if d and d.get("change_pct") is not None)
     if not rows:
-        ok = sum(1 for _, d in fetched if d and d.get("change_pct") is not None)
+        ok = len(fetched) - failed
         log.warning(
             "screen %s: no %s in %s over %s (universe=%d, quotes ok=%d/%d) - "
             "market may be closed or everything moved the other way",
@@ -885,31 +957,79 @@ def handle_market_screen(chat_id, parts, default_direction="all",
         reply(chat_id, f"No movement data found for {period_label} ({universe_label}).")
         return
 
-    def _fund_fetch(sym, with_screener):
-        return sym, sources.get_fundamentals(sym, with_screener=with_screener)
-
-    fund_by_sym = {}
-    with ThreadPoolExecutor(max_workers=12) as ex:
-        tasks = [
-            (sym, i < sources.FUND_MAX_ROWS)
-            for i, (sym, _) in enumerate(rows)
-        ]
-        for sym, fund in ex.map(lambda t: _fund_fetch(t[0], t[1]), tasks):
-            fund_by_sym[sym] = fund
-
-    failed = len(fetched) - sum(1 for _, d in fetched if d and d.get("change_pct") is not None)
     header = f"{title} · {universe_label}"
     if count:
         header += f" · top {len(rows)}"
-    lines = [header]
-    for idx, (sym, d) in enumerate(rows, 1):
+
+    def _row_line(idx, sym, d) -> str:
         change = d["change_pct"]
         arrow = "\u25b2" if change >= 0 else "\u25bc"
         sign = "+" if change >= 0 else ""
-        lines.append(
+        return (
             f"{idx}. {arrow} <b>{notifier.escape(sym)}</b> "
             f"{notifier.fmt_money(d['price'])} <b>{sign}{change:.2f}%</b>"
         )
+
+    # Phase 1 - the initial report: movers and their current price only, so
+    # the user gets actionable numbers now instead of waiting for the slower
+    # fundamentals enrichment.
+    lines = [header]
+    for idx, (sym, d) in enumerate(rows, 1):
+        lines.append(_row_line(idx, sym, d))
+    if failed:
+        lines.append(f"({failed} of {len(symbols)} stocks could not be loaded)")
+    lines.append("")
+    lines.append(
+        "Fetching stock details (P/E, sector P/E, 52-week range, dividend "
+        "yield, holdings, D/E)... the full updated report follows shortly."
+    )
+    _reply_messages(chat_id, _split_messages(lines))
+    log.info(
+        "screen %s: initial report sent (%d rows) in %.1fs",
+        parts[0], len(rows), monotonic() - t0,
+    )
+
+    # Phase 2 - fundamentals enrichment, then the full updated report.
+    def _fund_fetch(sym, with_screener):
+        return sym, sources.get_fundamentals(sym, with_screener=with_screener)
+
+    t_fund = monotonic()
+    fund_by_sym = {}
+    tasks = [
+        (sym, i < sources.FUND_MAX_ROWS)
+        for i, (sym, _) in enumerate(rows)
+    ]
+    with ThreadPoolExecutor(max_workers=12) as ex:
+        futures = {
+            ex.submit(_fund_fetch, sym, with_screener): (sym, with_screener)
+            for sym, with_screener in tasks
+        }
+        done = 0
+        for fut in as_completed(futures):
+            done += 1
+            sym, _ = futures[fut]
+            try:
+                fund = fut.result()[1]
+            except Exception as exc:  # fundamentals are best-effort
+                fund = None
+                log.info(
+                    "screen %s: fundamentals failed for %s: %s",
+                    parts[0], sym, exc,
+                )
+            fund_by_sym[sym] = fund
+            if done % 10 == 0 or done == len(tasks):
+                log.info(
+                    "screen %s: fundamentals progress %d/%d rows",
+                    parts[0], done, len(tasks),
+                )
+    log.info(
+        "screen %s: fundamentals fetch complete (%d rows) in %.1fs",
+        parts[0], len(tasks), monotonic() - t_fund,
+    )
+
+    lines = [header]
+    for idx, (sym, d) in enumerate(rows, 1):
+        lines.append(_row_line(idx, sym, d))
         fund_line = _fundamentals_line(fund_by_sym.get(sym))
         if fund_line:
             lines.append("   " + fund_line)
@@ -921,8 +1041,10 @@ def handle_market_screen(chat_id, parts, default_direction="all",
         lines.append(f"({failed} of {len(symbols)} stocks could not be loaded)")
     _reply_messages(chat_id, _split_messages(lines))
     log.info(
-        "screen %s: replied %d row(s), %d quote(s) failed, fundamentals cached=%d",
-        parts[0], len(rows), failed, len(fund_by_sym),
+        "screen %s: final report sent (%d rows) in %.1fs (total %.1fs), "
+        "quote failures=%d, fundamentals cached=%d",
+        parts[0], len(rows), monotonic() - t_fund, monotonic() - t0,
+        failed, len(fund_by_sym),
     )
 
 

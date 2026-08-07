@@ -88,8 +88,14 @@ def send_message(text: str, parse_mode: str = "HTML", chat_id: str | None = None
         data = resp.json()
         if not data.get("ok"):
             raise NotifierError(f"Telegram API error: {data.get('description')}")
+        log.info(
+            "Telegram send to chat %s: %d chars (parse=%s) -> %s",
+            target, len(text), parse_mode or "plain",
+            text[:100].replace("\n", " "),
+        )
         return data
     except requests.RequestException as exc:
+        log.warning("Telegram send to chat %s failed: %s", target, exc)
         raise NotifierError(f"Telegram send failed: {exc}") from exc
 
 

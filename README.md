@@ -232,6 +232,12 @@ corp_actions/
   affected fields are simply omitted. To protect against screener.in's
   aggressive rate limiting, its enrichment is paced (a few requests/second)
   and capped at the first 40 listed stocks.
+- The movement screens reply in two stages so you are never left waiting
+  blind: an immediate acknowledgment, then the initial report (movers +
+  current price) as soon as quotes are in, and finally an updated full
+  report with the fundamentals. The deployed bot logs every stage in
+  realtime (ack, universe load, change-fetch progress, initial/final report,
+  per-row failures, timings) so you can watch what the pipeline is doing.
 - To mute one source entirely (e.g. run NSE-only), the poller only iterates
   the exchanges it knows about — edit `FETCHERS` in `corp_actions/poller.py`.
 - Data comes from public NSE/BSE endpoints; use for informational purposes.
