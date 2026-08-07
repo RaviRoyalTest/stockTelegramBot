@@ -15,6 +15,7 @@ import logging
 import os
 import subprocess
 import sys
+import threading
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from datetime import date, timedelta
 from time import monotonic
@@ -981,26 +982,10 @@ def handle_market_screen(chat_id, parts, default_direction="all",
 
     header = f"{title} · {universe_label} (Top {len(rows)})"
 
-    # Fast fundamentals (Yahoo Finance only - no screener.in scraping to prevent blocking)
-    def _fund_fetch(sym):
-        return sym, sources.get_fundamentals(sym, with_screener=False)
-
-    fund_by_sym = {}
-    with ThreadPoolExecutor(max_workers=10) as ex:
-        futures = {ex.submit(_fund_fetch, sym): sym for sym, _ in rows}
-        for fut in as_completed(futures):
-            sym = futures[fut]
-            try:
-                fund_by_sym[sym] = fut.result()[1]
-            except Exception:
-                fund_by_sym[sym] = None
-
-    lines = [header]
-    for idx, (sym, d) in enumerate(rows, 1):
+    # ── Phase 1: send instant price-only list so user gets immediate data ──
+    def _row_line_simple(idx, sym, d) -> str:
         change = d["change_pct"]
         price = d.get("price")
-        fund = fund_by_sym.get(sym)
-        # Color circle + arrow based on direction and magnitude
         if change >= 3.0:
             move_icon = "\U0001F7E2\u25b2\u25b2"   # 🟢▲▲ strong up
         elif change >= 1.0:
@@ -1014,23 +999,86 @@ def handle_market_screen(chat_id, parts, default_direction="all",
         else:
             move_icon = "\U0001F7E1\u25bc"          # 🟡▼ small down
         sign = "+" if change >= 0 else ""
-        chg_str = f"{sign}{change:.2f}%"
-        # 52-week zone signal emoji
-        sig_emoji, _ = _wk52_signal(price, fund)
-        sig_prefix = f" {sig_emoji}" if sig_emoji else ""
-        lines.append(
-            f"{idx}. {move_icon}{sig_prefix} <b>{notifier.escape(sym)}</b>  "
-            f"{notifier.fmt_money(price)}  <b>{chg_str}</b>"
+        return (
+            f"{idx}. {move_icon} <b>{notifier.escape(sym)}</b>  "
+            f"{notifier.fmt_money(price)}  <b>{sign}{change:.2f}%</b>"
         )
-        fund_line = _fundamentals_line(fund, price)
-        if fund_line:
-            lines.append("   " + fund_line)
 
-    _reply_messages(chat_id, _split_messages(lines))
+    phase1_lines = [header]
+    for idx, (sym, d) in enumerate(rows, 1):
+        phase1_lines.append(_row_line_simple(idx, sym, d))
+    phase1_lines.append("")
+    phase1_lines.append(
+        "\u23f3 Fetching 52W high/low, P/E and fundamentals... updated report coming shortly."
+    )
+    _reply_messages(chat_id, _split_messages(phase1_lines))
     log.info(
-        "screen %s: completed %d rows in %.1fs",
+        "screen %s: phase-1 sent (%d rows) in %.1fs",
         parts[0], len(rows), monotonic() - t0,
     )
+
+    # ── Phase 2: fetch fundamentals in background, send enriched report ──
+    def _phase2():
+        t1 = monotonic()
+        log.info("screen %s: phase-2 fundamentals start for %d rows", parts[0], len(rows))
+
+        def _fund_fetch(sym):
+            return sym, sources.get_fundamentals(sym, with_screener=False)
+
+        fund_by_sym = {}
+        with ThreadPoolExecutor(max_workers=10) as ex:
+            futures = {ex.submit(_fund_fetch, sym): sym for sym, _ in rows}
+            for fut in as_completed(futures):
+                sym = futures[fut]
+                try:
+                    fund_by_sym[sym] = fut.result()[1]
+                except Exception as exc:
+                    log.info("screen %s: fund_fetch failed for %s: %s", parts[0], sym, exc)
+                    fund_by_sym[sym] = None
+
+        log.info(
+            "screen %s: phase-2 fundamentals done in %.1fs",
+            parts[0], monotonic() - t1,
+        )
+
+        enriched_lines = [header + "  \U0001F4CA"]
+        for idx, (sym, d) in enumerate(rows, 1):
+            change = d["change_pct"]
+            price = d.get("price")
+            fund = fund_by_sym.get(sym)
+            if change >= 3.0:
+                move_icon = "\U0001F7E2\u25b2\u25b2"
+            elif change >= 1.0:
+                move_icon = "\U0001F7E2\u25b2"
+            elif change <= -3.0:
+                move_icon = "\U0001F534\u25bc\u25bc"
+            elif change <= -1.0:
+                move_icon = "\U0001F534\u25bc"
+            elif change >= 0:
+                move_icon = "\U0001F7E1\u25b2"
+            else:
+                move_icon = "\U0001F7E1\u25bc"
+            sign = "+" if change >= 0 else ""
+            chg_str = f"{sign}{change:.2f}%"
+            sig_emoji, _ = _wk52_signal(price, fund)
+            sig_prefix = f" {sig_emoji}" if sig_emoji else ""
+            enriched_lines.append(
+                f"{idx}. {move_icon}{sig_prefix} <b>{notifier.escape(sym)}</b>  "
+                f"{notifier.fmt_money(price)}  <b>{chg_str}</b>"
+            )
+            fund_line = _fundamentals_line(fund, price)
+            if fund_line:
+                enriched_lines.append("   " + fund_line)
+
+        _reply_messages(chat_id, _split_messages(enriched_lines))
+        log.info(
+            "screen %s: phase-2 enriched report sent in %.1fs (total %.1fs)",
+            parts[0], monotonic() - t1, monotonic() - t0,
+        )
+
+    t = threading.Thread(target=_phase2, daemon=True)
+    t.start()
+    log.info("screen %s: phase-2 background thread started", parts[0])
 
 
 def _wk52_signal(price, fund: dict | None) -> tuple:

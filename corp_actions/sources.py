@@ -730,22 +730,30 @@ def _fund_session():
         sess = requests.Session()
         sess.headers.update({"User-Agent": config.USER_AGENT})
         try:
-            sess.get("https://fc.yahoo.com", timeout=config.HTTP_TIMEOUT)
-        except Exception:
-            pass
+            r = sess.get("https://fc.yahoo.com", timeout=config.HTTP_TIMEOUT)
+            log.info("fund_session: cookie consent ping -> status %s", r.status_code)
+        except Exception as exc:
+            log.info("fund_session: cookie consent ping failed: %s", exc)
         _tls.fund_sess = sess
     crumb = getattr(_tls, "fund_crumb", "")
     if not crumb:
-        try:
-            resp = sess.get(
-                "https://query1.finance.yahoo.com/v1/test/getcrumb",
-                timeout=config.HTTP_TIMEOUT,
-            )
-            if resp.status_code == 200 and resp.text.strip():
-                crumb = resp.text.strip()
-                _tls.fund_crumb = crumb
-        except Exception as exc:
-            log.info("Yahoo crumb unavailable: %s", exc)
+        for crumb_host in (
+            "https://query1.finance.yahoo.com/v1/test/getcrumb",
+            "https://query2.finance.yahoo.com/v1/test/getcrumb",
+        ):
+            try:
+                resp = sess.get(crumb_host, timeout=config.HTTP_TIMEOUT)
+                if resp.status_code == 200 and resp.text.strip():
+                    crumb = resp.text.strip()
+                    _tls.fund_crumb = crumb
+                    log.info("fund_session: crumb obtained from %s", crumb_host)
+                    break
+                log.info(
+                    "fund_session: crumb from %s -> status %s body=%r",
+                    crumb_host, resp.status_code, resp.text[:80],
+                )
+            except Exception as exc:
+                log.info("fund_session: crumb request to %s failed: %s", crumb_host, exc)
     return sess, crumb
 
 
@@ -753,25 +761,77 @@ def _quote_summary(symbol: str) -> dict | None:
     """Yahoo quoteSummary result (summaryDetail/financialData/assetProfile)."""
     sess, crumb = _fund_session()
     if not crumb:
+        log.info("_quote_summary: no crumb for %s — skipping", symbol)
         return None
-    url = (
-        f"https://query1.finance.yahoo.com/v10/finance/quoteSummary/"
-        f"{quote(symbol)}.NS"
-    )
-    try:
-        resp = sess.get(
-            url,
-            params={
-                "modules": "summaryDetail,financialData,assetProfile",
-                "crumb": crumb,
-            },
-            timeout=config.HTTP_TIMEOUT,
+    for host in (
+        "https://query1.finance.yahoo.com",
+        "https://query2.finance.yahoo.com",
+    ):
+        url = f"{host}/v10/finance/quoteSummary/{quote(symbol)}.NS"
+        try:
+            resp = sess.get(
+                url,
+                params={"modules": "summaryDetail,financialData,assetProfile", "crumb": crumb},
+                timeout=config.HTTP_TIMEOUT,
+            )
+            if resp.status_code == 401:
+                log.info("_quote_summary: 401 for %s on %s — clearing crumb", symbol, host)
+                _tls.fund_crumb = ""
+                break
+            resp.raise_for_status()
+            result = resp.json()["quoteSummary"]["result"]
+            if result:
+                log.info("_quote_summary: OK for %s from %s", symbol, host)
+                return result[0]
+            log.info("_quote_summary: empty result for %s from %s", symbol, host)
+        except Exception as exc:
+            log.info("_quote_summary: failed for %s on %s: %s", symbol, host, exc)
+    return None
+
+
+def _chart_fundamentals(symbol: str) -> dict:
+    """Extract 52W high/low + PE from /v8/finance/chart 1y range (no crumb needed).
+
+    This is the fallback when quoteSummary is unavailable on Render.
+    """
+    out = {}
+    for host in (
+        "https://query1.finance.yahoo.com",
+        "https://query2.finance.yahoo.com",
+    ):
+        url = (
+            f"{host}/v8/finance/chart/{quote(symbol)}.NS"
+            "?range=1y&interval=1d&includePrePost=false"
         )
-        resp.raise_for_status()
-        return resp.json()["quoteSummary"]["result"][0]
-    except Exception as exc:
-        log.info("quoteSummary failed for %s - %s", symbol, exc)
-        return None
+        try:
+            resp = _quote_session().get(url, timeout=config.HTTP_TIMEOUT)
+            resp.raise_for_status()
+            res = resp.json()
+            result = (res.get("chart") or {}).get("result") or []
+            if not result:
+                log.info("_chart_fundamentals: empty result for %s from %s", symbol, host)
+                continue
+            meta = result[0].get("meta") or {}
+            hi = meta.get("fiftyTwoWeekHigh") or meta.get("52WeekHigh")
+            lo = meta.get("fiftyTwoWeekLow") or meta.get("52WeekLow")
+            pe = meta.get("trailingPE")
+            dy = meta.get("dividendYield")
+            if hi:
+                out["wk52_high"] = hi
+            if lo:
+                out["wk52_low"] = lo
+            if pe:
+                out["pe"] = pe
+            if dy:
+                out["div_yield"] = round(dy * 100, 2)
+            log.info(
+                "_chart_fundamentals: %s -> 52W %.2f-%.2f PE=%s from %s",
+                symbol, lo or 0, hi or 0, pe, host,
+            )
+            break
+        except Exception as exc:
+            log.info("_chart_fundamentals: failed for %s on %s: %s", symbol, host, exc)
+    return out
 
 
 _sector_pe_cache: dict = {}
@@ -864,9 +924,12 @@ def get_fundamentals(symbol: str, with_screener: bool = True) -> dict | None:
     now = time.time()
     cached = _fund_cache.get(key)
     if cached and now - cached["ts"] < cached["ttl"]:
-        log.debug("fundamentals cache hit for %s", key)
+        log.info("get_fundamentals: cache hit for %s (%d fields)", key, len(cached["data"] or {}))
         return cached["data"]
     out = {}
+    log.info("get_fundamentals: fetching %s (with_screener=%s)", key, with_screener)
+
+    # Primary: Yahoo quoteSummary (needs cookie + crumb)
     res = _quote_summary(key)
     if res:
         sd = res.get("summaryDetail") or {}
@@ -896,17 +959,37 @@ def get_fundamentals(symbol: str, with_screener: bool = True) -> dict | None:
             out["debt_to_equity"] = round(de / 100, 2)
         if ap.get("sector"):
             out["sector"] = ap["sector"]
+        log.info("get_fundamentals: quoteSummary -> %d fields for %s", len(out), key)
+    else:
+        log.info("get_fundamentals: quoteSummary unavailable for %s — trying chart fallback", key)
+
+    # Fallback: extract 52W high/low + PE from chart endpoint (no crumb needed)
+    if not out.get("wk52_high"):
+        chart_data = _chart_fundamentals(key)
+        if chart_data:
+            out.update({k: v for k, v in chart_data.items() if k not in out})
+            log.info(
+                "get_fundamentals: chart fallback added %d fields for %s: %s",
+                len(chart_data), key, list(chart_data.keys()),
+            )
+        else:
+            log.info("get_fundamentals: chart fallback empty for %s", key)
+
     if with_screener:
         scr = _parse_screener_fundamentals(key)
         if scr:
             out.update({k: v for k, v in scr.items() if v is not None})
+            log.info("get_fundamentals: screener added %s for %s", list(scr.keys()), key)
+        else:
+            log.info("get_fundamentals: screener empty for %s", key)
+
     data = out or None
     ttl = _FUND_TTL
     if with_screener and not (out.get("promoter_pct") or out.get("sector_pe")):
         ttl = _FUND_RETRY_TTL  # retry the rate-limited part sooner
     _fund_cache[key] = {"ts": now, "data": data, "ttl": ttl}
-    log.debug(
-        "fundamentals fetched for %s (screener=%s): %d field(s)",
-        key, with_screener, len(out),
+    log.info(
+        "get_fundamentals: done %s -> %d field(s): %s",
+        key, len(out), list(out.keys()) if out else [],
     )
     return data
