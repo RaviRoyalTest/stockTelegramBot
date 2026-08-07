@@ -953,8 +953,8 @@ def _format_price_movers_report(rows: list, header: str) -> str:
 
 
 def _format_enriched_movers_report(rows: list, header: str, fund_by_sym: dict) -> str:
-    """Format the full enriched fundamentals movers report (Phase 2)."""
-    enriched_lines = [header + "  \U0001F4CA"]
+    """Format the full enriched fundamentals movers report."""
+    enriched_lines = [header]
     for idx, (sym, d) in enumerate(rows, 1):
         change = d["change_pct"]
         price = d.get("price")
@@ -1047,51 +1047,27 @@ def handle_market_screen(chat_id, parts, default_direction="all",
 
     header = f"{title} · {universe_label} (Top {len(rows)})"
 
-    # ── Phase 1: send instant price-only list so user gets immediate data ──
-    phase1_text = _format_price_movers_report(rows, header)
-    _reply_messages(chat_id, _split_messages(phase1_text.split("\n")))
+    # Fast fundamentals (Yahoo Finance chart + quote summary) for top N rows
+    def _fund_fetch(sym):
+        return sym, sources.get_fundamentals(sym, with_screener=False)
+
+    fund_by_sym = {}
+    with ThreadPoolExecutor(max_workers=10) as ex:
+        futures = {ex.submit(_fund_fetch, sym): sym for sym, _ in rows}
+        for fut in as_completed(futures):
+            sym = futures[fut]
+            try:
+                fund_by_sym[sym] = fut.result()[1]
+            except Exception as exc:
+                log.info("screen %s: fund_fetch failed for %s: %s", parts[0], sym, exc)
+                fund_by_sym[sym] = None
+
+    enriched_report = _format_enriched_movers_report(rows, header, fund_by_sym)
+    _reply_messages(chat_id, _split_messages(enriched_report.split("\n")))
     log.info(
-        "screen %s: phase-1 sent (%d rows) in %.1fs",
+        "screen %s: completed %d rows in %.1fs",
         parts[0], len(rows), monotonic() - t0,
     )
-
-    # ── Phase 2: fetch fundamentals in background, send enriched report ──
-    def _phase2():
-        try:
-            t1 = monotonic()
-            log.info("screen %s: phase-2 fundamentals start for %d rows", parts[0], len(rows))
-
-            def _fund_fetch(sym):
-                return sym, sources.get_fundamentals(sym, with_screener=True)
-
-            fund_by_sym = {}
-            with ThreadPoolExecutor(max_workers=10) as ex:
-                futures = {ex.submit(_fund_fetch, sym): sym for sym, _ in rows}
-                for fut in as_completed(futures):
-                    sym = futures[fut]
-                    try:
-                        fund_by_sym[sym] = fut.result()[1]
-                    except Exception as exc:
-                        log.info("screen %s: fund_fetch failed for %s: %s", parts[0], sym, exc)
-                        fund_by_sym[sym] = None
-
-            log.info(
-                "screen %s: phase-2 fundamentals done in %.1fs",
-                parts[0], monotonic() - t1,
-            )
-
-            phase2_text = _format_enriched_movers_report(rows, header, fund_by_sym)
-            _reply_messages(chat_id, _split_messages(phase2_text.split("\n")))
-            log.info(
-                "screen %s: phase-2 enriched report sent in %.1fs (total %.1fs)",
-                parts[0], monotonic() - t1, monotonic() - t0,
-            )
-        except Exception as exc:
-            log.exception("screen %s: phase-2 exception: %s", parts[0], exc)
-
-    t = threading.Thread(target=_phase2, daemon=True)
-    t.start()
-    log.info("screen %s: phase-2 background thread started", parts[0])
 
 
 def _wk52_signal(price, fund: dict | None) -> tuple:
