@@ -1118,8 +1118,23 @@ def _wk52_signal(price, fund: dict | None) -> tuple:
     return "\U0001F7E1", "\U0001F7E1 Mid-Range"
 
 
+def _rsi_signal(rsi: float | None) -> str:
+    """Format 14-period RSI with clear signal emoji."""
+    if rsi is None:
+        return ""
+    if rsi <= 30.0:
+        return f"\U0001F7E2 RSI {rsi:g} (Oversold)"
+    if rsi <= 45.0:
+        return f"\U0001F7E2 RSI {rsi:g} (Low)"
+    if rsi >= 70.0:
+        return f"\U0001F534 RSI {rsi:g} (Overbought)"
+    if rsi >= 60.0:
+        return f"\U0001F534 RSI {rsi:g} (High)"
+    return f"\U0001F7E1 RSI {rsi:g}"
+
+
 def _fundamentals_line(fund: dict | None, price=None) -> str:
-    """Compact fundamentals line with 52-week signal for a stock, or '' when nothing to show."""
+    """Compact fundamentals line with 52-week signal + RSI for a stock."""
     if not fund:
         return ""
 
@@ -1128,9 +1143,13 @@ def _fundamentals_line(fund: dict | None, price=None) -> str:
         return s.rstrip("0").rstrip(".") if "." in s else s
 
     sig_emoji, range_tag = _wk52_signal(price, fund)
+    rsi_tag = _rsi_signal(fund.get("rsi"))
+
     parts = []
     if range_tag:
         parts.append(range_tag)
+    if rsi_tag:
+        parts.append(rsi_tag)
     if fund.get("pe"):
         parts.append(f"P/E {_num(fund['pe'], 1)}")
     if fund.get("sector_pe"):
@@ -1144,10 +1163,15 @@ def _fundamentals_line(fund: dict | None, price=None) -> str:
         parts.append(f"Div {_num(fund['div_yield'], 2)}%")
     if fund.get("debt_to_equity") is not None:
         parts.append(f"D/E {_num(fund['debt_to_equity'], 2)}")
-    if fund.get("roce") is not None:
-        parts.append(f"ROCE {_num(fund['roce'], 1)}%")
-    if fund.get("roe") is not None:
-        parts.append(f"ROE {_num(fund['roe'], 1)}%")
+    if fund.get("market_cap") is not None:
+        parts.append(f"MCap \u20b9{fund['market_cap']:,.0f}Cr")
+    if fund.get("roce") is not None or fund.get("roe") is not None:
+        bits = []
+        if fund.get("roce"):
+            bits.append(f"ROCE {_num(fund['roce'], 1)}%")
+        if fund.get("roe"):
+            bits.append(f"ROE {_num(fund['roe'], 1)}%")
+        parts.append(" ".join(bits))
     if any(fund.get(k) for k in ("promoter_pct", "fii_pct", "dii_pct")):
         bits = []
         for key, label in (("promoter_pct", "Prom"), ("fii_pct", "FII"), ("dii_pct", "DII")):

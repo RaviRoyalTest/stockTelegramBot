@@ -789,11 +789,30 @@ def _quote_summary(symbol: str) -> dict | None:
     return None
 
 
-def _chart_fundamentals(symbol: str) -> dict:
-    """Extract 52W high/low + PE from /v8/finance/chart 1y range (no crumb needed).
+def _calculate_rsi(closes: list, period: int = 14) -> float | None:
+    """Calculate 14-period Relative Strength Index (RSI) using Wilder's smoothing."""
+    prices = [c for c in closes if c is not None]
+    if len(prices) < period + 1:
+        return None
+    deltas = [prices[i] - prices[i - 1] for i in range(1, len(prices))]
+    gains = [d if d > 0 else 0.0 for d in deltas]
+    losses = [-d if d < 0 else 0.0 for d in deltas]
 
-    This is the fallback when quoteSummary is unavailable on Render.
-    """
+    avg_gain = sum(gains[:period]) / period
+    avg_loss = sum(losses[:period]) / period
+
+    for i in range(period, len(deltas)):
+        avg_gain = (avg_gain * (period - 1) + gains[i]) / period
+        avg_loss = (avg_loss * (period - 1) + losses[i]) / period
+
+    if avg_loss == 0:
+        return 100.0
+    rs = avg_gain / avg_loss
+    return round(100.0 - (100.0 / (1.0 + rs)), 1)
+
+
+def _chart_fundamentals(symbol: str) -> dict:
+    """Extract 52W high/low, PE, dividend yield and 14-day RSI from /v8/finance/chart (no crumb needed)."""
     out = {}
     for host in (
         "https://query1.finance.yahoo.com",
@@ -824,9 +843,18 @@ def _chart_fundamentals(symbol: str) -> dict:
                 out["pe"] = pe
             if dy:
                 out["div_yield"] = round(dy * 100, 2)
+
+            # Calculate 14-day RSI from daily closing prices
+            indicators = (result[0].get("indicators") or {}).get("quote") or [{}]
+            closes = (indicators[0] or {}).get("close") or []
+            if closes:
+                rsi_val = _calculate_rsi(closes)
+                if rsi_val is not None:
+                    out["rsi"] = rsi_val
+
             log.info(
-                "_chart_fundamentals: %s -> 52W %.2f-%.2f PE=%s from %s",
-                symbol, lo or 0, hi or 0, pe, host,
+                "_chart_fundamentals: %s -> 52W %.2f-%.2f PE=%s RSI=%s from %s",
+                symbol, lo or 0, hi or 0, pe, out.get("rsi"), host,
             )
             break
         except Exception as exc:
@@ -991,17 +1019,16 @@ def get_fundamentals(symbol: str, with_screener: bool = True) -> dict | None:
     else:
         log.info("get_fundamentals: quoteSummary unavailable for %s — trying chart fallback", key)
 
-    # Fallback: extract 52W high/low + PE from chart endpoint (no crumb needed)
-    if not out.get("wk52_high"):
-        chart_data = _chart_fundamentals(key)
-        if chart_data:
-            out.update({k: v for k, v in chart_data.items() if k not in out})
-            log.info(
-                "get_fundamentals: chart fallback added %d fields for %s: %s",
-                len(chart_data), key, list(chart_data.keys()),
-            )
-        else:
-            log.info("get_fundamentals: chart fallback empty for %s", key)
+    # Chart fallback & RSI computation (always run chart to get 14-day RSI and 52W fallback)
+    chart_data = _chart_fundamentals(key)
+    if chart_data:
+        out.update({k: v for k, v in chart_data.items() if k not in out or out[k] is None})
+        log.info(
+            "get_fundamentals: chart data added for %s: %s",
+            key, list(chart_data.keys()),
+        )
+    else:
+        log.info("get_fundamentals: chart data empty for %s", key)
 
     if with_screener:
         scr = _parse_screener_fundamentals(key)
