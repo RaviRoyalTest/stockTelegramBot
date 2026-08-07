@@ -91,9 +91,9 @@ Send these to your bot:
 | `/exdate [today\|N]` | `/exdate 7` | All actions whose ex-date is today or within N days (default `REMINDER_DAYS`) |
 | `/summary` | `/summary` | Market snapshot: counts by exchange and type, plus the next ex-dates |
 | `/news [N\|SYMBOL]` | `/news 5` | Latest news headlines for the stocks in your list (up to N each, 1-5). `/news RELIANCE` = one symbol. Sources: Google News RSS, Yahoo fallback |
-| `/movers [period] [direction] [N] [100\|500]` | `/movers 1h gainers 10 500` | Screen an index (NIFTY 100/500) by price movement over a window, sorted lower → higher. Periods: `5m 15m 30m 1h 2h 4h today 2d 1w 1mo` (default 1h). Direction: `gainers`/`losers`/`all`; `N` = max rows; index `100` or `500` (default 100). E.g. `/movers 1w 500`. Each row also shows P/E, sector P/E, 52-week high/low, dividend yield, promoter/FII/DII holding and debt/equity when available |
-| `/gainers [period] [N] [100\|500]` | `/gainers 2d 100` | Top N gainers over an index (NIFTY 100/500, default 500). Same periods as `/movers`; default today, top 30, up to 100. Fundamentals shown per row. E.g. `/gainers 1h 50 500` |
-| `/losers [period] [N] [100\|500]` | `/losers 30m 5 100` | Top N losers over an index (same options and fundamentals as `/gainers`). E.g. `/losers 1w 20 500` |
+| `/movers [period] [direction] [N] [100\|500]` | `/movers 1h gainers 10 500` | Screen an index (NIFTY 100/500) by price movement over a window, sorted lower → higher. Periods: `5m 15m 30m 1h 2h 4h today 2d 1w 1mo` (default 1h). Direction: `gainers`/`losers`/`all`; `N` = max rows; a bare `100`/`500` picks the index (default 100). E.g. `/movers 1w 500`. Each row also shows P/E, sector P/E, 52-week high/low, dividend yield, promoter/FII/DII holding and debt/equity when available |
+| `/gainers [period] [N] [100\|500]` | `/gainers 2d 100` | Top N gainers over an index (default NIFTY 500, top 30). Here a bare `100`/`500` means **top N** — to pick the index use `nifty100`/`nifty500` or a second number after a count (e.g. `/gainers 1h 50 500`). Fundamentals shown per row |
+| `/losers [period] [N] [100\|500]` | `/losers 1mo 100` | Top N losers over an index (same options and fundamentals as `/gainers`). E.g. `/losers 1w 20 500`, `/losers 30m 5 nifty100` |
 
 Every `/ca`, `/exdate` and `/summary` result includes the current price
 (₹ with today's % change) and clearly printed Ex-date / Record date /

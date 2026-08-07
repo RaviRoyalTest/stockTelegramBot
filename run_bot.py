@@ -77,9 +77,9 @@ HELP_TEXT = (
     "/summary \u2014 counts by exchange &amp; type, plus next ex-dates\n"
     "/movers | /gainers | /losers [period] [direction] [N] [100|500]\n"
     "   \u2014 movement screens over NIFTY 100 or NIFTY 500 stocks\n"
-    "   \u2022 /movers 1h gainers 10 500 \u00b7 /movers 30m \u00b7 /movers 2d\n"
-    "   \u2022 /gainers 2d 100 \u00b7 /gainers 1h 50 500 \u00b7 /losers 30m 5 100\n"
-    "   \u2022 /movers 500 \u00b7 /gainers 1w \u00b7 /losers 1mo\n\n"
+    "   \u2022 /movers 1h gainers 10 500 \u00b7 /gainers 2d 100 (top 100)\n"
+    "   \u2022 /losers 1mo 100 (top 100) \u00b7 /losers 30m 5 nifty100\n"
+    "   \u2022 /movers 500 (NIFTY 500) \u00b7 /gainers 1w nifty500\n\n"
     "\u2B50 <b>Watchlist</b>\n"
     "/add SYMBOL [NSE|BSE] \u2014 add a stock you hold\n"
     "/remove SYMBOL \u2014 remove a stock\n"
@@ -105,7 +105,8 @@ HELP_TEXT = (
     "\u2022 Periods for /movers, /gainers, /losers:\n"
     "   intraday 5m \u00b7 15m \u00b7 30m \u00b7 1h \u00b7 2h \u00b7 4h\n"
     "   daily 1d(today) \u00b7 2d \u00b7 3d \u00b7 5d \u00b7 7d \u00b7 1w \u00b7 2w \u00b7 1mo \u00b7 3mo \u00b7 6mo \u00b7 1y\n"
-    "\u2022 Index: 100 = NIFTY 100, 500 = NIFTY 500 (movers default 100, gainers/losers default 500).\n"
+    "\u2022 Index: /movers 100 or 500, or the nifty100 / nifty500 keywords, pick the universe.\n"
+    "\u2022 For /gainers and /losers a bare 100 or 500 is a count (top N); use nifty100/nifty500 for the index.\n"
     "\u2022 Direction: gainers / losers / all; count 1-100 (gainers/losers default 30).\n"
     "\u2022 Each stock shows P/E, sector P/E, 52-week high/low, dividend yield,\n"
     "   promoter/FII/DII holding and debt/equity when available.\n"
@@ -115,8 +116,8 @@ HELP_TEXT = (
     "<b>Corporate actions:</b>  /ca  \u00b7  /ca dividend  \u00b7  /ca increase  \u00b7  /ca 7  \u00b7  /ca RELIANCE\n"
     "<b>Ex-dates:</b>  /exdate today  \u00b7  /exdate 10  \u00b7  /next\n"
     "<b>Movers:</b>  /movers 30m  \u00b7  /movers 1h gainers 10 500  \u00b7  /movers 2d  \u00b7  /movers 1w 500\n"
-    "<b>Gainers:</b>  /gainers  \u00b7  /gainers 50  \u00b7  /gainers 2d 100  \u00b7  /gainers 1h 500\n"
-    "<b>Losers:</b>  /losers  \u00b7  /losers 100  \u00b7  /losers 30m 5 500  \u00b7  /losers 1mo 100\n"
+    "<b>Gainers:</b>  /gainers  \u00b7  /gainers 50  \u00b7  /gainers 2d 100  \u00b7  /gainers 1h nifty500\n"
+    "<b>Losers:</b>  /losers  \u00b7  /losers 1mo 100  \u00b7  /losers 30m 5 nifty100  \u00b7  /losers 1w nifty500\n"
     "<b>News:</b>  /news  \u00b7  /news 5  \u00b7  /news RELIANCE\n"
     "<b>Personalize:</b>  /filter dividend,bonus  \u00b7  /alert 3  \u00b7  /settings"
 )
@@ -781,10 +782,15 @@ def _parse_screen_parts(parts, default_period, default_direction,
       periods   5m 15m 30m 1h 2h 4h today 2d 3d 5d 1w 2w 1mo 3mo 6mo 1y
       direction gainers/losers/all
       count     any number 1-100
-      universe  100 = NIFTY 100, 500 = NIFTY 500
+      universe  nifty100 / nifty500 keywords, or a second number after a count
+
+    A bare `100`/`500` means the index universe for /movers (which shows all
+    stocks anyway) but a *count* for /gainers and /losers, so `/losers 1mo
+    100` means "top 100 losers" while `/movers 500` means "NIFTY 500".
     """
     period, direction, count, universe = (
         default_period, default_direction, default_count, default_universe)
+    explicit_count = False
     for token in parts[1:]:
         t = token.lower()
         if t in MOVERS_PERIODS:
@@ -796,13 +802,22 @@ def _parse_screen_parts(parts, default_period, default_direction,
         elif t in ("all", "both", "mixed"):
             direction = "all"
         elif t in ("100", "nifty100", "nifty-100", "nifty 100"):
-            universe = "nifty100"
+            if t == "100" and not explicit_count and default_count is not None:
+                count = 100
+                explicit_count = True
+            else:
+                universe = "nifty100"
         elif t in ("500", "allstocks", "all-stocks", "nifty500", "nifty-500",
                    "nifty 500"):
-            universe = "nifty500"
+            if t == "500" and not explicit_count and default_count is not None:
+                count = 100
+                explicit_count = True
+            else:
+                universe = "nifty500"
         else:
             try:
                 count = max(1, min(100, int(t)))
+                explicit_count = True
             except ValueError:
                 pass
     return period, direction, count, universe
@@ -816,7 +831,7 @@ def handle_market_screen(chat_id, parts, default_direction="all",
     One implementation backs /movers, /gainers and /losers so all three stay
     feature-identical. Every command understands the shared options:
       /movers 1h gainers 10 500   period, direction, count, index universe
-      /gainers 2d 100            top 100 gainers over 2 days, NIFTY 100
+      /gainers 2d 100            top 100 gainers over 2 days
       /losers 30m 5 500          top 5 losers over 30 min, NIFTY 500
     Gainers/losers sort by size (best first); the movers "all" view sorts
     lower -> higher.
@@ -825,13 +840,18 @@ def handle_market_screen(chat_id, parts, default_direction="all",
         parts, default_period, default_direction, default_count,
         default_universe)
 
-    symbols = sources.get_index_universe(universe)
-    if not symbols:
-        reply(chat_id, "Could not load the stock universe right now. Try again in a minute.")
-        return
-
     universe_label = "NIFTY 500" if universe == "nifty500" else "NIFTY 100"
     period_label = _period_label(*period)
+    log.info(
+        "screen %s: period=%s direction=%s count=%s universe=%s",
+        parts[0], period_label, direction, count, universe_label,
+    )
+
+    symbols = sources.get_index_universe(universe)
+    if not symbols:
+        log.warning("screen %s: no symbols loaded for universe %s", parts[0], universe)
+        reply(chat_id, "Could not load the stock universe right now. Try again in a minute.")
+        return
 
     def _fetch(sym):
         return sym, _fetch_period_change(sym, period)
@@ -855,6 +875,13 @@ def handle_market_screen(chat_id, parts, default_direction="all",
     if count:
         rows = rows[:count]
     if not rows:
+        ok = sum(1 for _, d in fetched if d and d.get("change_pct") is not None)
+        log.warning(
+            "screen %s: no %s in %s over %s (universe=%d, quotes ok=%d/%d) - "
+            "market may be closed or everything moved the other way",
+            parts[0], direction, universe_label, period_label,
+            len(symbols), ok, len(fetched),
+        )
         reply(chat_id, f"No movement data found for {period_label} ({universe_label}).")
         return
 
@@ -893,6 +920,10 @@ def handle_market_screen(chat_id, parts, default_direction="all",
     if failed:
         lines.append(f"({failed} of {len(symbols)} stocks could not be loaded)")
     _reply_messages(chat_id, _split_messages(lines))
+    log.info(
+        "screen %s: replied %d row(s), %d quote(s) failed, fundamentals cached=%d",
+        parts[0], len(rows), failed, len(fund_by_sym),
+    )
 
 
 def _fundamentals_line(fund: dict | None) -> str:
