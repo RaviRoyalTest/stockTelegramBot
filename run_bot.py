@@ -1173,9 +1173,14 @@ def _fundamentals_lines(fund: dict | None, price=None) -> list[str]:
         lines.append("\U0001F4C8 " + "  \u00b7  ".join(l3_parts))
 
     # Line 4: Shareholding Pattern (with QoQ trends!)
-    if any(fund.get(k) for k in ("promoter_pct", "fii_pct", "dii_pct")):
+    if any(fund.get(k) for k in ("promoter_pct", "fii_pct", "dii_pct", "public_pct")):
         h_bits = []
-        for key, label in (("promoter_pct", "Prom"), ("fii_pct", "FII"), ("dii_pct", "DII")):
+        for key, label in (
+            ("promoter_pct", "Prom"),
+            ("fii_pct", "FII"),
+            ("dii_pct", "DII"),
+            ("public_pct", "Pub"),
+        ):
             if fund.get(key):
                 h_bits.append(f"{label} {notifier.escape(fund[key])}")
         lines.append("\U0001F4BC Holding (QoQ): " + "  \u00b7  ".join(h_bits))

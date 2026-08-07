@@ -994,6 +994,8 @@ def _parse_screener_fundamentals(symbol: str) -> dict | None:
                 out["fii_pct"] = val_str
             elif label.startswith("dii"):
                 out["dii_pct"] = val_str
+            elif label.startswith("public"):
+                out["public_pct"] = val_str
     return out or None
 
 
