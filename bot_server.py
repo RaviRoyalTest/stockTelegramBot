@@ -244,7 +244,7 @@ def main():
                 # command never happened and state only reached GitHub via the
                 # periodic flush (or was lost on redeploy).
                 parts = text.strip().split()
-                cmd = parts[0].lower() if parts else ""
+                cmd = parts[0].lower().split("@")[0] if parts else ""
                 log.info("command from chat %s: %s", chat_id, text)
                 if cmd == "/checknow":
                     handle_command(chat_id, text)

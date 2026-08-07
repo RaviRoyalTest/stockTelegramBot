@@ -60,23 +60,42 @@ logging.basicConfig(
 )
 log = logging.getLogger("run_bot")
 
+import html
+
 HELP_TEXT = (
-    "Corporate Action Alerts bot.\n\n"
-    "Commands:\n"
-    "/add SYMBOL [NSE|BSE] - add a stock to the watchlist\n"
-    "/remove SYMBOL [NSE|BSE] - remove a stock\n"
-    "/list - show the watchlist\n"
-    "/next - show upcoming ex-dates for your watchlist\n"
-    "/filter TYPE,TYPE - only receive these action types\n"
-    "   types: dividend, bonus, split, rights, buyback (or /filter all)\n"
-    "/alert PCT - alert me when a stock moves +/-PCT% in a day (/alert off)\n"
-    "/status - show where your list is saved and if GitHub push is on\n"
-    "/checknow - force a check and re-send all matching alerts\n"
-    "/help - this message\n"
-    "/start - this message\n"
-    "(tip: type / alone to see this help)\n\n"
-    "Examples:\n/add RELIANCE NSE\n/add PGINVIT NSE\n/remove TCS\n"
-    "/filter dividend,bonus\n/alert 3"
+    "<b>🔔 Corporate Action Alerts Bot</b>\n\n"
+    "Monitor NSE & BSE corporate actions (dividends, splits, bonus, rights, buybacks) "
+    "and daily price alerts directly in Telegram.\n\n"
+    "<b>📋 WATCHLIST COMMANDS</b>\n"
+    "• <code>/add SYMBOL [EXCHANGE]</code> - Add stock to watchlist\n"
+    "  <i>Examples:</i>\n"
+    "  • <code>/add RELIANCE</code> (Default: NSE)\n"
+    "  • <code>/add TCS BSE</code>\n"
+    "  • <code>/add PGINVIT NSE</code> (InvITs & REITs)\n"
+    "• <code>/remove SYMBOL [EXCHANGE]</code> - Remove stock from watchlist\n"
+    "  <i>Examples:</i>\n"
+    "  • <code>/remove TCS</code>\n"
+    "  • <code>/remove RELIANCE BSE</code>\n"
+    "• <code>/list</code> - View your current stock watchlist\n\n"
+    "<b>📅 EVENTS & ALERTS</b>\n"
+    "• <code>/next</code> - Show upcoming ex-dates for your watchlist\n"
+    "• <code>/checknow</code> - Force check now & re-send matching alerts\n\n"
+    "<b>⚙️ FILTERS & SETTINGS</b>\n"
+    "• <code>/filter TYPES</code> - Receive only specific action types\n"
+    "  <i>Types:</i> dividend, bonus, split, rights, buyback, other, all\n"
+    "  <i>Examples:</i>\n"
+    "  • <code>/filter dividend</code>\n"
+    "  • <code>/filter dividend,bonus,split</code>\n"
+    "  • <code>/filter all</code>\n"
+    "• <code>/alert PCT</code> - Set daily price move threshold (%)\n"
+    "  <i>Examples:</i>\n"
+    "  • <code>/alert 3</code> (Alert on +/-3% daily price move)\n"
+    "  • <code>/alert 5%</code>\n"
+    "  • <code>/alert off</code> (Turn off price alerts)\n\n"
+    "<b>📊 STATUS & HELP</b>\n"
+    "• <code>/status</code> - View chat ID, role, storage & GitHub sync status\n"
+    "• <code>/help</code> - Show this detailed guide\n\n"
+    "💡 <i>Tip: Type <code>/</code> alone to quickly access all commands.</i>"
 )
 
 
@@ -91,9 +110,21 @@ def get_updates(offset=None):
     return resp.json().get("result", [])
 
 
-def reply(chat_id, text):
+def reply(chat_id, text, parse_mode="HTML"):
     url = f"https://api.telegram.org/bot{config.TELEGRAM_BOT_TOKEN}/sendMessage"
-    requests.post(url, json={"chat_id": chat_id, "text": text}, timeout=config.HTTP_TIMEOUT)
+    payload = {"chat_id": chat_id, "text": text}
+    if parse_mode:
+        payload["parse_mode"] = parse_mode
+    try:
+        resp = requests.post(url, json=payload, timeout=config.HTTP_TIMEOUT)
+        resp.raise_for_status()
+    except Exception as exc:
+        if parse_mode:
+            payload.pop("parse_mode", None)
+            try:
+                requests.post(url, json=payload, timeout=config.HTTP_TIMEOUT)
+            except Exception:
+                pass
 
 
 def github_push_configured() -> bool:
@@ -106,7 +137,7 @@ def handle_command(chat_id, text):
     parts = (text or "").strip().split()
     if not parts:
         return
-    cmd = parts[0].lower()
+    cmd = parts[0].lower().split("@")[0]
     log.info("command from chat %s: %s", chat_id, text)
 
     if cmd in ("/start", "/help", "/"):
@@ -118,7 +149,7 @@ def handle_command(chat_id, text):
         if not items:
             reply(chat_id, "Your watchlist is empty.")
         else:
-            lines = [f"{i['symbol']} ({i['exchange']})" for i in items]
+            lines = [f"• <b>{i['symbol']}</b> ({i['exchange']})" for i in items]
             where = (
                 "watchlist.json (owner's list)"
                 if storage.is_owner(chat_id)
@@ -132,9 +163,9 @@ def handle_command(chat_id, text):
             )
             reply(
                 chat_id,
-                "Your watchlist:\n"
+                "<b>Your Watchlist:</b>\n"
                 + "\n".join(lines)
-                + f"\n\nSaved in: {where} - {persistence}",
+                + f"\n\nSaved in: <code>{html.escape(where)}</code>\nPersistence: {html.escape(persistence)}",
             )
         return
 
@@ -150,7 +181,7 @@ def handle_command(chat_id, text):
         try:
             matching = poller_mod.fetch_matching(items)
         except Exception as exc:
-            reply(chat_id, f"Could not fetch corporate actions: {exc}")
+            reply(chat_id, f"Could not fetch corporate actions: {html.escape(str(exc))}")
             return
         upcoming = [
             a for a in matching if poller_mod.within_reminder_window(a.get("ex_date"))
@@ -164,8 +195,8 @@ def handle_command(chat_id, text):
         if len(parts) < 2:
             reply(
                 chat_id,
-                "Current filters: " + (", ".join(current) if current else "all types")
-                + "\nUsage: /filter dividend,bonus  or  /filter all",
+                "Current filters: <b>" + html.escape(", ".join(current) if current else "all types") + "</b>"
+                + "\nUsage: <code>/filter dividend,bonus</code> or <code>/filter all</code>",
             )
             return
         raw = parts[1].lower()
@@ -186,9 +217,9 @@ def handle_command(chat_id, text):
             "chat %s filters set to: %s",
             chat_id, ", ".join(chosen) if chosen else "all types",
         )
-        msg = "Filters set to: " + (", ".join(chosen) if chosen else "all types")
+        msg = "Filters set to: <b>" + html.escape(", ".join(chosen) if chosen else "all types") + "</b>"
         if bad:
-            msg += f"\nIgnored unknown type(s): {', '.join(bad)}"
+            msg += f"\nIgnored unknown type(s): {html.escape(', '.join(bad))}"
             msg += f" (valid: {', '.join(sources.ACTION_TYPES)})"
         reply(chat_id, msg)
         return
@@ -198,9 +229,9 @@ def handle_command(chat_id, text):
         current = settings.get("price_alert_pct")
         if len(parts) < 2:
             if current:
-                reply(chat_id, f"Current price-alert threshold: {current:g}%")
+                reply(chat_id, f"Current price-alert threshold: <b>{current:g}%</b>")
             else:
-                reply(chat_id, "Price alerts are off.\nUsage: /alert 3  (percent move)  or  /alert off")
+                reply(chat_id, "Price alerts are off.\nUsage: <code>/alert 3</code> (percent move) or <code>/alert off</code>")
             return
         raw = parts[1].lower()
         if raw in ("off", "none", "0", "0%"):
@@ -209,7 +240,7 @@ def handle_command(chat_id, text):
             try:
                 val = abs(float(raw.strip().rstrip("%")))
             except ValueError:
-                reply(chat_id, "Usage: /alert 3  (e.g. 3%)  or  /alert off")
+                reply(chat_id, "Usage: <code>/alert 3</code> (e.g. 3%) or <code>/alert off</code>")
                 return
             if val == 0:
                 val = None
@@ -219,7 +250,7 @@ def handle_command(chat_id, text):
             "chat %s price-alert threshold set to: %s",
             chat_id, "off" if val is None else f"{val:g}%",
         )
-        reply(chat_id, f"Price alerts {'off' if val is None else 'set to ' + format(val, 'g') + '%'}.")
+        reply(chat_id, f"Price alerts {'off' if val is None else 'set to <b>' + format(val, 'g') + '%</b>'}.")
         return
 
     if cmd == "/status":
@@ -251,11 +282,11 @@ def handle_command(chat_id, text):
             chat_id,
             "\n".join(
                 [
-                    f"Your chat id: {chat_id}",
-                    f"Role: {'owner' if owner else 'subscriber'}",
-                    f"Your list is saved in: {location}",
-                    f"GitHub push: {push_status}",
-                    sync_line,
+                    f"<b>Your chat id:</b> <code>{chat_id}</code>",
+                    f"<b>Role:</b> {'owner' if owner else 'subscriber'}",
+                    f"<b>Saved in:</b> <code>{html.escape(location)}</code>",
+                    f"<b>GitHub push:</b> {html.escape(push_status)}",
+                    html.escape(sync_line),
                     "Run /list to see your current watchlist.",
                 ]
             ),
@@ -263,21 +294,26 @@ def handle_command(chat_id, text):
         return
 
     if len(parts) < 2:
-        reply(chat_id, "Usage: /add SYMBOL [NSE|BSE]  or  /remove SYMBOL [NSE|BSE]")
+        reply(chat_id, "Usage: <code>/add SYMBOL [NSE|BSE]</code> or <code>/remove SYMBOL [NSE|BSE]</code>")
         return
 
-    symbol = parts[1].upper()
-    exchange = (parts[2].upper() if len(parts) > 2 else "NSE")
-    exchange = exchange if exchange in ("NSE", "BSE") else "NSE"
+    raw_symbol = parts[1].upper().strip()
+    if raw_symbol.endswith(".BO"):
+        symbol = raw_symbol.removesuffix(".BO")
+        exchange = "BSE"
+    elif raw_symbol.endswith(".NS"):
+        symbol = raw_symbol.removesuffix(".NS")
+        exchange = "NSE"
+    else:
+        symbol = raw_symbol
+        exchange = (parts[2].upper().strip() if len(parts) > 2 else "NSE")
+        exchange = exchange if exchange in ("NSE", "BSE") else "NSE"
 
     if cmd == "/add":
         quote = sources.get_quote(exchange, symbol)
         company = quote.get("name", "") if quote else ""
         validated = quote is not None
         if not validated and exchange == "NSE":
-            # Yahoo can be flaky from datacenter IPs (e.g. Render). Fall back
-            # to the NSE stock list so valid tickers still get added even when
-            # the live quote is unavailable.
             exact = next(
                 (
                     s for s in sources.search_stocks(symbol, limit=5)
@@ -286,12 +322,26 @@ def handle_command(chat_id, text):
                 None,
             )
             if exact is not None:
-                company = exact["company"]
+                company = exact.get("company", "")
                 validated = True
                 log.info(
                     "Yahoo quote unavailable for %s:%s; validated via NSE stock list",
                     exchange, symbol,
                 )
+        elif not validated and exchange == "BSE":
+            try:
+                bse_list = sources.get_bse_stock_list()
+                exact = next(
+                    (s for s in bse_list if s["symbol"].upper() == symbol or s.get("code") == symbol),
+                    None,
+                )
+                if exact is not None:
+                    symbol = exact["symbol"]
+                    company = exact.get("company", "")
+                    validated = True
+            except Exception:
+                pass
+
         if not validated:
             _reply_suggestions(chat_id, symbol)
             return
@@ -307,13 +357,13 @@ def handle_command(chat_id, text):
         log.info("Added %s (%s) for chat %s -> %s", symbol, exchange, chat_id, where)
         reply(
             chat_id,
-            f"Added {symbol} ({exchange}). Alerts will come to this chat.\n"
-            f"Saved in: {where}.",
+            f"Added <b>{symbol}</b> ({exchange}). Alerts will come to this chat.\n"
+            f"Saved in: <code>{html.escape(where)}</code>.",
         )
     elif cmd == "/remove":
         storage.remove_from_user_list(chat_id, symbol, exchange)
         log.info("Removed %s (%s) for chat %s", symbol, exchange, chat_id)
-        reply(chat_id, f"Removed {symbol} ({exchange}) if it was present.")
+        reply(chat_id, f"Removed <b>{symbol}</b> ({exchange}) if it was present.")
     else:
         reply(chat_id, HELP_TEXT)
 

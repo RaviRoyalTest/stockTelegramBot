@@ -60,13 +60,33 @@ def action_type(subject) -> str:
 
 
 def _parse_nse_date(value: str) -> str:
-    """Normalise NSE date strings like '06-Aug-2026' to ISO '2026-08-06'."""
-    for fmt in ("%d-%b-%Y", "%d-%b-%y"):
+    """Normalise date strings (e.g. '06-Aug-2026', '06-AUG-2026', '2026-08-06T00:00:00') to ISO '2026-08-06'."""
+    val = str(value or "").strip()
+    if not val or val == "-":
+        return "-"
+    if "T" in val:
+        val = val.split("T")[0]
+    elif " " in val:
+        val = val.split()[0]
+
+    for fmt in (
+        "%Y-%m-%d",
+        "%d-%b-%Y",
+        "%d-%b-%y",
+        "%d/%m/%Y",
+        "%d-%m-%Y",
+        "%Y%m%d",
+        "%d %b %Y",
+    ):
         try:
-            return datetime.strptime(value.strip(), fmt).date().isoformat()
+            return datetime.strptime(val.title(), fmt).date().isoformat()
         except ValueError:
-            continue
-    return value.strip()
+            pass
+        try:
+            return datetime.strptime(val, fmt).date().isoformat()
+        except ValueError:
+            pass
+    return val
 
 
 def _pick(obj, *keys, default=""):
@@ -86,43 +106,65 @@ _quote_cache: dict = {}
 _QUOTE_TTL = 60  # seconds
 
 
+def _clean_company_name(raw_name: str) -> str:
+    """Clean raw company names from Yahoo Finance (e.g., 'PGINVIT.NS,0P0001MGQ9...')."""
+    if not raw_name:
+        return ""
+    if "," in raw_name and (".NS" in raw_name or ".BO" in raw_name):
+        raw_name = raw_name.split(",")[0]
+    return raw_name.removesuffix(".NS").removesuffix(".BO").strip()
+
+
 def get_quote(exchange: str, symbol: str) -> dict | None:
-    """Return {'price', 'prev_close', 'change_pct', 'currency'} or None."""
+    """Return {'price', 'prev_close', 'change_pct', 'currency', 'name'} or None."""
     exchange = exchange.upper()
-    symbol = symbol.upper()
+    symbol = symbol.upper().removesuffix(".NS").removesuffix(".BO").strip()
     now = time.time()
     cached = _quote_cache.get((exchange, symbol))
     if cached and now - cached["ts"] < _QUOTE_TTL:
         return cached["data"]
 
     suffix = ".BO" if exchange == "BSE" else ".NS"
-    url = (
-        f"https://query1.finance.yahoo.com/v8/finance/chart/{symbol}{suffix}"
-        "?range=1d&interval=1d"
-    )
-    try:
-        resp = requests.get(
-            url, headers={"User-Agent": config.USER_AGENT}, timeout=config.HTTP_TIMEOUT
+    hosts = [
+        "https://query1.finance.yahoo.com",
+        "https://query2.finance.yahoo.com",
+    ]
+    meta = None
+    for host in hosts:
+        url = (
+            f"{host}/v8/finance/chart/{symbol}{suffix}"
+            "?range=1d&interval=1d"
         )
-        resp.raise_for_status()
-        meta = resp.json()["chart"]["result"][0]["meta"]
-        price = meta.get("regularMarketPrice")
-        prev = meta.get("chartPreviousClose") or meta.get("previousClose")
-        data = {
-            "price": price,
-            "prev_close": prev,
-            "change_pct": ((price - prev) / prev * 100) if (price and prev) else None,
-            "currency": meta.get("currency", "INR"),
-            "name": meta.get("longName") or meta.get("shortName") or "",
-        }
-        _quote_cache[(exchange, symbol)] = {"ts": now, "data": data}
-        return data
-    except Exception as exc:
-        log.info(
-            "quote lookup failed for %s:%s (Yahoo %s) - %s",
-            exchange, symbol, suffix, exc,
-        )
+        try:
+            resp = requests.get(
+                url, headers={"User-Agent": config.USER_AGENT}, timeout=config.HTTP_TIMEOUT
+            )
+            resp.raise_for_status()
+            res = resp.json()
+            if "chart" in res and "result" in res["chart"] and res["chart"]["result"]:
+                meta = res["chart"]["result"][0]["meta"]
+                if meta:
+                    break
+        except Exception as exc:
+            log.debug("Quote lookup attempt failed on %s for %s:%s - %s", host, exchange, symbol, exc)
+            continue
+
+    if not meta:
+        log.info("quote lookup failed for %s:%s (Yahoo %s)", exchange, symbol, suffix)
         return None
+
+    price = meta.get("regularMarketPrice")
+    prev = meta.get("chartPreviousClose") or meta.get("previousClose")
+    name = _clean_company_name(meta.get("longName") or meta.get("shortName") or "")
+    data = {
+        "price": price,
+        "prev_close": prev,
+        "change_pct": ((price - prev) / prev * 100) if (price is not None and prev) else None,
+        "currency": meta.get("currency", "INR"),
+        "name": name,
+    }
+    _quote_cache[(exchange, symbol)] = {"ts": now, "data": data}
+    return data
 
 
 # ------------------------------------------------------------------- NSE
