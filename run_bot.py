@@ -107,6 +107,8 @@ HELP_TEXT = (
     "   daily 1d(today) \u00b7 2d \u00b7 3d \u00b7 5d \u00b7 7d \u00b7 1w \u00b7 2w \u00b7 1mo \u00b7 3mo \u00b7 6mo \u00b7 1y\n"
     "\u2022 Index: 100 = NIFTY 100, 500 = NIFTY 500 (movers default 100, gainers/losers default 500).\n"
     "\u2022 Direction: gainers / losers / all; count 1-100 (gainers/losers default 30).\n"
+    "\u2022 Each stock shows P/E, sector P/E, 52-week high/low, dividend yield,\n"
+    "   promoter/FII/DII holding and debt/equity when available.\n"
     "\u2022 Type / alone to see this help again.\n\n"
     "\U0001F4C5 <b>Examples</b>\n"
     "<b>Watchlist:</b>  /add RELIANCE NSE  \u00b7  /add PGINVIT NSE  \u00b7  /remove TCS\n"
@@ -856,6 +858,18 @@ def handle_market_screen(chat_id, parts, default_direction="all",
         reply(chat_id, f"No movement data found for {period_label} ({universe_label}).")
         return
 
+    def _fund_fetch(sym, with_screener):
+        return sym, sources.get_fundamentals(sym, with_screener=with_screener)
+
+    fund_by_sym = {}
+    with ThreadPoolExecutor(max_workers=12) as ex:
+        tasks = [
+            (sym, i < sources.FUND_MAX_ROWS)
+            for i, (sym, _) in enumerate(rows)
+        ]
+        for sym, fund in ex.map(lambda t: _fund_fetch(t[0], t[1]), tasks):
+            fund_by_sym[sym] = fund
+
     failed = len(fetched) - sum(1 for _, d in fetched if d and d.get("change_pct") is not None)
     header = f"{title} · {universe_label}"
     if count:
@@ -869,9 +883,48 @@ def handle_market_screen(chat_id, parts, default_direction="all",
             f"{idx}. {arrow} <b>{notifier.escape(sym)}</b> "
             f"{notifier.fmt_money(d['price'])} <b>{sign}{change:.2f}%</b>"
         )
+        fund_line = _fundamentals_line(fund_by_sym.get(sym))
+        if fund_line:
+            lines.append("   " + fund_line)
+    if len(rows) > sources.FUND_MAX_ROWS:
+        lines.append(
+            f"(fundamentals detail shown for the first {sources.FUND_MAX_ROWS} stocks)"
+        )
     if failed:
         lines.append(f"({failed} of {len(symbols)} stocks could not be loaded)")
     _reply_messages(chat_id, _split_messages(lines))
+
+
+def _fundamentals_line(fund: dict | None) -> str:
+    """One compact fundamentals line for a stock, or '' when nothing to show."""
+    if not fund:
+        return ""
+
+    def _num(value, nd: int) -> str:
+        s = f"{value:.{nd}f}"
+        return s.rstrip("0").rstrip(".") if "." in s else s
+
+    parts = []
+    if fund.get("pe"):
+        parts.append(f"P/E {_num(fund['pe'], 1)}")
+    if fund.get("sector_pe"):
+        parts.append(f"Sec P/E {_num(fund['sector_pe'], 1)}")
+    if fund.get("wk52_high") is not None and fund.get("wk52_low") is not None:
+        parts.append(
+            f"52w {notifier.fmt_money(fund['wk52_low'])}\u2013"
+            f"{notifier.fmt_money(fund['wk52_high'])}"
+        )
+    if fund.get("div_yield") is not None:
+        parts.append(f"Div {_num(fund['div_yield'], 2)}%")
+    if any(fund.get(k) for k in ("promoter_pct", "fii_pct", "dii_pct")):
+        bits = []
+        for key, label in (("promoter_pct", "Prom"), ("fii_pct", "FII"), ("dii_pct", "DII")):
+            if fund.get(key):
+                bits.append(f"{label} {fund[key]}")
+        parts.append(" \u00b7 ".join(bits))
+    if fund.get("debt_to_equity") is not None:
+        parts.append(f"D/E {_num(fund['debt_to_equity'], 2)}")
+    return " | ".join(parts)
 
 
 def handle_movers(chat_id, parts) -> None:
@@ -962,9 +1015,9 @@ def register_commands() -> bool:
         {"command": "exdate", "description": "Ex-dates: /exdate today or /exdate 7"},
         {"command": "summary", "description": "Market snapshot: counts + next ex-dates"},
         {"command": "news", "description": "Latest news for your watchlist stocks"},
-        {"command": "movers", "description": "Movement screen 100/500: /movers 1h gainers 10"},
-        {"command": "gainers", "description": "Top gainers 100/500: /gainers 1h 50 or 2d"},
-        {"command": "losers", "description": "Top losers 100/500: /losers 1w 100 or 30m"},
+        {"command": "movers", "description": "Movers + fundamentals: /movers 1h gainers 10"},
+        {"command": "gainers", "description": "Top gainers + fundamentals: /gainers 1h 50"},
+        {"command": "losers", "description": "Top losers + fundamentals: /losers 1w 100"},
         {"command": "add", "description": "Add stock to watchlist: /add RELIANCE NSE"},
         {"command": "remove", "description": "Remove stock from watchlist"},
         {"command": "list", "description": "Show your watchlist"},

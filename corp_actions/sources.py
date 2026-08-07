@@ -4,13 +4,15 @@ Each function raises `SourceError` with a human-readable message on failure,
 so callers can surface warnings in the UI while keeping the app running.
 """
 import csv
+import html
 import io
 import logging
+import re
 import threading
 import time
 from datetime import date, datetime, timedelta
 from time import mktime, strptime
-from urllib.parse import quote_plus
+from urllib.parse import quote, quote_plus
 from xml.etree import ElementTree as ET
 
 import requests
@@ -604,4 +606,248 @@ def get_daily_change(exchange: str, symbol: str, days: int) -> dict | None:
     except Exception as exc:
         log.info("daily change failed for %s:%s - %s", exchange, symbol, exc)
     _daily_cache[key] = {"ts": now, "data": data}
+    return data
+
+
+# ------------------------------------------------------------- fundamentals
+# Stock fundamentals for the movement screens. Two public sources, both cached
+# 24h (fundamentals change slowly):
+#   * Yahoo quoteSummary (needs a cookie + crumb) for price, 52-week high/low,
+#     P/E, dividend yield, debt/equity and sector.
+#   * screener.in for sector P/E and promoter/FII/DII holdings. screener.in
+#     rate-limits aggressively, so those requests are serialised and paced;
+#     failures are skipped and the affected fields simply omitted.
+
+_fund_cache: dict = {}
+_FUND_TTL = 86400  # 24 hours
+_FUND_RETRY_TTL = 1800  # 30 min when the screener.in part is still missing
+FUND_MAX_ROWS = 40  # rows enriched with the slow screener.in part per command
+
+_screener_lock = threading.Lock()
+_last_screener_req = 0.0
+_screener_fail_count = 0
+_screener_blocked_until = 0.0
+_SCREENER_INTERVAL = 0.9  # seconds between screener.in requests
+_SCREENER_MAX_FAILS = 5  # consecutive failures before pausing
+_SCREENER_BLOCK_SECONDS = 600  # pause enrichment for 10 minutes when blocked
+
+
+def _screener_get(url: str) -> str | None:
+    """Paced, rate-limit-safe GET of a screener.in page.
+
+    A simple circuit breaker pauses enrichment for 10 minutes after a few
+    consecutive failures so a blocked/rate-limited screener.in never slows the
+    movement screens down repeatedly.
+    """
+    global _last_screener_req, _screener_fail_count, _screener_blocked_until
+    now = time.time()
+    with _screener_lock:
+        if now < _screener_blocked_until:
+            return None
+        wait = _last_screener_req + _SCREENER_INTERVAL - now
+        if wait > 0:
+            time.sleep(wait)
+        _last_screener_req = time.time()
+    try:
+        resp = _session().get(url, timeout=config.HTTP_TIMEOUT)
+        resp.raise_for_status()
+        text = resp.text
+    except Exception as exc:
+        log.info("screener.in fetch failed for %s - %s", url, exc)
+        with _screener_lock:
+            _screener_fail_count += 1
+            if _screener_fail_count >= _SCREENER_MAX_FAILS:
+                _screener_blocked_until = time.time() + _SCREENER_BLOCK_SECONDS
+                _screener_fail_count = 0
+                log.warning(
+                    "screener.in appears blocked - pausing enrichment for %ss",
+                    _SCREENER_BLOCK_SECONDS,
+                )
+        return None
+    with _screener_lock:
+        _screener_fail_count = 0
+    return text
+
+
+def _fund_session():
+    """A per-thread Yahoo session with its own cookie + crumb."""
+    sess = getattr(_tls, "fund_sess", None)
+    if sess is None:
+        sess = requests.Session()
+        sess.headers.update({"User-Agent": config.USER_AGENT})
+        try:
+            sess.get("https://fc.yahoo.com", timeout=config.HTTP_TIMEOUT)
+        except Exception:
+            pass
+        _tls.fund_sess = sess
+    crumb = getattr(_tls, "fund_crumb", "")
+    if not crumb:
+        try:
+            resp = sess.get(
+                "https://query1.finance.yahoo.com/v1/test/getcrumb",
+                timeout=config.HTTP_TIMEOUT,
+            )
+            if resp.status_code == 200 and resp.text.strip():
+                crumb = resp.text.strip()
+                _tls.fund_crumb = crumb
+        except Exception as exc:
+            log.info("Yahoo crumb unavailable: %s", exc)
+    return sess, crumb
+
+
+def _quote_summary(symbol: str) -> dict | None:
+    """Yahoo quoteSummary result (summaryDetail/financialData/assetProfile)."""
+    sess, crumb = _fund_session()
+    if not crumb:
+        return None
+    url = (
+        f"https://query1.finance.yahoo.com/v10/finance/quoteSummary/"
+        f"{quote(symbol)}.NS"
+    )
+    try:
+        resp = sess.get(
+            url,
+            params={
+                "modules": "summaryDetail,financialData,assetProfile",
+                "crumb": crumb,
+            },
+            timeout=config.HTTP_TIMEOUT,
+        )
+        resp.raise_for_status()
+        return resp.json()["quoteSummary"]["result"][0]
+    except Exception as exc:
+        log.info("quoteSummary failed for %s - %s", symbol, exc)
+        return None
+
+
+_sector_pe_cache: dict = {}
+_SECTOR_PE_TTL = 86400  # 24 hours - sectors change rarely
+
+
+def get_sector_pe(slug: str) -> float | None:
+    """Average P/E of a screener.in sector, from its constituent list."""
+    slug = (slug or "").strip()
+    if not slug:
+        return None
+    now = time.time()
+    cached = _sector_pe_cache.get(slug)
+    if cached and now - cached["ts"] < _SECTOR_PE_TTL:
+        return cached["data"]
+    pe = None
+    page = _screener_get(f"https://www.screener.in{slug}")
+    if page:
+        table = re.search(r"<table[^>]*>(.*?)</table>", page, re.S)
+        if table:
+            values = []
+            for row in re.findall(r"<tr[^>]*>(.*?)</tr>", table.group(1), re.S)[1:]:
+                cells = [
+                    re.sub(r"<[^>]+>|\s+", " ", c).strip()
+                    for c in re.findall(r"<t[dh][^>]*>(.*?)</t[dh]>", row, re.S)
+                ]
+                if len(cells) >= 4 and cells[3]:
+                    try:
+                        v = float(cells[3].replace(",", ""))
+                        if v > 0:
+                            values.append(v)
+                    except ValueError:
+                        continue
+            if values:
+                pe = round(sum(values) / len(values), 1)
+    _sector_pe_cache[slug] = {"ts": now, "data": pe}
+    return pe
+
+
+def _parse_screener_fundamentals(symbol: str) -> dict | None:
+    """Best-effort promoter/FII/DII holding + sector P/E from screener.in."""
+    page = _screener_get(f"https://www.screener.in/company/{quote(symbol)}/")
+    if not page:
+        return None
+    out = {}
+    m = re.search(r'<p class="sub">(.*?)</p>', page, re.S)
+    if m:
+        for link in re.finditer(
+            r'<a href="(/market/[^"]+)"[^>]*title="Sector">(.*?)</a>',
+            m.group(1),
+            re.S,
+        ):
+            out["sector"] = html.unescape(
+                re.sub(r"<[^>]+>|\s+", " ", link.group(2)).strip()
+            )
+            out["sector_pe"] = get_sector_pe(link.group(1))
+            break
+    i = page.find('<div id="quarterly-shp"')
+    j = page.find('<div id="yearly-shp"')
+    seg = page[i:j] if i > 0 and j > i else ""
+    for row in re.findall(r"<tr[^>]*>(.*?)</tr>", seg, re.S):
+        first = re.search(r'<td class="text">(.*?)</td>', row, re.S)
+        if not first:
+            continue
+        label = re.sub(r"<[^>]+>|\s+", " ", first.group(1)).strip().lower()
+        cells = [
+            re.sub(r"<[^>]+>|\s+", " ", c).strip()
+            for c in re.findall(r"<td[^>]*>(.*?)</td>", row, re.S)
+        ]
+        last = cells[-1] if cells else ""
+        if label.startswith("promoter"):
+            out["promoter_pct"] = last
+        elif label.startswith("fii"):
+            out["fii_pct"] = last
+        elif label.startswith("dii"):
+            out["dii_pct"] = last
+    return out or None
+
+
+def get_fundamentals(symbol: str, with_screener: bool = True) -> dict | None:
+    """Return fundamentals for an NSE symbol, cached.
+
+    Always-attempted Yahoo fields: price, wk52_high, wk52_low, pe,
+    div_yield (%), debt_to_equity (ratio), sector. When with_screener is
+    true (the default) the slow screener.in part (sector_pe, promoter_pct,
+    fii_pct, dii_pct) is added as well. Missing keys mean the value could not
+    be obtained; None is returned only when nothing at all was available.
+    """
+    key = symbol.strip().upper()
+    now = time.time()
+    cached = _fund_cache.get(key)
+    if cached and now - cached["ts"] < cached["ttl"]:
+        return cached["data"]
+    out = {}
+    res = _quote_summary(key)
+    if res:
+        sd = res.get("summaryDetail") or {}
+        fd = res.get("financialData") or {}
+        ap = res.get("assetProfile") or {}
+
+        def _raw(d, k):
+            v = d.get(k) or {}
+            return v.get("raw") if isinstance(v, dict) else v
+
+        price = _raw(sd, "regularMarketPrice") or _raw(sd, "currentPrice")
+        if price:
+            out["price"] = price
+        for src, dst in (
+            ("fiftyTwoWeekHigh", "wk52_high"),
+            ("fiftyTwoWeekLow", "wk52_low"),
+            ("trailingPE", "pe"),
+        ):
+            val = _raw(sd, src)
+            if val:
+                out[dst] = val
+        dy = _raw(sd, "dividendYield")  # fraction (0.0045 -> 0.45%)
+        if dy:
+            out["div_yield"] = round(dy * 100, 2)
+        de = _raw(fd, "debtToEquity")  # Yahoo reports percent (36.65 -> 0.37)
+        if de:
+            out["debt_to_equity"] = round(de / 100, 2)
+        if ap.get("sector"):
+            out["sector"] = ap["sector"]
+    if with_screener:
+        scr = _parse_screener_fundamentals(key)
+        if scr:
+            out.update({k: v for k, v in scr.items() if v is not None})
+    data = out or None
+    ttl = _FUND_TTL
+    if with_screener and not (out.get("promoter_pct") or out.get("sector_pe")):
+        ttl = _FUND_RETRY_TTL  # retry the rate-limited part sooner
+    _fund_cache[key] = {"ts": now, "data": data, "ttl": ttl}
     return data
