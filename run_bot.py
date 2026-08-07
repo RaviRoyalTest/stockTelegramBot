@@ -84,10 +84,12 @@ HELP_TEXT = (
     "   /movers 30m        last 30 min, all stocks\n"
     "   /movers 1h gainers 10   top 10 gainers over an hour\n"
     "   /movers losers 2h   losers over 2 hours\n"
-    "/gainers [N] - top N gainers across ALL stocks (NIFTY 500), today's move\n"
-    "   default 30, up to 100  (e.g. /gainers 50)\n"
-    "/losers [N] - top N losers across ALL stocks (NIFTY 500), today's move\n"
-    "   default 30, up to 100  (e.g. /losers 100)\n"
+    "/gainers [period] [N] - top N gainers across ALL stocks (NIFTY 500)\n"
+    "   default today's move, top 30 (up to 100)\n"
+    "   /gainers 50  /gainers 1h  /gainers 30m 100\n"
+    "/losers [period] [N] - top N losers across ALL stocks (NIFTY 500)\n"
+    "   /losers 100  /losers 5m  /losers 1h 50\n"
+    "   periods: 5m 15m 30m 1h 2h 4h today (default today)\n"
     "/add SYMBOL [NSE|BSE] - add a stock to the watchlist\n"
     "/remove SYMBOL [NSE|BSE] - remove a stock\n"
     "/list - show the watchlist\n"
@@ -801,11 +803,17 @@ def handle_movers(chat_id, parts) -> None:
 def handle_gainers_losers(chat_id, parts, direction: str) -> None:
     """Overall-market top gainers / losers across all stocks (NIFTY 500).
 
-    Uses today's change vs previous close. Count defaults to 30; pass any
-    number up to 100 (e.g. /gainers 50, /losers 100).
+    Time frame: none or 'today' = day change vs previous close; otherwise a
+    period from MOVERS_PERIODS (5m/15m/30m/1h/2h/4h). Count defaults to 30;
+    pass any number up to 100 (e.g. /gainers 50, /losers 1h 100).
     """
     count = 30
+    period = None  # None = today (day change)
     for token in parts[1:]:
+        t = token.lower()
+        if t in MOVERS_PERIODS:
+            period = MOVERS_PERIODS[t]
+            continue
         try:
             count = max(1, min(100, int(token)))
         except ValueError:
@@ -816,7 +824,9 @@ def handle_gainers_losers(chat_id, parts, direction: str) -> None:
         return
 
     def _fetch(sym):
-        return sym, sources.get_quote("NSE", sym)
+        if period is None:
+            return sym, sources.get_quote("NSE", sym)
+        return sym, sources.get_intraday_change("NSE", sym, period)
 
     with ThreadPoolExecutor(max_workers=20) as ex:
         fetched = list(ex.map(_fetch, symbols))
@@ -830,20 +840,25 @@ def handle_gainers_losers(chat_id, parts, direction: str) -> None:
     if direction == "gainers":
         rows = [r for r in rows if r[2] > 0]
         rows.sort(key=lambda r: r[2], reverse=True)  # highest first
-        title = "<b>Top Gainers - today</b>"
+        title = "<b>Top Gainers"
     else:
         rows = [r for r in rows if r[2] < 0]
         rows.sort(key=lambda r: r[2])  # most negative first
-        title = "<b>Top Losers - today</b>"
+        title = "<b>Top Losers"
+
+    if period is None or period == 0:
+        title += " - today</b>"
+    elif period % 60 == 0:
+        title += f" - last {period // 60}h</b>"
+    else:
+        title += f" - last {period}m</b>"
 
     rows = rows[:count]
     if not rows:
         reply(chat_id, f"No {direction} right now (market may be closed).")
         return
 
-    failed = sum(
-        1 for _, q in fetched if not q or q.get("change_pct") is None
-    )
+    failed = sum(1 for _, q in fetched if not q or q.get("change_pct") is None)
     lines = [f"{title} · all NIFTY 500 stocks (top {len(rows)})"]
     for idx, (sym, price, change, currency) in enumerate(rows, 1):
         arrow = "\u25b2" if change >= 0 else "\u25bc"
