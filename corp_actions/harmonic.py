@@ -365,6 +365,10 @@ def analyze(exchange: str, symbol: str, timeframe: str = "1d", pct: float | None
         "matches": [], "pattern": None, "plan": None, "status": None,
         "signal": None, "notes": [],
     }
+    result["change_pct"] = (
+        (price / result["prev_close"] - 1) * 100
+        if result["prev_close"] else None
+    )
 
     matches = _find_patterns(pivots, price)
     if matches:
@@ -622,15 +626,49 @@ SCAN_MAX_ROWS = 25
 
 
 def format_scan_row(r) -> str:
-    """One compact line per stock for the bulk harmonic screener.
+    """One compact entry (two lines) per stock for the bulk harmonic screener.
 
-    e.g. "▲ TCS ₹4,000.00 — Gartley (bullish) — Reversal confirmed · SELL"
+    Line 1: symbol, current price (+/-% move on this chart's last bar),
+    pattern, direction, status and signal.
+    Line 2 (indented): the PRZ range, the projected/completed D level and
+    how far price currently is from the zone.
+
+    e.g.
+      ▲ TCS ₹4,000.00 (+1.25%) — Gartley (bullish) — Reversal confirmed · BUY
+         PRZ ₹3,980.00–₹4,010.00 · D ₹4,000.00 · inside PRZ
     """
     arrow = "\u25b2" if r.get("direction") == "bullish" else "\u25bc"
+    chg = ""
+    if r.get("change_pct") is not None:
+        chg = f" ({r['change_pct']:+.2f}%)"
+    elif r.get("prev_close"):
+        chg = f" ({(r['price'] / r['prev_close'] - 1) * 100:+.2f}%)"
     pattern = notifier.escape(r.get("pattern") or "?")
     status = notifier.escape(r.get("status") or "")
-    return (
+    line = (
         f"{arrow} <b>{notifier.escape(r['symbol'])}</b> "
-        f"{notifier.fmt_money(r['price'])} \u2014 <b>{pattern}</b> "
+        f"{notifier.fmt_money(r['price'])}{chg} \u2014 <b>{pattern}</b> "
         f"({r.get('direction') or '?'}) \u2014 {status} \u00b7 {r.get('signal') or 'NO TRADE'}"
     )
+
+    extra = []
+    prz = r.get("prz")
+    if prz and prz.get("lower") is not None and prz.get("upper") is not None:
+        extra.append(
+            f"PRZ {notifier.fmt_money(prz['lower'])}\u2013"
+            f"{notifier.fmt_money(prz['upper'])}"
+        )
+    if r.get("d_comp"):
+        extra.append(f"D {notifier.fmt_money(r['d_comp'])}")
+    if prz and prz.get("dist") is not None and r.get("price"):
+        away = abs(prz["dist"]) / r["price"] * 100
+        if prz["lower"] <= r["price"] <= prz["upper"]:
+            tag = "inside PRZ"
+        elif prz["dist"] > 0:
+            tag = f"{away:.1f}% above PRZ"
+        else:
+            tag = f"{away:.1f}% below PRZ"
+        extra.append(tag)
+    if extra:
+        line += "\n   " + " \u00b7 ".join(extra)
+    return line
