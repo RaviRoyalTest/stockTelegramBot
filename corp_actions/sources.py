@@ -764,7 +764,7 @@ def _fund_session():
 
 
 def _quote_summary(symbol: str) -> dict | None:
-    """Yahoo quoteSummary result (summaryDetail/financialData/assetProfile)."""
+    """Yahoo quoteSummary result (summaryDetail/financialData/defaultKeyStatistics/assetProfile)."""
     sess, crumb = _fund_session()
     if not crumb:
         log.info("_quote_summary: no crumb for %s — skipping", symbol)
@@ -777,7 +777,10 @@ def _quote_summary(symbol: str) -> dict | None:
         try:
             resp = sess.get(
                 url,
-                params={"modules": "summaryDetail,financialData,assetProfile", "crumb": crumb},
+                params={
+                    "modules": "summaryDetail,financialData,defaultKeyStatistics,assetProfile",
+                    "crumb": crumb,
+                },
                 timeout=config.HTTP_TIMEOUT,
             )
             if resp.status_code == 401:
@@ -1022,6 +1025,7 @@ def get_fundamentals(symbol: str, with_screener: bool = True) -> dict | None:
     if res:
         sd = res.get("summaryDetail") or {}
         fd = res.get("financialData") or {}
+        dks = res.get("defaultKeyStatistics") or {}
         ap = res.get("assetProfile") or {}
 
         def _raw(d, k):
@@ -1047,6 +1051,54 @@ def get_fundamentals(symbol: str, with_screener: bool = True) -> dict | None:
             out["debt_to_equity"] = round(de / 100, 2)
         if ap.get("sector"):
             out["sector"] = ap["sector"]
+
+        # Deep-fundamentals extras (used by the /fund deep report)
+        extras = {}
+        for src, src_key, dst_key in (
+            (sd, "marketCap", "mcap_cr"),
+            (sd, "forwardPE", "forward_pe"),
+            (sd, "priceToSalesTrailing12Months", "price_to_sales"),
+            (sd, "beta", "beta"),
+            (dks, "priceToBook", "price_to_book"),
+            (dks, "bookValue", "book_value"),
+            (dks, "enterpriseValue", "enterprise_value"),
+            (dks, "sharesOutstanding", "shares_outstanding"),
+            (dks, "floatShares", "float_shares"),
+            (dks, "trailingEps", "trailing_eps"),
+            (dks, "forwardEps", "forward_eps"),
+            (fd, "targetHighPrice", "target_high"),
+            (fd, "targetLowPrice", "target_low"),
+            (fd, "targetMeanPrice", "target_mean"),
+            (fd, "targetMedianPrice", "target_median"),
+            (fd, "numberOfAnalystOpinions", "num_analysts"),
+            (fd, "totalCash", "total_cash"),
+            (fd, "totalCashPerShare", "cash_per_share"),
+            (fd, "totalDebt", "total_debt"),
+            (fd, "totalRevenue", "total_revenue"),
+            (fd, "ebitda", "ebitda"),
+            (fd, "revenuePerShare", "revenue_per_share"),
+            (fd, "earningsGrowth", "earnings_growth"),
+            (fd, "revenueGrowth", "revenue_growth"),
+            (fd, "grossMargins", "gross_margin"),
+            (fd, "ebitdaMargins", "ebitda_margin"),
+            (fd, "operatingMargins", "operating_margin"),
+            (fd, "profitMargins", "profit_margin"),
+            (fd, "currentRatio", "current_ratio"),
+            (fd, "quickRatio", "quick_ratio"),
+            (fd, "freeCashflow", "free_cashflow"),
+            (fd, "operatingCashflow", "operating_cashflow"),
+        ):
+            val = _raw(src, src_key)
+            if val:
+                extras[dst_key] = val
+        mc = extras.get("mcap_cr")
+        if mc:
+            extras["mcap_cr"] = round(mc / 1e7, 1)  # rupees -> Crore
+        if ap.get("industry"):
+            extras["industry"] = ap["industry"]
+        if ap.get("fullTimeEmployees"):
+            extras["employees"] = ap["fullTimeEmployees"]
+        out.update(extras)
         log.info("get_fundamentals: quoteSummary -> %d fields for %s", len(out), key)
     else:
         log.info("get_fundamentals: quoteSummary unavailable for %s — trying chart fallback", key)

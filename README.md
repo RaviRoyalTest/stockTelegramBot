@@ -94,6 +94,10 @@ Send these to your bot:
 | `/movers [period] [direction] [N] [100\|500]` | `/movers 1h gainers 10 500` | Screen an index (NIFTY 100/500) by price movement over a window, sorted lower → higher. Periods: `5m 15m 30m 1h 2h 4h today 2d 1w 1mo` (default 1h). Direction: `gainers`/`losers`/`all`; `N` = max rows; a bare `100`/`500` picks the index (default 100). E.g. `/movers 1w 500`. Each row also shows P/E, sector P/E, 52-week high/low, dividend yield, promoter/FII/DII holding and debt/equity when available |
 | `/gainers [period] [N] [100\|500]` | `/gainers 2d 100` | Top N gainers over an index (default NIFTY 500, top 30). Here a bare `100`/`500` means **top N** — to pick the index use `nifty100`/`nifty500` or a second number after a count (e.g. `/gainers 1h 50 500`). Fundamentals shown per row |
 | `/losers [period] [N] [100\|500]` | `/losers 1mo 100` | Top N losers over an index (same options and fundamentals as `/gainers`). E.g. `/losers 1w 20 500`, `/losers 30m 5 nifty100` |
+| `/stock SYMBOL` | `/stock TATATECH` | Quick summary card for one stock: price, P/E, 52-week signal, QoQ shareholding |
+| `/fund SYMBOL` | `/fund RELIANCE` | Deep fundamental report for one stock: valuation (P/E, fwd P/E, P/B, P/S, div yield), YoY growth & margins, EPS/book value, balance sheet, analyst targets, QoQ shareholding |
+
+For the universe token you can use the short forms too: `n100`/`nifty100` and `n500`/`nifty500` (e.g. `/gainers n100` = today's top NIFTY 100 gainers, `/movers 1w n500`).
 
 Every `/ca`, `/exdate` and `/summary` result includes the current price
 (₹ with today's % change) and clearly printed Ex-date / Record date /
