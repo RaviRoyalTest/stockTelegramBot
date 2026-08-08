@@ -28,7 +28,7 @@ try:
     import requests
 
     import corp_actions.poller as poller_mod
-    from corp_actions import notifier, sources, storage
+    from corp_actions import harmonic, notifier, sources, storage
     from corp_actions.poller import poller
 except ImportError:
     # The dependency-light --check diagnostic must still run when
@@ -91,6 +91,15 @@ HELP_TEXT = (
     "  /fund RELIANCE   \u2192 valuation, growth, margins, balance sheet,\n"
     "                     EPS, analyst targets &amp; shareholding\n"
     "  /fund 3-5        \u2192 deep report for watchlist #3..#5\n\n"
+    "\U0001F3C6 <b>Harmonic Patterns &amp; PRZ</b>\n"
+    "━━━━━━━━━━━━━━━━━━━━\n"
+    "/harmonic <i>SYMBOL [TIMEFRAME]</i>\n"
+    "  Scans for Gartley / Bat / Butterfly / Crab / Shark setups and maps\n"
+    "  the Potential Reversal Zone (PRZ) with entry, SL &amp; targets.\n"
+    "  /harmonic RELIANCE      \u2192 daily scan\n"
+    "  /harmonic TATATECH 1h   \u2192 1-hour scan\n"
+    "  /harmonic 3             \u2192 scan watchlist #3\n"
+    "  Timeframes: 5m 15m 30m 1h 4h 1d 1w\n\n"
     "━━━━━━━━━━━━━━━━━━━━\n"
     "\U0001F4C8 <b>Market Screens</b>\n"
     "━━━━━━━━━━━━━━━━━━━━\n"
@@ -459,6 +468,10 @@ def handle_command(chat_id, text):
 
     if cmd == "/fund":
         handle_fund_analysis(chat_id, parts)
+        return
+
+    if cmd == "/harmonic":
+        handle_harmonic(chat_id, parts)
         return
 
     if cmd in ("/stock", "/info", "/quote"):
@@ -1685,6 +1698,68 @@ def handle_fund_analysis(chat_id, parts) -> None:
     log.info("handle_fund: completed for %s in %.1fs", raw_sym, monotonic() - t0)
 
 
+HARMONIC_TIMEFRAMES = ("5m", "15m", "30m", "1h", "4h", "1d", "1w")
+
+
+def handle_harmonic(chat_id, parts) -> None:
+    """Scan a stock for harmonic patterns + PRZ (/harmonic SYMBOL [TIMEFRAME]).
+
+    Accepts a symbol or a single watchlist position, plus an optional
+    timeframe. Timeframe matters: a 30m setup is far less significant than a
+    daily one.
+    """
+    if len(parts) < 2:
+        reply(
+            chat_id,
+            "Usage: <code>/harmonic SYMBOL [TIMEFRAME]</code>\n"
+            "e.g. <code>/harmonic RELIANCE</code> (daily), <code>/harmonic TATATECH 1h</code>, "
+            "<code>/harmonic 3</code> (watchlist #3)\n"
+            "Timeframes: " + ", ".join(HARMONIC_TIMEFRAMES),
+        )
+        return
+
+    raw = parts[1].upper().strip().removesuffix(".NS").removesuffix(".BO")
+    tf = "1d"
+    if len(parts) >= 3:
+        cand = parts[2].lower()
+        if cand in HARMONIC_TIMEFRAMES:
+            tf = cand
+        else:
+            reply(
+                chat_id,
+                f"Unknown timeframe <code>{html.escape(parts[2])}</code>. "
+                f"Options: {', '.join(HARMONIC_TIMEFRAMES)}",
+            )
+            return
+
+    if raw.isdigit():
+        items = storage.get_user_list(chat_id)
+        n = int(raw)
+        if n < 1 or n > len(items):
+            reply(chat_id, f"Your watchlist has {len(items)} stock(s) — use a position 1..{len(items)}.")
+            return
+        item = items[n - 1]
+        symbol, exchange = item["symbol"], item["exchange"]
+    else:
+        symbol, exchange = raw, "NSE"
+
+    t0 = monotonic()
+    log.info("handle_harmonic: scanning %s on %s (chat %s)", symbol, tf, chat_id)
+    try:
+        res = harmonic.analyze(exchange, symbol, tf)
+    except Exception as exc:
+        log.warning("handle_harmonic failed for %s: %s", symbol, exc)
+        reply(chat_id, f"Could not scan <code>{html.escape(symbol)}</code>: {html.escape(str(exc))}")
+        return
+    if not res:
+        _reply_suggestions(chat_id, symbol)
+        return
+
+    lines = harmonic.format_report(res)
+    _reply_messages(chat_id, _split_messages(lines))
+    log.info("handle_harmonic: done %s %s in %.1fs", symbol, tf, monotonic() - t0)
+
+
 def handle_movers(chat_id, parts) -> None:
     """Movement screen over an index (default NIFTY 100, all directions)."""
     handle_market_screen(
@@ -1775,6 +1850,7 @@ def register_commands() -> bool:
         {"command": "news", "description": "Latest news for your watchlist stocks"},
         {"command": "stock", "description": "Stock summary or watchlist range: /stock 5-10"},
         {"command": "fund", "description": "Deep fundamentals or range: /fund 3-5"},
+        {"command": "harmonic", "description": "Harmonic patterns + PRZ: /harmonic TATATECH 1d"},
         {"command": "movers", "description": "Movers + fundamentals: /movers 1h gainers 10"},
         {"command": "gainers", "description": "Top gainers + fundamentals: /gainers 1h 50"},
         {"command": "losers", "description": "Top losers + fundamentals: /losers 1w 100"},

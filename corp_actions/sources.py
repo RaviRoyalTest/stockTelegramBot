@@ -663,6 +663,99 @@ def get_daily_change(exchange: str, symbol: str, days: int) -> dict | None:
     return data
 
 
+# ------------------------------------------------------------- OHLC bars
+# Raw candlestick series for a symbol/timeframe (used by the harmonic-pattern
+# scanner). Yahoo chart endpoint, cached a short while.
+
+_ohlc_cache: dict = {}
+_OHLC_TTL = 120  # seconds
+
+OHLC_TIMEFRAMES = {
+    "5m": ("5m", "1d"),
+    "15m": ("15m", "5d"),
+    "30m": ("30m", "1mo"),
+    "1h": ("1h", "3mo"),
+    "4h": ("4h", "6mo"),
+    "1d": ("1d", "2y"),
+    "1w": ("1wk", "5y"),
+    "1mo": ("1mo", "10y"),
+}
+
+_HFT_LADDER = {
+    "5m": "15m",
+    "15m": "1h",
+    "30m": "4h",
+    "1h": "4h",
+    "4h": "1d",
+    "1d": "1w",
+    "1w": "1mo",
+}
+
+
+def get_ohlc(exchange: str, symbol: str, timeframe: str = "1d") -> dict | None:
+    """Return OHLC bars for a symbol/timeframe via Yahoo chart, cached.
+
+    Returns {'timestamp','open','high','low','close','volume','interval',
+    'name','exchange','symbol','timeframe'} with the arrays aligned to the
+    same bars, or None on any failure. Incomplete leading/trailing bars are
+    dropped.
+    """
+    timeframe = (timeframe or "1d").lower()
+    interval, rng = OHLC_TIMEFRAMES.get(timeframe, OHLC_TIMEFRAMES["1d"])
+    key = (exchange.upper(), symbol.upper(), interval)
+    now = time.time()
+    cached = _ohlc_cache.get(key)
+    if cached and now - cached["ts"] < _OHLC_TTL:
+        log.debug("ohlc cache hit for %s:%s (%s)", exchange, symbol, interval)
+        return cached["data"]
+    suffix = ".BO" if exchange.upper() == "BSE" else ".NS"
+    url = (
+        f"https://query1.finance.yahoo.com/v8/finance/chart/{symbol}{suffix}"
+        f"?range={rng}&interval={interval}&includePrePost=false"
+    )
+    data = None
+    try:
+        resp = _quote_session().get(url, timeout=config.HTTP_TIMEOUT)
+        resp.raise_for_status()
+        res = resp.json()["chart"]["result"][0]
+        meta = res.get("meta") or {}
+        ts = res.get("timestamp") or []
+        quotes = (res.get("indicators") or {}).get("quote") or [{}]
+        q = quotes[0] or {}
+        opens, highs, lows, closes, vols = q.get("open") or [], q.get("high") or [], \
+            q.get("low") or [], q.get("close") or [], q.get("volume") or []
+        rows = []
+        for i in range(len(ts)):
+            if i >= len(opens) or i >= len(highs) or i >= len(lows) or i >= len(closes):
+                break
+            o, h, l, c = opens[i], highs[i], lows[i], closes[i]
+            if None in (o, h, l, c):
+                continue
+            v = vols[i] if i < len(vols) and vols[i] is not None else 0
+            rows.append((ts[i], o, h, l, c, v))
+        if not rows:
+            data = None
+        else:
+            data = {
+                "timestamp": [r[0] for r in rows],
+                "open": [r[1] for r in rows],
+                "high": [r[2] for r in rows],
+                "low": [r[3] for r in rows],
+                "close": [r[4] for r in rows],
+                "volume": [r[5] for r in rows],
+                "interval": interval,
+                "timeframe": timeframe,
+                "name": meta.get("longName") or meta.get("shortName") or symbol,
+                "exchange": exchange.upper(),
+                "symbol": symbol.upper(),
+            }
+            log.info("ohlc: %d %s bars for %s:%s", len(rows), interval, exchange, symbol)
+    except Exception as exc:
+        log.info("ohlc failed for %s:%s (%s) - %s", exchange, symbol, interval, exc)
+    _ohlc_cache[key] = {"ts": now, "data": data}
+    return data
+
+
 # ------------------------------------------------------------- fundamentals
 # Stock fundamentals for the movement screens. Two public sources, both cached
 # 24h (fundamentals change slowly):
