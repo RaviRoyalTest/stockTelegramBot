@@ -823,6 +823,19 @@ _global_fund_crumb_ts = 0.0
 _CRUMB_TTL = 3600  # 1 hour
 
 
+def _invalidate_crumb():
+    """Drop the cached Yahoo crumb so the next call re-fetches it.
+
+    A 401 from quoteSummary means the current crumb is stale (usually after a
+    cookie/crumb rotation server-side). The crumb lives in a process-wide global
+    shared by every thread, so an expired one must be cleared globally -
+    otherwise every /fund would keep 401ing until the 1h TTL expires.
+    """
+    global _global_fund_crumb, _global_fund_crumb_ts
+    _global_fund_crumb = ""
+    _global_fund_crumb_ts = 0.0
+
+
 def _fund_session():
     """A thread-safe global Yahoo session with cached crumb (prevents HTTP 429)."""
     global _global_fund_sess, _global_fund_crumb, _global_fund_crumb_ts
@@ -858,36 +871,41 @@ def _fund_session():
 
 def _quote_summary(symbol: str) -> dict | None:
     """Yahoo quoteSummary result (summaryDetail/financialData/defaultKeyStatistics/assetProfile)."""
-    sess, crumb = _fund_session()
-    if not crumb:
-        log.info("_quote_summary: no crumb for %s — skipping", symbol)
-        return None
-    for host in (
-        "https://query1.finance.yahoo.com",
-        "https://query2.finance.yahoo.com",
-    ):
-        url = f"{host}/v10/finance/quoteSummary/{quote(symbol)}.NS"
-        try:
-            resp = sess.get(
-                url,
-                params={
-                    "modules": "summaryDetail,financialData,defaultKeyStatistics,assetProfile",
-                    "crumb": crumb,
-                },
-                timeout=config.HTTP_TIMEOUT,
-            )
-            if resp.status_code == 401:
-                log.info("_quote_summary: 401 for %s on %s — clearing crumb", symbol, host)
-                _tls.fund_crumb = ""
-                break
-            resp.raise_for_status()
-            result = resp.json()["quoteSummary"]["result"]
-            if result:
-                log.info("_quote_summary: OK for %s from %s", symbol, host)
-                return result[0]
-            log.info("_quote_summary: empty result for %s from %s", symbol, host)
-        except Exception as exc:
-            log.info("_quote_summary: failed for %s on %s: %s", symbol, host, exc)
+    for attempt in range(2):  # second attempt after a 401 crumb refresh
+        sess, crumb = _fund_session()
+        if not crumb:
+            log.info("_quote_summary: no crumb for %s — skipping", symbol)
+            return None
+        auth_retry = False
+        for host in (
+            "https://query1.finance.yahoo.com",
+            "https://query2.finance.yahoo.com",
+        ):
+            url = f"{host}/v10/finance/quoteSummary/{quote(symbol)}.NS"
+            try:
+                resp = sess.get(
+                    url,
+                    params={
+                        "modules": "summaryDetail,financialData,defaultKeyStatistics,assetProfile",
+                        "crumb": crumb,
+                    },
+                    timeout=config.HTTP_TIMEOUT,
+                )
+                if resp.status_code == 401:
+                    log.info("_quote_summary: 401 for %s on %s — refreshing crumb", symbol, host)
+                    _invalidate_crumb()
+                    auth_retry = True
+                    break
+                resp.raise_for_status()
+                result = resp.json()["quoteSummary"]["result"]
+                if result:
+                    log.info("_quote_summary: OK for %s from %s", symbol, host)
+                    return result[0]
+                log.info("_quote_summary: empty result for %s from %s", symbol, host)
+            except Exception as exc:
+                log.info("_quote_summary: failed for %s on %s: %s", symbol, host, exc)
+        if not auth_retry:
+            break
     return None
 
 
@@ -1217,8 +1235,13 @@ def get_fundamentals(symbol: str, with_screener: bool = True) -> dict | None:
 
     data = out or None
     ttl = _FUND_TTL
-    if with_screener and not (out.get("promoter_pct") or out.get("sector_pe")):
-        ttl = _FUND_RETRY_TTL  # retry the rate-limited part sooner
+    # Shorten the cache when a part is missing so we retry it sooner instead of
+    # serving a degraded report for the full 24h. This covers both the
+    # rate-limited screener.in part and a failed/empty Yahoo quoteSummary (which
+    # would otherwise leave the deep /fund sections empty).
+    deep_ok = bool(out.get("earnings_growth") or out.get("book_value") or out.get("total_cash"))
+    if (with_screener and not (out.get("promoter_pct") or out.get("sector_pe"))) or not deep_ok:
+        ttl = _FUND_RETRY_TTL  # retry the missing part sooner
     _fund_cache[key] = {"ts": now, "data": data, "ttl": ttl}
     log.info(
         "get_fundamentals: done %s -> %d field(s): %s",

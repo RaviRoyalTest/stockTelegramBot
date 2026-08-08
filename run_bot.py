@@ -556,8 +556,12 @@ def handle_command(chat_id, text):
         send_help(chat_id)
 
 
-def _reply_suggestions(chat_id, query):
-    """Reply with matching stocks from the NSE list when an exact symbol fails."""
+def _reply_suggestions(chat_id, query, cmd="add"):
+    """Reply with matching stocks from the NSE list when an exact symbol fails.
+
+    cmd is the command the user actually ran (add|stock|fund|harmonic) so the
+    suggested follow-up reuses it instead of always suggesting /add.
+    """
     matches = sources.search_stocks(query, limit=10)
     if not matches:
         log.info(
@@ -568,7 +572,10 @@ def _reply_suggestions(chat_id, query):
     lines = [f"'{query}' not found as an exact symbol. Did you mean (NSE):"]
     for m in matches:
         company = m["company"] or ""
-        lines.append(f"  /add {m['symbol']} NSE  - {company}")
+        if cmd == "add":
+            lines.append(f"  /add {m['symbol']} NSE  - {company}")
+        else:
+            lines.append(f"  /{cmd} {m['symbol']}  - {company}")
     reply(chat_id, "\n".join(lines))
 
 
@@ -1464,14 +1471,11 @@ def _fund_report_lines(raw_sym, quote, fund, include_tip=True, label="") -> list
     lines.append("")
 
     # Section 3: Growth & margins (YoY)
-    lines.append("<b>\U0001F4C8 GROWTH & MARGINS (YoY)</b>")
     grow = []
     if fund.get("earnings_growth") is not None:
         grow.append(f"Earnings: <b>{_pct(fund['earnings_growth'])}</b>")
     if fund.get("revenue_growth") is not None:
         grow.append(f"Revenue: <b>{_pct(fund['revenue_growth'])}</b>")
-    if grow:
-        lines.append("  \u00b7  ".join(grow))
     marg = []
     if fund.get("gross_margin") is not None:
         marg.append(f"Gross: <b>{_pct(fund['gross_margin'])}</b>")
@@ -1481,12 +1485,15 @@ def _fund_report_lines(raw_sym, quote, fund, include_tip=True, label="") -> list
         marg.append(f"Operating: <b>{_pct(fund['operating_margin'])}</b>")
     if fund.get("profit_margin") is not None:
         marg.append(f"Net: <b>{_pct(fund['profit_margin'])}</b>")
-    if marg:
-        lines.append("  \u00b7  ".join(marg))
-    lines.append("")
+    if grow or marg:
+        lines.append("<b>\U0001F4C8 GROWTH & MARGINS (YoY)</b>")
+        if grow:
+            lines.append("  \u00b7  ".join(grow))
+        if marg:
+            lines.append("  \u00b7  ".join(marg))
+        lines.append("")
 
     # Section 4: Per-share & scale
-    lines.append("<b>\U0001F4BC PER-SHARE & SCALE</b>")
     per = []
     if fund.get("trailing_eps") is not None:
         per.append(f"EPS(TTM): <b>{_num(fund['trailing_eps'], 2)}</b>")
@@ -1498,14 +1505,15 @@ def _fund_report_lines(raw_sym, quote, fund, include_tip=True, label="") -> list
         per.append(f"Book Value: <b>{_num(fund['book_value'], 2)}</b>")
     if fund.get("cash_per_share") is not None:
         per.append(f"Cash/Share: <b>{_num(fund['cash_per_share'], 2)}</b>")
-    if per:
-        lines.append("  \u00b7  ".join(per))
-    if fund.get("shares_outstanding") is not None:
-        lines.append(f"Shares Outstanding: <b>{fund['shares_outstanding'] / 1e7:,.2f}Cr</b>")
-    lines.append("")
+    if per or fund.get("shares_outstanding") is not None:
+        lines.append("<b>\U0001F4BC PER-SHARE & SCALE</b>")
+        if per:
+            lines.append("  \u00b7  ".join(per))
+        if fund.get("shares_outstanding") is not None:
+            lines.append(f"Shares Outstanding: <b>{fund['shares_outstanding'] / 1e7:,.2f}Cr</b>")
+        lines.append("")
 
     # Section 5: Balance sheet
-    lines.append("<b>\U0001F4C9 BALANCE SHEET</b>")
     bs = []
     if fund.get("debt_to_equity") is not None:
         bs.append(f"D/E: <b>{_num(fund['debt_to_equity'], 2)}</b>")
@@ -1513,13 +1521,15 @@ def _fund_report_lines(raw_sym, quote, fund, include_tip=True, label="") -> list
         bs.append(f"Current Ratio: <b>{_num(fund['current_ratio'], 2)}</b>")
     if fund.get("quick_ratio") is not None:
         bs.append(f"Quick Ratio: <b>{_num(fund['quick_ratio'], 2)}</b>")
-    if bs:
-        lines.append("  \u00b7  ".join(bs))
-    if fund.get("total_cash") is not None or fund.get("total_debt") is not None:
-        lines.append(
-            f"Cash: <b>{_cr(fund.get('total_cash'))}</b>  \u00b7  Debt: <b>{_cr(fund.get('total_debt'))}</b>"
-        )
-    lines.append("")
+    if bs or fund.get("total_cash") is not None or fund.get("total_debt") is not None:
+        lines.append("<b>\U0001F4C9 BALANCE SHEET</b>")
+        if bs:
+            lines.append("  \u00b7  ".join(bs))
+        if fund.get("total_cash") is not None or fund.get("total_debt") is not None:
+            lines.append(
+                f"Cash: <b>{_cr(fund.get('total_cash'))}</b>  \u00b7  Debt: <b>{_cr(fund.get('total_debt'))}</b>"
+            )
+        lines.append("")
 
     # Section 6: Returns
     ret = []
@@ -1605,7 +1615,7 @@ def handle_single_stock_analysis(chat_id, parts) -> None:
     fund = sources.get_fundamentals(raw_sym, with_screener=True) or {}
 
     if quote.get("price") is None and not fund:
-        _reply_suggestions(chat_id, raw_sym)
+        _reply_suggestions(chat_id, raw_sym, "stock")
         return
 
     lines = _stock_summary_lines(raw_sym, quote, fund, include_tip=True)
@@ -1693,7 +1703,7 @@ def handle_fund_analysis(chat_id, parts) -> None:
     fund = sources.get_fundamentals(raw_sym, with_screener=True) or {}
 
     if quote.get("price") is None and not fund:
-        _reply_suggestions(chat_id, raw_sym)
+        _reply_suggestions(chat_id, raw_sym, "fund")
         return
 
     lines = _fund_report_lines(raw_sym, quote, fund, include_tip=True)
@@ -1785,7 +1795,7 @@ def handle_harmonic(chat_id, parts) -> None:
         reply(chat_id, f"Could not scan <code>{html.escape(symbol)}</code>: {html.escape(str(exc))}")
         return
     if not res:
-        _reply_suggestions(chat_id, symbol)
+        _reply_suggestions(chat_id, symbol, "harmonic")
         return
 
     lines = harmonic.format_report(res)
