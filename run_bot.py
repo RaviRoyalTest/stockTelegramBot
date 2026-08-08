@@ -13,6 +13,7 @@ Local usage:  python run_bot.py
 """
 import logging
 import os
+import re
 import subprocess
 import sys
 import threading
@@ -83,9 +84,13 @@ HELP_TEXT = (
     "━━━━━━━━━━━━━━━━━━━━\n"
     "/stock <i>SYMBOL</i>  \u2014 quick summary card\n"
     "  /stock TATATECH  \u2192 price, P/E, 52W signal, QoQ shareholding\n"
+    "/stock <i>N | N-M | all</i>  \u2014 watchlist positions\n"
+    "  /stock 5         \u2192 first 5 watchlist stocks\n"
+    "  /stock 5-10      \u2192 watchlist stocks #5 to #10\n"
     "/fund <i>SYMBOL</i>  \u2014 deep fundamental report\n"
     "  /fund RELIANCE   \u2192 valuation, growth, margins, balance sheet,\n"
-    "                     EPS, analyst targets &amp; shareholding\n\n"
+    "                     EPS, analyst targets &amp; shareholding\n"
+    "  /fund 3-5        \u2192 deep report for watchlist #3..#5\n\n"
     "━━━━━━━━━━━━━━━━━━━━\n"
     "\U0001F4C8 <b>Market Screens</b>\n"
     "━━━━━━━━━━━━━━━━━━━━\n"
@@ -1209,43 +1214,56 @@ def _fundamentals_lines(fund: dict | None, price=None) -> list[str]:
     return lines
 
 
-def handle_single_stock_analysis(chat_id, parts) -> None:
-    """Fetch and display deep fundamentals and summary card for a single stock.
+MAX_STOCK_BATCH = 10
+MAX_FUND_BATCH = 5
 
-    Usage: /stock TATATECH  or  /fund RELIANCE  or  /stock CGCL
+
+def _parse_stock_range(arg: str):
+    """Parse a watchlist position range like '5', '5-10', '5 - 10', 'all'.
+
+    Returns a (start, end) tuple with 1-based inclusive positions (end None =
+    to the end of the list), or None when the arg looks like a stock symbol.
     """
-    if len(parts) < 2:
-        reply(
-            chat_id,
-            "Usage: <code>/stock SYMBOL</code> (e.g. <code>/stock TATATECH</code> or <code>/stock RELIANCE</code>)",
-        )
-        return
+    token = (arg or "").strip().lower()
+    if not token:
+        return None
+    if token in ("all", "*", "full", "everything"):
+        return (1, None)
+    m = re.fullmatch(r"(\d+)\s*-\s*(\d+)", token)
+    if m:
+        a, b = int(m.group(1)), int(m.group(2))
+        return (min(a, b), max(a, b))
+    m = re.fullmatch(r"(\d+)\s*-", token)
+    if m:
+        return (int(m.group(1)), None)
+    m = re.fullmatch(r"-\s*(\d+)", token)
+    if m:
+        return (1, int(m.group(1)))
+    if token.isdigit():
+        return (1, max(1, int(token)))
+    return None
 
-    raw_sym = parts[1].upper().strip().removesuffix(".NS").removesuffix(".BO")
-    t0 = monotonic()
-    log.info("handle_single_stock: fetching full details for %s for chat %s", raw_sym, chat_id)
 
-    # 1. Fetch quote data (price, change, volume, name)
-    quote = sources.get_quote("NSE", raw_sym) or sources.get_quote("BSE", raw_sym) or {}
+def _stock_summary_lines(raw_sym, quote, fund, include_tip=True, label="") -> list[str]:
+    """Build the compact /stock summary card for one symbol."""
     price = quote.get("price")
     change_pct = quote.get("change_pct")
     change_abs = quote.get("change")
     comp_name = quote.get("name") or raw_sym
 
-    # 2. Fetch full fundamentals + screener + RSI
-    fund = sources.get_fundamentals(raw_sym, with_screener=True) or {}
-
-    if price is None and not fund:
-        _reply_suggestions(chat_id, raw_sym)
-        return
-
     def _num(value, nd: int) -> str:
-        s = f"{value:.{nd}f}"
+        try:
+            s = f"{float(value):.{nd}f}"
+        except (TypeError, ValueError):
+            return "N/A"
         return s.rstrip("0").rstrip(".") if "." in s else s
 
     lines = []
     sec_name = notifier.escape(fund.get("sector") or "Indian Equity")
-    lines.append(f"\U0001F4CA <b>{notifier.escape(comp_name.upper())}</b> (<code>{notifier.escape(raw_sym)}</code>)")
+    lbl = f"{label} " if label else ""
+    lines.append(
+        f"\U0001F4CA {lbl}<b>{notifier.escape(comp_name.upper())}</b> (<code>{notifier.escape(raw_sym)}</code>)"
+    )
     lines.append(f"Sector: <i>{sec_name}</i>")
     lines.append("")
 
@@ -1256,8 +1274,7 @@ def handle_single_stock_analysis(chat_id, parts) -> None:
         if change_pct is not None:
             sign = "+" if change_pct >= 0 else ""
             abs_str = f" ({sign}{notifier.fmt_money(change_abs)})" if change_abs is not None else ""
-            chg_badge = f"<b>{sign}{change_pct:.2f}%</b>{abs_str}"
-            lines.append(f"Current Price: <b>{p_str}</b>  {chg_badge}")
+            lines.append(f"Current Price: <b>{p_str}</b>  {sign}{change_pct:.2f}%{abs_str}")
         else:
             lines.append(f"Current Price: <b>{p_str}</b>")
 
@@ -1330,37 +1347,18 @@ def handle_single_stock_analysis(chat_id, parts) -> None:
     else:
         lines.append("No shareholding breakdown available.")
 
-    lines.append("")
-    lines.append(f"\U0001F4A1 <i>Tip: Track this stock with /add {raw_sym} NSE</i>")
+    if include_tip:
+        lines.append("")
+        lines.append(f"\U0001F4A1 <i>Tip: Track this stock with /add {raw_sym} NSE</i>")
+    return lines
 
-    _reply_messages(chat_id, ["\n".join(lines)])
-    log.info("handle_single_stock: completed for %s in %.1fs", raw_sym, monotonic() - t0)
 
-
-def handle_fund_analysis(chat_id, parts) -> None:
-    """Deep fundamental & technical report for a single stock (/fund SYMBOL)."""
-    if len(parts) < 2:
-        reply(
-            chat_id,
-            "Usage: <code>/fund SYMBOL</code> (e.g. <code>/fund RELIANCE</code> or <code>/fund TATATECH</code>)",
-        )
-        return
-
-    raw_sym = parts[1].upper().strip().removesuffix(".NS").removesuffix(".BO")
-    t0 = monotonic()
-    log.info("handle_fund: deep fundamentals for %s (chat %s)", raw_sym, chat_id)
-
-    quote = sources.get_quote("NSE", raw_sym) or sources.get_quote("BSE", raw_sym) or {}
+def _fund_report_lines(raw_sym, quote, fund, include_tip=True, label="") -> list[str]:
+    """Build the deep /fund fundamental report for one symbol."""
     price = quote.get("price")
     change_pct = quote.get("change_pct")
     change_abs = quote.get("change")
     comp_name = quote.get("name") or raw_sym
-
-    fund = sources.get_fundamentals(raw_sym, with_screener=True) or {}
-
-    if price is None and not fund:
-        _reply_suggestions(chat_id, raw_sym)
-        return
 
     def _num(value, nd: int = 1) -> str:
         if value is None:
@@ -1390,8 +1388,9 @@ def handle_fund_analysis(chat_id, parts) -> None:
     lines = []
     sec_name = notifier.escape(fund.get("sector") or "Indian Equity")
     ind_name = notifier.escape(fund.get("industry") or "")
+    lbl = f"{label} " if label else ""
     lines.append(
-        f"\U0001F4CA <b>{notifier.escape(comp_name.upper())}</b> (<code>{notifier.escape(raw_sym)}</code>)"
+        f"\U0001F4CA {lbl}<b>{notifier.escape(comp_name.upper())}</b> (<code>{notifier.escape(raw_sym)}</code>)"
     )
     if ind_name:
         lines.append(f"Sector: <i>{sec_name}</i>  \u00b7  Industry: <i>{ind_name}</i>")
@@ -1551,9 +1550,133 @@ def handle_fund_analysis(chat_id, parts) -> None:
     else:
         lines.append("No shareholding breakdown available.")
 
-    lines.append("")
-    lines.append(f"\U0001F4A1 <i>Tip: Track this stock with /add {raw_sym} NSE</i>")
+    if include_tip:
+        lines.append("")
+        lines.append(f"\U0001F4A1 <i>Tip: Track this stock with /add {raw_sym} NSE</i>")
+    return lines
 
+
+def handle_single_stock_analysis(chat_id, parts) -> None:
+    """Stock summary card for one symbol, or a watchlist position range.
+
+    /stock TATATECH  → single symbol
+    /stock 5         → first 5 watchlist stocks
+    /stock 5-10      → watchlist positions 5..10
+    /stock all       → whole watchlist
+    """
+    if len(parts) < 2:
+        reply(
+            chat_id,
+            "Usage: <code>/stock SYMBOL</code> (e.g. <code>/stock TATATECH</code>) "
+            "or <code>/stock 5</code> / <code>/stock 5-10</code> (watchlist positions)",
+        )
+        return
+
+    rng = _parse_stock_range(parts[1])
+    if rng is not None:
+        handle_stock_batch(chat_id, "/stock", rng, deep=False)
+        return
+
+    raw_sym = parts[1].upper().strip().removesuffix(".NS").removesuffix(".BO")
+    t0 = monotonic()
+    log.info("handle_single_stock: fetching full details for %s for chat %s", raw_sym, chat_id)
+
+    quote = sources.get_quote("NSE", raw_sym) or sources.get_quote("BSE", raw_sym) or {}
+    fund = sources.get_fundamentals(raw_sym, with_screener=True) or {}
+
+    if quote.get("price") is None and not fund:
+        _reply_suggestions(chat_id, raw_sym)
+        return
+
+    lines = _stock_summary_lines(raw_sym, quote, fund, include_tip=True)
+    _reply_messages(chat_id, ["\n".join(lines)])
+    log.info("handle_single_stock: completed for %s in %.1fs", raw_sym, monotonic() - t0)
+
+
+def handle_stock_batch(chat_id, cmd: str, rng, deep: bool) -> None:
+    """Render /stock or /fund for a range of the user's watchlist positions."""
+    cap = MAX_FUND_BATCH if deep else MAX_STOCK_BATCH
+    items = storage.get_user_list(chat_id)
+    if not items:
+        reply(chat_id, "Your watchlist is empty. Add stocks with /add SYMBOL NSE")
+        return
+    start, end = rng
+    total = len(items)
+    start = max(1, start)
+    end = total if end is None else min(end, total)
+    if start > total:
+        reply(chat_id, f"Your watchlist has only {total} stock(s) — start position must be 1..{total}.")
+        return
+    work = items[start - 1:end]
+    skipped = max(0, len(work) - cap)
+    work = work[:cap]
+    t0 = monotonic()
+    log.info(
+        "%s batch: positions %d-%d (%d stocks, deep=%s)",
+        cmd, start, start + len(work) - 1, len(work), deep,
+    )
+
+    with ThreadPoolExecutor(max_workers=max(1, min(8, len(work)))) as ex:
+        quotes = list(ex.map(lambda it: sources.get_quote(it["exchange"], it["symbol"]) or {}, work))
+        funds = list(ex.map(lambda it: sources.get_fundamentals(it["symbol"], with_screener=True) or {}, work))
+
+    body = []
+    for pos, (item, quote, fund) in enumerate(zip(work, quotes, funds), start=start):
+        sym = item["symbol"]
+        label = f"<b>#{pos}</b>"
+        if deep:
+            lines = _fund_report_lines(sym, quote, fund, include_tip=False, label=label)
+        else:
+            lines = _stock_summary_lines(sym, quote, fund, include_tip=False, label=label)
+        if not quote and not fund:
+            lines = [
+                f"\U0001F4CA {label} <b>{notifier.escape(sym)}</b>",
+                "\u26a0\ufe0f No data available right now.",
+            ]
+        body.extend(lines)
+        body.append("")
+
+    header = f"\U0001F4CA <b>{cmd.upper()} \u00b7 Watchlist positions {start}\u2013{start + len(work) - 1} of {total}</b>\n"
+    all_lines = [header] + body
+    if skipped:
+        all_lines.append(f"\u2026 and {skipped} more (max {cap} per query).")
+    _reply_messages(chat_id, _split_messages(all_lines))
+    log.info("%s batch: done %d stocks in %.1fs", cmd, len(work), monotonic() - t0)
+
+
+def handle_fund_analysis(chat_id, parts) -> None:
+    """Deep fundamental report for one symbol, or a watchlist position range.
+
+    /fund RELIANCE  → single symbol
+    /fund 5         → first 5 watchlist stocks
+    /fund 5-10      → watchlist positions 5..10
+    /fund all       → whole watchlist
+    """
+    if len(parts) < 2:
+        reply(
+            chat_id,
+            "Usage: <code>/fund SYMBOL</code> (e.g. <code>/fund RELIANCE</code>) "
+            "or <code>/fund 5</code> / <code>/fund 5-10</code> (watchlist positions)",
+        )
+        return
+
+    rng = _parse_stock_range(parts[1])
+    if rng is not None:
+        handle_stock_batch(chat_id, "/fund", rng, deep=True)
+        return
+
+    raw_sym = parts[1].upper().strip().removesuffix(".NS").removesuffix(".BO")
+    t0 = monotonic()
+    log.info("handle_fund: deep fundamentals for %s (chat %s)", raw_sym, chat_id)
+
+    quote = sources.get_quote("NSE", raw_sym) or sources.get_quote("BSE", raw_sym) or {}
+    fund = sources.get_fundamentals(raw_sym, with_screener=True) or {}
+
+    if quote.get("price") is None and not fund:
+        _reply_suggestions(chat_id, raw_sym)
+        return
+
+    lines = _fund_report_lines(raw_sym, quote, fund, include_tip=True)
     _reply_messages(chat_id, _split_messages(lines))
     log.info("handle_fund: completed for %s in %.1fs", raw_sym, monotonic() - t0)
 
@@ -1646,8 +1769,8 @@ def register_commands() -> bool:
         {"command": "exdate", "description": "Ex-dates: /exdate today or /exdate 7"},
         {"command": "summary", "description": "Market snapshot: counts + next ex-dates"},
         {"command": "news", "description": "Latest news for your watchlist stocks"},
-        {"command": "stock", "description": "Quick stock summary: /stock TATATECH"},
-        {"command": "fund", "description": "Deep fundamentals: /fund RELIANCE"},
+        {"command": "stock", "description": "Stock summary or watchlist range: /stock 5-10"},
+        {"command": "fund", "description": "Deep fundamentals or range: /fund 3-5"},
         {"command": "movers", "description": "Movers + fundamentals: /movers 1h gainers 10"},
         {"command": "gainers", "description": "Top gainers + fundamentals: /gainers 1h 50"},
         {"command": "losers", "description": "Top losers + fundamentals: /losers 1w 100"},

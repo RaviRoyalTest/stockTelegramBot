@@ -95,7 +95,9 @@ Send these to your bot:
 | `/gainers [period] [N] [100\|500]` | `/gainers 2d 100` | Top N gainers over an index (default NIFTY 500, top 30). Here a bare `100`/`500` means **top N** — to pick the index use `nifty100`/`nifty500` or a second number after a count (e.g. `/gainers 1h 50 500`). Fundamentals shown per row |
 | `/losers [period] [N] [100\|500]` | `/losers 1mo 100` | Top N losers over an index (same options and fundamentals as `/gainers`). E.g. `/losers 1w 20 500`, `/losers 30m 5 nifty100` |
 | `/stock SYMBOL` | `/stock TATATECH` | Quick summary card for one stock: price, P/E, 52-week signal, QoQ shareholding |
+| `/stock N` / `/stock N-M` / `/stock all` | `/stock 5-10` | Same summary card for a range of watchlist positions (1-based). `/stock 5` = first 5 stocks, `/stock 5-10` = positions #5..#10, `/stock all` = whole list (max 10 per query) |
 | `/fund SYMBOL` | `/fund RELIANCE` | Deep fundamental report for one stock: valuation (P/E, fwd P/E, P/B, P/S, div yield), YoY growth & margins, EPS/book value, balance sheet, analyst targets, QoQ shareholding |
+| `/fund N` / `/fund N-M` / `/fund all` | `/fund 3-5` | Deep report for a range of watchlist positions (same syntax as `/stock`, max 5 per query) |
 
 For the universe token you can use the short forms too: `n100`/`nifty100` and `n500`/`nifty500` (e.g. `/gainers n100` = today's top NIFTY 100 gainers, `/movers 1w n500`).
 
