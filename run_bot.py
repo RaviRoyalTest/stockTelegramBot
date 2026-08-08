@@ -261,7 +261,10 @@ def handle_command(chat_id, text):
         if not items:
             reply(chat_id, "Your watchlist is empty.")
         else:
-            lines = [f"• <b>{i['symbol']}</b> ({i['exchange']})" for i in items]
+            lines = [
+                f"{idx}. <b>{i['symbol']}</b> ({i['exchange']})"
+                for idx, i in enumerate(items, start=1)
+            ]
             where = (
                 "watchlist.json (owner's list)"
                 if storage.is_owner(chat_id)
@@ -277,7 +280,8 @@ def handle_command(chat_id, text):
                 chat_id,
                 "<b>Your Watchlist:</b>\n"
                 + "\n".join(lines)
-                + f"\n\nSaved in: <code>{html.escape(where)}</code>\nPersistence: {html.escape(persistence)}",
+                + f"\n\nUse <code>/stock 5-10</code> or <code>/fund 3-5</code> to get details by these numbers."
+                + f"\nSaved in: <code>{html.escape(where)}</code>\nPersistence: {html.escape(persistence)}",
             )
         return
 
