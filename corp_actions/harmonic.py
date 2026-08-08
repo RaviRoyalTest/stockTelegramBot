@@ -336,11 +336,15 @@ def _find_forming(pivots, price, lookback=30):
     return best[:6]
 
 
-def analyze(exchange: str, symbol: str, timeframe: str = "1d", pct: float | None = None):
+def analyze(exchange: str, symbol: str, timeframe: str = "1d", pct: float | None = None,
+            light: bool = False):
     """Fetch OHLC and build a full harmonic analysis result dict.
 
     Returns a dict with everything format_report() needs, or None when no
-    price data is available.
+    price data is available. With light=True the higher-timeframe fetch and
+    the confirmation notes are skipped, which roughly halves the network
+    calls - used by the bulk index screener (/harmonic all|100|500) where
+    only the pattern / direction / status / price are needed.
     """
     ohlc = sources.get_ohlc(exchange, symbol, timeframe)
     if not ohlc:
@@ -413,61 +417,62 @@ def analyze(exchange: str, symbol: str, timeframe: str = "1d", pct: float | None
         result["status"] = "No harmonic pattern detected"
         result["signal"] = "NO TRADE"
 
-    # Higher-timeframe direction (best effort, cached fetch)
-    htf = sources._HFT_LADDER.get(tf)
-    if htf:
-        try:
-            ho = sources.get_ohlc(exchange, symbol, htf)
-            if ho and len(ho["close"]) > 20:
-                hc = ho["close"]
-                h20 = _sma(hc, 20)
-                if h20 is not None:
-                    result["htf"] = f"{htf} trend: {'up' if hc[-1] > h20 else 'down'}"
-        except Exception:
-            pass
+    if not light:
+        # Higher-timeframe direction (best effort, cached fetch)
+        htf = sources._HFT_LADDER.get(tf)
+        if htf:
+            try:
+                ho = sources.get_ohlc(exchange, symbol, htf)
+                if ho and len(ho["close"]) > 20:
+                    hc = ho["close"]
+                    h20 = _sma(hc, 20)
+                    if h20 is not None:
+                        result["htf"] = f"{htf} trend: {'up' if hc[-1] > h20 else 'down'}"
+            except Exception:
+                pass
 
-    # Confirmation notes
-    notes = []
-    rsi = result["rsi"]
-    if rsi is not None:
-        if rsi <= 30:
-            notes.append(f"RSI {rsi:g} (oversold)")
-        elif rsi <= 45:
-            notes.append(f"RSI {rsi:g} (weak/bullish zone)")
-        elif rsi >= 70:
-            notes.append(f"RSI {rsi:g} (overbought)")
-        elif rsi >= 60:
-            notes.append(f"RSI {rsi:g} (strong zone)")
-        else:
-            notes.append(f"RSI {rsi:g} (neutral)")
-    if result.get("htf"):
-        notes.append("HTF: " + result["htf"])
-    sma20, sma50 = result["sma20"], result["sma50"]
-    if sma20 is not None:
-        notes.append("Price above SMA20 (short-term up)" if price > sma20
-                     else "Price below SMA20 (short-term down)")
-    if sma50 is not None:
-        notes.append("Price above SMA50 (medium-term up)" if price > sma50
-                     else "Price below SMA50 (medium-term down)")
-    vols = [v for v in ohlc["volume"] if v]
-    if len(vols) >= 20:
-        avg_v = sum(vols[-20:]) / 20
-        last_v = vols[-1]
-        if avg_v > 0:
-            if last_v > avg_v * 1.25:
-                notes.append("Volume rising (last bar > 1.25× 20-bar avg)")
-            elif last_v < avg_v * 0.75:
-                notes.append("Volume below average (weak conviction)")
+        # Confirmation notes
+        notes = []
+        rsi = result["rsi"]
+        if rsi is not None:
+            if rsi <= 30:
+                notes.append(f"RSI {rsi:g} (oversold)")
+            elif rsi <= 45:
+                notes.append(f"RSI {rsi:g} (weak/bullish zone)")
+            elif rsi >= 70:
+                notes.append(f"RSI {rsi:g} (overbought)")
+            elif rsi >= 60:
+                notes.append(f"RSI {rsi:g} (strong zone)")
             else:
-                notes.append("Volume in line with the 20-bar average")
-    # nearest pivots as support / resistance
-    highs_near = [p[1] for p in pivots if p[2] and p[1] > price]
-    lows_near = [p[1] for p in pivots if not p[2] and p[1] < price]
-    if highs_near:
-        notes.append(f"Resistance near: ₹{min(highs_near):,.2f}")
-    if lows_near:
-        notes.append(f"Support near: ₹{max(lows_near):,.2f}")
-    result["notes"] = notes
+                notes.append(f"RSI {rsi:g} (neutral)")
+        if result.get("htf"):
+            notes.append("HTF: " + result["htf"])
+        sma20, sma50 = result["sma20"], result["sma50"]
+        if sma20 is not None:
+            notes.append("Price above SMA20 (short-term up)" if price > sma20
+                         else "Price below SMA20 (short-term down)")
+        if sma50 is not None:
+            notes.append("Price above SMA50 (medium-term up)" if price > sma50
+                         else "Price below SMA50 (medium-term down)")
+        vols = [v for v in ohlc["volume"] if v]
+        if len(vols) >= 20:
+            avg_v = sum(vols[-20:]) / 20
+            last_v = vols[-1]
+            if avg_v > 0:
+                if last_v > avg_v * 1.25:
+                    notes.append("Volume rising (last bar > 1.25× 20-bar avg)")
+                elif last_v < avg_v * 0.75:
+                    notes.append("Volume below average (weak conviction)")
+                else:
+                    notes.append("Volume in line with the 20-bar average")
+        # nearest pivots as support / resistance
+        highs_near = [p[1] for p in pivots if p[2] and p[1] > price]
+        lows_near = [p[1] for p in pivots if not p[2] and p[1] < price]
+        if highs_near:
+            notes.append(f"Resistance near: ₹{min(highs_near):,.2f}")
+        if lows_near:
+            notes.append(f"Support near: ₹{max(lows_near):,.2f}")
+        result["notes"] = notes
     return result
 
 
@@ -596,3 +601,36 @@ def format_report(r) -> list[str]:
     lines.append(f"\U0001F4A1 <i>Tip: {notifier.escape(r['symbol'])} on the {r['timeframe']} chart. "
                  "A PRZ is a potential area, not a guaranteed reversal.</i>")
     return lines
+
+
+# ---- bulk screener -------------------------------------------------------
+# The index-wide scan (/harmonic all|100|500) renders one compact line per
+# stock instead of the full report, so the whole universe fits in a few
+# Telegram messages.
+
+# Most actionable first. Statuses come from analyze()/_classify/_find_forming.
+SCAN_PRIORITY = {
+    "Reversal confirmed": 0,       # signal BUY/SELL - price has confirmed
+    "PRZ reached": 1,              # signal WAIT - price is inside the zone
+    "D point/PRZ approaching": 2,  # forming, D near its projection
+    "Pattern forming": 3,          # forming, D still projected ahead
+    "Pattern completed": 4,        # played out - levels for reference only
+}
+
+# Rows shown per scan. Keeps the "smaller version" readable even on NIFTY 500.
+SCAN_MAX_ROWS = 25
+
+
+def format_scan_row(r) -> str:
+    """One compact line per stock for the bulk harmonic screener.
+
+    e.g. "▲ TCS ₹4,000.00 — Gartley (bullish) — Reversal confirmed · SELL"
+    """
+    arrow = "\u25b2" if r.get("direction") == "bullish" else "\u25bc"
+    pattern = notifier.escape(r.get("pattern") or "?")
+    status = notifier.escape(r.get("status") or "")
+    return (
+        f"{arrow} <b>{notifier.escape(r['symbol'])}</b> "
+        f"{notifier.fmt_money(r['price'])} \u2014 <b>{pattern}</b> "
+        f"({r.get('direction') or '?'}) \u2014 {status} \u00b7 {r.get('signal') or 'NO TRADE'}"
+    )

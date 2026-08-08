@@ -93,12 +93,15 @@ HELP_TEXT = (
     "  /fund 3-5        \u2192 deep report for watchlist #3..#5\n\n"
     "\U0001F3C6 <b>Harmonic Patterns &amp; PRZ</b>\n"
     "━━━━━━━━━━━━━━━━━━━━\n"
-    "/harmonic <i>SYMBOL [TIMEFRAME]</i>\n"
-    "  Scans for Gartley / Bat / Butterfly / Crab / Shark setups and maps\n"
-    "  the Potential Reversal Zone (PRZ) with entry, SL &amp; targets.\n"
-    "  /harmonic RELIANCE      \u2192 daily scan\n"
-    "  /harmonic TATATECH 1h   \u2192 1-hour scan\n"
-    "  /harmonic 3             \u2192 scan watchlist #3\n"
+    "/harmonic <i>[all|100|500] [TIMEFRAME]</i>\n"
+    "  Scans an index for Gartley / Bat / Butterfly / Crab / Shark setups and\n"
+    "  lists every stock showing a formation (compact, one line per stock).\n"
+    "  /harmonic all          \u2192 NIFTY 100, daily\n"
+    "  /harmonic 500          \u2192 NIFTY 500, daily\n"
+    "  /harmonic 500 1w       \u2192 NIFTY 500, weekly chart\n"
+    "  /harmonic SYMBOL [TIMEFRAME]  \u2192 full report with PRZ, entry, SL &amp; targets\n"
+    "  /harmonic RELIANCE     \u2192 daily scan  \u00b7  /harmonic TATATECH 1h\n"
+    "  /harmonic 3            \u2192 full report for watchlist #3\n"
     "  Timeframes: 5m 15m 30m 1h 4h 1d 1w\n\n"
     "━━━━━━━━━━━━━━━━━━━━\n"
     "\U0001F4C8 <b>Market Screens</b>\n"
@@ -1700,22 +1703,52 @@ def handle_fund_analysis(chat_id, parts) -> None:
 
 HARMONIC_TIMEFRAMES = ("5m", "15m", "30m", "1h", "4h", "1d", "1w")
 
+# Universe keywords for the bulk screener. "all"/bare defaults to NIFTY 100,
+# "500" switches to NIFTY 500 (mirrors the movers 100|500 index selector).
+HARMONIC_SCAN_UNIVERSES = {
+    "all": "nifty100",
+    "100": "nifty100",
+    "nifty100": "nifty100",
+    "nifty-100": "nifty100",
+    "500": "nifty500",
+    "nifty500": "nifty500",
+    "nifty-500": "nifty500",
+}
+
 
 def handle_harmonic(chat_id, parts) -> None:
-    """Scan a stock for harmonic patterns + PRZ (/harmonic SYMBOL [TIMEFRAME]).
+    """Harmonic pattern scanner.
 
-    Accepts a symbol or a single watchlist position, plus an optional
-    timeframe. Timeframe matters: a 30m setup is far less significant than a
-    daily one.
+    Screener mode (compact, one line per stock - a "smaller version" of the
+    full report so the whole index fits in a few messages):
+      /harmonic          -> NIFTY 100, daily
+      /harmonic all      -> NIFTY 100, daily
+      /harmonic 500      -> NIFTY 500, daily
+      /harmonic 500 1w   -> NIFTY 500, weekly chart
+    Single-stock detail (full report with PRZ, entry, SL & targets):
+      /harmonic SYMBOL [TIMEFRAME]   e.g. /harmonic RELIANCE, /harmonic TATATECH 1h
+      /harmonic 3                    -> full report for watchlist #3
     """
+    if len(parts) >= 2 and parts[1].lower() in HARMONIC_SCAN_UNIVERSES:
+        universe = HARMONIC_SCAN_UNIVERSES[parts[1].lower()]
+        tf = "1d"
+        if len(parts) >= 3:
+            cand = parts[2].lower()
+            if cand in HARMONIC_TIMEFRAMES:
+                tf = cand
+            else:
+                reply(
+                    chat_id,
+                    f"Unknown timeframe <code>{html.escape(parts[2])}</code>. "
+                    f"Options: {', '.join(HARMONIC_TIMEFRAMES)}",
+                )
+                return
+        handle_harmonic_scan(chat_id, universe, tf)
+        return
+
     if len(parts) < 2:
-        reply(
-            chat_id,
-            "Usage: <code>/harmonic SYMBOL [TIMEFRAME]</code>\n"
-            "e.g. <code>/harmonic RELIANCE</code> (daily), <code>/harmonic TATATECH 1h</code>, "
-            "<code>/harmonic 3</code> (watchlist #3)\n"
-            "Timeframes: " + ", ".join(HARMONIC_TIMEFRAMES),
-        )
+        # Bare /harmonic -> default NIFTY 100 screener, like /movers.
+        handle_harmonic_scan(chat_id, "nifty100", "1d")
         return
 
     raw = parts[1].upper().strip().removesuffix(".NS").removesuffix(".BO")
@@ -1758,6 +1791,95 @@ def handle_harmonic(chat_id, parts) -> None:
     lines = harmonic.format_report(res)
     _reply_messages(chat_id, _split_messages(lines))
     log.info("handle_harmonic: done %s %s in %.1fs", symbol, tf, monotonic() - t0)
+
+
+def handle_harmonic_scan(chat_id, universe, tf) -> None:
+    """Bulk /harmonic screener over an index universe (compact report).
+
+    Scans every symbol in NIFTY 100 / NIFTY 500 for a harmonic formation and
+    replies with one compact line per stock that has one, sorted most
+    actionable first. Full detail for any stock is one /harmonic SYMBOL away.
+    """
+    universe_label = "NIFTY 500" if universe == "nifty500" else "NIFTY 100"
+    t0 = monotonic()
+    log.info(
+        "harmonic scan: universe=%s timeframe=%s (chat %s)",
+        universe_label, tf, chat_id,
+    )
+    reply(
+        chat_id,
+        f"Scanning {universe_label} stocks for harmonic patterns on the "
+        f"{tf} chart... this can take a minute or two.",
+    )
+
+    symbols = sources.get_index_universe(universe)
+    if not symbols:
+        log.warning("harmonic scan: no symbols loaded for %s", universe)
+        reply(chat_id, "Could not load the stock universe right now. Try again in a minute.")
+        return
+    log.info("harmonic scan: universe loaded (%d symbols)", len(symbols))
+
+    def _scan(sym):
+        try:
+            return sym, harmonic.analyze("NSE", sym, tf, light=True)
+        except Exception as exc:  # one bad symbol must not kill the scan
+            log.info("harmonic scan: failed for %s: %s", sym, exc)
+            return sym, None
+
+    found = []
+    with ThreadPoolExecutor(max_workers=16) as ex:
+        futures = {ex.submit(_scan, sym): sym for sym in symbols}
+        done = 0
+        for fut in as_completed(futures):
+            done += 1
+            sym = futures[fut]
+            try:
+                res = fut.result()[1]
+            except Exception as exc:
+                res = None
+            if res and res.get("pattern") and res.get("status") not in (
+                "No harmonic pattern detected", "Pattern invalidated",
+            ):
+                found.append(res)
+            if done % 50 == 0 or done == len(symbols):
+                log.info(
+                    "harmonic scan: progress %d/%d symbols, %d pattern(s)",
+                    done, len(symbols), len(found),
+                )
+
+    log.info(
+        "harmonic scan: %d/%d symbols with a pattern in %.1fs",
+        len(found), len(symbols), monotonic() - t0,
+    )
+    if not found:
+        reply(
+            chat_id,
+            f"No harmonic patterns detected across {universe_label} on the {tf} chart.",
+        )
+        return
+
+    found.sort(
+        key=lambda r: (
+            harmonic.SCAN_PRIORITY.get(r.get("status"), 9),
+            r.get("pattern") or "",
+            r["symbol"],
+        )
+    )
+    shown = found[:harmonic.SCAN_MAX_ROWS]
+    lines = [
+        f"<b>HARMONIC SCAN - {universe_label}</b> \u00b7 {tf} chart",
+        f"{len(found)} stock(s) showing a formation"
+        + (f" (top {len(shown)} by actionability)" if len(found) > len(shown) else ""),
+    ]
+    for idx, r in enumerate(shown, 1):
+        lines.append(f"{idx}. {harmonic.format_scan_row(r)}")
+    lines.append("")
+    lines.append("Use /harmonic SYMBOL for the full report (PRZ, entry, SL & targets).")
+    _reply_messages(chat_id, _split_messages(lines))
+    log.info(
+        "harmonic scan: sent %d row(s) in %.1fs",
+        len(shown), monotonic() - t0,
+    )
 
 
 def handle_movers(chat_id, parts) -> None:
@@ -1850,7 +1972,7 @@ def register_commands() -> bool:
         {"command": "news", "description": "Latest news for your watchlist stocks"},
         {"command": "stock", "description": "Stock summary or watchlist range: /stock 5-10"},
         {"command": "fund", "description": "Deep fundamentals or range: /fund 3-5"},
-        {"command": "harmonic", "description": "Harmonic patterns + PRZ: /harmonic TATATECH 1d"},
+        {"command": "harmonic", "description": "Harmonic scan NIFTY 100/500: /harmonic all / 500"},
         {"command": "movers", "description": "Movers + fundamentals: /movers 1h gainers 10"},
         {"command": "gainers", "description": "Top gainers + fundamentals: /gainers 1h 50"},
         {"command": "losers", "description": "Top losers + fundamentals: /losers 1w 100"},
