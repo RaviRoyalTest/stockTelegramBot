@@ -102,6 +102,16 @@ HELP_TEXT = (
     "  /harmonic RELIANCE     \u2192 daily scan  \u00b7  /harmonic TATATECH 1h\n"
     "  /harmonic 3            \u2192 full report for watchlist #3\n"
     "  Timeframes: 5m 15m 30m 1h 4h 1d 1w\n\n"
+    "\U0001F4CA <b>NIFTY 500 CNC/MIS Scanner</b>\n"
+    "━━━━━━━━━━━━━━━━━━━━\n"
+    "/scan500\n"
+    "  Advanced multi-indicator scan of the full NIFTY 500 universe:\n"
+    "  EMAs, RSI, MACD, ADX, CMF, MFI, OBV, Aroon, TTM Squeeze, Donchian,\n"
+    "  weekly Supertrend, GMMA, Anchored VWAP &amp; Mansfield RS.\n"
+    "  Applies strict \u201cdo not buy / do not show\u201d rejection rules, scores\n"
+    "  survivors /100 (\u226575 qualifies), picks the #1 setup and maps an\n"
+    "  hour-by-hour CNC vs MIS execution plan.\n"
+    "  /scan500        \u2192 full NIFTY 500 scan (takes ~1-2 min)\n\n"
     "━━━━━━━━━━━━━━━━━━━━\n"
     "\U0001F4C8 <b>Market Screens</b>\n"
     "━━━━━━━━━━━━━━━━━━━━\n"
@@ -178,6 +188,7 @@ HELP_TEXT = (
     "/gainers 1h 10          \u2192 Top 10 gainers last hour\n"
     "/losers 1mo 500         \u2192 Monthly losers \u2014 NIFTY 500\n"
     "/movers 2d 10 500       \u2192 2-day movers, top 10, NIFTY 500\n"
+    "/scan500               \u2192 full NIFTY 500 CNC/MIS technical scan\n"
     "/ca dividend            \u2192 Upcoming dividends\n"
     "/ca RELIANCE            \u2192 RELIANCE corporate actions\n"
     "/add INFY NSE           \u2192 Add INFY to watchlist\n"
@@ -474,6 +485,10 @@ def handle_command(chat_id, text):
 
     if cmd == "/harmonic":
         handle_harmonic(chat_id, parts)
+        return
+
+    if cmd == "/scan500":
+        handle_scan500(chat_id, parts)
         return
 
     if cmd in ("/stock", "/info", "/quote"):
@@ -1870,6 +1885,122 @@ def handle_harmonic_scan(chat_id, universe, tf) -> None:
     )
 
 
+def handle_scan500(chat_id, parts) -> None:
+    """NIFTY 500 advanced multi-indicator CNC/MIS scanner (/scan500).
+
+    Runs the full indicator suite (EMAs, RSI, MACD, ADX, CMF, MFI, OBV,
+    Aroon, TTM squeeze, Donchian, weekly Supertrend, GMMA, anchored VWAP,
+    Mansfield RS) over the NIFTY 500 universe, applies the strict rejection
+    rules, scores survivors out of 100 and reports regime + top picks.
+    """
+    t0 = monotonic()
+    log.info("scan500: starting (chat %s)", chat_id)
+    reply(
+        chat_id,
+        "Scanning NIFTY 500 (daily candles, ~500 stocks)... "
+        "this can take a minute or two.",
+    )
+    try:
+        import corp_actions.scanner as sc
+    except Exception as exc:
+        log.warning("scan500: scanner module unavailable: %s", exc)
+        reply(chat_id, "Scanner engine unavailable (pandas missing?).")
+        return
+
+    symbols = sources.get_index_universe("nifty500")
+    if not symbols:
+        log.warning("scan500: no symbols loaded")
+        reply(chat_id, "Could not load the NIFTY 500 universe right now. Try again in a minute.")
+        return
+
+    # Market regime inputs
+    idx50 = sources.get_index_ohlc("^NSEI", "2y", "1d")
+    vix = sources.get_index_ohlc("^INDIAVIX", "6mo", "1d")
+    idx500 = sources.get_index_ohlc("^CRSLDX", "2y", "1d") or idx50
+    bench_close = (idx500 or {}).get("close")
+
+    def _fetch(sym):
+        try:
+            return sym, sources.get_ohlc("NSE", sym, "1d")
+        except Exception:
+            return sym, None
+
+    ohlc_by_sym = {}
+    with ThreadPoolExecutor(max_workers=20) as ex:
+        futures = {ex.submit(_fetch, sym): sym for sym in symbols}
+        for fut in as_completed(futures):
+            sym = futures[fut]
+            try:
+                ohlc_by_sym[sym] = fut.result()[1]
+            except Exception:
+                ohlc_by_sym[sym] = None
+    log.info("scan500: fetched %d/%d OHLC sets in %.1fs",
+             sum(1 for v in ohlc_by_sym.values() if v), len(symbols),
+             monotonic() - t0)
+
+    rows = []
+    rejected = []
+    for sym, ohlc in ohlc_by_sym.items():
+        try:
+            f = sc.scan_stock(ohlc, index_close=bench_close)
+            if f is None:
+                continue
+            f = sc.build_plan(f)
+            score, breakdown = sc.score_stock(f)
+            reasons = sc.rejection_reasons(f)
+            f["score"] = score
+            if reasons:
+                rejected.append((sym, f.get("name") or sym, f["price"], reasons))
+            else:
+                rows.append({"fields": f, "score": score, "breakdown": breakdown})
+        except Exception as exc:
+            log.info("scan500: skip %s (%s)", sym, exc)
+            continue
+
+    # Breadth across the scanned universe
+    above_50 = sum(1 for _, o in ohlc_by_sym.items() if _above_ema(o, 50))
+    above_200 = sum(1 for _, o in ohlc_by_sym.items() if _above_ema(o, 200))
+    adv = sum(1 for s, o in ohlc_by_sym.items() if o and o["close"] and o["close"][-1] > o["open"][-1])
+    dec = sum(1 for s, o in ohlc_by_sym.items() if o and o["close"] and o["close"][-1] < o["open"][-1])
+    total = sum(1 for o in ohlc_by_sym.values() if o)
+    vix_val = (vix or {}).get("close")
+    vix_last = vix_val[-1] if vix_val else None
+    breadth = {
+        "above_ema50": (above_50 / total * 100.0) if total else None,
+        "above_ema200": (above_200 / total * 100.0) if total else None,
+        "advance": float(adv), "decline": float(dec),
+        "vix": vix_last,
+    }
+    regime = sc.market_regime(idx50, breadth)
+
+    # Approve by score threshold
+    rows.sort(key=lambda r: r["score"], reverse=True)
+    approved = [r for r in rows if r["score"] >= sc.SCORE_QUALIFY]
+
+    lines = sc.format_report({
+        "regime": regime,
+        "rejected": rejected,
+        "approved": approved,
+        "scanned": total or len(symbols),
+    })
+    _reply_messages(chat_id, _split_messages(lines))
+    log.info("scan500: done in %.1fs (%d approved, %d rejected, %d scanned)",
+             monotonic() - t0, len(approved), len(rejected), total or len(symbols))
+
+
+def _above_ema(ohlc, span: int) -> bool:
+    """Quick price-vs-EMA check for breadth (no pandas dependency here)."""
+    if not ohlc or len(ohlc["close"]) < span + 5:
+        return False
+    closes = ohlc["close"]
+    price = closes[-1]
+    k = 2.0 / (span + 1.0)
+    ema = closes[-span]
+    for c in closes[-span:]:
+        ema = c * k + ema * (1 - k)
+    return price > ema
+
+
 def handle_movers(chat_id, parts) -> None:
     """Movement screen over an index (default NIFTY 100, all directions)."""
     handle_market_screen(
@@ -1961,6 +2092,7 @@ def register_commands() -> bool:
         {"command": "stock", "description": "Stock summary or watchlist range: /stock 5-10"},
         {"command": "fund", "description": "Deep fundamentals or range: /fund 3-5"},
         {"command": "harmonic", "description": "Harmonic scan NIFTY 100/500: /harmonic all / 500"},
+        {"command": "scan500", "description": "NIFTY 500 CNC/MIS technical scanner"},
         {"command": "movers", "description": "Movers + fundamentals: /movers 1h gainers 10"},
         {"command": "gainers", "description": "Top gainers + fundamentals: /gainers 1h 50"},
         {"command": "losers", "description": "Top losers + fundamentals: /losers 1w 100"},

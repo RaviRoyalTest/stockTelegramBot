@@ -766,6 +766,71 @@ def get_ohlc(exchange: str, symbol: str, timeframe: str = "1d") -> dict | None:
     return data
 
 
+_index_ohlc_cache: dict = {}
+_INDEX_OHLC_TTL = 180  # seconds
+
+
+def get_index_ohlc(index_symbol: str, range_: str = "6mo",
+                   interval: str = "1d") -> dict | None:
+    """Return OHLC bars for a Yahoo index symbol (e.g. ^NSEI, ^INDIAVIX).
+
+    Index symbols carry no exchange suffix, so this bypasses the .NS/.BO
+    logic in get_ohlc. Same dict shape as get_ohlc. Cached briefly.
+    """
+    index_symbol = (index_symbol or "").strip()
+    if not index_symbol:
+        return None
+    key = (index_symbol.upper(), range_, interval)
+    now = time.time()
+    cached = _index_ohlc_cache.get(key)
+    if cached and now - cached["ts"] < _INDEX_OHLC_TTL:
+        log.debug("index ohlc cache hit for %s", index_symbol)
+        return cached["data"]
+    url = (
+        f"https://query1.finance.yahoo.com/v8/finance/chart/{index_symbol}"
+        f"?range={range_}&interval={interval}&includePrePost=false"
+    )
+    data = None
+    try:
+        resp = _quote_session().get(url, timeout=config.HTTP_TIMEOUT)
+        resp.raise_for_status()
+        res = resp.json()["chart"]["result"][0]
+        meta = res.get("meta") or {}
+        ts = res.get("timestamp") or []
+        quotes = (res.get("indicators") or {}).get("quote") or [{}]
+        q = quotes[0] or {}
+        opens, highs, lows, closes, vols = q.get("open") or [], q.get("high") or [], \
+            q.get("low") or [], q.get("close") or [], q.get("volume") or []
+        rows = []
+        for i in range(len(ts)):
+            if i >= len(opens) or i >= len(highs) or i >= len(lows) or i >= len(closes):
+                break
+            o, h, l, c = opens[i], highs[i], lows[i], closes[i]
+            if None in (o, h, l, c):
+                continue
+            v = vols[i] if i < len(vols) and vols[i] is not None else 0
+            rows.append((ts[i], o, h, l, c, v))
+        if rows:
+            data = {
+                "timestamp": [r[0] for r in rows],
+                "open": [r[1] for r in rows],
+                "high": [r[2] for r in rows],
+                "low": [r[3] for r in rows],
+                "close": [r[4] for r in rows],
+                "volume": [r[5] for r in rows],
+                "interval": interval,
+                "timeframe": interval,
+                "name": meta.get("longName") or meta.get("shortName") or index_symbol,
+                "exchange": "IDX",
+                "symbol": index_symbol,
+            }
+            log.info("index ohlc: %d %s bars for %s", len(rows), interval, index_symbol)
+    except Exception as exc:
+        log.info("index ohlc failed for %s - %s", index_symbol, exc)
+    _index_ohlc_cache[key] = {"ts": now, "data": data}
+    return data
+
+
 # ------------------------------------------------------------- fundamentals
 # Stock fundamentals for the movement screens. Two public sources, both cached
 # 24h (fundamentals change slowly):
