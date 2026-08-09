@@ -12,8 +12,12 @@ log = logging.getLogger(__name__)
 
 
 def escape(text) -> str:
-    """Escape text for Telegram HTML parse mode."""
-    return html.escape(str(text or ""), quote=False)
+    """Escape text for Telegram HTML parse mode.
+
+    quote=True also escapes " and ' so escaped values are safe inside HTML
+    attributes too (e.g. the href of a news link).
+    """
+    return html.escape(str(text or ""), quote=True)
 
 
 def _fmt_date(value) -> str:
@@ -167,12 +171,12 @@ def format_corporate_action(action: dict) -> str:
 
 def format_reminder(action: dict) -> str:
     """Render an 'ex-date approaching' reminder as an HTML Telegram message."""
-    symbol = action.get("symbol") or "-"
-    company = action.get("company") or "-"
-    subject = action.get("subject") or "-"
+    symbol = escape(action.get("symbol") or "-")
+    company = escape(action.get("company") or "-")
+    subject = escape(action.get("subject") or "-")
     ex_date = action.get("ex_date") or "-"
     record_date = action.get("record_date") or "-"
-    exchange = action.get("exchange") or "-"
+    exchange = escape(action.get("exchange") or "-")
 
     lines = [
         "\u23f0 <b>Ex-date reminder</b>",

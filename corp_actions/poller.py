@@ -17,13 +17,17 @@ from . import config, notifier, sources, storage
 
 log = logging.getLogger(__name__)
 
-FETCHERS = {"NSE": sources.get_nse_corporate_actions}
+FETCHERS = {
+    "NSE": sources.get_nse_corporate_actions,
+    "BSE": sources.get_bse_corporate_actions,
+}
 
 
 def _active_fetchers() -> dict:
-    fetchers = {"NSE": sources.get_nse_corporate_actions}
-    if config.ENABLE_BSE:
-        fetchers["BSE"] = sources.get_bse_corporate_actions
+    """Enabled sources (BSE optional via ENABLE_BSE)."""
+    fetchers = dict(FETCHERS)
+    if not config.ENABLE_BSE:
+        fetchers.pop("BSE", None)
     return fetchers
 
 
@@ -57,6 +61,9 @@ def fetch_all_actions() -> tuple[list[dict], list[str], list[str]]:
                 warnings.append(f"BSE unavailable (blocked by their WAF): {exc}")
             else:
                 errors.append(f"{exchange}: {exc}")
+        except Exception as exc:  # keep the whole cycle alive on unexpected bugs
+            log.exception("fetcher %s raised unexpectedly", exchange)
+            errors.append(f"{exchange}: {exc}")
     return all_actions, errors, warnings
 
 
@@ -92,7 +99,7 @@ def within_reminder_window(
     parsed = parse_ex_date(ex_date)
     if parsed is None:
         return False
-    today = today or date.today()
+    today = today or config.today_ist()
     days = config.REMINDER_DAYS if days is None else days
     if days <= 0:
         return False
@@ -184,7 +191,7 @@ class Poller:
             len(all_actions), time.monotonic() - t0, len(errors), len(warnings),
         )
         sent = 0
-        today = date.today()
+        today = config.today_ist()
 
         for chat_id, watchlist in targets:
             settings = storage.get_user_settings(chat_id)
@@ -200,7 +207,9 @@ class Poller:
 
             # -------------------------------------------------- action alerts
             wanted = {
-                (w["exchange"].upper(), w["symbol"].upper()) for w in watchlist
+                (w.get("exchange", "").upper(), w.get("symbol", "").upper())
+                for w in watchlist
+                if isinstance(w, dict)
             }
             matching = [
                 a
@@ -270,13 +279,15 @@ class Poller:
                     chat_id, threshold,
                 )
                 for item in watchlist:
+                    if not isinstance(item, dict):
+                        continue
                     day_key = (
-                        f"price|{chat_id}|{item['exchange'].upper()}"
-                        f"|{item['symbol'].upper()}|{today.isoformat()}"
+                        f"price|{chat_id}|{item.get('exchange', '').upper()}"
+                        f"|{item.get('symbol', '').upper()}|{today.isoformat()}"
                     )
                     if day_key in self._seen and not force:
                         continue
-                    quote = sources.get_quote(item["exchange"], item["symbol"])
+                    quote = sources.get_quote(item.get("exchange", "NSE"), item.get("symbol", ""))
                     if not quote or quote.get("change_pct") is None:
                         continue
                     if abs(quote["change_pct"]) < threshold:
@@ -293,7 +304,13 @@ class Poller:
                         break
 
         if self._seen:
-            storage.save_seen(self._seen)
+            try:
+                storage.save_seen(self._seen)
+            except Exception as exc:
+                # Losing the dedupe cache means already-sent actions would be
+                # re-sent next cycle - log it loudly so it isn't silent data loss.
+                log.exception("save_seen failed: %s", exc)
+                errors.append(f"seen cache: {exc}")
 
         total_sent = self.status["total_sent"] + sent
         self._set("total_sent", total_sent)

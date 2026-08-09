@@ -1,7 +1,9 @@
 """Persistent storage for the selected watchlist and de-duplication cache."""
 import json
 import logging
+import os
 import threading
+from contextlib import contextmanager
 from pathlib import Path
 
 from . import config
@@ -9,6 +11,42 @@ from . import config
 log = logging.getLogger(__name__)
 
 _lock = threading.Lock()
+
+try:
+    import fcntl
+except ImportError:  # non-POSIX (e.g. Windows) - fall back to in-process lock only
+    fcntl = None
+
+
+@contextmanager
+def _file_lock(path: Path):
+    """Cross-process advisory lock for a JSON state file.
+
+    The always-on bot server and the GitHub Actions cron are separate
+    processes that can write the same state files. Without an OS-level lock,
+    a concurrent read-modify-write silently drops one side's changes.
+    """
+    fh = None
+    locked = False
+    if fcntl is not None:
+        try:
+            lock_path = path.with_suffix(path.suffix + ".lock")
+            lock_path.parent.mkdir(parents=True, exist_ok=True)
+            fh = open(lock_path, "a+")
+            fcntl.flock(fh.fileno(), fcntl.LOCK_EX)
+            locked = True
+        except OSError:
+            fh = None
+            locked = False
+    try:
+        yield
+    finally:
+        if locked and fh is not None:
+            try:
+                fcntl.flock(fh.fileno(), fcntl.LOCK_UN)
+            except OSError:
+                pass
+            fh.close()
 
 
 def _read_json(path: Path, default):
@@ -26,11 +64,14 @@ def _read_json(path: Path, default):
 
 
 def _write_json(path: Path, data) -> None:
-    """Write data to disk, logging only when the content actually changed.
+    """Write data to disk atomically, logging only when content changed.
 
-    Skipping identical writes keeps the logs quiet - the Streamlit UI persists
-    the watchlist on every rerun, and a rewrite with the same content would
-    otherwise spam "Saved ..." lines and touch the file needlessly.
+    The write goes to a temp file in the same directory followed by an atomic
+    os.replace(), so a crash or concurrent process never leaves a truncated
+    JSON file behind. Skipping identical writes keeps the logs quiet - the
+    Streamlit UI persists the watchlist on every rerun, and a rewrite with the
+    same content would otherwise spam "Saved ..." lines and touch the file
+    needlessly.
     """
     payload = json.dumps(data, ensure_ascii=False, indent=2)
     try:
@@ -39,8 +80,19 @@ def _write_json(path: Path, data) -> None:
     except OSError:
         pass
     path.parent.mkdir(parents=True, exist_ok=True)
-    with open(path, "w", encoding="utf-8") as fh:
-        fh.write(payload)
+    tmp = path.with_suffix(path.suffix + ".tmp")
+    try:
+        with open(tmp, "w", encoding="utf-8") as fh:
+            fh.write(payload)
+            fh.flush()
+            os.fsync(fh.fileno())
+        os.replace(tmp, path)
+    except OSError:
+        try:
+            os.unlink(tmp)
+        except OSError:
+            pass
+        raise
     if isinstance(data, list):
         log.info("Saved %s: %d item(s)", path.name, len(data))
     elif isinstance(data, dict):
@@ -67,20 +119,19 @@ def _watchlist_key(item: dict) -> tuple:
 
 def add_to_watchlist(items: list[dict]) -> list[dict]:
     """Add entries, de-duplicating on (exchange, symbol). Returns new list."""
-    with _lock:
+    with _lock, _file_lock(config.WATCHLIST_FILE):
         current = _read_json(config.WATCHLIST_FILE, [])
-    before = len(current)
-    seen = {_watchlist_key(i) for i in current}
-    added_keys, skipped = [], []
-    for item in items:
-        key = _watchlist_key(item)
-        if key not in seen and item.get("symbol"):
-            current.append(item)
-            seen.add(key)
-            added_keys.append(key)
-        elif key in seen:
-            skipped.append(key)
-    with _lock:
+        before = len(current)
+        seen = {_watchlist_key(i) for i in current}
+        added_keys, skipped = [], []
+        for item in items:
+            key = _watchlist_key(item)
+            if key not in seen and item.get("symbol"):
+                current.append(item)
+                seen.add(key)
+                added_keys.append(key)
+            elif key in seen:
+                skipped.append(key)
         _write_json(config.WATCHLIST_FILE, current)
     log.info(
         "watchlist.json: %d -> %d item(s) | added: %s | skipped (already present): %s",
@@ -93,16 +144,15 @@ def add_to_watchlist(items: list[dict]) -> list[dict]:
 
 
 def remove_from_watchlist(symbol: str, exchange: str) -> list[dict]:
-    with _lock:
+    with _lock, _file_lock(config.WATCHLIST_FILE):
         current = _read_json(config.WATCHLIST_FILE, [])
-    before = len(current)
-    kept = [
-        i
-        for i in current
-        if not (i.get("symbol", "").upper() == symbol.upper()
-                and i.get("exchange", "").upper() == exchange.upper())
-    ]
-    with _lock:
+        before = len(current)
+        kept = [
+            i
+            for i in current
+            if not (i.get("symbol", "").upper() == symbol.upper()
+                    and i.get("exchange", "").upper() == exchange.upper())
+        ]
         _write_json(config.WATCHLIST_FILE, kept)
     log.info(
         "watchlist.json: %d -> %d item(s) | removed %s:%s",
@@ -124,7 +174,11 @@ def load_subscriptions() -> dict:
     """Return {chat_id(str): [item, ...]} for non-owner users."""
     with _lock:
         data = _read_json(config.SUBSCRIPTIONS_FILE, {})
-    return {str(k): v for k, v in data.items() if isinstance(v, list)}
+    cleaned = {}
+    for k, v in data.items():
+        if isinstance(v, list):
+            cleaned[str(k)] = [i for i in v if isinstance(i, dict)]
+    return cleaned
 
 
 def get_user_list(chat_id) -> list:
@@ -137,16 +191,16 @@ def get_user_list(chat_id) -> list:
 def add_to_user_list(chat_id, item: dict) -> list:
     if is_owner(chat_id):
         return add_to_watchlist([item])
-    subs = load_subscriptions()
-    key = str(chat_id)
-    current = subs.get(key, [])
-    before = len(current)
-    seen = {_watchlist_key(i) for i in current}
-    added = item.get("symbol") and _watchlist_key(item) not in seen
-    if added:
-        current.append(item)
-    subs[key] = current
-    with _lock:
+    with _lock, _file_lock(config.SUBSCRIPTIONS_FILE):
+        subs = _read_json(config.SUBSCRIPTIONS_FILE, {})
+        key = str(chat_id)
+        current = subs.get(key, [])
+        before = len(current)
+        seen = {_watchlist_key(i) for i in current}
+        added = item.get("symbol") and _watchlist_key(item) not in seen
+        if added:
+            current.append(item)
+        subs[key] = current
         _write_json(config.SUBSCRIPTIONS_FILE, subs)
     log.info(
         "subscriptions.json: chat %s %d -> %d item(s) | %s %s:%s",
@@ -161,16 +215,16 @@ def add_to_user_list(chat_id, item: dict) -> list:
 def remove_from_user_list(chat_id, symbol: str, exchange: str) -> list:
     if is_owner(chat_id):
         return remove_from_watchlist(symbol, exchange)
-    subs = load_subscriptions()
-    key = str(chat_id)
-    before = len(subs.get(key, []))
-    current = [
-        i for i in subs.get(key, [])
-        if not (i.get("symbol", "").upper() == symbol.upper()
-                and i.get("exchange", "").upper() == exchange.upper())
-    ]
-    subs[key] = current
-    with _lock:
+    with _lock, _file_lock(config.SUBSCRIPTIONS_FILE):
+        subs = _read_json(config.SUBSCRIPTIONS_FILE, {})
+        key = str(chat_id)
+        before = len(subs.get(key, []))
+        current = [
+            i for i in subs.get(key, [])
+            if not (i.get("symbol", "").upper() == symbol.upper()
+                    and i.get("exchange", "").upper() == exchange.upper())
+        ]
+        subs[key] = current
         _write_json(config.SUBSCRIPTIONS_FILE, subs)
     log.info(
         "subscriptions.json: chat %s %d -> %d item(s) | removed %s:%s",
@@ -198,10 +252,9 @@ def get_user_settings(chat_id) -> dict:
 
 def save_user_settings(chat_id, settings: dict) -> None:
     """Merge/replace a chat's settings dict."""
-    with _lock:
+    with _lock, _file_lock(config.SETTINGS_FILE):
         current = _read_json(config.SETTINGS_FILE, {})
-    current[str(chat_id)] = settings
-    with _lock:
+        current[str(chat_id)] = settings
         _write_json(config.SETTINGS_FILE, current)
     log.info("settings.json: chat %s settings = %s", chat_id, settings)
 
@@ -210,11 +263,11 @@ def save_user_settings(chat_id, settings: dict) -> None:
 
 def load_seen() -> set:
     """Return set of event keys already notified (survives restarts)."""
-    with _lock:
+    with _lock, _file_lock(config.SEEN_FILE):
         data = _read_json(config.SEEN_FILE, [])
     return set(data) if isinstance(data, list) else set()
 
 
 def save_seen(keys: set) -> None:
-    with _lock:
+    with _lock, _file_lock(config.SEEN_FILE):
         _write_json(config.SEEN_FILE, sorted(keys))

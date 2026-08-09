@@ -10,7 +10,7 @@ import logging
 import re
 import threading
 import time
-from datetime import date, datetime, timedelta
+from datetime import datetime, timedelta
 from time import mktime, strptime
 from urllib.parse import quote, quote_plus
 from xml.etree import ElementTree as ET
@@ -238,7 +238,7 @@ def get_nse_stock_list_cached() -> list[dict]:
 
 
 def search_stocks(query: str, limit: int = 10) -> list[dict]:
-    """Fuzzy search the NSE list by symbol or company name (case-insensitive)."""
+    """Case-insensitive substring search of the NSE list by symbol or company name."""
     q = (query or "").upper()
     try:
         stocks = get_nse_stock_list_cached()
@@ -332,7 +332,7 @@ def get_bse_stock_list() -> list[dict]:
 
 def get_bse_corporate_actions() -> list[dict]:
     """Return BSE corporate actions for the configured lookback window."""
-    today = date.today()
+    today = config.today_ist()
     start = today - timedelta(days=config.LOOKBACK_DAYS)
     params = {
         "pageno": 1,
@@ -398,7 +398,10 @@ def get_stock_news(exchange: str, symbol: str, limit: int = 3) -> list[dict]:
     # Google News RSS gives India-relevant headlines for Indian tickers;
     # Yahoo search is the fallback when Google is unreachable.
     items = _google_news(symbol, limit) or _yf_news(exchange, symbol, limit)
-    _news_cache[cache_key] = {"ts": now, "data": items}
+    # Don't cache an empty result: a transient outage would otherwise make the
+    # bot report "no news" for the full 10 minutes after sources recover.
+    if items:
+        _news_cache[cache_key] = {"ts": now, "data": items}
     return items
 
 
@@ -510,7 +513,11 @@ def get_index_universe(index: str = "nifty100") -> list[str]:
     except Exception as exc:
         log.warning("NSE index universe unavailable (%s): %s", index, exc)
         symbols = []
-    _universe_cache[url] = {"ts": now, "data": symbols}
+    # Only cache a successful (non-empty) load. Caching an empty list for 24h
+    # after one transient failure would silently make /movers and /harmonic
+    # scans return nothing for the rest of the day.
+    if symbols:
+        _universe_cache[url] = {"ts": now, "data": symbols}
     return symbols
 
 
@@ -701,7 +708,10 @@ def get_ohlc(exchange: str, symbol: str, timeframe: str = "1d") -> dict | None:
     dropped.
     """
     timeframe = (timeframe or "1d").lower()
-    interval, rng = OHLC_TIMEFRAMES.get(timeframe, OHLC_TIMEFRAMES["1d"])
+    if timeframe not in OHLC_TIMEFRAMES:
+        log.info("ohlc: unknown timeframe %r for %s:%s — returning None", timeframe, exchange, symbol)
+        return None
+    interval, rng = OHLC_TIMEFRAMES[timeframe]
     key = (exchange.upper(), symbol.upper(), interval)
     now = time.time()
     cached = _ohlc_cache.get(key)
@@ -984,6 +994,7 @@ def _chart_fundamentals(symbol: str) -> dict:
 
 _sector_pe_cache: dict = {}
 _SECTOR_PE_TTL = 86400  # 24 hours - sectors change rarely
+_SECTOR_PE_RETRY_TTL = 600  # 10 min when the fetch failed, so we retry soon
 
 
 def get_sector_pe(slug: str) -> float | None:
@@ -993,7 +1004,7 @@ def get_sector_pe(slug: str) -> float | None:
         return None
     now = time.time()
     cached = _sector_pe_cache.get(slug)
-    if cached and now - cached["ts"] < _SECTOR_PE_TTL:
+    if cached and now - cached["ts"] < cached.get("ttl", _SECTOR_PE_TTL):
         return cached["data"]
     pe = None
     page = _screener_get(f"https://www.screener.in{slug}")
@@ -1015,7 +1026,14 @@ def get_sector_pe(slug: str) -> float | None:
                         continue
             if values:
                 pe = round(sum(values) / len(values), 1)
-    _sector_pe_cache[slug] = {"ts": now, "data": pe}
+    # A failed/empty fetch is cached only briefly so a transient screener.in
+    # outage (or the 10-min circuit breaker) doesn't suppress the sector P/E
+    # for a full day.
+    _sector_pe_cache[slug] = {
+        "ts": now,
+        "data": pe,
+        "ttl": _SECTOR_PE_TTL if pe else _SECTOR_PE_RETRY_TTL,
+    }
     return pe
 
 
@@ -1123,10 +1141,14 @@ def get_fundamentals(symbol: str, with_screener: bool = True) -> dict | None:
     be obtained; None is returned only when nothing at all was available.
     """
     key = symbol.strip().upper()
+    # Cache separately per with_screener flag: a fast bulk call (with_screener
+    # False) must not poison the deep /fund cache entry for the same symbol,
+    # and a deep call must not leak screener.in fields into the fast path.
+    cache_key = (key, bool(with_screener))
     now = time.time()
-    cached = _fund_cache.get(key)
+    cached = _fund_cache.get(cache_key)
     if cached and now - cached["ts"] < cached["ttl"]:
-        log.info("get_fundamentals: cache hit for %s (%d fields)", key, len(cached["data"] or {}))
+        log.info("get_fundamentals: cache hit for %s (screener=%s, %d fields)", key, bool(with_screener), len(cached["data"] or {}))
         return cached["data"]
     out = {}
     log.info("get_fundamentals: fetching %s (with_screener=%s)", key, with_screener)
@@ -1155,10 +1177,10 @@ def get_fundamentals(symbol: str, with_screener: bool = True) -> dict | None:
             if val:
                 out[dst] = val
         dy = _raw(sd, "dividendYield")  # fraction (0.0045 -> 0.45%)
-        if dy:
+        if dy is not None:
             out["div_yield"] = round(dy * 100, 2)
         de = _raw(fd, "debtToEquity")  # Yahoo reports percent (36.65 -> 0.37)
-        if de:
+        if de is not None:
             out["debt_to_equity"] = round(de / 100, 2)
         if ap.get("sector"):
             out["sector"] = ap["sector"]
@@ -1200,10 +1222,10 @@ def get_fundamentals(symbol: str, with_screener: bool = True) -> dict | None:
             (fd, "operatingCashflow", "operating_cashflow"),
         ):
             val = _raw(src, src_key)
-            if val:
+            if val is not None:
                 extras[dst_key] = val
         mc = extras.get("mcap_cr")
-        if mc:
+        if mc is not None:
             extras["mcap_cr"] = round(mc / 1e7, 1)  # rupees -> Crore
         if ap.get("industry"):
             extras["industry"] = ap["industry"]
@@ -1242,7 +1264,7 @@ def get_fundamentals(symbol: str, with_screener: bool = True) -> dict | None:
     deep_ok = bool(out.get("earnings_growth") or out.get("book_value") or out.get("total_cash"))
     if (with_screener and not (out.get("promoter_pct") or out.get("sector_pe"))) or not deep_ok:
         ttl = _FUND_RETRY_TTL  # retry the missing part sooner
-    _fund_cache[key] = {"ts": now, "data": data, "ttl": ttl}
+    _fund_cache[cache_key] = {"ts": now, "data": data, "ttl": ttl}
     log.info(
         "get_fundamentals: done %s -> %d field(s): %s",
         key, len(out), list(out.keys()) if out else [],

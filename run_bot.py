@@ -16,9 +16,8 @@ import os
 import re
 import subprocess
 import sys
-import threading
 from concurrent.futures import ThreadPoolExecutor, as_completed
-from datetime import date, timedelta
+from datetime import timedelta
 from time import monotonic
 from pathlib import Path
 
@@ -482,7 +481,10 @@ def handle_command(chat_id, text):
         return
 
     if len(parts) < 2:
-        reply(chat_id, "Usage: <code>/add SYMBOL [NSE|BSE]</code> or <code>/remove SYMBOL [NSE|BSE]</code>")
+        if cmd in ("/add", "/remove"):
+            reply(chat_id, "Usage: <code>/add SYMBOL [NSE|BSE]</code> or <code>/remove SYMBOL [NSE|BSE]</code>")
+        else:
+            reply(chat_id, f"Unknown command <code>{html.escape(cmd)}</code>. Type <code>/help</code> for the available commands.")
         return
 
     raw_symbol = parts[1].upper().strip()
@@ -569,13 +571,13 @@ def _reply_suggestions(chat_id, query, cmd="add"):
         )
         reply(chat_id, f"No stocks match '{query}'.")
         return
-    lines = [f"'{query}' not found as an exact symbol. Did you mean (NSE):"]
+    lines = [f"'{notifier.escape(query)}' not found as an exact symbol. Did you mean (NSE):"]
     for m in matches:
         company = m["company"] or ""
         if cmd == "add":
-            lines.append(f"  /add {m['symbol']} NSE  - {company}")
+            lines.append(f"  /add {m['symbol']} NSE  - {notifier.escape(company)}")
         else:
-            lines.append(f"  /{cmd} {m['symbol']}  - {company}")
+            lines.append(f"  /{cmd} {m['symbol']}  - {notifier.escape(company)}")
     reply(chat_id, "\n".join(lines))
 
 
@@ -741,7 +743,7 @@ def run_ca_query(chat_id, descriptor: dict) -> bool:
 
     elif mode == "exdate":
         days = int(descriptor.get("days", config.REMINDER_DAYS))
-        today = date.today()
+        today = config.today_ist()
         cutoff = today + timedelta(days=days)
         results = [
             a for a in all_actions
@@ -960,7 +962,7 @@ def _parse_screen_parts(parts, default_period, default_direction,
         elif t in ("500", "n500", "allstocks", "all-stocks", "nifty500",
                    "nifty-500", "nifty 500"):
             if t == "500" and not explicit_count and default_count is not None:
-                count = 100
+                count = 500
                 explicit_count = True
             else:
                 universe = "nifty500"
@@ -971,38 +973,6 @@ def _parse_screen_parts(parts, default_period, default_direction,
             except ValueError:
                 pass
     return period, direction, count, universe
-
-
-def _format_price_movers_report(rows: list, header: str) -> str:
-    """Format the fast initial price-only movers report (Phase 1)."""
-    lines = [header]
-    for idx, (sym, d) in enumerate(rows, 1):
-        change = d["change_pct"]
-        price = d.get("price")
-        if change >= 3.0:
-            move_icon = "\U0001F7E2\u25b2\u25b2"   # 🟢▲▲ strong up
-        elif change >= 1.0:
-            move_icon = "\U0001F7E2\u25b2"          # 🟢▲ up
-        elif change <= -3.0:
-            move_icon = "\U0001F534\u25bc\u25bc"   # 🔴▼▼ strong down
-        elif change <= -1.0:
-            move_icon = "\U0001F534\u25bc"          # 🔴▼ down
-        elif change >= 0:
-            move_icon = "\U0001F7E1\u25b2"          # 🟡▲ small up
-        else:
-            move_icon = "\U0001F7E1\u25bc"          # 🟡▼ small down
-        sign = "+" if change >= 0 else ""
-        lines.append(
-            f"{idx}. {move_icon} <b>{notifier.escape(sym)}</b>  "
-            f"{notifier.fmt_money(price)}  <b>{sign}{change:.2f}%</b>"
-        )
-    lines.append("")
-    lines.append(
-        f"\u23f3 Price data loaded for {len(rows)} stocks. "
-        "Fetching 52W range, RSI, P/E &amp; fundamentals... "
-        "Updated report coming in a few seconds."
-    )
-    return "\n".join(lines)
 
 
 def _format_enriched_movers_report(rows: list, header: str, fund_by_sym: dict) -> str:
@@ -1295,34 +1265,36 @@ def _stock_summary_lines(raw_sym, quote, fund, include_tip=True, label="") -> li
     lines.append("")
 
     # Section 1: Price & Today's Movement
-    lines.append("<b>\U0001F4B0 PRICE & MOVEMENT</b>")
-    if price is not None:
-        p_str = notifier.fmt_money(price)
-        if change_pct is not None:
-            sign = "+" if change_pct >= 0 else ""
-            abs_str = f" ({sign}{notifier.fmt_money(change_abs)})" if change_abs is not None else ""
-            lines.append(f"Current Price: <b>{p_str}</b>  {sign}{change_pct:.2f}%{abs_str}")
-        else:
-            lines.append(f"Current Price: <b>{p_str}</b>")
-
     sig_emoji, range_tag = _wk52_signal(price, fund)
     rsi_tag = _rsi_signal(fund.get("rsi"))
+    if price is not None or (
+        fund.get("wk52_high") is not None and fund.get("wk52_low") is not None
+    ) or range_tag or rsi_tag:
+        lines.append("<b>\U0001F4B0 PRICE & MOVEMENT</b>")
+        if price is not None:
+            p_str = notifier.fmt_money(price)
+            if change_pct is not None:
+                sign = "+" if change_pct >= 0 else ""
+                abs_str = f" ({sign}{notifier.fmt_money(change_abs)})" if change_abs is not None else ""
+                lines.append(f"Current Price: <b>{p_str}</b>  {sign}{change_pct:.2f}%{abs_str}")
+            else:
+                lines.append(f"Current Price: <b>{p_str}</b>")
 
-    if fund.get("wk52_high") is not None and fund.get("wk52_low") is not None:
-        hi, lo = fund["wk52_high"], fund["wk52_low"]
-        lines.append(f"\U0001F4C8 52w Range: {notifier.fmt_money(lo)} \u2013 {notifier.fmt_money(hi)}")
-        if price:
-            try:
-                dist_lo = ((float(price) - lo) / lo) * 100
-                dist_hi = ((hi - float(price)) / hi) * 100
-                lines.append(f"📍 Distance: +{dist_lo:.1f}% from 52w Low  \u00b7  -{dist_hi:.1f}% from 52w High")
-            except (ValueError, TypeError, ZeroDivisionError):
-                pass
+        if fund.get("wk52_high") is not None and fund.get("wk52_low") is not None:
+            hi, lo = fund["wk52_high"], fund["wk52_low"]
+            lines.append(f"\U0001F4C8 52w Range: {notifier.fmt_money(lo)} \u2013 {notifier.fmt_money(hi)}")
+            if price:
+                try:
+                    dist_lo = ((float(price) - lo) / lo) * 100
+                    dist_hi = ((hi - float(price)) / hi) * 100
+                    lines.append(f"📍 Distance: +{dist_lo:.1f}% from 52w Low  \u00b7  -{dist_hi:.1f}% from 52w High")
+                except (ValueError, TypeError, ZeroDivisionError):
+                    pass
 
-    if range_tag or rsi_tag:
-        t_bits = [b for b in (range_tag, rsi_tag) if b]
-        lines.append(f"\u26a1 Technicals: {'  •  '.join(t_bits)}")
-    lines.append("")
+        if range_tag or rsi_tag:
+            t_bits = [b for b in (range_tag, rsi_tag) if b]
+            lines.append(f"\u26a1 Technicals: {'  •  '.join(t_bits)}")
+        lines.append("")
 
     # Section 2: Valuation & Ratios
     lines.append("<b>\U0001F3F7\ufe0f VALUATION & RATIOS</b>")
@@ -1426,23 +1398,26 @@ def _fund_report_lines(raw_sym, quote, fund, include_tip=True, label="") -> list
     lines.append("")
 
     # Section 1: Price & movement
-    lines.append("<b>\U0001F4B0 PRICE & MOVEMENT</b>")
-    if price is not None:
-        p_str = notifier.fmt_money(price)
-        if change_pct is not None:
-            sign = "+" if change_pct >= 0 else ""
-            abs_str = f" ({sign}{notifier.fmt_money(change_abs)})" if change_abs is not None else ""
-            lines.append(f"Current Price: <b>{p_str}</b>  <b>{sign}{change_pct:.2f}%</b>{abs_str}")
-        else:
-            lines.append(f"Current Price: <b>{p_str}</b>")
-    if fund.get("wk52_high") is not None and fund.get("wk52_low") is not None:
-        lines.append(
-            f"\U0001F4C8 52w Range: {notifier.fmt_money(fund['wk52_low'])} \u2013 {notifier.fmt_money(fund['wk52_high'])}"
-        )
     t_bits = [b for b in (_wk52_signal(price, fund)[1], _rsi_signal(fund.get("rsi"))) if b]
-    if t_bits:
-        lines.append(f"\u26a1 Technicals: {'  •  '.join(t_bits)}")
-    lines.append("")
+    if price is not None or (
+        fund.get("wk52_high") is not None and fund.get("wk52_low") is not None
+    ) or t_bits:
+        lines.append("<b>\U0001F4B0 PRICE & MOVEMENT</b>")
+        if price is not None:
+            p_str = notifier.fmt_money(price)
+            if change_pct is not None:
+                sign = "+" if change_pct >= 0 else ""
+                abs_str = f" ({sign}{notifier.fmt_money(change_abs)})" if change_abs is not None else ""
+                lines.append(f"Current Price: <b>{p_str}</b>  <b>{sign}{change_pct:.2f}%</b>{abs_str}")
+            else:
+                lines.append(f"Current Price: <b>{p_str}</b>")
+        if fund.get("wk52_high") is not None and fund.get("wk52_low") is not None:
+            lines.append(
+                f"\U0001F4C8 52w Range: {notifier.fmt_money(fund['wk52_low'])} \u2013 {notifier.fmt_money(fund['wk52_high'])}"
+            )
+        if t_bits:
+            lines.append(f"\u26a1 Technicals: {'  •  '.join(t_bits)}")
+        lines.append("")
 
     # Section 2: Valuation
     lines.append("<b>\U0001F3F7\ufe0f VALUATION</b>")
@@ -1778,6 +1753,9 @@ def handle_harmonic(chat_id, parts) -> None:
     if raw.isdigit():
         items = storage.get_user_list(chat_id)
         n = int(raw)
+        if not items:
+            reply(chat_id, "Your watchlist is empty — add stocks with <code>/add SYMBOL</code> first.")
+            return
         if n < 1 or n > len(items):
             reply(chat_id, f"Your watchlist has {len(items)} stock(s) — use a position 1..{len(items)}.")
             return
@@ -2041,7 +2019,10 @@ def process_commands():
             continue
         if text.strip().lower() == "/checknow":
             checknow_chat = str(chat_id)
-        handle_command(chat_id, text)
+        try:
+            handle_command(chat_id, text)
+        except Exception as exc:  # one bad command must not kill the cron run
+            log.warning("command failed for chat %s: %s", chat_id, config.redact(exc), exc_info=True)
     if max_offset:
         # Mark updates as consumed.
         get_updates(offset=max_offset + 1)

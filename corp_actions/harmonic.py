@@ -294,7 +294,7 @@ def _find_forming(pivots, price, lookback=30):
     reports structures whose projected PRZ has not been reached yet, so the
     report is honest about the pattern being incomplete (NO TRADE).
     """
-    if len(pivots) < 4:
+    if len(pivots) < 4 or not price or price <= 0:
         return None
     last_idx = pivots[-1][0]
     best = None
