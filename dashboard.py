@@ -21,6 +21,7 @@ import sys
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from datetime import date, timedelta
 
+import pandas as pd
 import streamlit as st
 
 import run_bot
@@ -146,43 +147,48 @@ def _fmt_price(price) -> str:
 
 
 def _fmt_change(change) -> str:
-    """Format a % change with the green-up / red-down arrow icon."""
+    """Signed % string; st.metric colours positive/negative deltas natively."""
     if change is None:
         return "-"
     try:
         c = float(change)
         sign = "+" if c >= 0 else ""
-        icon = "🟢▲" if c >= 0 else "🔴▼"
-        return f"{icon} {sign}{c:.2f}%"
+        return f"{sign}{c:.2f}%"
     except (TypeError, ValueError):
         return "-"
 
 
-def _change_color(change) -> str:
-    try:
-        return "🟢" if float(change) >= 0 else "🔴"
-    except (TypeError, ValueError):
-        return "⚪"
+_CELL_UP = "#16a34a"   # green
+_CELL_DOWN = "#dc2626"  # red
+_CELL_NA = "#9ca3af"    # grey (no data)
 
 
-def _signal_icon(change_pct) -> str:
-    """Return a green-up / red-down arrow icon for the Signal column.
+def _style_table(rows: list[dict]) -> "pd.io.formats.style.Styler":
+    """Return a pandas Styler that colours Price / Change % values inline.
 
-    Matches the Telegram alerts' convention (🟢▲ / 🔴▼): up arrow in green
-    for gainers, down arrow in red for losers, neutral dot when no data.
+    The green/red colour lives ON the value itself (modern, no extra emoji
+    column): a row whose Change % is positive shows its Price and Change %
+    in green, negative in red, and missing data in grey. Column headers
+    stay sortable - the style follows the data when rows are re-ordered.
     """
-    if change_pct is None:
-        return "⚪"
-    try:
-        return "🟢▲" if float(change_pct) >= 0 else "🔴▼"
-    except (TypeError, ValueError):
-        return "⚪"
+    df = pd.DataFrame(rows)
 
+    def _color_row(row):
+        chg = row.get("Change %")
+        try:
+            if chg is None or pd.isna(chg):
+                return [f"color:{_CELL_NA}"] * len(row)
+            up = float(chg) >= 0
+        except (TypeError, ValueError):
+            return [f"color:{_CELL_NA}"] * len(row)
+        color = _CELL_UP if up else _CELL_DOWN
+        styles = [""] * len(row)
+        for col in ("Price", "Change %"):
+            if col in row.index:
+                styles[row.index.get_loc(col)] = f"color:{color}; font-weight:600"
+        return styles
 
-def _symbol_fund_label(sym: str, change_pct=None) -> str:
-    """Label for a deep-fundamentals button, with green-up/red-down arrow."""
-    icon = _signal_icon(change_pct)
-    return f"{icon} {sym} \U0001f4b9" if change_pct is not None else f"{sym} \U0001f4b9"
+    return df.style.apply(_color_row, axis=1)
 
 
 def _fetch_quotes_for(items: list[dict]) -> dict:
@@ -237,11 +243,11 @@ def _run_screen(period_key: str, direction: str, universe: str, count: int) -> l
         fetched.sort(key=lambda r: r[1]["change_pct"])
 
     # Raw numeric Price / Change % so the sortable table orders numerically;
-    # the dataframe column_config applies the display formatting.
+    # the dataframe column_config applies the display formatting and the
+    # Styler colours the values green/red inline.
     return [
         {
             "Symbol": sym,
-            "Signal": _signal_icon(d.get("change_pct")),
             "Price": d.get("price"),
             "Change %": d.get("change_pct"),
             "Name": d.get("name") or "",
@@ -325,24 +331,18 @@ def _render_linked_analysis(source: str) -> None:
     )
 
 
-def _symbol_fund_button(sym: str, key: str, source: str, show_label: bool = True,
-                        change_pct=None) -> None:
+def _symbol_fund_button(sym: str, key: str, source: str, show_label: bool = True) -> None:
     """Single-click deep-fundamentals button for a symbol/name.
 
     show_label=True (grids) renders the ticker on the button so it is never
-    a bare icon - prefixed with the 🟢/🔴/⚪ colour dot when change_pct is
-    available so gains/losses are visible at a glance. False (inline next to
-    a card heading) renders just the icon.
+    a bare icon; False (inline next to a card heading) renders just the icon.
     Clicking fetches the deep report and renders it below the current view.
     key must be unique across the whole app; source scopes the render.
     """
     sym = (sym or "").strip()
     if not sym:
         return
-    if show_label:
-        label = _symbol_fund_label(sym, change_pct)
-    else:
-        label = "\U0001F4B9"
+    label = f"{sym} \U0001F4B9" if show_label else "\U0001F4B9"
     if st.button(label, key=key, help=f"Deep fundamentals for {sym}",
                  type="primary", use_container_width=True):
         _request_analysis(sym, source)
@@ -728,34 +728,31 @@ with tab_watch:
                 "Exchange": i["exchange"],
                 "Symbol": i["symbol"],
                 "Company": i.get("company", ""),
-                "Signal": _signal_icon(chg),
                 "Price": q.get("price") if q and q.get("price") is not None else None,
                 "Change %": chg,
             })
         # Sortable table (tap the column headers to sort) with one 💹 button
         # per row below - single click opens that stock's deep fundamentals.
-        st.caption("Tap a column header to sort the table.  🟢▲ = gainer · 🔴▼ = loser · ⚪ = no data")
+        # Price & Change % are coloured inline by the Styler (green up / red down).
+        st.caption("Tap a column header to sort the table.  Values are colour-coded: green = up · red = down")
         st.dataframe(
-            rows,
+            _style_table(rows),
             width="stretch",
             hide_index=True,
             column_config={
-                "Signal": st.column_config.TextColumn("Signal", width="small"),
                 "Price": st.column_config.NumberColumn("Price", format="₹%.2f"),
                 "Change %": st.column_config.NumberColumn("Change %", format="%+.2f%%"),
             },
         )
         watch_syms = [r.get("Symbol", "") for r in rows]
-        watch_chgs = {r["Symbol"]: r.get("Change %") for r in rows}
-        st.caption("Tap the 🟢/🔴 💹 button to open a stock's deep fundamentals report.")
+        st.caption("Tap the 💹 button to open a stock's deep fundamentals report.")
         if watch_syms:
             per_row = 5
             for start in range(0, len(watch_syms), per_row):
                 cols = st.columns(per_row)
                 for j, sym in enumerate(watch_syms[start:start + per_row]):
                     with cols[j]:
-                        _symbol_fund_button(sym, f"watch_{start + j}", "watch",
-                                            change_pct=watch_chgs.get(sym))
+                        _symbol_fund_button(sym, f"watch_{start + j}", "watch")
         _render_linked_analysis("watch")
 
         remove_options = [_label_of(i) for i in current_watchlist]
@@ -825,43 +822,37 @@ with tab_watch:
             else:
                 st.markdown(_tg_to_markdown(fav["corp"]), unsafe_allow_html=True)
         with st.expander("\U0001f4c9 Top losers — last 1h (NIFTY 100)"):
-            st.caption("🟢▲ = gainer · 🔴▼ = loser · ⚪ = no data")
+            st.caption("Values are colour-coded: green = up · red = down")
             st.dataframe(
-                fav["losers_1h"], width="stretch", hide_index=True,
+                _style_table(fav["losers_1h"]), width="stretch", hide_index=True,
                 column_config={
-                    "Signal": st.column_config.TextColumn("Signal", width="small"),
                     "Price": st.column_config.NumberColumn("Price", format="₹%.2f"),
                     "Change %": st.column_config.NumberColumn("Change %", format="%+.2f%%"),
                 },
             )
             syms = [str(r.get("Symbol", "")) for r in fav["losers_1h"]]
-            chgs = {r.get("Symbol"): r.get("Change %") for r in fav["losers_1h"]}
             if syms:
                 for start in range(0, len(syms), 5):
                     cols = st.columns(5)
                     for j, sym in enumerate(syms[start:start + 5]):
                         with cols[j]:
-                            _symbol_fund_button(sym, f"fav1h_{start + j}", "fav",
-                                                change_pct=chgs.get(sym))
+                            _symbol_fund_button(sym, f"fav1h_{start + j}", "fav")
         with st.expander("\U0001f4c9 Top losers — today (NIFTY 100)"):
-            st.caption("🟢▲ = gainer · 🔴▼ = loser · ⚪ = no data")
+            st.caption("Values are colour-coded: green = up · red = down")
             st.dataframe(
-                fav["losers_today"], width="stretch", hide_index=True,
+                _style_table(fav["losers_today"]), width="stretch", hide_index=True,
                 column_config={
-                    "Signal": st.column_config.TextColumn("Signal", width="small"),
                     "Price": st.column_config.NumberColumn("Price", format="₹%.2f"),
                     "Change %": st.column_config.NumberColumn("Change %", format="%+.2f%%"),
                 },
             )
             syms = [str(r.get("Symbol", "")) for r in fav["losers_today"]]
-            chgs = {r.get("Symbol"): r.get("Change %") for r in fav["losers_today"]}
             if syms:
                 for start in range(0, len(syms), 5):
                     cols = st.columns(5)
                     for j, sym in enumerate(syms[start:start + 5]):
                         with cols[j]:
-                            _symbol_fund_button(sym, f"fav1d_{start + j}", "fav",
-                                                change_pct=chgs.get(sym))
+                            _symbol_fund_button(sym, f"fav1d_{start + j}", "fav")
         st.caption("Tap the \U0001F4B9 button next to any symbol to open its deep fundamentals report.")
         _render_linked_analysis("fav")
         with st.expander("\U0001f4ca Deep fundamentals — whole watchlist"):
@@ -1087,28 +1078,25 @@ with tab_market:
         universe_label = "NIFTY 500" if universe == "nifty500" else "NIFTY 100"
         st.subheader(f"{screen_type} — {period_label} · {universe_label} (top {n})")
         rows = st.session_state["screen_rows"]
-        st.caption("Tap a column header to sort the table.  🟢▲ = gainer · 🔴▼ = loser · ⚪ = no data")
+        st.caption("Tap a column header to sort the table.  Values are colour-coded: green = up · red = down")
         st.dataframe(
-            rows,
+            _style_table(rows),
             width="stretch",
             hide_index=True,
             column_config={
-                "Signal": st.column_config.TextColumn("Signal", width="small"),
                 "Price": st.column_config.NumberColumn("Price", format="₹%.2f"),
                 "Change %": st.column_config.NumberColumn("Change %", format="%+.2f%%"),
             },
         )
         screen_syms = [str(r.get("Symbol", "")) for r in rows]
-        screen_chgs = {r["Symbol"]: r.get("Change %") for r in rows}
-        st.caption("Tap the 🟢/🔴 💹 button to open a stock's deep fundamentals report.")
+        st.caption("Tap the 💹 button to open a stock's deep fundamentals report.")
         if screen_syms:
             per_row = 5
             for start in range(0, len(screen_syms), per_row):
                 cols = st.columns(per_row)
                 for j, sym in enumerate(screen_syms[start:start + per_row]):
                     with cols[j]:
-                        _symbol_fund_button(sym, f"market_{start + j}", "screen",
-                                            change_pct=screen_chgs.get(sym))
+                        _symbol_fund_button(sym, f"market_{start + j}", "screen")
         _render_linked_analysis("screen")
 
 # ================================================================ STOCK ANALYSIS
