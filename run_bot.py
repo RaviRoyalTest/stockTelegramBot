@@ -72,7 +72,7 @@ HELP_TEXT = (
     "<i>Real-time NSE/BSE corporate actions, market movers &amp; news</i>\n\n"
     "Every command name explains what it does. The old short forms still work\n"
     "as aliases (e.g. <code>/ca</code> = <code>/corpactions</code>, "
-    "<code>/next</code> = <code>/upcoming</code>).\n\n"
+    "<code>/next</code> = <code>/corpactionsformylist</code>).\n\n"
     "━━━━━━━━━━━━━━━━━━━━\n"
     "\U0001F3A8 <b>Colour &amp; Signal Legend</b>\n"
     "\U0001F7E2\u25b2 Green + Up arrow = Stock gaining\n"
@@ -126,11 +126,12 @@ HELP_TEXT = (
     "/fundamentalanalyze <i>N | N-M | mylist</i>  \u2192 same card for your stocks\n"
     "  /fundamentalanalyze mylist  \u2192 your whole watchlist (10 per page, Next button)\n"
     "  /fundamentalanalyze 5-10    \u2192 watchlist stocks #5 to #10\n\n"
-    "/fundamentals <i>SYMBOL</i>  \u2192 deep fundamental report\n"
-    "  /fundamentals RELIANCE  \u2192 valuation, growth, margins, balance sheet,\n"
+    "/fundamentalreport <i>SYMBOL</i>  \u2192 DEEP fundamental report\n"
+    "  (much more detailed than /fundamentalanalyze)\n"
+    "  /fundamentalreport RELIANCE  \u2192 valuation, growth, margins, balance sheet,\n"
     "                     EPS, analyst targets &amp; shareholding\n"
-    "  /fundamentals 3-5   \u2192 deep report for watchlist #3..#5\n"
-    "  /fundamentals mylist \u2192 deep report for your whole watchlist (5 per page)\n\n"
+    "  /fundamentalreport 3-5   \u2192 deep report for watchlist #3..#5\n"
+    "  /fundamentalreport mylist \u2192 deep report for your whole watchlist (5 per page)\n\n"
     "/harmonicpatterns <i>[all|100|500] [TIMEFRAME]</i>  \u2192 harmonic patterns\n"
     "  Scans for Gartley / Bat / Butterfly / Crab / Shark setups.\n"
     "  /harmonicpatterns all  \u2192 NIFTY 100, daily \u00b7  /harmonicpatterns 500 1w\n"
@@ -153,8 +154,11 @@ HELP_TEXT = (
     "/toplosers <i>[period] [N] [100|500]</i>  \u2192 top falling stocks\n"
     "  /toplosers 1h 10       \u2192 top 10 losers last hour\n"
     "  /toplosers 1w nifty100 \u2192 weekly losers, NIFTY 100\n\n"
-    "Periods: 5m \u00b7 15m \u00b7 30m \u00b7 1h \u00b7 2h \u00b7 4h \u00b7 1d \u00b7 2d \u00b7 5d \u00b7 1w \u00b7 2w \u00b7 1mo \u00b7 3mo \u00b7 6mo \u00b7 1y\n"
-    "Universe: n100/nifty100=NIFTY 100 \u00b7 n500/nifty500=NIFTY 500\n\n"
+    "Periods: 5m \u00b7 15m \u00b7 30m \u00b7 1h \u00b7 2h \u00b7 4h \u00b7 today \u00b7 1d \u00b7 2d \u00b7 5d \u00b7 1w \u00b7 2w \u00b7 1mo \u00b7 3mo \u00b7 6mo \u00b7 1y\n"
+    "Universe: n100/nifty100=NIFTY 100 \u00b7 n500/nifty500=NIFTY 500\n"
+    "Tip: for /topgainers &amp; /toplosers a bare 100/500 means the top-N count\n"
+    "(e.g. /topgainers 100 = top 100) - use nifty100/nifty500 or a second\n"
+    "number for the index. For /topmovers a bare 100/500 picks the index.\n\n"
     "━━━━━━━━━━━━━━━━━━━━\n"
     "\u2699\ufe0f <b>Alerts &amp; Personalisation</b>\n"
     "━━━━━━━━━━━━━━━━━━━━\n"
@@ -176,7 +180,7 @@ HELP_TEXT = (
     "\U0001F4A1 <b>Quick Examples</b>\n"
     "━━━━━━━━━━━━━━━━━━━━\n"
     "/topgainers 1h 10          \u2192 Top 10 gainers last hour\n"
-    "/toplosers 1mo 500         \u2192 Monthly losers \u2014 NIFTY 500\n"
+    "/toplosers 1mo nifty500   \u2192 Monthly losers \u2014 NIFTY 500\n"
     "/topmovers 2d 10 500       \u2192 2-day movers, top 10, NIFTY 500\n"
     "/scan500               \u2192 full NIFTY 500 CNC/MIS technical scan\n"
     "/corpactions dividend   \u2192 Upcoming dividends\n"
@@ -469,7 +473,7 @@ def handle_command(chat_id, text):
         handle_gainers_losers(chat_id, parts, direction)
         return
 
-    if cmd in ("/fund", "/fundamentals"):
+    if cmd in ("/fund", "/fundamentals", "/fundamentalreport"):
         handle_fund_analysis(chat_id, parts)
         return
 
@@ -588,7 +592,7 @@ def send_watchlist(chat_id) -> None:
         chat_id,
         "<b>Your Watchlist:</b>\n"
         + "\n".join(lines)
-        + f"\n\nUse <code>/fundamentalanalyze 5-10</code> or <code>/fundamentals 3-5</code> to get details by these numbers."
+        + f"\n\nUse <code>/fundamentalanalyze 5-10</code> or <code>/fundamentalreport 3-5</code> to get details by these numbers."
         + f"\nSaved in: <code>{html.escape(where)}</code>\nPersistence: {html.escape(persistence)}",
     )
 
@@ -635,7 +639,7 @@ def handle_favourites(chat_id) -> None:
     handle_gainers_losers(chat_id, ["/toplosers", "1h"], "losers")
     handle_gainers_losers(chat_id, ["/toplosers", "1d", "10"], "losers")
     send_watchlist(chat_id)
-    handle_fund_analysis(chat_id, ["/fundamentals", "mylist"])
+    handle_fund_analysis(chat_id, ["/fundamentalreport", "mylist"])
     reply(
         chat_id,
         "\u2705 <b>Favourites done.</b> Use <code>/menu</code> for one-tap commands "
@@ -2096,7 +2100,7 @@ def _build_stock_batch(chat_id, cmd: str, rng, deep: bool) -> tuple[list[str], i
 
 
 def handle_stock_batch(chat_id, cmd: str, rng, deep: bool) -> None:
-    """Render /fundamentalanalyze or /fundamentals for a range of watchlist positions."""
+    """Render /fundamentalanalyze or /fundamentalreport for a range of watchlist positions."""
     lines, next_start = _build_stock_batch(chat_id, cmd, rng, deep)
     markup = _stock_next_markup(deep, next_start) if next_start else None
     _reply_messages(chat_id, _split_messages(lines), reply_markup=markup)
@@ -2140,7 +2144,7 @@ def handle_callback_query(callback) -> None:
         start = int(start_s)
     except ValueError:
         return
-    cmd = "/fundamentals" if deep else "/fundamentalanalyze"
+    cmd = "/fundamentalreport" if deep else "/fundamentalanalyze"
     lines, next_start = _build_stock_batch(chat_id, cmd, (start, None), deep)
     markup = _stock_next_markup(deep, next_start) if next_start else None
     _reply_messages(chat_id, _split_messages(lines), reply_markup=markup)
@@ -2149,22 +2153,23 @@ def handle_callback_query(callback) -> None:
 def handle_fund_analysis(chat_id, parts) -> None:
     """Deep fundamental report for one symbol, or a watchlist position range.
 
-    /fundamentals RELIANCE  → single symbol
-    /fundamentals 5         → first 5 watchlist stocks
-    /fundamentals 5-10      → watchlist positions 5..10
-    /fundamentals mylist    → whole watchlist
+    /fundamentalreport RELIANCE  → single symbol
+    /fundamentalreport 5         → first 5 watchlist stocks
+    /fundamentalreport 5-10      → watchlist positions 5..10
+    /fundamentalreport mylist    → whole watchlist
     """
     if len(parts) < 2:
         reply(
             chat_id,
-            "Usage: <code>/fundamentals SYMBOL</code> (e.g. <code>/fundamentals RELIANCE</code>) "
-            "or <code>/fundamentals 5</code> / <code>/fundamentals 5-10</code> (watchlist positions)",
+            "Usage: <code>/fundamentalreport SYMBOL</code> (e.g. <code>/fundamentalreport RELIANCE</code>) "
+            "or <code>/fundamentalreport 5</code> / <code>/fundamentalreport 5-10</code> / "
+            "<code>/fundamentalreport mylist</code> (watchlist positions)",
         )
         return
 
     rng = _parse_stock_range(parts[1])
     if rng is not None:
-        handle_stock_batch(chat_id, "/fundamentals", rng, deep=True)
+        handle_stock_batch(chat_id, "/fundamentalreport", rng, deep=True)
         return
 
     raw_sym = parts[1].upper().strip().removesuffix(".NS").removesuffix(".BO")
@@ -2175,7 +2180,7 @@ def handle_fund_analysis(chat_id, parts) -> None:
     fund = sources.get_fundamentals(raw_sym, with_screener=True) or {}
 
     if quote.get("price") is None and not fund:
-        _reply_suggestions(chat_id, raw_sym, "fundamentals")
+        _reply_suggestions(chat_id, raw_sym, "fundamentalreport")
         return
 
     lines = _fund_report_lines(raw_sym, quote, fund, include_tip=True)
@@ -2577,7 +2582,7 @@ def register_commands() -> bool:
         {"command": "removestock", "description": "Remove a stock from your watchlist"},
         {"command": "news", "description": "Latest news for your watchlist stocks"},
         {"command": "fundamentalanalyze", "description": "Analysis card or watchlist range: /fundamentalanalyze mylist"},
-        {"command": "fundamentals", "description": "Deep fundamentals or range: /fundamentals 3-5"},
+        {"command": "fundamentalreport", "description": "Deep report or range: /fundamentalreport mylist"},
         {"command": "harmonicpatterns", "description": "Harmonic pattern scan NIFTY 100/500: /harmonicpatterns all"},
         {"command": "scan500", "description": "NIFTY 500 CNC/MIS technical scanner"},
         {"command": "topmovers", "description": "Top gainers AND losers with fundamentals"},

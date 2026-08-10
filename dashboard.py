@@ -47,7 +47,7 @@ HELP_TEXT = (
     "- `/corpactionsformylist` — YOUR watchlist: ex-dates + in-progress actions (rights/dividends) with status\n\n"
     "**Stock Analysis**\n"
     "- `/fundamentalanalyze SYMBOL` — quick analysis card (price, P/E, 52W signal, QoQ holding); `/fundamentalanalyze mylist` for your whole watchlist\n"
-    "- `/fundamentals SYMBOL` — full deep-dive report (valuation, growth, margins, balance sheet)\n\n"
+    "- `/fundamentalreport SYMBOL` — deep fundamental report (valuation, growth, margins, balance sheet); `/fundamentalreport mylist` for your whole watchlist\n\n"
     "**Watchlist**\n"
     "- `/addstock SYMBOL [NSE|BSE]` · `/removestock SYMBOL` · `/watchlist`\n"
     "- `/myfavourites` — run your favourite commands in one go (corp actions for your list, top losers 1h + today, watchlist, fundamentals)\n"
@@ -62,7 +62,7 @@ HELP_TEXT = (
     "- `/checknow` — force-run alerts\n"
     "- `/menu` — one-tap command buttons in Telegram (no typing)\n"
     "- `/help` — this guide\n\n"
-    "_Old short forms still work as aliases: /ca, /next, /upcoming, /summary, /add, /list, /movers, /gainers, /losers, /stock, /fund, /filter, /alert, /sched, /exdate._\n"
+    "_Old short forms still work as aliases: /ca, /next, /upcoming, /summary, /add, /list, /movers, /gainers, /losers, /stock, /stockanalysis, /fund, /fundamentals, /filter, /alert, /sched, /exdate._\n"
 )
 
 # Streamlit page config
