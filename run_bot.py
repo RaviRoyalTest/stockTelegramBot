@@ -123,13 +123,13 @@ HELP_TEXT = (
     "  /movers 2d 500   \u2192 2-day movers, NIFTY 500\n"
     "  /movers 1w 10    \u2192 top 10 movers this week\n\n"
     "/gainers <i>[period] [N] [100|500]</i>\n"
-    "  Top rising stocks. Default: today, NIFTY 500, top 15.\n"
+    "  Top rising stocks. Default: today, NIFTY 500, top 30.\n"
     "  /gainers             \u2192 today's top gainers\n"
     "  /gainers 1h          \u2192 last 1h gainers\n"
     "  /gainers 1mo 20 500  \u2192 top 20 gainers this month, NIFTY 500\n"
     "  /gainers 3mo nifty100\u2192 3-month gainers, NIFTY 100\n\n"
     "/losers <i>[period] [N] [100|500]</i>\n"
-    "  Top falling stocks. Default: today, NIFTY 500, top 15.\n"
+    "  Top falling stocks. Default: today, NIFTY 500, top 30.\n"
     "  /losers             \u2192 today's top losers\n"
     "  /losers 1h 10       \u2192 top 10 losers last hour\n"
     "  /losers 1mo 500     \u2192 biggest losers this month, NIFTY 500\n"
@@ -1152,6 +1152,38 @@ def _parse_screen_parts(parts, default_period, default_direction,
     return period, direction, count, universe
 
 
+def _format_price_movers_report(rows: list, header: str) -> str:
+    """Format the fast initial price-only movers report (Phase 1)."""
+    lines = [header]
+    for idx, (sym, d) in enumerate(rows, 1):
+        change = d["change_pct"]
+        price = d.get("price")
+        if change >= 3.0:
+            move_icon = "\U0001F7E2\u25b2\u25b2"
+        elif change >= 1.0:
+            move_icon = "\U0001F7E2\u25b2"
+        elif change <= -3.0:
+            move_icon = "\U0001F534\u25bc\u25bc"
+        elif change <= -1.0:
+            move_icon = "\U0001F534\u25bc"
+        elif change >= 0:
+            move_icon = "\U0001F7E1\u25b2"
+        else:
+            move_icon = "\U0001F7E1\u25bc"
+        sign = "+" if change >= 0 else ""
+        lines.append(
+            f"{idx}. {move_icon} <b>{notifier.escape(sym)}</b>  "
+            f"{notifier.fmt_money(price)}  <b>{sign}{change:.2f}%</b>"
+        )
+    lines.append("")
+    lines.append(
+        f"\u23f3 Price data loaded for {len(rows)} stocks. "
+        "Fetching 52W range, RSI, P/E &amp; fundamentals... "
+        "Updated report coming in a few seconds."
+    )
+    return "\n".join(lines)
+
+
 def _format_enriched_movers_report(rows: list, header: str, fund_by_sym: dict) -> str:
     """Format the full enriched fundamentals movers report with spacious card layout."""
     enriched_lines = [header, ""]
@@ -1191,14 +1223,14 @@ def handle_market_screen(chat_id, parts, default_direction="all",
                          default_universe="nifty100") -> None:
     """Screen an index universe by price movement over a time window.
 
-    Responds concisely with the top results without blocking command processing.
+    One implementation backs /movers, /gainers and /losers so all three stay
+    feature-identical. Replies in two stages so the user never waits blind:
+    an immediate acknowledgment, then the initial price-only report as soon
+    as quotes are in, and finally an updated full report with fundamentals.
     """
     period, direction, count, universe = _parse_screen_parts(
         parts, default_period, default_direction, default_count,
         default_universe)
-
-    # Limit maximum rows to 25 so responses are concise and fast
-    count = min(count or 15, 25)
 
     universe_label = "NIFTY 500" if universe == "nifty500" else "NIFTY 100"
     period_label = _period_label(*period)
@@ -1208,11 +1240,24 @@ def handle_market_screen(chat_id, parts, default_direction="all",
         parts[0], period_label, direction, count, universe_label,
     )
 
+    # Phase 0 - acknowledge immediately so the user never waits blind while
+    # the universe + quotes are fetched (NIFTY 500 can take a minute or two).
+    reply(
+        chat_id,
+        f"Scanning {universe_label} over {period_label} for {direction}... "
+        "This can take a minute or two.",
+    )
+    log.info("screen %s: sent initial acknowledgment", parts[0])
+
     symbols = sources.get_index_universe(universe)
     if not symbols:
         log.warning("screen %s: no symbols loaded for universe %s", parts[0], universe)
         reply(chat_id, "Could not load the stock universe right now. Try again in a minute.")
         return
+    log.info(
+        "screen %s: universe loaded (%d symbols) in %.1fs",
+        parts[0], len(symbols), monotonic() - t0,
+    )
 
     def _fetch(sym):
         return sym, _fetch_period_change(sym, period)
@@ -1220,54 +1265,125 @@ def handle_market_screen(chat_id, parts, default_direction="all",
     fetched = []
     with ThreadPoolExecutor(max_workers=25) as ex:
         futures = {ex.submit(_fetch, sym): sym for sym in symbols}
+        done = 0
         for fut in as_completed(futures):
+            done += 1
             sym = futures[fut]
             try:
                 data = fut.result()[1]
-            except Exception:
+            except Exception as exc:
                 data = None
+                log.info(
+                    "screen %s: change fetch failed for %s: %s",
+                    parts[0], sym, exc,
+                )
             fetched.append((sym, data))
+            if done % 100 == 0 or done == len(symbols):
+                log.info(
+                    "screen %s: change fetch progress %d/%d symbols",
+                    parts[0], done, len(symbols),
+                )
+    log.info(
+        "screen %s: change fetch complete (%d symbols) in %.1fs",
+        parts[0], len(symbols), monotonic() - t0,
+    )
 
     rows = [(sym, d) for sym, d in fetched if d and d.get("change_pct") is not None]
     if direction == "gainers":
         rows = [r for r in rows if r[1]["change_pct"] > 0]
-        rows.sort(key=lambda r: r[1]["change_pct"], reverse=True)
+        rows.sort(key=lambda r: r[1]["change_pct"], reverse=True)  # highest first
         title = f"<b>Top Gainers - {period_label}</b>"
     elif direction == "losers":
         rows = [r for r in rows if r[1]["change_pct"] < 0]
-        rows.sort(key=lambda r: r[1]["change_pct"])
+        rows.sort(key=lambda r: r[1]["change_pct"])  # most negative first
         title = f"<b>Top Losers - {period_label}</b>"
     else:
-        rows.sort(key=lambda r: r[1]["change_pct"])
-        title = f"<b>Movers - {period_label}</b> · {direction}"
+        rows.sort(key=lambda r: r[1]["change_pct"])  # lower -> higher
+        title = f"<b>Movers - {period_label}</b> · {direction} (lower \u2192 higher)"
 
-    rows = rows[:count]
+    if count:
+        rows = rows[:count]
+    failed = len(fetched) - sum(
+        1 for _, d in fetched if d and d.get("change_pct") is not None
+    )
     if not rows:
+        ok = len(fetched) - failed
+        log.warning(
+            "screen %s: no %s in %s over %s (universe=%d, quotes ok=%d/%d) - "
+            "market may be closed or everything moved the other way",
+            parts[0], direction, universe_label, period_label,
+            len(symbols), ok, len(fetched),
+        )
         reply(chat_id, f"No movement data found for {period_label} ({universe_label}).")
         return
 
     header = f"{title} · {universe_label} (Top {len(rows)})"
 
-    # Full fundamentals (Screener + Yahoo Finance) for top N rows
-    def _fund_fetch(sym):
-        return sym, sources.get_fundamentals(sym, with_screener=True)
+    # Phase 1 - the initial report: movers and their current price only, so
+    # the user gets actionable numbers now instead of waiting for the slower
+    # fundamentals enrichment.
+    phase1_lines = _format_price_movers_report(rows, header)
+    if failed:
+        phase1_lines += f"\n({failed} of {len(symbols)} stocks could not be loaded)"
+    _reply_messages(chat_id, _split_messages(phase1_lines.split("\n")))
+    log.info(
+        "screen %s: initial report sent (%d rows) in %.1fs",
+        parts[0], len(rows), monotonic() - t0,
+    )
 
+    # Phase 2 - fetch fundamentals (Screener + Yahoo Finance) and send the
+    # enriched report. To protect against screener.in's aggressive rate
+    # limiting, the slow screener.in part is only fetched for the first
+    # FUND_MAX_ROWS rows; the rest get the fast Yahoo-only fundamentals.
+    def _fund_fetch(sym, with_screener):
+        return sym, sources.get_fundamentals(sym, with_screener=with_screener)
+
+    t_fund = monotonic()
     fund_by_sym = {}
+    tasks = [
+        (sym, i < sources.FUND_MAX_ROWS)
+        for i, (sym, _) in enumerate(rows)
+    ]
     with ThreadPoolExecutor(max_workers=10) as ex:
-        futures = {ex.submit(_fund_fetch, sym): sym for sym, _ in rows}
+        futures = {
+            ex.submit(_fund_fetch, sym, with_screener): (sym, with_screener)
+            for sym, with_screener in tasks
+        }
+        done = 0
         for fut in as_completed(futures):
-            sym = futures[fut]
+            done += 1
+            sym, _ = futures[fut]
             try:
                 fund_by_sym[sym] = fut.result()[1]
-            except Exception as exc:
-                log.info("screen %s: fund_fetch failed for %s: %s", parts[0], sym, exc)
+            except Exception as exc:  # fundamentals are best-effort
                 fund_by_sym[sym] = None
+                log.info(
+                    "screen %s: fundamentals failed for %s: %s",
+                    parts[0], sym, exc,
+                )
+            if done % 10 == 0 or done == len(tasks):
+                log.info(
+                    "screen %s: fundamentals progress %d/%d rows",
+                    parts[0], done, len(tasks),
+                )
+    log.info(
+        "screen %s: fundamentals fetch complete (%d rows) in %.1fs",
+        parts[0], len(tasks), monotonic() - t_fund,
+    )
 
     enriched_report = _format_enriched_movers_report(rows, header, fund_by_sym)
+    if len(rows) > sources.FUND_MAX_ROWS:
+        enriched_report += (
+            f"\n(fundamentals detail shown for the first "
+            f"{sources.FUND_MAX_ROWS} stocks)"
+        )
+    if failed:
+        enriched_report += f"\n({failed} of {len(symbols)} stocks could not be loaded)"
     _reply_messages(chat_id, _split_messages(enriched_report.split("\n")))
     log.info(
-        "screen %s: completed %d rows in %.1fs",
-        parts[0], len(rows), monotonic() - t0,
+        "screen %s: final report sent (%d rows) in %.1fs (total %.1fs), "
+        "quote failures=%d",
+        parts[0], len(rows), monotonic() - t_fund, monotonic() - t0, failed,
     )
 
 
