@@ -302,17 +302,19 @@ def _render_linked_analysis(source: str) -> None:
     )
 
 
-def _symbol_fund_button(sym: str, key: str, source: str) -> None:
-    """Single-click deep-fundamentals button next to a symbol/name.
+def _symbol_fund_button(sym: str, key: str, source: str, show_label: bool = True) -> None:
+    """Single-click deep-fundamentals button for a symbol/name.
 
-    Clicking it fetches the deep report and renders it below the current
-    view (mirrors tapping a ticker on Telegram). key must be unique across
-    the whole app (Streamlit requires it); source scopes the render.
+    show_label=True (grids) renders the ticker on the button so it is never
+    a bare icon; False (inline next to a card heading) renders just the icon.
+    Clicking fetches the deep report and renders it below the current view.
+    key must be unique across the whole app; source scopes the render.
     """
     sym = (sym or "").strip()
     if not sym:
         return
-    if st.button("\U0001F4B9", key=key, help=f"Deep fundamentals for {sym}",
+    label = f"{sym} \U0001F4B9" if show_label else "\U0001F4B9"
+    if st.button(label, key=key, help=f"Deep fundamentals for {sym}",
                  type="primary", use_container_width=True):
         _request_analysis(sym, source)
 
@@ -330,7 +332,7 @@ def _render_ca_card(a: dict, key: str, source: str) -> None:
 
     h1, h2 = st.columns([1, 5])
     with h1:
-        _symbol_fund_button(sym, key, source)
+        _symbol_fund_button(sym, key, source, show_label=False)
     with h2:
         st.markdown(f"### {type_emoji} {sym} ({a.get('exchange')})")
         st.caption(company)
@@ -710,7 +712,7 @@ with tab_watch:
         watch_syms = [r.get("Symbol", "") for r in rows]
         st.caption("Tap the \U0001F4B9 button to open a stock's deep fundamentals report.")
         if watch_syms:
-            per_row = 10
+            per_row = 5
             for start in range(0, len(watch_syms), per_row):
                 cols = st.columns(per_row)
                 for j, sym in enumerate(watch_syms[start:start + per_row]):
@@ -794,9 +796,9 @@ with tab_watch:
             )
             syms = [str(r.get("Symbol", "")) for r in fav["losers_1h"]]
             if syms:
-                for start in range(0, len(syms), 10):
-                    cols = st.columns(10)
-                    for j, sym in enumerate(syms[start:start + 10]):
+                for start in range(0, len(syms), 5):
+                    cols = st.columns(5)
+                    for j, sym in enumerate(syms[start:start + 5]):
                         with cols[j]:
                             _symbol_fund_button(sym, f"fav1h_{start + j}", "fav")
         with st.expander("\U0001f4c9 Top losers — today (NIFTY 100)"):
@@ -809,9 +811,9 @@ with tab_watch:
             )
             syms = [str(r.get("Symbol", "")) for r in fav["losers_today"]]
             if syms:
-                for start in range(0, len(syms), 10):
-                    cols = st.columns(10)
-                    for j, sym in enumerate(syms[start:start + 10]):
+                for start in range(0, len(syms), 5):
+                    cols = st.columns(5)
+                    for j, sym in enumerate(syms[start:start + 5]):
                         with cols[j]:
                             _symbol_fund_button(sym, f"fav1d_{start + j}", "fav")
         st.caption("Tap the \U0001F4B9 button next to any symbol to open its deep fundamentals report.")
@@ -1052,7 +1054,7 @@ with tab_market:
         screen_syms = [str(r.get("Symbol", "")) for r in rows]
         st.caption("Tap the \U0001F4B9 button to open a stock's deep fundamentals report.")
         if screen_syms:
-            per_row = 10
+            per_row = 5
             for start in range(0, len(screen_syms), per_row):
                 cols = st.columns(per_row)
                 for j, sym in enumerate(screen_syms[start:start + per_row]):
