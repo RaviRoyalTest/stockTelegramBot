@@ -16,12 +16,13 @@ dropdown, then continuously polls both exchanges for corporate actions
   (default 5) days away, so you're alerted before the event, not just at the
   announcement.
 - **Action-type filters** - per-user, receive only the types you care about
-  (dividend / bonus / split / rights / buyback) via `/filter` or the web UI.
+  (dividend / bonus / split / rights / buyback) via `/alertfilters` (alias `/filter`) or the web UI.
 - **Price-move alerts** - get a Telegram alert when a watched stock moves
-  beyond a threshold (e.g. ±3% in a day) via `/alert 3` or the web UI.
-- `/next` bot command - instantly list upcoming ex-dates for your watchlist,
-  plus recently passed / in-progress actions (e.g. a rights issue whose
-  ex-date has just passed, or a dividend whose payment is still pending).
+  beyond a threshold (e.g. ±3% in a day) via `/pricealert 3` (alias `/alert`) or the web UI.
+- `/upcoming` bot command (alias `/next`) - instantly list upcoming ex-dates
+  for your watchlist, plus recently passed / in-progress actions (e.g. a
+  rights issue whose ex-date has just passed, or a dividend whose payment
+  is still pending) with derived status.
 - "Check now" button to force an immediate poll.
 - Graceful handling when a source is unavailable (e.g. BSE is Cloudflare-blocked
   from datacenter IPs).
@@ -93,32 +94,33 @@ Send these to your bot:
 
 | Command | Example | What it does |
 | ------- | ------- | ------------ |
-| `/ca [TYPE\|SYMBOL\|N\|today]` | `/ca increase` | Query corporate actions across ALL NSE+BSE stocks, not just the watchlist. No arg = overview; `dividend`/`bonus`/`split`/`rights`/`buyback` filter by type; `increase` = shareholder increase (bonus + split + rights); `today`/`7` = ex-date window; a symbol (e.g. `RELIANCE`) = full detail; any other word = keyword search. |
-| `/exdate [today\|N]` | `/exdate 7` | All actions whose ex-date is today or within N days (default `REMINDER_DAYS`) |
-| `/summary` | `/summary` | Market snapshot: counts by exchange and type, plus the next ex-dates |
+| `/corpactions [TYPE\|SYMBOL\|N\|today]` | `/corpactions increase` | Browse corporate actions across ALL NSE+BSE stocks, not just the watchlist. No arg = overview; `dividend`/`bonus`/`split`/`rights`/`buyback` filter by type; `increase` = shareholder increase (bonus + split + rights); `today`/`7` = ex-date window; a symbol (e.g. `RELIANCE`) = full detail; any other word = keyword search. Alias: `/ca` |
+| `/exdates [today\|N]` | `/exdates 7` | All actions whose ex-date is today or within N days (default `REMINDER_DAYS`). Alias: `/exdate` |
+| `/summary` | `/summary` | Corporate-action snapshot: counts by exchange and type, plus the next ex-dates |
+| `/upcoming` | `/upcoming` | Your watchlist: upcoming ex-dates PLUS recently passed / in-progress actions with status (rights subscription open, dividend payment due/pending, bonus credit). Alias: `/next` |
 | `/news [N\|SYMBOL]` | `/news 5` | Latest news headlines for the stocks in your list (up to N each, 1-5). `/news RELIANCE` = one symbol. Sources: Google News RSS, Yahoo fallback |
-| `/movers [period] [direction] [N] [100\|500]` | `/movers 1h gainers 10 500` | Screen an index (NIFTY 100/500) by price movement over a window, sorted lower → higher. Periods: `5m 15m 30m 1h 2h 4h today 2d 1w 1mo` (default 1h). Direction: `gainers`/`losers`/`all`; `N` = max rows; a bare `100`/`500` picks the index (default 100). E.g. `/movers 1w 500`. Each row also shows P/E, sector P/E, 52-week high/low, dividend yield, promoter/FII/DII holding and debt/equity when available |
-| `/gainers [period] [N] [100\|500]` | `/gainers 2d 100` | Top N gainers over an index (default NIFTY 500, top 30). Here a bare `100`/`500` means **top N** — to pick the index use `nifty100`/`nifty500` or a second number after a count (e.g. `/gainers 1h 50 500`). Fundamentals shown per row |
-| `/losers [period] [N] [100\|500]` | `/losers 1mo 100` | Top N losers over an index (same options and fundamentals as `/gainers`). E.g. `/losers 1w 20 500`, `/losers 30m 5 nifty100` |
-| `/stock SYMBOL` | `/stock TATATECH` | Quick summary card for one stock: price, P/E, 52-week signal, QoQ shareholding |
-| `/stock N` / `/stock N-M` / `/stock all` | `/stock 5-10` | Same summary card for a range of watchlist positions (1-based). `/stock 5` = first 5 stocks, `/stock 5-10` = positions #5..#10, `/stock all` = whole list (max 10 per query) |
-| `/fund SYMBOL` | `/fund RELIANCE` | Deep fundamental report for one stock: valuation (P/E, fwd P/E, P/B, P/S, div yield), YoY growth & margins, EPS/book value, balance sheet, analyst targets, QoQ shareholding |
-| `/fund N` / `/fund N-M` / `/fund all` | `/fund 3-5` | Deep report for a range of watchlist positions (same syntax as `/stock`, max 5 per query) |
+| `/topmovers [period] [direction] [N] [100\|500]` | `/topmovers 1h gainers 10 500` | Screen an index (NIFTY 100/500) by price movement over a window, sorted lower → higher. Periods: `5m 15m 30m 1h 2h 4h today 2d 1w 1mo` (default 1h). Direction: `gainers`/`losers`/`all`; `N` = max rows; a bare `100`/`500` picks the index (default 100). E.g. `/topmovers 1w 500`. Each row also shows P/E, sector P/E, 52-week high/low, dividend yield, promoter/FII/DII holding and debt/equity when available. Alias: `/movers` |
+| `/topgainers [period] [N] [100\|500]` | `/topgainers 2d 100` | Top N gainers over an index (default NIFTY 500, top 30). Here a bare `100`/`500` means **top N** — to pick the index use `nifty100`/`nifty500` or a second number after a count (e.g. `/topgainers 1h 50 500`). Fundamentals shown per row. Alias: `/gainers` |
+| `/toplosers [period] [N] [100\|500]` | `/toplosers 1mo 100` | Top N losers over an index (same options and fundamentals as `/topgainers`). E.g. `/toplosers 1w 20 500`, `/toplosers 30m 5 nifty100`. Alias: `/losers` |
+| `/stockanalysis SYMBOL` | `/stockanalysis TATATECH` | Quick summary card for one stock: price, P/E, 52-week signal, QoQ shareholding. Alias: `/stock` |
+| `/stockanalysis N` / `N-M` / `all` | `/stockanalysis 5-10` | Same summary card for a range of watchlist positions (1-based). `/stockanalysis 5` = first 5 stocks, `/stockanalysis 5-10` = positions #5..#10, `all` = whole list (max 10 per query) |
+| `/fundamentals SYMBOL` | `/fundamentals RELIANCE` | Deep fundamental report for one stock: valuation (P/E, fwd P/E, P/B, P/S, div yield), YoY growth & margins, EPS/book value, balance sheet, analyst targets, QoQ shareholding. Alias: `/fund` |
+| `/fundamentals N` / `N-M` / `all` | `/fundamentals 3-5` | Deep report for a range of watchlist positions (same syntax as `/stockanalysis`, max 5 per query) |
 | `/harmonic [all\|100\|500] [TIMEFRAME]` | `/harmonic all` / `/harmonic 500` | Harmonic-pattern scan. With a universe keyword it scans the whole index (default NIFTY 100) and lists every stock showing a formation, sorted most actionable first (top 25). Each entry is clear and compact: line 1 = symbol, current price with +/-% move, pattern (Gartley/Bat/Butterfly/Crab/Shark), direction, status & signal; line 2 = the PRZ zone, the projected/completed D level and how far price is from it (e.g. `inside PRZ`, `2.8% below PRZ`). `/harmonic 500 1w` scans NIFTY 500 on the weekly chart. Without a universe keyword it stays the single-stock deep report: `/harmonic TATATECH 1h` (PRZ, Fibonacci ratios, entry/SL/targets, R:R, final signal) or `/harmonic 3` (watchlist position). Timeframes: `5m 15m 30m 1h 4h 1d 1w`. Not investment advice — entries wait for PRZ confirmation |
 | `/scan500` | `/scan500` | Full NIFTY 500 multi-indicator CNC/MIS scanner. Computes EMAs (20/50/100/200), RSI, MACD, ADX, CMF, MFI, OBV, Aroon, TTM Squeeze, Donchian 52-week channel, weekly Supertrend, GMMA, anchored VWAP and Mansfield RS for all ~500 stocks, applies the strict "do not buy / do not show" rejection rules (weekly supertrend red, below 200 SMA, CMF < 0, MRS < 0, R:R < 1:2, SL > 8%, ADTV < ₹10cr), scores survivors /100 (≥75 qualifies) and reports: market regime + breadth, rejected stocks with reasons, #1 top trade setup with a 09:15–15:30 hourly execution roadmap, an approved-stocks matrix and a CNC vs MIS execution table. Takes ~1 minute. Delivery % is estimated from money-flow (real NSE delivery data isn't public via this feed) |
-| `/sched [add <interval> <cmd> \| remove <n> \| clear]` | `/sched add 3h /scan500` | Owner-only: manage automated reports on the always-on server. `/sched` lists the current schedule. `/sched add <interval> <command>` runs a command on its own timer — interval is minutes (`180`), `m` (`90m`), `h` (`3h`) or `d` (`1d`), minimum 15 minutes, e.g. `/sched add 3h /scan500`, `/sched add 90m /movers 30m`. `/sched remove <n>` deletes entry n (1-based as shown by `/sched`), `/sched clear` removes everything. Entries are saved to `schedule.json` and pushed to GitHub, so they survive redeploys. Without any file entries the `SCHEDULED_COMMANDS` env defaults are used |
+| `/schedule [add <interval> <cmd> \| remove <n> \| clear]` | `/schedule add 3h /scan500` | Owner-only: manage automated reports on the always-on server. `/schedule` lists the current schedule. `/schedule add <interval> <command>` runs a command on its own timer — interval is minutes (`180`), `m` (`90m`), `h` (`3h`) or `d` (`1d`), minimum 15 minutes, e.g. `/schedule add 3h /scan500`, `/schedule add 90m /topmovers 30m`. `/schedule remove <n>` deletes entry n (1-based as shown by `/schedule`), `/schedule clear` removes everything. Entries are saved to `schedule.json` and pushed to GitHub, so they survive redeploys. Without any file entries the `SCHEDULED_COMMANDS` env defaults are used. Alias: `/sched` |
 
-For the universe token you can use the short forms too: `n100`/`nifty100` and `n500`/`nifty500` (e.g. `/gainers n100` = today's top NIFTY 100 gainers, `/movers 1w n500`).
+For the universe token you can use the short forms too: `n100`/`nifty100` and `n500`/`nifty500` (e.g. `/topgainers n100` = today's top NIFTY 100 gainers, `/topmovers 1w n500`).
 
-Every `/ca`, `/exdate` and `/summary` result includes the current price
+Every `/corpactions`, `/exdates` and `/summary` result includes the current price
 (₹ with today's % change) and clearly printed Ex-date / Record date /
-Announced date. `/ca SYMBOL` shows full detail (face value, series, ISIN).
-| `/add SYMBOL [NSE/BSE]` | `/add RELIANCE NSE` | Add a stock (validated via Yahoo) |
-| `/remove SYMBOL [NSE/BSE]` | `/remove TCS` | Remove a stock |
-| `/list` | `/list` | Show the current watchlist |
-| `/next` | `/next` | Upcoming ex-dates + recently passed / in-progress actions (last 30 days) with status |
-| `/filter TYPE,...` | `/filter dividend,bonus` | Only receive these action types (`/filter all` resets) |
-| `/alert PCT` | `/alert 3` | Alert on daily moves of ±PCT% (`/alert off` disables) |
+Announced date. `/corpactions SYMBOL` shows full detail (face value, series, ISIN)
+plus a derived Status and book-closure dates.
+| `/addstock SYMBOL [NSE/BSE]` | `/addstock RELIANCE NSE` | Add a stock (validated via Yahoo). Alias: `/add` |
+| `/removestock SYMBOL [NSE/BSE]` | `/removestock TCS` | Remove a stock. Alias: `/remove` |
+| `/watchlist` | `/watchlist` | Show the current watchlist. Alias: `/list` |
+| `/alertfilters TYPE,...` | `/alertfilters dividend,bonus` | Only receive these action types (`/alertfilters all` resets). Alias: `/filter` |
+| `/pricealert PCT` | `/pricealert 3` | Alert on daily moves of ±PCT% (`/pricealert off` disables). Alias: `/alert` |
 | `/settings` | `/settings` | Show your current filters, price-alert and list location |
 | `/status` | `/status` | Show where your list is saved and whether GitHub push is configured |
 | `/checknow` | `/checknow` | Force a check and re-send all matching alerts to your chat |
@@ -153,7 +155,7 @@ functionality in a browser — no Telegram needed for browsing:
 | 📊 **Market Screens** | Run movers / gainers / losers screens over NIFTY 100/500 with any period (5m → 1y) |
 | 💹 **Stock Analysis** | Deep single-stock report: price, 52W signal, RSI, P/E, sector P/E, market cap, D/E, div yield, ROCE, ROE, QoQ shareholding |
 | 📰 **News** | Latest headlines for your watchlist or a single symbol |
-| 🎛️ **Alert Settings** | Action-type filters + price-move threshold (same as `/filter` and `/alert`) |
+| 🎛️ **Alert Settings** | Action-type filters + price-move threshold (same as `/alertfilters` and `/pricealert`) |
 | 🖥️ **System** | Poller status, config, subscribers, persistence / GitHub push status |
 
 ### Run on Render — just redeploy, nothing to change
@@ -172,7 +174,7 @@ streamlit run dashboard.py
 
 ## Always-on Telegram bot (bot_server.py)
 
-For instant `/add`, `/remove`, `/list` and `/checknow` replies, run
+For instant `/addstock`, `/removestock`, `/watchlist` and `/checknow` replies, run
 `bot_server.py` on an always-on host such as a Render Web Service:
 
 - **Service type:** Web Service (not Cron Job / Background Worker).
@@ -199,7 +201,7 @@ filesystem is wiped on the next deployment/restart. Your watchlist survives
 only because the bot pushes the JSON state files back to the GitHub repo,
 which is exactly what the next deploy is built from.
 
-To make `/add` stick across redeploys:
+To make `/addstock` stick across redeploys:
 
 1. **Deploy the latest code.** The startup log prints
    `Deployed commit <sha>` - if it is older than the current `main`, redeploy.
@@ -213,9 +215,9 @@ To make `/add` stick across redeploys:
    ```bash
    python run_bot.py --check
    ```
-   A green verdict means `/add`, `/remove`, `/filter` and `/alert` changes
-   will reach GitHub and survive redeploys. You can also send `/status` to
-   the bot in Telegram.
+   A green verdict means `/addstock`, `/removestock`, `/alertfilters` and
+   `/pricealert` changes will reach GitHub and survive redeploys. You can
+   also send `/status` to the bot in Telegram.
 
 The always-on server pushes state to GitHub right after every write command
 **and** re-checks every `PUSH_FLUSH_SECONDS` (default 180) for anything left
@@ -254,8 +256,9 @@ corp_actions/
 - **Where the watchlist lives.** The repo's `watchlist.json` /
   `subscriptions.json` / `settings.json` / `seen_actions.json` are the source
   of truth, committed and pushed by the always-on server after every WRITE
-  command (`/add`, `/remove`, `/filter`, `/alert`) and by the workflow cron
-  after every poll. Read-only commands (`/list`, `/status`, `/next`) never
+  command (`/addstock`, `/removestock`, `/alertfilters`, `/pricealert`, `/schedule`
+  and their short aliases) and by the workflow cron after every poll.
+  Read-only commands (`/watchlist`, `/status`, `/upcoming`, `/help`) never
   push or reset. Always-on hosts like Render have **ephemeral disks** -
   anything written but not pushed is wiped on redeploy. To persist changes
   from Render, set these env vars:
@@ -270,7 +273,8 @@ corp_actions/
   Cloudflare and commonly returns `403` from datacenter/VPN IPs; from a normal
   residential network it usually works. When blocked, the app warns and simply
   uses NSE data.
-- `/movers`, `/gainers` and `/losers` show fundamentals per stock: P/E and
+- `/topmovers`, `/topgainers` and `/toplosers` (aliases `/movers`, `/gainers`,
+  `/losers`) show fundamentals per stock: P/E and
   sector P/E, 52-week high/low, dividend yield, promoter / FII / DII holding
   and debt-to-equity. Fundamentals come from Yahoo Finance (price, 52w range,
   P/E, dividend, D/E) plus screener.in (sector P/E, holdings), are cached for

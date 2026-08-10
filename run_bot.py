@@ -70,6 +70,9 @@ import html
 HELP_TEXT = (
     "\U0001F4CA <b>Stock Alert Bot \u2014 Command Guide</b>\n"
     "<i>Real-time NSE/BSE corporate actions, market movers &amp; news</i>\n\n"
+    "Every command name explains what it does. The old short forms still work\n"
+    "as aliases (e.g. <code>/ca</code> = <code>/corpactions</code>, "
+    "<code>/next</code> = <code>/upcoming</code>).\n\n"
     "━━━━━━━━━━━━━━━━━━━━\n"
     "\U0001F3A8 <b>Colour &amp; Signal Legend</b>\n"
     "\U0001F7E2\u25b2 Green + Up arrow = Stock gaining\n"
@@ -80,136 +83,115 @@ HELP_TEXT = (
     "\u26a0\ufe0f <b>High Zone</b>  = Near 52-week HIGH (65\u201385%)\n"
     "\U0001F6AB <b>Avoid</b>     = At/near 52-week HIGH (\u226585%)\n\n"
     "━━━━━━━━━━━━━━━━━━━━\n"
-    "\U0001F50D <b>Single Stock Deep Analysis</b>\n"
-    "━━━━━━━━━━━━━━━━━━━━\n"
-    "/stock <i>SYMBOL</i>  \u2014 quick summary card\n"
-    "  /stock TATATECH  \u2192 price, P/E, 52W signal, QoQ shareholding\n"
-    "/stock <i>N | N-M | all</i>  \u2014 watchlist positions\n"
-    "  /stock 5         \u2192 first 5 watchlist stocks\n"
-    "  /stock 5-10      \u2192 watchlist stocks #5 to #10\n"
-    "/fund <i>SYMBOL</i>  \u2014 deep fundamental report\n"
-    "  /fund RELIANCE   \u2192 valuation, growth, margins, balance sheet,\n"
-    "                     EPS, analyst targets &amp; shareholding\n"
-    "  /fund 3-5        \u2192 deep report for watchlist #3..#5\n\n"
-    "\U0001F3C6 <b>Harmonic Patterns &amp; PRZ</b>\n"
-    "━━━━━━━━━━━━━━━━━━━━\n"
-    "/harmonic <i>[all|100|500] [TIMEFRAME]</i>\n"
-    "  Scans an index for Gartley / Bat / Butterfly / Crab / Shark setups and\n"
-    "  lists every stock showing a formation (compact, one line per stock).\n"
-    "  /harmonic all          \u2192 NIFTY 100, daily\n"
-    "  /harmonic 500          \u2192 NIFTY 500, daily\n"
-    "  /harmonic 500 1w       \u2192 NIFTY 500, weekly chart\n"
-    "  /harmonic SYMBOL [TIMEFRAME]  \u2192 full report with PRZ, entry, SL &amp; targets\n"
-    "  /harmonic RELIANCE     \u2192 daily scan  \u00b7  /harmonic TATATECH 1h\n"
-    "  /harmonic 3            \u2192 full report for watchlist #3\n"
-    "  Timeframes: 5m 15m 30m 1h 4h 1d 1w\n\n"
-    "\U0001F4CA <b>NIFTY 500 CNC/MIS Scanner</b>\n"
-    "━━━━━━━━━━━━━━━━━━━━\n"
-    "/scan500\n"
-    "  Advanced multi-indicator scan of the full NIFTY 500 universe:\n"
-    "  EMAs, RSI, MACD, ADX, CMF, MFI, OBV, Aroon, TTM Squeeze, Donchian,\n"
-    "  weekly Supertrend, GMMA, Anchored VWAP &amp; Mansfield RS.\n"
-    "  Applies strict \u201cdo not buy / do not show\u201d rejection rules, scores\n"
-    "  survivors /100 (\u226575 qualifies), picks the #1 setup and maps an\n"
-    "  hour-by-hour CNC vs MIS execution plan.\n"
-    "  /scan500        \u2192 full NIFTY 500 scan (takes ~1-2 min)\n\n"
-    "━━━━━━━━━━━━━━━━━━━━\n"
-    "\U0001F4C8 <b>Market Screens</b>\n"
-    "━━━━━━━━━━━━━━━━━━━━\n"
-    "/movers <i>[period] [N] [100|500]</i>\n"
-    "  Top movers (up &amp; down) in a time window.\n"
-    "  /movers          \u2192 last 1h, NIFTY 100\n"
-    "  /movers 30m      \u2192 last 30 minutes\n"
-    "  /movers 2d 500   \u2192 2-day movers, NIFTY 500\n"
-    "  /movers 1w 10    \u2192 top 10 movers this week\n\n"
-    "/gainers <i>[period] [N] [100|500]</i>\n"
-    "  Top rising stocks. Default: today, NIFTY 500, top 30.\n"
-    "  /gainers             \u2192 today's top gainers\n"
-    "  /gainers 1h          \u2192 last 1h gainers\n"
-    "  /gainers 1mo 20 500  \u2192 top 20 gainers this month, NIFTY 500\n"
-    "  /gainers 3mo nifty100\u2192 3-month gainers, NIFTY 100\n\n"
-    "/losers <i>[period] [N] [100|500]</i>\n"
-    "  Top falling stocks. Default: today, NIFTY 500, top 30.\n"
-    "  /losers             \u2192 today's top losers\n"
-    "  /losers 1h 10       \u2192 top 10 losers last hour\n"
-    "  /losers 1mo 500     \u2192 biggest losers this month, NIFTY 500\n"
-    "  /losers 1w nifty100 \u2192 weekly losers, NIFTY 100\n\n"
-    "Periods: 5m \u00b7 15m \u00b7 30m \u00b7 1h \u00b7 2h \u00b7 4h \u00b7 1d \u00b7 2d \u00b7 5d \u00b7 1w \u00b7 2w \u00b7 1mo \u00b7 3mo \u00b7 6mo \u00b7 1y\n"
-    "Universe: n100/nifty100=NIFTY 100 \u00b7 n500/nifty500=NIFTY 500\n\n"
-    "━━━━━━━━━━━━━━━━━━━━\n"
     "\U0001F4C5 <b>Corporate Actions (NSE + BSE)</b>\n"
     "━━━━━━━━━━━━━━━━━━━━\n"
-    "/ca                  \u2192 overview of all upcoming actions\n"
-    "/ca dividend         \u2192 dividend announcements\n"
-    "/ca bonus            \u2192 bonus share issues\n"
-    "/ca split            \u2192 stock splits\n"
-    "/ca rights           \u2192 rights issues\n"
-    "/ca buyback          \u2192 buybacks\n"
-    "/ca increase         \u2192 bonus + split + rights combined\n"
-    "/ca today            \u2192 ex-dates due today\n"
-    "/ca 7                \u2192 ex-dates within next 7 days\n"
-    "/ca RELIANCE         \u2192 full details for one symbol\n"
-    "/ca TATA             \u2192 keyword search (company/subject)\n\n"
-    "/exdate [today|N]    \u2192 all actions by ex-date window (default 5 days)\n"
-    "  /exdate today      \u2192 ex-dates today\n"
-    "  /exdate 10         \u2192 ex-dates in next 10 days\n\n"
-    "/summary             \u2192 counts by type + next ex-dates\n\n"
+    "/corpactions <i>[TYPE | SYMBOL | N | today]</i>\n"
+    "  Browse all dividend / bonus / split / rights / buyback actions.\n"
+    "  /corpactions                  \u2192 overview of everything upcoming\n"
+    "  /corpactions dividend         \u2192 only dividend announcements\n"
+    "  /corpactions bonus|split|rights|buyback  \u2192 one action type\n"
+    "  /corpactions increase         \u2192 shareholder increase (bonus+split+rights)\n"
+    "  /corpactions today            \u2192 ex-dates due today\n"
+    "  /corpactions 7                \u2192 ex-dates within the next 7 days\n"
+    "  /corpactions RELIANCE         \u2192 full details for one symbol\n"
+    "  /corpactions TATA             \u2192 keyword search (company/subject)\n\n"
+    "/exdates <i>[today|N]</i>       \u2192 all actions by ex-date window\n"
+    "  (default 5 days) \u00b7  /exdates today  \u00b7  /exdates 10\n\n"
+    "/summary             \u2192 corporate-action snapshot: counts by exchange\n"
+    "                       &amp; type, plus the next ex-dates\n\n"
+    "/upcoming            \u2192 your watchlist: upcoming ex-dates PLUS recently\n"
+    "                       passed / in-progress actions with status (rights\n"
+    "                       subscription open, dividend payment due/pending,\n"
+    "                       bonus credit) \u2014 last 30 days\n\n"
     "━━━━━━━━━━━━━━━━━━━━\n"
     "\u2B50 <b>Watchlist</b>\n"
     "━━━━━━━━━━━━━━━━━━━━\n"
-    "/add SYMBOL [NSE|BSE]\u2192 add a stock (default NSE)\n"
-    "  /add RELIANCE NSE  \u00b7  /add PGINVIT\n"
-    "/remove SYMBOL       \u2192 remove from watchlist\n"
-    "  /remove TCS\n"
-    "/list                \u2192 view your full watchlist\n"
-    "/next                \u2192 ex-dates + in-progress actions (rights/dividends)\n"
-    "                       for your watchlist (upcoming + last 30 days)\n"
-    "/news [N|SYMBOL]     \u2192 latest headlines\n"
+    "/watchlist           \u2192 show your full watchlist\n"
+    "/addstock SYMBOL [NSE|BSE] \u2192 add a stock (default NSE)\n"
+    "  /addstock RELIANCE NSE  \u00b7  /addstock PGINVIT\n"
+    "/removestock SYMBOL  \u2192 remove a stock from your watchlist\n"
+    "  /removestock TCS\n"
+    "/news <i>[N|SYMBOL]</i> \u2192 latest headlines for your watchlist stocks\n"
     "  /news              \u2192 news for all watchlist stocks\n"
     "  /news 5            \u2192 5 headlines per stock\n"
     "  /news RELIANCE     \u2192 news for RELIANCE only\n\n"
     "━━━━━━━━━━━━━━━━━━━━\n"
-    "\u2699\ufe0f <b>Personalise</b>\n"
+    "\U0001F50D <b>Stock Analysis</b>\n"
     "━━━━━━━━━━━━━━━━━━━━\n"
-    "/filter TYPE,TYPE    \u2192 receive only selected action types\n"
-    "  /filter dividend,bonus  \u00b7  /filter all (reset)\n"
+    "/stockanalysis <i>SYMBOL</i>  \u2192 quick summary card\n"
+    "  /stockanalysis TATATECH  \u2192 price, P/E, 52W signal, QoQ shareholding\n"
+    "/stockanalysis <i>N | N-M | all</i>  \u2192 same card for watchlist positions\n"
+    "  /stockanalysis 5-10  \u2192 watchlist stocks #5 to #10\n\n"
+    "/fundamentals <i>SYMBOL</i>  \u2192 deep fundamental report\n"
+    "  /fundamentals RELIANCE  \u2192 valuation, growth, margins, balance sheet,\n"
+    "                     EPS, analyst targets &amp; shareholding\n"
+    "  /fundamentals 3-5   \u2192 deep report for watchlist #3..#5\n\n"
+    "/harmonic <i>[all|100|500] [TIMEFRAME]</i>  \u2192 harmonic patterns &amp; PRZ\n"
+    "  Scans for Gartley / Bat / Butterfly / Crab / Shark setups.\n"
+    "  /harmonic all      \u2192 NIFTY 100, daily \u00b7  /harmonic 500 1w  \u2192 weekly\n"
+    "  /harmonic RELIANCE \u2192 full report with PRZ, entry, SL &amp; targets\n"
+    "  Timeframes: 5m 15m 30m 1h 4h 1d 1w\n\n"
+    "/scan500             \u2192 full NIFTY 500 CNC/MIS technical scanner\n"
+    "  EMAs, RSI, MACD, ADX, CMF, OBV, Aroon, TTM Squeeze, Supertrend, GMMA,\n"
+    "  VWAP &amp; Mansfield RS \u2014 scores survivors /100, picks the #1 setup and\n"
+    "  maps an hour-by-hour CNC vs MIS execution plan (takes ~1-2 min).\n\n"
+    "━━━━━━━━━━━━━━━━━━━━\n"
+    "\U0001F4C8 <b>Market Screens</b>\n"
+    "━━━━━━━━━━━━━━━━━━━━\n"
+    "/topmovers <i>[period] [N] [100|500]</i>  \u2192 top gainers AND losers\n"
+    "  /topmovers          \u2192 last 1h, NIFTY 100\n"
+    "  /topmovers 2d 500   \u2192 2-day movers, NIFTY 500\n"
+    "  /topmovers 1w 10    \u2192 top 10 movers this week\n\n"
+    "/topgainers <i>[period] [N] [100|500]</i>  \u2192 top rising stocks\n"
+    "  /topgainers 1h          \u2192 last 1h gainers\n"
+    "  /topgainers 1mo 20 500  \u2192 top 20 gainers this month, NIFTY 500\n\n"
+    "/toplosers <i>[period] [N] [100|500]</i>  \u2192 top falling stocks\n"
+    "  /toplosers 1h 10       \u2192 top 10 losers last hour\n"
+    "  /toplosers 1w nifty100 \u2192 weekly losers, NIFTY 100\n\n"
+    "Periods: 5m \u00b7 15m \u00b7 30m \u00b7 1h \u00b7 2h \u00b7 4h \u00b7 1d \u00b7 2d \u00b7 5d \u00b7 1w \u00b7 2w \u00b7 1mo \u00b7 3mo \u00b7 6mo \u00b7 1y\n"
+    "Universe: n100/nifty100=NIFTY 100 \u00b7 n500/nifty500=NIFTY 500\n\n"
+    "━━━━━━━━━━━━━━━━━━━━\n"
+    "\u2699\ufe0f <b>Alerts &amp; Personalisation</b>\n"
+    "━━━━━━━━━━━━━━━━━━━━\n"
+    "/alertfilters TYPE,TYPE  \u2192 receive only the action types you choose\n"
+    "  /alertfilters dividend,bonus  \u00b7  /alertfilters all (reset)\n"
     "  Types: dividend \u00b7 bonus \u00b7 split \u00b7 rights \u00b7 buyback\n"
-    "/alert PCT           \u2192 alert when stock moves \u00b1PCT% in a day\n"
-    "  /alert 3           \u2192 alert on \u00b13% move\n"
-    "  /alert 1.5         \u00b7  /alert off (disable)\n"
+    "/pricealert PCT      \u2192 alert when a stock moves \u00b1PCT% in a day\n"
+    "  /pricealert 3      \u2192 alert on \u00b13% move  \u00b7  /pricealert off (disable)\n"
     "/settings            \u2192 view your current filter &amp; alert config\n\n"
     "━━━━━━━━━━━━━━━━━━━━\n"
     "\U0001F6E0 <b>System</b>\n"
     "━━━━━━━━━━━━━━━━━━━━\n"
     "/status              \u2192 where your watchlist is saved &amp; GitHub push status\n"
-    "/sched add 3h /scan500 \u2192 run /scan500 automatically every 3h\n"
+    "/schedule add 3h /scan500  \u2192 run /scan500 automatically every 3h\n"
     "/checknow            \u2192 force-run alerts and re-send all matches\n"
     "/help \u00b7 /start       \u2192 show this guide\n\n"
     "━━━━━━━━━━━━━━━━━━━━\n"
     "\U0001F4A1 <b>Quick Examples</b>\n"
     "━━━━━━━━━━━━━━━━━━━━\n"
-    "/gainers 1h 10          \u2192 Top 10 gainers last hour\n"
-    "/losers 1mo 500         \u2192 Monthly losers \u2014 NIFTY 500\n"
-    "/movers 2d 10 500       \u2192 2-day movers, top 10, NIFTY 500\n"
+    "/topgainers 1h 10          \u2192 Top 10 gainers last hour\n"
+    "/toplosers 1mo 500         \u2192 Monthly losers \u2014 NIFTY 500\n"
+    "/topmovers 2d 10 500       \u2192 2-day movers, top 10, NIFTY 500\n"
     "/scan500               \u2192 full NIFTY 500 CNC/MIS technical scan\n"
-    "/ca dividend            \u2192 Upcoming dividends\n"
-    "/ca RELIANCE            \u2192 RELIANCE corporate actions\n"
-    "/add INFY NSE           \u2192 Add INFY to watchlist\n"
+    "/corpactions dividend   \u2192 Upcoming dividends\n"
+    "/corpactions RELIANCE   \u2192 RELIANCE corporate actions\n"
+    "/upcoming              \u2192 Watchlist ex-dates + in-progress actions\n"
+    "/addstock INFY NSE      \u2192 Add INFY to watchlist\n"
     "/news RELIANCE          \u2192 Latest RELIANCE headlines\n"
-    "/filter bonus,split     \u2192 Only bonus &amp; split alerts\n"
-    "/alert 2.5              \u2192 Alert on \u00b12.5% daily move\n"
+    "/alertfilters bonus,split  \u2192 Only bonus &amp; split alerts\n"
+    "/pricealert 2.5         \u2192 Alert on \u00b12.5% daily move\n"
     "\U0001F4DD Type in plain text: \"gainers\", \"dividends\", \"ex-date today\", \"news\""
 )
 
 CA_HELP = (
-    "Corporate Action queries (/ca):\n"
-    "/ca - overview of all NSE + BSE actions\n"
-    "/ca dividend | bonus | split | rights | buyback - one action type\n"
-    "/ca increase - shareholder increase (bonus + split + rights)\n"
-    "/ca today - ex-date today\n"
-    "/ca 7 - ex-date within 7 days\n"
-    "/ca RELIANCE - details for one symbol\n"
-    "/ca TATA - keyword search in company name / subject"
+    "Corporate Action queries (/corpactions, alias /ca):\n"
+    "/corpactions - overview of all NSE + BSE actions\n"
+    "/corpactions dividend | bonus | split | rights | buyback - one action type\n"
+    "/corpactions increase - shareholder increase (bonus + split + rights)\n"
+    "/corpactions today - ex-date today\n"
+    "/corpactions 7 - ex-date within 7 days\n"
+    "/corpactions RELIANCE - details for one symbol\n"
+    "/corpactions TATA - keyword search in company name / subject"
 )
 
 
@@ -281,7 +263,7 @@ def handle_command(chat_id, text):
         send_help(chat_id)
         return
 
-    if cmd == "/list":
+    if cmd in ("/list", "/watchlist"):
         items = storage.get_user_list(chat_id)
         if not items:
             reply(chat_id, "Your watchlist is empty.")
@@ -305,7 +287,7 @@ def handle_command(chat_id, text):
                 chat_id,
                 "<b>Your Watchlist:</b>\n"
                 + "\n".join(lines)
-                + f"\n\nUse <code>/stock 5-10</code> or <code>/fund 3-5</code> to get details by these numbers."
+                + f"\n\nUse <code>/stockanalysis 5-10</code> or <code>/fundamentals 3-5</code> to get details by these numbers."
                 + f"\nSaved in: <code>{html.escape(where)}</code>\nPersistence: {html.escape(persistence)}",
             )
         return
@@ -314,7 +296,7 @@ def handle_command(chat_id, text):
         reply(chat_id, "Running a forced check now - re-sending all matching alerts shortly.")
         return
 
-    if cmd == "/next":
+    if cmd in ("/next", "/upcoming"):
         items = storage.get_user_list(chat_id)
         if not items:
             reply(chat_id, "Your watchlist is empty.")
@@ -336,7 +318,7 @@ def handle_command(chat_id, text):
         reply(chat_id, notifier.format_next_report(upcoming, recent, pending))
         return
 
-    if cmd == "/filter":
+    if cmd in ("/filter", "/alertfilters", "/actionfilters"):
         settings = storage.get_user_settings(chat_id)
         current = settings.get("action_filters") or []
         if len(parts) < 2:
@@ -371,7 +353,7 @@ def handle_command(chat_id, text):
         reply(chat_id, msg)
         return
 
-    if cmd == "/alert":
+    if cmd in ("/alert", "/pricealert"):
         settings = storage.get_user_settings(chat_id)
         current = settings.get("price_alert_pct")
         if len(parts) < 2:
@@ -447,14 +429,14 @@ def handle_command(chat_id, text):
                     f"<b>Scheduled reports:</b> "
                     + ("enabled" if config.SCHEDULED_REPORTS_ENABLED and config.PROCESS_COMMANDS else "off")
                     + " \u00b7 " + html.escape(format_schedule(chat_id).split("\n")[0])
-                    + f" \u00b7 manage with /sched",
+                    + f" \u00b7 manage with /schedule",
                     "Run /list to see your current watchlist.",
                 ]
             ),
         )
         return
 
-    if cmd in ("/ca", "/corpactions", "/actions", "/shareholder", "/increase"):
+    if cmd in ("/ca", "/corpactions", "/corporate-actions", "/corp-actions", "/actions", "/shareholder", "/increase"):
         if cmd in ("/shareholder", "/increase"):
             descriptor = {"mode": "types", "types": list(sources.INCREASE_TYPES)}
         elif len(parts) > 1:
@@ -467,7 +449,7 @@ def handle_command(chat_id, text):
             run_ca_query(chat_id, descriptor)
         return
 
-    if cmd == "/exdate":
+    if cmd in ("/exdate", "/exdates", "/ex-dates"):
         days = config.REMINDER_DAYS
         if len(parts) > 1:
             if parts[1].lower() == "today":
@@ -481,7 +463,7 @@ def handle_command(chat_id, text):
         run_ca_query(chat_id, {"mode": "exdate", "days": days})
         return
 
-    if cmd == "/summary":
+    if cmd in ("/summary", "/casummary"):
         run_ca_query(chat_id, {"mode": "overview"})
         return
 
@@ -489,7 +471,7 @@ def handle_command(chat_id, text):
         reply(chat_id, format_settings(chat_id))
         return
 
-    if cmd == "/sched":
+    if cmd in ("/sched", "/schedule"):
         handle_sched(chat_id, parts)
         return
 
@@ -497,16 +479,16 @@ def handle_command(chat_id, text):
         handle_news(chat_id, parts)
         return
 
-    if cmd == "/movers":
+    if cmd in ("/movers", "/topmovers", "/marketmovers"):
         handle_movers(chat_id, parts)
         return
 
-    if cmd in ("/gainers", "/losers"):
-        direction = "gainers" if cmd == "/gainers" else "losers"
+    if cmd in ("/gainers", "/topgainers", "/losers", "/toplosers"):
+        direction = "gainers" if cmd in ("/gainers", "/topgainers") else "losers"
         handle_gainers_losers(chat_id, parts, direction)
         return
 
-    if cmd == "/fund":
+    if cmd in ("/fund", "/fundamentals"):
         handle_fund_analysis(chat_id, parts)
         return
 
@@ -518,13 +500,13 @@ def handle_command(chat_id, text):
         handle_scan500(chat_id, parts)
         return
 
-    if cmd in ("/stock", "/info", "/quote"):
+    if cmd in ("/stock", "/info", "/quote", "/stockanalysis", "/stock-analysis", "/analysis"):
         handle_single_stock_analysis(chat_id, parts)
         return
 
     if len(parts) < 2:
-        if cmd in ("/add", "/remove"):
-            reply(chat_id, "Usage: <code>/add SYMBOL [NSE|BSE]</code> or <code>/remove SYMBOL [NSE|BSE]</code>")
+        if cmd in ("/add", "/addstock", "/remove", "/removestock"):
+            reply(chat_id, "Usage: <code>/addstock SYMBOL [NSE|BSE]</code> or <code>/removestock SYMBOL [NSE|BSE]</code>")
         else:
             reply(chat_id, f"Unknown command <code>{html.escape(cmd)}</code>. Type <code>/help</code> for the available commands.")
         return
@@ -541,7 +523,7 @@ def handle_command(chat_id, text):
         exchange = (parts[2].upper().strip() if len(parts) > 2 else "NSE")
         exchange = exchange if exchange in ("NSE", "BSE") else "NSE"
 
-    if cmd == "/add":
+    if cmd in ("/add", "/addstock"):
         quote = sources.get_quote(exchange, symbol)
         company = quote.get("name", "") if quote else ""
         validated = quote is not None
@@ -592,7 +574,7 @@ def handle_command(chat_id, text):
             f"Added <b>{symbol}</b> ({exchange}). Alerts will come to this chat.\n"
             f"Saved in: <code>{html.escape(where)}</code>.",
         )
-    elif cmd == "/remove":
+    elif cmd in ("/remove", "/removestock"):
         storage.remove_from_user_list(chat_id, symbol, exchange)
         log.info("Removed %s (%s) for chat %s", symbol, exchange, chat_id)
         reply(chat_id, f"Removed <b>{symbol}</b> ({exchange}) if it was present.")
@@ -633,7 +615,7 @@ def _reply_suggestions(chat_id, query, cmd="add"):
     for m in matches:
         company = m["company"] or ""
         if cmd == "add":
-            lines.append(f"  /add {m['symbol']} NSE  - {notifier.escape(company)}")
+            lines.append(f"  /addstock {m['symbol']} NSE  - {notifier.escape(company)}")
         else:
             lines.append(f"  /{cmd} {m['symbol']}  - {notifier.escape(company)}")
     reply(chat_id, "\n".join(lines))
@@ -957,19 +939,19 @@ def format_schedule(chat_id) -> str:
                 f"  {i}. {label}: {html.escape(', '.join(cmds))}{html.escape(target)}"
             )
     lines.append(
-        "\nUsage: <code>/sched add 3h /scan500</code> (interval: 180, 90m, 3h, 1d)"
+        "\nUsage: <code>/schedule add 3h /scan500</code> (interval: 180, 90m, 3h, 1d)"
     )
-    lines.append("<code>/sched remove 1</code>  /  <code>/sched clear</code>")
+    lines.append("<code>/schedule remove 1</code>  /  <code>/schedule clear</code>")
     return "\n".join(lines)
 
 
 def handle_sched(chat_id, parts) -> None:
     """Manage the automated-report schedule (owner only).
 
-    /sched                     -> show the current schedule
-    /sched add <int> <cmd...>  -> add a command on its own timer (e.g. /sched add 3h /scan500)
-    /sched remove <n>          -> remove entry n (1-based, as shown by /sched)
-    /sched clear               -> remove all entries
+    /schedule                  -> show the current schedule
+    /schedule add <int> <cmd...> -> add a command on its own timer (e.g. /schedule add 3h /scan500)
+    /schedule remove <n>       -> remove entry n (1-based, as shown by /schedule)
+    /schedule clear            -> remove all entries
     """
     if not storage.is_owner(chat_id):
         if not config.TELEGRAM_CHAT_ID:
@@ -995,9 +977,9 @@ def handle_sched(chat_id, parts) -> None:
         if len(parts) < 4:
             reply(
                 chat_id,
-                "Usage: <code>/sched add &lt;interval&gt; &lt;command&gt;</code>\n"
-                "e.g. <code>/sched add 3h /scan500</code> or "
-                "<code>/sched add 90m /movers 30m</code>\n"
+                "Usage: <code>/schedule add &lt;interval&gt; &lt;command&gt;</code>\n"
+                "e.g. <code>/schedule add 3h /scan500</code> or "
+                "<code>/schedule add 90m /topmovers 30m</code>\n"
                 "Interval: minutes (180), m (90m), h (3h) or d (1d), min 15.",
             )
             return
@@ -1013,8 +995,8 @@ def handle_sched(chat_id, parts) -> None:
         if not command.startswith("/"):
             reply(chat_id, "The command must start with / (e.g. <code>/scan500</code>).")
             return
-        if command.lower().split()[0] in ("/sched",):
-            reply(chat_id, "You cannot schedule /sched itself.")
+        if command.lower().split()[0] in ("/sched", "/schedule"):
+            reply(chat_id, "You cannot schedule /schedule itself.")
             return
         storage.add_schedule_entry(interval, [command], str(config.TELEGRAM_CHAT_ID))
         log.info("chat %s added schedule entry: every %d min -> %s", chat_id, interval, command)
@@ -1027,12 +1009,12 @@ def handle_sched(chat_id, parts) -> None:
 
     if sub == "remove":
         if len(parts) < 3:
-            reply(chat_id, "Usage: <code>/sched remove &lt;n&gt;</code> (number shown by /sched).")
+            reply(chat_id, "Usage: <code>/schedule remove &lt;n&gt;</code> (number shown by /schedule).")
             return
         try:
             index = int(parts[2]) - 1
         except ValueError:
-            reply(chat_id, "Usage: <code>/sched remove &lt;n&gt;</code>")
+            reply(chat_id, "Usage: <code>/schedule remove &lt;n&gt;</code>")
             return
         entries = storage.load_schedule()
         if index < 0 or index >= len(entries):
@@ -2418,25 +2400,25 @@ def register_commands() -> bool:
     if not notifier.is_configured():
         return False
     menu = [
-        {"command": "ca", "description": "Corporate actions all NSE+BSE: /ca [type]"},
-        {"command": "exdate", "description": "Ex-dates: /exdate today or /exdate 7"},
-        {"command": "summary", "description": "Market snapshot: counts + next ex-dates"},
+        {"command": "upcoming", "description": "Watchlist: ex-dates + in-progress actions (rights/dividends)"},
+        {"command": "corpactions", "description": "Browse all NSE+BSE corporate actions"},
+        {"command": "exdates", "description": "All actions by ex-date: today or next N days"},
+        {"command": "summary", "description": "Corporate-action snapshot: counts + next ex-dates"},
+        {"command": "watchlist", "description": "Show your watchlist"},
+        {"command": "addstock", "description": "Add a stock: /addstock RELIANCE NSE"},
+        {"command": "removestock", "description": "Remove a stock from your watchlist"},
         {"command": "news", "description": "Latest news for your watchlist stocks"},
-        {"command": "stock", "description": "Stock summary or watchlist range: /stock 5-10"},
-        {"command": "fund", "description": "Deep fundamentals or range: /fund 3-5"},
+        {"command": "stockanalysis", "description": "Stock summary or watchlist range: /stockanalysis 5-10"},
+        {"command": "fundamentals", "description": "Deep fundamentals or range: /fundamentals 3-5"},
         {"command": "harmonic", "description": "Harmonic scan NIFTY 100/500: /harmonic all / 500"},
         {"command": "scan500", "description": "NIFTY 500 CNC/MIS technical scanner"},
-        {"command": "movers", "description": "Movers + fundamentals: /movers 1h gainers 10"},
-        {"command": "gainers", "description": "Top gainers + fundamentals: /gainers 1h 50"},
-        {"command": "losers", "description": "Top losers + fundamentals: /losers 1w 100"},
-        {"command": "add", "description": "Add stock to watchlist: /add RELIANCE NSE"},
-        {"command": "remove", "description": "Remove stock from watchlist"},
-        {"command": "list", "description": "Show your watchlist"},
-        {"command": "next", "description": "Upcoming ex-dates for your watchlist"},
-        {"command": "filter", "description": "Receive only chosen action types"},
-        {"command": "alert", "description": "Price-move alert threshold percent"},
+        {"command": "topmovers", "description": "Top gainers AND losers with fundamentals"},
+        {"command": "topgainers", "description": "Top rising stocks with fundamentals"},
+        {"command": "toplosers", "description": "Top falling stocks with fundamentals"},
+        {"command": "alertfilters", "description": "Receive only chosen action types"},
+        {"command": "pricealert", "description": "Alert on +/-PCT% daily price move"},
         {"command": "settings", "description": "Show your current settings"},
-        {"command": "sched", "description": "Schedule auto reports: /sched add 3h /scan500"},
+        {"command": "schedule", "description": "Auto reports: /schedule add 3h /scan500"},
         {"command": "status", "description": "Check persistence / GitHub push"},
         {"command": "checknow", "description": "Force a check and resend alerts"},
         {"command": "help", "description": "Show all commands and examples"},
