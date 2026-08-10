@@ -337,12 +337,22 @@ class Poller:
                 for w in watchlist
                 if isinstance(w, dict)
             }
+            # Only actions in a relevant window may alert: upcoming ex-dates,
+            # recently passed ones (payment/subscription still in progress), or
+            # announced-but-undated. Ancient records (e.g. a 2018 dividend on a
+            # 2026 watchlist) match symbol+type but are years stale - without
+            # this window they would spam on every /checknow force re-send.
             matching = [
                 a
                 for a in all_actions
                 if (a.get("exchange", "").upper(), a.get("symbol", "").upper())
                 in wanted
                 and (not filters or sources.action_type(a.get("subject")) in filters)
+                and (
+                    within_reminder_window(a.get("ex_date"), today)
+                    or recently_passed(a.get("ex_date"), today)
+                    or parse_ex_date(a.get("ex_date")) is None
+                )
             ]
             log.info(
                 "poll cycle: chat %s has %d matching corporate action(s)",
