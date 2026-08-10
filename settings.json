@@ -3,7 +3,7 @@
     "price_alert_pct": 3.0,
     "watcher": {
       "threshold": 5.0,
-      "enabled": false,
+      "enabled": true,
       "universe": "nifty500"
     }
   },
