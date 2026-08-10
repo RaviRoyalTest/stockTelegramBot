@@ -74,7 +74,7 @@ HELP_TEXT = (
     "- `/settings` — view your current filter & alert config\n\n"
     "**System**\n"
     "- `/status` — where your watchlist is saved & GitHub push status\n"
-    "- `/schedule add 3h /scan500` — run a command automatically every 3h (works for every user; each person's reports go to their own chat)\n"
+    "- `/schedule add 3h /scan500` — run a command automatically every 3h; `/schedule add at 09:15 /toplosers 1h` — daily at a clock time (works for every user; each person's reports go to their own chat)\n"
     "- `/checknow` — force-run alerts and re-send all matches\n"
     "- `/watcher on` / `off` — sudden-move alerts; `set 5` = 5%, `universe nifty500` = nifty100/nifty500/mylist\n"
     "- `/menu` — one-tap command buttons in Telegram (no typing)\n"
@@ -1348,9 +1348,10 @@ with tab_status:
                 label = f"every {interval // (24 * 60)}d"
             elif interval and interval % 60 == 0:
                 label = f"every {interval // 60}h"
+            at = f" at {e['run_at']} IST" if e.get("run_at") else ""
             due = storage.schedule_next_due_ts(e)
             next_run = f" — next run {run_bot._fmt_next_run(due)}" if due else ""
-            st.markdown(f"**{i}.** {label}: `{'`, `'.join(e.get('commands') or [])}`{next_run}")
+            st.markdown(f"**{i}.** {label}{at}: `{'`, `'.join(e.get('commands') or [])}`{next_run}")
     else:
         cmds = [c for c in config.SCHEDULED_COMMANDS if c.strip()]
         if cmds:
@@ -1360,28 +1361,35 @@ with tab_status:
         else:
             st.info("No automated reports scheduled yet.")
 
-    s1, s2, s3 = st.columns([2, 1, 1])
+    s1, s2, s3, s4 = st.columns([2, 1, 1, 1])
     with s1:
         new_interval = st.text_input("Interval (minutes / 3h / 1d)", value="3h", key="sched_interval")
     with s2:
+        new_at = st.text_input("At time (HH:MM, optional)", value="", key="sched_at",
+                               placeholder="e.g. 09:15 IST")
+    with s3:
         st.write("")
         if st.button("➕ Add", width="stretch", key="sched_add_btn"):
             interval = run_bot._parse_interval_min(new_interval.strip())
-            if interval is None:
+            at = new_at.strip() or None
+            if at and run_bot._next_at_ist(at) is None:
+                st.error("Bad time. Use 24h format like 09:15 (IST).")
+            elif interval is None:
                 st.error("Bad interval. Use e.g. 180, 90m, 3h or 1d (min 15).")
             else:
-                storage.add_schedule_entry(interval, ["/scan500"], owner_key)
-                st.success(f"Added /scan500 every {interval} min.")
+                storage.add_schedule_entry(interval, ["/scan500"], owner_key, run_at=at)
+                st.success(f"Added /scan500 every {interval} min" + (f" at {at} IST" if at else "") + ".")
                 st.rerun()
-    with s3:
+    with s4:
         st.write("")
         if st.button("🗑️ Remove #1", width="stretch", key="sched_rm_btn") and sched_entries:
             storage.remove_schedule_entry(owner_key, 0)
             st.success("Removed entry 1.")
             st.rerun()
-    st.caption("Add always schedules `/scan500`; use Telegram `/schedule add 3h /scan500` "
-               "for any command. Remove deletes the first entry (use /schedule in "
-               "Telegram for full control).")
+    st.caption("Add schedules `/scan500`; use Telegram `/schedule add 3h /scan500` or "
+               "`/schedule add at 09:15 /cmd` (daily at a clock time) for any command. "
+               "Remove deletes the first entry (use /schedule in Telegram for full "
+               "control).")
     st.divider()
     st.subheader("Configuration")
     cfg_cols = st.columns(3)

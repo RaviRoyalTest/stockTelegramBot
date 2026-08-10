@@ -1102,6 +1102,40 @@ def _parse_interval_min(raw: str) -> int | None:
     return minutes
 
 
+def _next_at_ist(hhmm: str) -> float | None:
+    """Epoch seconds of the next occurrence of an "HH:MM" wall-clock time in IST.
+
+    Returns None when the string is not a valid HH:MM. Used by the schedule
+    so a report can be tied to an exact clock time (e.g. run at 09:15 IST)
+    instead of only an interval - and it lands on that minute regardless of
+    the host's timezone.
+    """
+    import datetime as _dt
+    m = re.fullmatch(r"(\d{1,2}):(\d{2})", str(hhmm or "").strip())
+    if not m:
+        return None
+    hour, minute = int(m.group(1)), int(m.group(2))
+    if not (0 <= hour <= 23 and 0 <= minute <= 59):
+        return None
+    try:
+        from zoneinfo import ZoneInfo
+        tz = ZoneInfo("Asia/Kolkata")
+    except Exception:
+        tz = None
+    now_utc = _dt.datetime.now(_dt.timezone.utc)
+    if tz is None:
+        now_local = _dt.datetime.now()
+        cand = now_local.replace(hour=hour, minute=minute, second=0, microsecond=0)
+        if cand <= now_local:
+            cand += _dt.timedelta(days=1)
+        return cand.timestamp()
+    now_ist = now_utc.astimezone(tz)
+    cand = now_ist.replace(hour=hour, minute=minute, second=0, microsecond=0)
+    if cand <= now_ist:
+        cand += _dt.timedelta(days=1)
+    return cand.timestamp()
+
+
 def _fmt_next_run(due_ts: float) -> str:
     """Human-friendly 'next run' for a schedule entry, e.g. 'in 35 min (14:20 IST)'."""
     import datetime as _dt
@@ -1154,6 +1188,8 @@ def format_schedule(chat_id) -> str:
         elif interval and interval % 60 == 0:
             label = f"every {interval // 60}h"
         line = f"  {i}. {label}: {html.escape(', '.join(cmds))}"
+        if e.get("run_at"):
+            line += f" at {e['run_at']} IST"
         due = storage.schedule_next_due_ts(e)
         if due:
             line += f"  — next run {_fmt_next_run(due)}"
@@ -1184,10 +1220,39 @@ def handle_sched(chat_id, parts) -> None:
                 "Usage: <code>/schedule add &lt;interval&gt; &lt;command&gt;</code>\n"
                 "e.g. <code>/schedule add 3h /scan500</code> or "
                 "<code>/schedule add 90m /topmovers 30m</code>\n"
+                "Or at a clock time: <code>/schedule add at 09:15 /toplosers 1h</code> "
+                "(daily at 09:15 IST) or <code>/schedule add at 09:15 3h /cmd</code> "
+                "(every 3h from 09:15).\n"
                 "Interval: minutes (180), m (90m), h (3h) or d (1d), min 15.",
             )
             return
-        interval = _parse_interval_min(parts[2])
+        run_at = None
+        token2 = parts[2].lower()
+        interval_tok = parts[2]
+        cmd_start = 3
+        if token2 in ("at", "time", "@"):
+            # /schedule add at HH:MM [interval] <command>
+            if len(parts) < 5:
+                reply(
+                    chat_id,
+                    "Usage: <code>/schedule add at HH:MM &lt;command&gt;</code>\n"
+                    "e.g. <code>/schedule add at 09:15 /toplosers 1h</code> (daily at 09:15 IST) "
+                    "or <code>/schedule add at 09:15 3h /cmd</code> (every 3h).",
+                )
+                return
+            run_at = parts[3].strip()
+            if _next_at_ist(run_at) is None:
+                reply(chat_id, "Bad time. Use 24h format like <code>09:15</code> or <code>18:30</code> (IST).")
+                return
+            nxt = parts[4] if len(parts) > 4 else ""
+            if nxt.startswith("/"):
+                # No interval given -> daily at run_at
+                interval_tok = "1440m"
+                cmd_start = 4
+            else:
+                interval_tok = nxt
+                cmd_start = 5
+        interval = _parse_interval_min(interval_tok)
         if interval is None:
             reply(
                 chat_id,
@@ -1195,19 +1260,22 @@ def handle_sched(chat_id, parts) -> None:
                 "<code>3h</code> or <code>1d</code> (min 15 minutes).",
             )
             return
-        command = " ".join(parts[3:]).strip()
+        command = " ".join(parts[cmd_start:]).strip()
         if not command.startswith("/"):
             reply(chat_id, "The command must start with / (e.g. <code>/scan500</code>).")
             return
         if command.lower().split()[0] in ("/sched", "/schedule"):
             reply(chat_id, "You cannot schedule /schedule itself.")
             return
-        storage.add_schedule_entry(interval, [command], str(chat_id))
-        log.info("chat %s added schedule entry: every %d min -> %s", chat_id, interval, command)
+        storage.add_schedule_entry(interval, [command], str(chat_id), run_at=run_at)
+        log.info(
+            "chat %s added schedule entry: every %d min%s -> %s",
+            chat_id, interval, f" at {run_at}" if run_at else "", command,
+        )
+        when = f"every <b>{interval} min</b> starting at <b>{run_at} IST</b>" if run_at else f"every <b>{interval} min</b>"
         reply(
             chat_id,
-            f"Added: <code>{html.escape(command)}</code> every "
-            f"<b>{interval} min</b>.\n\n{format_schedule(chat_id)}",
+            f"Added: <code>{html.escape(command)}</code> {when}.\n\n{format_schedule(chat_id)}",
         )
         return
 
@@ -2908,13 +2976,18 @@ def start_scheduled_reports():
                         continue
                     key = (chat, tuple(commands))
                     # Persisted next-due (schedule.json) wins so the cadence
-                    # survives redeploys; without it, fall back to a first-run
-                    # delay (short, so a fresh schedule proves itself fast).
+                    # survives redeploys. For a clock-time entry (run_at) the
+                    # first due is the next occurrence of HH:MM in IST. Plain
+                    # interval entries fall back to a short first-run delay.
                     persisted = storage.schedule_next_due_ts(entry)
                     due = next_due.get(key)
                     if due is None:
                         if persisted is not None:
                             due = persisted
+                        elif entry.get("run_at"):
+                            due = _next_at_ist(entry["run_at"])
+                            if due is None:
+                                due = now + min(interval * 60, 60)
                         else:
                             due = now + min(interval * 60, 60)
                         next_due[key] = due

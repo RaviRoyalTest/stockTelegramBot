@@ -298,6 +298,8 @@ def load_schedule() -> list[dict]:
                 # Persisted next-run timestamp (ISO) - kept so the cadence
                 # survives redeploys (see set_schedule_next_due).
                 "next_due": item.get("next_due"),
+                # Optional wall-clock "HH:MM" (IST) - first run at that time.
+                "run_at": item.get("run_at"),
             })
     return cleaned
 
@@ -323,21 +325,31 @@ def save_schedule(entries: list[dict]) -> None:
     log.info("schedule.json: %d scheduled report entry(s)", len(entries))
 
 
-def add_schedule_entry(interval_min: int, commands: list[str], chat: str) -> list[dict]:
-    """Append a schedule entry, then return the new full schedule."""
+def add_schedule_entry(
+    interval_min: int, commands: list[str], chat: str, run_at: str | None = None
+) -> list[dict]:
+    """Append a schedule entry, then return the new full schedule.
+
+    run_at is an optional "HH:MM" wall-clock time (IST). When set, the first
+    report fires at the next occurrence of that time and then repeats every
+    interval_min; without it the entry is plain interval-based (as before).
+    """
     with _lock, _file_lock(config.SCHEDULE_FILE):
         current = _read_json(config.SCHEDULE_FILE, [])
         if not isinstance(current, list):
             current = []
-        current.append({
+        entry = {
             "interval_min": interval_min,
             "commands": [c for c in commands if c.strip()],
             "chat": str(chat),
-        })
+        }
+        if run_at:
+            entry["run_at"] = run_at
+        current.append(entry)
         _write_json(config.SCHEDULE_FILE, current)
     log.info(
-        "schedule.json: added entry every %d min -> %s (chat %s)",
-        interval_min, ", ".join(commands), chat,
+        "schedule.json: added entry every %d min%s -> %s (chat %s)",
+        interval_min, f" at {run_at}" if run_at else "", ", ".join(commands), chat,
     )
     return current
 
