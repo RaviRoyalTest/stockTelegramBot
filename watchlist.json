@@ -15,11 +15,6 @@
     "company": "ASK Automotive Limited"
   },
   {
-    "symbol": "AUTOBEES",
-    "exchange": "NSE",
-    "company": ""
-  },
-  {
     "symbol": "BSE",
     "exchange": "NSE",
     "company": "BSE Limited"
@@ -28,11 +23,6 @@
     "symbol": "CANBK",
     "exchange": "NSE",
     "company": "Canara Bank"
-  },
-  {
-    "symbol": "CAPINVIT-IV",
-    "exchange": "NSE",
-    "company": ""
   },
   {
     "symbol": "CHOLAFIN",
@@ -60,16 +50,6 @@
     "company": "Genesys International Corporation Limited"
   },
   {
-    "symbol": "GOLDBEES",
-    "exchange": "NSE",
-    "company": ""
-  },
-  {
-    "symbol": "GOLDCASE",
-    "exchange": "NSE",
-    "company": ""
-  },
-  {
     "symbol": "GRSE",
     "exchange": "NSE",
     "company": "Garden Reach Shipbuilders & Engineers Limited"
@@ -90,11 +70,6 @@
     "company": "Indian Railway Catering And Tourism Corporation Limited"
   },
   {
-    "symbol": "ITBEES",
-    "exchange": "NSE",
-    "company": ""
-  },
-  {
     "symbol": "ITC",
     "exchange": "NSE",
     "company": "ITC Limited"
@@ -110,11 +85,6 @@
     "company": "KPIT Technologies Limited"
   },
   {
-    "symbol": "MAGNUS",
-    "exchange": "NSE",
-    "company": ""
-  },
-  {
     "symbol": "MARUTI",
     "exchange": "NSE",
     "company": "Maruti Suzuki India Limited"
@@ -123,11 +93,6 @@
     "symbol": "MCX",
     "exchange": "NSE",
     "company": "Multi Commodity Exchange of India Limited"
-  },
-  {
-    "symbol": "MODEFENCE",
-    "exchange": "NSE",
-    "company": ""
   },
   {
     "symbol": "MOTILALOFS",
@@ -150,19 +115,9 @@
     "company": "NMDC Limited"
   },
   {
-    "symbol": "PGINVIT",
-    "exchange": "NSE",
-    "company": ""
-  },
-  {
     "symbol": "RELIANCE",
     "exchange": "NSE",
     "company": "Reliance Industries Limited"
-  },
-  {
-    "symbol": "SGBDE31III-GB",
-    "exchange": "NSE",
-    "company": ""
   },
   {
     "symbol": "SHAKTIPUMP",
@@ -175,24 +130,9 @@
     "company": "Shriram Finance Limited"
   },
   {
-    "symbol": "SILVERBEES",
-    "exchange": "NSE",
-    "company": ""
-  },
-  {
-    "symbol": "SILVERCASE",
-    "exchange": "NSE",
-    "company": ""
-  },
-  {
     "symbol": "SOUTHBANK",
     "exchange": "NSE",
     "company": "The South Indian Bank Limited"
-  },
-  {
-    "symbol": "SPRIGHT",
-    "exchange": "NSE",
-    "company": ""
   },
   {
     "symbol": "SUZLON",
@@ -218,5 +158,65 @@
     "symbol": "VBL",
     "exchange": "NSE",
     "company": "Varun Beverages Limited"
+  },
+  {
+    "symbol": "ITBEES",
+    "exchange": "NSE",
+    "company": "Nippon India ETF Nifty IT"
+  },
+  {
+    "symbol": "CAPINVIT-IV",
+    "exchange": "NSE",
+    "company": "CAPITAL INFRA TRUST"
+  },
+  {
+    "symbol": "SILVERCASE",
+    "exchange": "NSE",
+    "company": "Zerodha Silver ETF"
+  },
+  {
+    "symbol": "PGINVIT",
+    "exchange": "NSE",
+    "company": "PGINVIT"
+  },
+  {
+    "symbol": "MODEFENCE",
+    "exchange": "NSE",
+    "company": "Motilal Oswal Nifty India Defence ETF"
+  },
+  {
+    "symbol": "GOLDBEES",
+    "exchange": "NSE",
+    "company": "Nippon India ETF Gold BeES"
+  },
+  {
+    "symbol": "AUTOBEES",
+    "exchange": "NSE",
+    "company": "Nippon India Nifty Auto ETF"
+  },
+  {
+    "symbol": "GOLDCASE",
+    "exchange": "NSE",
+    "company": "Zerodha Gold ETF"
+  },
+  {
+    "symbol": "MAGNUS",
+    "exchange": "NSE",
+    "company": ""
+  },
+  {
+    "symbol": "SILVERBEES",
+    "exchange": "NSE",
+    "company": "Nippon India Silver ETF"
+  },
+  {
+    "symbol": "SGBDE31III-GB",
+    "exchange": "NSE",
+    "company": ""
+  },
+  {
+    "symbol": "SPRIGHT",
+    "exchange": "NSE",
+    "company": ""
   }
 ]
