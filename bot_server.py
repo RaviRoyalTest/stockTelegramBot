@@ -66,6 +66,10 @@ WRITE_COMMANDS = {
     "/add", "/addstock", "/remove", "/removestock",
     "/filter", "/alertfilters", "/actionfilters", "/alert", "/pricealert",
     "/sched", "/schedule",
+    # /watcher writes the user's watcher settings (on/off, threshold,
+    # universe) to settings.json - without an immediate push, a redeploy
+    # inside the 180s flush window would silently reset it to OFF.
+    "/watcher", "/bigmover", "/moverwatch",
 }
 
 # How often to retry pushing state that did not reach GitHub (seconds). A
