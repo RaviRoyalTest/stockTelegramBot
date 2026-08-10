@@ -55,6 +55,10 @@ Open the URL shown in the terminal, then:
 | `POLL_INTERVAL_SECONDS` | `3600`  | Seconds between polls (>= ~300 to respect Telegram limits) |
 | `LOOKBACK_DAYS`         | `30`    | Past-days window used for BSE fetch      |
 | `REMINDER_DAYS`         | `5`     | Days ahead of ex-date to send a reminder (`0` = off) |
+| `SCHEDULED_REPORTS_ENABLED` | `true` | Run scheduled screens to the owner chat on a timer (always-on server only) |
+| `SCHEDULED_REPORTS_INTERVAL_MIN` | `30` | Minutes between scheduled reports (min 15) |
+| `SCHEDULED_REPORTS_CHAT` | owner | Chat id to send scheduled reports to (defaults to `TELEGRAM_CHAT_ID`) |
+| `SCHEDULED_COMMANDS`     | `/movers 30m,/scan500` | Comma-separated commands run on the schedule |
 
 ## Deploy free on GitHub Actions (24/7 polling, no server)
 

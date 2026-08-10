@@ -61,6 +61,23 @@ NATURAL_QUERIES = (
     in ("1", "true", "yes", "on")
 )
 
+# Scheduled reports: run a set of commands to the owner chat on a timer so
+# fresh screens (e.g. "/movers 30m" and "/scan500") arrive without anyone
+# typing them. Only the always-on server (PROCESS_COMMANDS=true) runs these;
+# the GitHub Actions cron skips them so two processes never send duplicates.
+SCHEDULED_REPORTS_ENABLED = (
+    os.getenv("SCHEDULED_REPORTS_ENABLED", "true").strip().lower()
+    in ("1", "true", "yes", "on")
+)
+SCHEDULED_REPORTS_INTERVAL_MIN = _env_int("SCHEDULED_REPORTS_INTERVAL_MIN", 30, floor=15)
+SCHEDULED_REPORTS_CHAT = os.getenv("SCHEDULED_REPORTS_CHAT", "").strip() or TELEGRAM_CHAT_ID
+SCHEDULED_COMMANDS = [
+    c.strip() for c in os.getenv(
+        "SCHEDULED_COMMANDS", "/movers 30m,/scan500"
+    ).split(",")
+    if c.strip()
+]
+
 WATCHLIST_FILE = Path(os.getenv("WATCHLIST_FILE", str(BASE_DIR / "watchlist.json")))
 SUBSCRIPTIONS_FILE = Path(os.getenv("SUBSCRIPTIONS_FILE", str(BASE_DIR / "subscriptions.json")))
 SETTINGS_FILE = Path(os.getenv("SETTINGS_FILE", str(BASE_DIR / "settings.json")))

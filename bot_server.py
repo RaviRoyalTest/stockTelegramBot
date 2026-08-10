@@ -33,6 +33,7 @@ from run_bot import (
     push_state,
     register_commands,
     reply,
+    start_scheduled_reports,
     sync_state,
 )
 
@@ -224,6 +225,7 @@ def main():
         )
     start_health_server()
     register_commands()
+    start_scheduled_reports()
     log.info("Starting long-polling bot (instant responses)...")
     sync_state()
     # Push anything a previous run left behind (failed push, crash before

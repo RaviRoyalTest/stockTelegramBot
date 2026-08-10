@@ -16,6 +16,7 @@ import os
 import re
 import subprocess
 import sys
+import threading
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from datetime import timedelta
 from time import monotonic
@@ -425,6 +426,11 @@ def handle_command(chat_id, text):
                     f"<b>Saved in:</b> <code>{html.escape(location)}</code>",
                     f"<b>GitHub push:</b> {html.escape(push_status)}",
                     html.escape(sync_line),
+                    f"<b>Scheduled reports:</b> "
+                    + ("enabled" if config.SCHEDULED_REPORTS_ENABLED and config.PROCESS_COMMANDS else "off")
+                    + f" \u00b7 every {config.SCHEDULED_REPORTS_INTERVAL_MIN} min \u00b7 "
+                    + ", ".join(config.SCHEDULED_COMMANDS)
+                    + f" \u00b7 to {config.SCHEDULED_REPORTS_CHAT or '(owner chat)'}",
                     "Run /list to see your current watchlist.",
                 ]
             ),
@@ -2159,6 +2165,50 @@ def process_commands():
         # Mark updates as consumed.
         get_updates(offset=max_offset + 1)
     return checknow_chat
+
+
+def start_scheduled_reports():
+    """Run SCHEDULED_COMMANDS to the owner chat on a timer (daemon thread).
+
+    Only the always-on server runs these (PROCESS_COMMANDS=true); the GitHub
+    Actions cron and any other process skip them so scans are never sent
+    twice. The first report fires one interval after startup so the server
+    has finished booting before the scans hit the data feeds.
+    """
+    if not config.SCHEDULED_REPORTS_ENABLED:
+        log.info("SCHEDULED_REPORTS_ENABLED=false - scheduled reports off")
+        return
+    if not config.PROCESS_COMMANDS:
+        log.info("PROCESS_COMMANDS=false - scheduled reports skipped (cron instance)")
+        return
+    target = config.SCHEDULED_REPORTS_CHAT or config.TELEGRAM_CHAT_ID
+    commands = list(config.SCHEDULED_COMMANDS)
+    if not target:
+        log.warning("SCHEDULED_REPORTS_CHAT / TELEGRAM_CHAT_ID not set - scheduled reports off")
+        return
+    if not commands:
+        log.info("SCHEDULED_COMMANDS empty - scheduled reports off")
+        return
+
+    interval = config.SCHEDULED_REPORTS_INTERVAL_MIN * 60
+    log.info(
+        "scheduled reports: %s every %d min to chat %s",
+        commands, config.SCHEDULED_REPORTS_INTERVAL_MIN, target,
+    )
+
+    def _loop():
+        import time as _time
+        _time.sleep(min(interval, 60))
+        while True:
+            for cmd in commands:
+                try:
+                    log.info("scheduled report: running %s", cmd)
+                    handle_command(target, cmd)
+                except Exception as exc:  # one bad report must not stop the loop
+                    log.warning("scheduled report %s failed: %s", cmd, config.redact(exc), exc_info=True)
+            _time.sleep(interval)
+
+    threading.Thread(target=_loop, daemon=True, name="scheduled-reports").start()
 
 
 # ----------------------------------------------------------------------- git
