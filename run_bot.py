@@ -282,6 +282,22 @@ def _pricealert_status_text(chat_id) -> str:
     return "Price alerts: <b>" + ("off" if not alert else f"{float(alert):g}%") + "</b>"
 
 
+def _watcher_universe(raw) -> str | None:
+    """Normalize a watcher universe token (nifty100 / nifty500 / mylist).
+
+    Returns None when the token is not a valid universe, so callers can
+    reject bad input with a usage message.
+    """
+    u = (raw or "").lower()
+    if u in ("nifty100", "n100", "100"):
+        return "nifty100"
+    if u in ("nifty500", "n500", "500", "all"):
+        return "nifty500"
+    if u in ("mylist", "watchlist", "list", "my"):
+        return "mylist"
+    return None
+
+
 def _alertfilters_status_text(chat_id) -> str:
     filters = (storage.get_user_settings(chat_id) or {}).get("action_filters") or []
     return "Action filters: <b>" + (", ".join(filters) if filters else "all types") + "</b>"
@@ -417,7 +433,7 @@ COMMAND_USAGE = {
         "Usage:\n"
         "/watcher on    \u2192 turn it ON\n"
         "/watcher off   \u2192 turn it OFF\n"
-        "/watcher set 3 \u2192 alert at a 3% session move\n"
+        "/watcher set 3 \u2192 alert at a 3% session move (e.g. /watcher set 5 nifty500)\n"
         "/watcher universe nifty500 \u2192 nifty100 | nifty500 | mylist\n"
         "/watcher       \u2192 show current status"
     ),
@@ -661,27 +677,37 @@ def handle_command(chat_id, text):
             if val == 0:
                 val = 5.0
             watcher["threshold"] = val
+            # Combined form: /watcher set 5 nifty500 sets threshold AND universe.
+            uni = _watcher_universe(parts[3]) if len(parts) >= 4 else None
+            if uni is None and len(parts) >= 4:
+                reply(chat_id, "Universe must be <code>nifty100</code>, <code>nifty500</code> or <code>mylist</code>.")
+                return
+            if uni:
+                watcher["universe"] = uni
             watcher["enabled"] = bool(watcher.get("enabled"))
             settings["watcher"] = watcher
             storage.save_user_settings(chat_id, settings)
-            reply(chat_id, f"Watcher threshold set to <b>{val:g}%</b> "
-                  f"({"ON" if watcher.get("enabled") else "OFF"} - use <code>/watcher on</code> to enable).")
+            reply(chat_id, f"Watcher threshold set to <b>{val:g}%</b>"
+                  + (f" · universe <b>{uni.upper()}</b>" if uni else "") + " "
+                  + ("✅ ON" if watcher.get("enabled") else "(OFF - use <code>/watcher on</code> to enable)."))
             return
         if sub in ("universe", "scope", "market"):
             if len(parts) < 3:
                 reply(chat_id, "Usage: <code>/watcher universe nifty100</code> | nifty500 | mylist")
                 return
-            u = parts[2].lower()
-            if u in ("nifty100", "n100", "100"):
-                u = "nifty100"
-            elif u in ("nifty500", "n500", "500", "all"):
-                u = "nifty500"
-            elif u in ("mylist", "watchlist", "list", "my"):
-                u = "mylist"
-            else:
+            u = _watcher_universe(parts[2])
+            if u is None:
                 reply(chat_id, "Universe must be <code>nifty100</code>, <code>nifty500</code> or <code>mylist</code>.")
                 return
             watcher["universe"] = u
+            # Combined form: /watcher universe nifty500 5 sets universe AND threshold.
+            if len(parts) >= 4:
+                try:
+                    t = abs(float(parts[3].strip().rstrip("%")))
+                    watcher["threshold"] = t if t > 0 else 5.0
+                except ValueError:
+                    reply(chat_id, "Usage: <code>/watcher universe nifty500 5</code> (percent move)")
+                    return
             watcher["enabled"] = bool(watcher.get("enabled"))
             settings["watcher"] = watcher
             storage.save_user_settings(chat_id, settings)

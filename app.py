@@ -244,13 +244,12 @@ with st.sidebar:
         (ui_settings.get("action_filters") or []) != sel_types
         or stored_thresh != thresh
     ):
-        storage.save_user_settings(
-            owner_key,
-            {
-                "action_filters": sel_types,
-                "price_alert_pct": thresh if thresh > 0 else None,
-            },
-        )
+        # Merge into the existing settings so other keys (e.g. the sudden-move
+        # watcher config saved via /watcher) are never wiped by this save.
+        merged = dict(ui_settings)
+        merged["action_filters"] = sel_types
+        merged["price_alert_pct"] = thresh if thresh > 0 else None
+        storage.save_user_settings(owner_key, merged)
     st.caption(f"Ex-date reminders: {config.REMINDER_DAYS} days ahead "
                f"(env REMINDER_DAYS, 0 disables).")
 
