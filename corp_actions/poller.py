@@ -231,10 +231,67 @@ class Poller:
             len(targets), only_chat, force,
         )
         t0 = time.monotonic()
-        all_actions, errors, warnings = fetch_all_actions()
+
+        # Collect unique watchlist stocks across all active targets
+        unique_watchlist = []
+        seen_keys = set()
+        for chat_id, watchlist in targets:
+            for item in watchlist:
+                if not isinstance(item, dict):
+                    continue
+                key = (item.get("exchange", "").upper(), item.get("symbol", "").upper())
+                if key not in seen_keys:
+                    seen_keys.add(key)
+                    unique_watchlist.append(item)
+
+        nse_symbols = [
+            w["symbol"] for w in unique_watchlist
+            if w.get("exchange", "").upper() == "NSE"
+        ]
+        bse_symbols = [
+            w["symbol"] for w in unique_watchlist
+            if w.get("exchange", "").upper() == "BSE"
+        ]
+
+        all_actions: list[dict] = []
+        errors: list[str] = []
+        warnings: list[str] = []
+
+        # Query NSE per-symbol (parallel) to get full history for each watchlist stock
+        if nse_symbols:
+            from concurrent.futures import ThreadPoolExecutor, as_completed
+
+            def _fetch_nse(sym):
+                try:
+                    return sources.get_nse_corporate_actions(symbol=sym), None
+                except Exception as exc:
+                    return [], f"NSE:{sym}: {exc}"
+
+            with ThreadPoolExecutor(max_workers=10) as ex:
+                futures = {ex.submit(_fetch_nse, sym): sym for sym in nse_symbols}
+                for fut in as_completed(futures):
+                    try:
+                        res, err = fut.result()
+                        if res:
+                            all_actions.extend(res)
+                        if err:
+                            errors.append(err)
+                    except Exception as exc:
+                        errors.append(f"NSE thread error: {exc}")
+
+        # Query BSE globally (when enabled)
+        if bse_symbols and config.ENABLE_BSE:
+            try:
+                bse_actions = sources.get_bse_corporate_actions()
+                all_actions.extend(bse_actions)
+            except sources.SourceError as exc:
+                warnings.append(f"BSE unavailable (blocked by their WAF): {exc}")
+            except Exception as exc:
+                errors.append(f"BSE: {exc}")
+
         log.info(
-            "poll cycle: fetched %d corporate action(s) in %.1fs (errors=%d, warnings=%d)",
-            len(all_actions), time.monotonic() - t0, len(errors), len(warnings),
+            "poll cycle: fetched %d corporate action(s) for %d unique watchlist stock(s) in %.1fs (errors=%d, warnings=%d)",
+            len(all_actions), len(unique_watchlist), time.monotonic() - t0, len(errors), len(warnings),
         )
         sent = 0
         today = config.today_ist()

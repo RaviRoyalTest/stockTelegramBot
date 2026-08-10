@@ -789,10 +789,30 @@ def run_ca_query(chat_id, descriptor: dict) -> bool:
 
     else:  # mode == "term": exact symbol first, then keyword search
         term = descriptor.get("term", "").strip()
-        symbol_matches = [
-            a for a in all_actions
-            if (a.get("symbol") or "").upper() == term.upper()
-        ]
+        
+        # Try to fetch symbol-specific actions from NSE to get full history
+        symbol_matches = []
+        try:
+            from corp_actions import sources as sources_mod
+            nse_actions = sources_mod.get_nse_corporate_actions(symbol=term.upper())
+            for a in nse_actions:
+                a["exchange"] = "NSE"
+            symbol_matches.extend(nse_actions)
+        except Exception as exc:
+            log.info("Failed to fetch NSE corporate actions for %s: %s", term, exc)
+
+        # Include matching symbols from the fetched global actions (e.g. BSE)
+        for a in all_actions:
+            if (a.get("symbol") or "").upper() == term.upper():
+                # Avoid duplicates
+                if not any(
+                    sa.get("exchange") == a.get("exchange")
+                    and sa.get("subject") == a.get("subject")
+                    and sa.get("ex_date") == a.get("ex_date")
+                    for sa in symbol_matches
+                ):
+                    symbol_matches.append(a)
+
         if symbol_matches:
             _attach_quotes(symbol_matches)
             messages = [f"<b>Corporate actions for {notifier.escape(term.upper())}</b>"]
