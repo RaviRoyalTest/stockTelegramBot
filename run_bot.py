@@ -613,6 +613,9 @@ def send_watchlist_actions(chat_id) -> None:
     pending = [
         a for a in matching if not poller_mod.parse_ex_date(a.get("ex_date"))
     ]
+    # Attach live prices so each colorful block can show the current price.
+    for group in (upcoming, recent, pending):
+        _attach_quotes(group)
     reply(chat_id, notifier.format_next_report(upcoming, recent, pending))
 
 

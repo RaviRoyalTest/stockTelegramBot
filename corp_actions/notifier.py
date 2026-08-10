@@ -288,6 +288,9 @@ def _parse_iso_date(value) -> date | None:
         return None
 
 
+
+
+
 def action_status(action: dict, today: date | None = None) -> str:
     """Derived one-line status for a corporate action, based on its dates.
 
@@ -351,49 +354,88 @@ def action_status(action: dict, today: date | None = None) -> str:
     return f"Ex-date passed {_fmt_date(ex)} ({days_ago}d ago)"
 
 
+def format_action_block(action: dict) -> str:
+    """Full colorful block for ONE action, as used by /corpactionsformylist.
+
+    Matches the alert layout: bold symbol + company, subject, current price
+    with a green/red direction arrow, and the ex/record dates.
+    """
+    symbol = action.get("symbol") or "-"
+    exchange = action.get("exchange") or "-"
+    company = action.get("company") or "-"
+    subject = action.get("subject") or "-"
+    typ = sources.action_type(subject)
+    type_emoji = _TYPE_EMOJI.get(typ, _TYPE_EMOJI["other"])
+    lines = [
+        f"{type_emoji} <b>{escape(symbol)}</b> ({escape(exchange)}) - {escape(company)}",
+        f"Subject: {escape(subject)}",
+    ]
+    quote = action.get("quote")
+    if quote and quote.get("price") is not None:
+        price = quote["price"]
+        currency = quote.get("currency", "INR")
+        change = quote.get("change_pct")
+        if change is not None:
+            arrow = "\u25b2" if change >= 0 else "\u25bc"
+            color_icon = "\U0001F7E2" if change >= 0 else "\U0001F534"
+            sign = "+" if change >= 0 else ""
+            lines.append(
+                f"Current Price: <b>{fmt_money(price, currency)}</b>  "
+                f"{color_icon}{arrow} <b>{sign}{change:.2f}%</b>"
+            )
+        else:
+            lines.append(f"Current Price: <b>{fmt_money(price, currency)}</b>")
+    ex = action.get("ex_date")
+    if ex and str(ex).strip() not in ("", "-"):
+        lines.append(f"Ex-Date: <b>{escape(ex)}</b>")
+    rec = action.get("record_date")
+    if rec and str(rec).strip() not in ("", "-"):
+        lines.append(f"Record Date: {escape(rec)}")
+    return "\n".join(lines)
+
+
 def format_next_report(
     upcoming: list[dict], recent: list[dict], pending: list[dict] | None = None
 ) -> str:
-    """Render the /next report: upcoming ex-dates plus recently passed / in-
-    progress actions and announced actions with no ex-date yet.
+    """Render /corpactionsformylist: a full colorful block per action.
 
-    `recent` catches exactly the cases /next used to miss - a rights issue
-    whose ex-date has just passed (subscription still open) or a dividend
-    whose payment is still pending.
+    Every action - upcoming, recently passed / in-progress, and announced-
+    but-undated - is shown as a detail block (symbol + company, subject,
+    current price with direction arrow, ex/record dates), the same layout
+    as the push alerts, so the whole report reads clearly with dates.
     """
     sections = []
     if upcoming:
-        lines = ["<b>Upcoming ex-dates</b>"]
-        for action in sorted(upcoming, key=lambda a: a.get("ex_date") or "9999-99-99"):
-            typ = sources.action_type(action.get("subject"))
-            lines.append(
-                f"\u2022 <b>{escape(action.get('symbol'))}</b> ({escape(action.get('exchange'))}) - "
-                f"{escape(action.get('ex_date'))} [{sources.TYPE_LABELS.get(typ, typ)}]"
-            )
-        sections.append("\n".join(lines))
+        blocks = [
+            format_action_block(a)
+            for a in sorted(upcoming, key=lambda a: a.get("ex_date") or "9999-99-99")
+        ]
+        sections.append(
+            "<b>\U0001F4C5 Upcoming ex-dates</b>\n\n" + "\n\n".join(blocks)
+        )
     else:
-        sections.append("<b>Upcoming ex-dates</b>\nNone in the reminder window.")
+        sections.append(
+            "<b>\U0001F4C5 Upcoming ex-dates</b>\nNone in the reminder window."
+        )
 
     if pending:
-        lines = ["<b>Announced - ex-date not fixed yet</b>"]
-        for action in pending:
-            typ = sources.action_type(action.get("subject"))
-            lines.append(
-                f"\u2022 <b>{escape(action.get('symbol'))}</b> ({escape(action.get('exchange'))}) - "
-                f"{escape(action.get('subject'))} [{sources.TYPE_LABELS.get(typ, typ)}]"
-            )
-        sections.append("\n".join(lines))
+        blocks = [format_action_block(a) for a in pending]
+        sections.append(
+            "<b>\U0001F4E2 Announced - ex-date not fixed yet</b>\n\n"
+            + "\n\n".join(blocks)
+        )
 
     if recent:
-        lines = ["<b>Recently passed / in progress</b> (past 30 days)"]
-        for action in sorted(
-            recent, key=lambda a: a.get("ex_date") or "0000-01-01", reverse=True
-        ):
-            lines.append(
-                f"\u2022 <b>{escape(action.get('symbol'))}</b> ({escape(action.get('exchange'))}) - "
-                f"{action_status(action)}"
+        blocks = [
+            format_action_block(a)
+            for a in sorted(
+                recent, key=lambda a: a.get("ex_date") or "0000-01-01", reverse=True
             )
-        sections.append("\n".join(lines))
+        ]
+        sections.append(
+            "<b>\U0001F504 Recently passed / in progress</b> (past 30 days)\n\n"
+            + "\n\n".join(blocks)
+        )
 
     if not sections:
         return "No corporate actions for your watchlist right now."
