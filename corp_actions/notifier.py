@@ -148,8 +148,11 @@ def send_message(
                 return resp2.json()
             except Exception as exc2:
                 log.warning("Telegram plain text fallback also failed: %s", exc2)
-        log.warning("Telegram send to chat %s failed: %s", target, exc)
-        raise NotifierError(f"Telegram send failed: {exc}") from exc
+        log.warning("Telegram send to chat %s failed: %s", target, config.redact(exc))
+        # redact() strips the bot token - requests embeds the full request URL
+        # (which contains the token) in HTTP-error exceptions, and this message
+        # can surface in the dashboard, Telegram replies and logs.
+        raise NotifierError(config.redact(f"Telegram send failed: {exc}")) from exc
 
 
 # Emoji map for corporate action types

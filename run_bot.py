@@ -611,7 +611,7 @@ def send_watchlist_actions(chat_id) -> None:
     try:
         matching = poller_mod.fetch_matching(items)
     except Exception as exc:
-        reply(chat_id, f"Could not fetch corporate actions: {html.escape(str(exc))}")
+        reply(chat_id, f"Could not fetch corporate actions: {html.escape(config.redact(str(exc)))}")
         return
     upcoming = [
         a for a in matching if poller_mod.within_reminder_window(a.get("ex_date"))

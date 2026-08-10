@@ -510,7 +510,7 @@ with st.sidebar:
                 notifier.send_message("<b>Stock Alert Bot</b> test message OK.")
                 st.success("Test message sent.")
             except notifier.NotifierError as exc:
-                st.error(str(exc))
+                st.error(config.redact(str(exc)))
     else:
         st.warning("Telegram not configured.")
 
@@ -531,7 +531,7 @@ with st.sidebar:
             poller.run_once()
             st.success("Checked.")
         except Exception as exc:
-            st.error(str(exc))
+            st.error(config.redact(str(exc)))
         st.rerun()
 
     st.divider()
@@ -1295,7 +1295,7 @@ with tab_status:
                 sent = poller.run_once(force=True)
                 st.success(f"Check done — re-sent {sent} alert(s).")
             except Exception as exc:
-                st.error(f"Check failed: {exc}")
+                st.error(f"Check failed: {config.redact(exc)}")
 
     st.divider()
     st.subheader("Automated reports (schedule)")

@@ -296,7 +296,7 @@ def main():
                         sent = poller.run_once(force=True, only_chat=str(chat_id))
                         reply(chat_id, f"Check done - re-sent {sent} alert(s) to this chat.")
                     except Exception as exc:  # keep the loop alive
-                        reply(chat_id, f"Check failed: {exc}")
+                        reply(chat_id, f"Check failed: {config.redact(exc)}")
                 else:
                     try:
                         handle_command(chat_id, text)
