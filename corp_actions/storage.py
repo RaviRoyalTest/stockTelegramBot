@@ -277,7 +277,8 @@ def save_seen(keys: set) -> None:
 # Scheduled reports live in schedule.json (pushed to GitHub with the rest of
 # the state) so /schedule add/remove changes survive redeploys instead of living
 # only in env vars. Each entry: {"interval_min": int, "commands": [str,...],
-# "chat": str}.
+# "chat": str}. Every Telegram user manages their own entries - a chat only
+# ever sees and changes the rows that belong to it.
 
 def load_schedule() -> list[dict]:
     """Return list of {'interval_min', 'commands', 'chat'} schedule entries."""
@@ -296,6 +297,21 @@ def load_schedule() -> list[dict]:
                 "chat": str(item.get("chat", "") or ""),
             })
     return cleaned
+
+
+def load_schedule_for(chat_id) -> list[dict]:
+    """Return the schedule entries that belong to one chat.
+
+    Legacy rows with an empty chat field count as the owner's (they were
+    created before per-user schedules, when only the owner could schedule).
+    """
+    key = str(chat_id)
+    owner = str(config.TELEGRAM_CHAT_ID or "")
+    return [
+        e for e in load_schedule()
+        if str(e.get("chat") or "") == key
+        or (not str(e.get("chat") or "") and key == owner)
+    ]
 
 
 def save_schedule(entries: list[dict]) -> None:
@@ -323,15 +339,54 @@ def add_schedule_entry(interval_min: int, commands: list[str], chat: str) -> lis
     return current
 
 
-def remove_schedule_entry(index: int) -> list[dict]:
-    """Remove the entry at index (0-based). Returns the new full schedule."""
+def remove_schedule_entry(chat_id, index: int) -> list[dict]:
+    """Remove the index-th (0-based) schedule entry belonging to chat_id.
+
+    Indexes are relative to that chat's own entries (as shown by /schedule),
+    so one user removing theirs never touches another user's rows. Returns
+    the new full schedule.
+    """
     with _lock, _file_lock(config.SCHEDULE_FILE):
         current = _read_json(config.SCHEDULE_FILE, [])
         if not isinstance(current, list):
             current = []
+        key = str(chat_id)
+        owner = str(config.TELEGRAM_CHAT_ID or "")
+        own = [
+            i for i, e in enumerate(current)
+            if str(e.get("chat") or "") == key
+            or (not str(e.get("chat") or "") and key == owner)
+        ]
         removed = None
-        if 0 <= index < len(current):
-            removed = current.pop(index)
+        if 0 <= index < len(own):
+            removed = current.pop(own[index])
             _write_json(config.SCHEDULE_FILE, current)
-    log.info("schedule.json: removed entry %d -> %s", index, removed if removed else "not found")
+    log.info(
+        "schedule.json: removed chat %s entry %d -> %s",
+        chat_id, index, removed if removed else "not found",
+    )
     return current
+
+
+def clear_schedule(chat_id) -> list[dict]:
+    """Remove every schedule entry belonging to chat_id only.
+
+    Other users' rows stay untouched. Returns the new full schedule.
+    """
+    with _lock, _file_lock(config.SCHEDULE_FILE):
+        current = _read_json(config.SCHEDULE_FILE, [])
+        if not isinstance(current, list):
+            current = []
+        key = str(chat_id)
+        owner = str(config.TELEGRAM_CHAT_ID or "")
+        kept = [
+            e for e in current
+            if not (str(e.get("chat") or "") == key
+                    or (not str(e.get("chat") or "") and key == owner))
+        ]
+        _write_json(config.SCHEDULE_FILE, kept)
+    log.info(
+        "schedule.json: cleared chat %s (%d entry(s) removed)",
+        chat_id, len(current) - len(kept),
+    )
+    return kept

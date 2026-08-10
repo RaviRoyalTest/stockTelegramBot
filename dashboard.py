@@ -67,7 +67,7 @@ HELP_TEXT = (
     "- `/settings` — view your current filter & alert config\n\n"
     "**System**\n"
     "- `/status` — where your watchlist is saved & GitHub push status\n"
-    "- `/schedule add 3h /scan500` — run a command automatically every 3h\n"
+    "- `/schedule add 3h /scan500` — run a command automatically every 3h (works for every user; each person's reports go to their own chat)\n"
     "- `/checknow` — force-run alerts and re-send all matches\n"
     "- `/menu` — one-tap command buttons in Telegram (no typing)\n"
     "- `/help` · `/start` — show this guide\n\n"

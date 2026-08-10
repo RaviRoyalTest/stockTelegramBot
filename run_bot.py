@@ -171,8 +171,8 @@ HELP_TEXT = (
     "━━━━━━━━━━━━━━━━━━━━\n"
     "\U0001F6E0 <b>System</b>\n"
     "━━━━━━━━━━━━━━━━━━━━\n"
-    "/status              \u2192 where your watchlist is saved &amp; GitHub push status\n"
-    "/schedule add 3h /scan500  \u2192 run /scan500 automatically every 3h\n"
+    "/status              \u2192 YOUR personal setup (watchlist, schedule, settings, alerts)\n"
+    "/schedule add 3h /scan500  \u2192 YOUR report runs /scan500 automatically every 3h\n"
     "/checknow            \u2192 force-run alerts and re-send all matches\n"
     "/menu                \u2192 one-tap command buttons (tap, no typing)\n"
     "/help \u00b7 /start       \u2192 show this guide\n\n"
@@ -387,11 +387,10 @@ def handle_command(chat_id, text):
                 "on redeploy). Set GH_TOKEN + GITHUB_REPOSITORY on this host."
             )
             sync_line = "Local state vs GitHub: unknown (no GitHub credentials)"
-        owner_chat = config.TELEGRAM_CHAT_ID or "NOT SET"
-        owner_line = (
-            f"<b>Configured owner chat:</b> <code>{html.escape(owner_chat)}</code>"
-            + ("" if owner else " - you are NOT this chat, so owner commands "
-               "(/schedule, watchlist.json) are unavailable to you")
+        personal_line = (
+            "<b>Personal:</b> everything here is yours alone - your watchlist, "
+            "schedule, settings and alerts. Other users' data never mixes "
+            "with yours and they cannot touch yours."
         )
         reply(
             chat_id,
@@ -399,7 +398,7 @@ def handle_command(chat_id, text):
                 [
                     f"<b>Your chat id:</b> <code>{chat_id}</code>",
                     f"<b>Role:</b> {'owner' if owner else 'subscriber'}",
-                    owner_line,
+                    personal_line,
                     f"<b>Saved in:</b> <code>{html.escape(location)}</code>",
                     f"<b>GitHub push:</b> {html.escape(push_status)}",
                     html.escape(sync_line),
@@ -1011,32 +1010,38 @@ def _parse_interval_min(raw: str) -> int | None:
 
 
 def format_schedule(chat_id) -> str:
-    """Render the current automated-report schedule (/schedule)."""
-    entries = storage.load_schedule()
-    if not entries:
-        cmds = [c for c in config.SCHEDULED_COMMANDS if c.strip()]
-        if not cmds:
-            return "<b>Schedule:</b> no automated reports."
-        lines = [
-            "<b>Schedule (env defaults - use /schedule to edit)</b>",
-            f"  1. every {config.SCHEDULED_REPORTS_INTERVAL_MIN} min: "
-            + html.escape(", ".join(cmds)),
-        ]
-    else:
-        lines = ["<b>Schedule (schedule.json - pushed to GitHub)</b>"]
-        for i, e in enumerate(entries, start=1):
-            interval = int(e.get("interval_min") or 0)
-            cmds = e.get("commands") or []
-            chat = e.get("chat")
-            label = f"every {interval} min"
-            if interval and interval % (24 * 60) == 0:
-                label = f"every {interval // (24 * 60)}d"
-            elif interval and interval % 60 == 0:
-                label = f"every {interval // 60}h"
-            target = f" to {chat}" if chat and str(chat) != str(config.TELEGRAM_CHAT_ID) else ""
-            lines.append(
-                f"  {i}. {label}: {html.escape(', '.join(cmds))}{html.escape(target)}"
+    """Render the requester's OWN automated-report schedule (/schedule).
+
+    Every user only ever sees and manages their own entries - another
+    person's reports never appear here and are never affected by this
+    chat's /schedule add/remove/clear.
+    """
+    mine = storage.load_schedule_for(chat_id)
+    if not mine:
+        if storage.is_owner(chat_id):
+            cmds = [c for c in config.SCHEDULED_COMMANDS if c.strip()]
+            if not cmds:
+                return "<b>Schedule:</b> no automated reports yet."
+            return (
+                "<b>Schedule (env defaults - use /schedule to edit)</b>\n"
+                f"  1. every {config.SCHEDULED_REPORTS_INTERVAL_MIN} min: "
+                + html.escape(", ".join(cmds))
+                + "\n\n<b>Tip:</b> add your own entry below to replace these defaults."
             )
+        return (
+            "<b>Schedule:</b> no automated reports yet for your chat.\n"
+            "Add one with <code>/schedule add 3h /scan500</code>."
+        )
+    lines = ["<b>Your schedule (schedule.json - pushed to GitHub)</b>"]
+    for i, e in enumerate(mine, start=1):
+        interval = int(e.get("interval_min") or 0)
+        cmds = e.get("commands") or []
+        label = f"every {interval} min"
+        if interval and interval % (24 * 60) == 0:
+            label = f"every {interval // (24 * 60)}d"
+        elif interval and interval % 60 == 0:
+            label = f"every {interval // 60}h"
+        lines.append(f"  {i}. {label}: {html.escape(', '.join(cmds))}")
     lines.append(
         "\nUsage: <code>/schedule add 3h /scan500</code> (interval: 180, 90m, 3h, 1d)"
     )
@@ -1045,32 +1050,16 @@ def format_schedule(chat_id) -> str:
 
 
 def handle_sched(chat_id, parts) -> None:
-    """Manage the automated-report schedule (owner only).
+    """Manage YOUR OWN automated-report schedule (works for every user).
 
-    /schedule                  -> show the current schedule
+    /schedule                  -> show YOUR schedule
     /schedule add <int> <cmd...> -> add a command on its own timer (e.g. /schedule add 3h /scan500)
-    /schedule remove <n>       -> remove entry n (1-based, as shown by /schedule)
-    /schedule clear            -> remove all entries
-    """
-    if not storage.is_owner(chat_id):
-        if not config.TELEGRAM_CHAT_ID:
-            reply(
-                chat_id,
-                "Only the owner can change the schedule, and this host has "
-                "no TELEGRAM_CHAT_ID configured, so nobody is recognized as "
-                "owner. Set TELEGRAM_CHAT_ID on the server (your chat id is "
-                f"<code>{chat_id}</code>), then try again.",
-            )
-        else:
-            reply(
-                chat_id,
-                "Only the owner can change the schedule. Your chat id "
-                f"(<code>{chat_id}</code>) is not the configured owner chat "
-                f"(<code>{html.escape(config.TELEGRAM_CHAT_ID)}</code>). "
-                "Use /status to compare.",
-            )
-        return
+    /schedule remove <n>       -> remove YOUR entry n (1-based, as shown by /schedule)
+    /schedule clear            -> remove all of YOUR entries
 
+    Everything is scoped to the requesting chat - one user's schedule can
+    never change or disturb another user's.
+    """
     sub = parts[1].lower() if len(parts) > 1 else ""
     if sub == "add":
         if len(parts) < 4:
@@ -1097,7 +1086,7 @@ def handle_sched(chat_id, parts) -> None:
         if command.lower().split()[0] in ("/sched", "/schedule"):
             reply(chat_id, "You cannot schedule /schedule itself.")
             return
-        storage.add_schedule_entry(interval, [command], str(config.TELEGRAM_CHAT_ID))
+        storage.add_schedule_entry(interval, [command], str(chat_id))
         log.info("chat %s added schedule entry: every %d min -> %s", chat_id, interval, command)
         reply(
             chat_id,
@@ -1115,19 +1104,23 @@ def handle_sched(chat_id, parts) -> None:
         except ValueError:
             reply(chat_id, "Usage: <code>/schedule remove &lt;n&gt;</code>")
             return
-        entries = storage.load_schedule()
+        entries = storage.load_schedule_for(chat_id)
         if index < 0 or index >= len(entries):
             reply(chat_id, "No entry at that number. Run /schedule to list them.")
             return
-        storage.remove_schedule_entry(index)
+        storage.remove_schedule_entry(chat_id, index)
         log.info("chat %s removed schedule entry %d", chat_id, index)
         reply(chat_id, f"Removed entry {index + 1}.\n\n{format_schedule(chat_id)}")
         return
 
     if sub == "clear":
-        storage.save_schedule([])
-        log.info("chat %s cleared the schedule", chat_id)
-        reply(chat_id, "Schedule cleared - no automated reports will run.")
+        storage.clear_schedule(chat_id)
+        log.info("chat %s cleared their schedule", chat_id)
+        reply(
+            chat_id,
+            "Your schedule cleared - no automated reports will run "
+            "for your chat. Other users' schedules are untouched.",
+        )
         return
 
     reply(chat_id, format_schedule(chat_id))
@@ -2658,18 +2651,44 @@ def process_commands():
     return checknow_chat
 
 
+def _schedule_entries_with_defaults(default_chat: str) -> list[dict]:
+    """schedule.json entries plus the owner's env-default report.
+
+    The env defaults (SCHEDULED_COMMANDS) keep running for the owner chat
+    until the owner adds their own file entries. Subscribers adding their
+    own entries must never suppress those defaults - this guarantees one
+    user's schedule never disturbs another's.
+    """
+    entries = storage.load_schedule()
+    cmds = [c for c in config.SCHEDULED_COMMANDS if c.strip()]
+    if cmds:
+        owner_has_entries = any(
+            str(e.get("chat") or default_chat) == str(default_chat)
+            for e in entries
+        )
+        if not owner_has_entries:
+            entries = entries + [{
+                "interval_min": config.SCHEDULED_REPORTS_INTERVAL_MIN,
+                "commands": cmds,
+                "chat": default_chat,
+            }]
+    return entries
+
+
 def start_scheduled_reports():
-    """Run scheduled reports to the owner chat on a timer (daemon thread).
+    """Run scheduled reports to EACH user's own chat on a timer (daemon thread).
 
     Only the always-on server runs these (PROCESS_COMMANDS=true); the GitHub
     Actions cron and any other process skip them so scans are never sent
     twice. The first report fires a short while after startup so the server
     has finished booting before the scans hit the data feeds.
 
-    Entries come from schedule.json (manageable from Telegram with /schedule);
-    when the file is empty the env-var defaults (SCHEDULED_COMMANDS +
-    SCHEDULED_REPORTS_INTERVAL_MIN) are used so existing deployments keep
-    working. The schedule is re-read each loop, so /schedule add/remove/clear
+    Entries come from schedule.json (manageable from Telegram with /schedule)
+    and every entry is delivered to the chat that created it - schedules are
+    fully per-user. When the owner has no file entries the env-var defaults
+    (SCHEDULED_COMMANDS + SCHEDULED_REPORTS_INTERVAL_MIN) are used so existing
+    deployments keep working; other users' entries never suppress those
+    defaults. The schedule is re-read each loop, so /schedule add/remove/clear
     take effect without a redeploy.
     """
     if not config.SCHEDULED_REPORTS_ENABLED:
@@ -2684,19 +2703,12 @@ def start_scheduled_reports():
         return
 
     def _entries():
-        entries = storage.load_schedule()
-        if entries:
-            return entries
-        cmds = [c for c in config.SCHEDULED_COMMANDS if c.strip()]
-        if not cmds:
-            return []
-        return [{
-            "interval_min": config.SCHEDULED_REPORTS_INTERVAL_MIN,
-            "commands": cmds,
-            "chat": default_chat,
-        }]
+        return _schedule_entries_with_defaults(default_chat)
 
-    next_due = {}  # index -> monotonic() seconds when the next run is due
+    # (chat, commands) -> monotonic() seconds when the next run is due.
+    # Keyed on the entry's identity (not its list index) so one user adding
+    # or removing their entries never changes another user's timing.
+    next_due = {}
 
     def _loop():
         import time as _time
@@ -2709,15 +2721,25 @@ def start_scheduled_reports():
                     next_due.clear()
                     _time.sleep(60)
                     continue
-                for idx, entry in enumerate(entries):
+                # Drop due-times for entries that no longer exist so removed
+                # schedules never linger, and (chat, commands) stays stable
+                # across add/remove in other users' rows.
+                alive = {
+                    (str(e.get("chat") or default_chat),
+                     tuple(c for c in e.get("commands") or [] if c.strip()))
+                    for e in entries
+                }
+                next_due = {k: v for k, v in next_due.items() if k in alive}
+                for entry in entries:
                     interval = int(entry.get("interval_min") or config.SCHEDULED_REPORTS_INTERVAL_MIN)
                     commands = [c for c in entry.get("commands") or [] if c.strip()]
                     chat = str(entry.get("chat") or default_chat)
                     if not commands:
                         continue
-                    due = next_due.get(idx)
+                    key = (chat, tuple(commands))
+                    due = next_due.get(key)
                     if due is None:
-                        next_due[idx] = now + min(interval * 60, 60)
+                        next_due[key] = now + min(interval * 60, 60)
                         continue
                     if now < due:
                         continue
@@ -2730,7 +2752,7 @@ def start_scheduled_reports():
                                 "scheduled report %s failed: %s",
                                 cmd, config.redact(exc), exc_info=True,
                             )
-                    next_due[idx] = monotonic() + interval * 60
+                    next_due[key] = monotonic() + interval * 60
             except Exception as exc:  # never let a scheduler hiccup kill the thread
                 log.warning(
                     "scheduled reports loop error: %s",
