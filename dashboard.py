@@ -46,7 +46,7 @@ HELP_TEXT = (
     "- `/corpactionssummary` — corporate-action snapshot: counts + next ex-dates\n"
     "- `/corpactionsformylist` — YOUR watchlist: ex-dates + in-progress actions (rights/dividends) with status\n\n"
     "**Stock Analysis**\n"
-    "- `/stockanalysis SYMBOL` — quick summary (price, P/E, 52W signal, QoQ holding)\n"
+    "- `/fundamentalanalyze SYMBOL` — quick analysis card (price, P/E, 52W signal, QoQ holding); `/fundamentalanalyze mylist` for your whole watchlist\n"
     "- `/fundamentals SYMBOL` — full deep-dive report (valuation, growth, margins, balance sheet)\n\n"
     "**Watchlist**\n"
     "- `/addstock SYMBOL [NSE|BSE]` · `/removestock SYMBOL` · `/watchlist`\n"

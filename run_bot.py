@@ -121,14 +121,16 @@ HELP_TEXT = (
     "━━━━━━━━━━━━━━━━━━━━\n"
     "\U0001F50D <b>Stock Analysis</b>\n"
     "━━━━━━━━━━━━━━━━━━━━\n"
-    "/stockanalysis <i>SYMBOL</i>  \u2192 quick summary card\n"
-    "  /stockanalysis TATATECH  \u2192 price, P/E, 52W signal, QoQ shareholding\n"
-    "/stockanalysis <i>N | N-M | all</i>  \u2192 same card for watchlist positions\n"
-    "  /stockanalysis 5-10  \u2192 watchlist stocks #5 to #10\n\n"
+    "/fundamentalanalyze <i>SYMBOL</i>  \u2192 quick analysis card\n"
+    "  /fundamentalanalyze TATATECH  \u2192 price, P/E, 52W signal, QoQ shareholding\n"
+    "/fundamentalanalyze <i>N | N-M | mylist</i>  \u2192 same card for your stocks\n"
+    "  /fundamentalanalyze mylist  \u2192 your whole watchlist (10 per page, Next button)\n"
+    "  /fundamentalanalyze 5-10    \u2192 watchlist stocks #5 to #10\n\n"
     "/fundamentals <i>SYMBOL</i>  \u2192 deep fundamental report\n"
     "  /fundamentals RELIANCE  \u2192 valuation, growth, margins, balance sheet,\n"
     "                     EPS, analyst targets &amp; shareholding\n"
-    "  /fundamentals 3-5   \u2192 deep report for watchlist #3..#5\n\n"
+    "  /fundamentals 3-5   \u2192 deep report for watchlist #3..#5\n"
+    "  /fundamentals mylist \u2192 deep report for your whole watchlist (5 per page)\n\n"
     "/harmonicpatterns <i>[all|100|500] [TIMEFRAME]</i>  \u2192 harmonic patterns\n"
     "  Scans for Gartley / Bat / Butterfly / Crab / Shark setups.\n"
     "  /harmonicpatterns all  \u2192 NIFTY 100, daily \u00b7  /harmonicpatterns 500 1w\n"
@@ -479,7 +481,7 @@ def handle_command(chat_id, text):
         handle_scan500(chat_id, parts)
         return
 
-    if cmd in ("/stock", "/info", "/quote", "/stockanalysis", "/stock-analysis", "/analysis"):
+    if cmd in ("/stock", "/info", "/quote", "/stockanalysis", "/stock-analysis", "/analysis", "/fundamentalanalyze", "/fundamental-analysis"):
         handle_single_stock_analysis(chat_id, parts)
         return
 
@@ -586,7 +588,7 @@ def send_watchlist(chat_id) -> None:
         chat_id,
         "<b>Your Watchlist:</b>\n"
         + "\n".join(lines)
-        + f"\n\nUse <code>/stockanalysis 5-10</code> or <code>/fundamentals 3-5</code> to get details by these numbers."
+        + f"\n\nUse <code>/fundamentalanalyze 5-10</code> or <code>/fundamentals 3-5</code> to get details by these numbers."
         + f"\nSaved in: <code>{html.escape(where)}</code>\nPersistence: {html.escape(persistence)}",
     )
 
@@ -633,7 +635,7 @@ def handle_favourites(chat_id) -> None:
     handle_gainers_losers(chat_id, ["/toplosers", "1h"], "losers")
     handle_gainers_losers(chat_id, ["/toplosers", "1d", "10"], "losers")
     send_watchlist(chat_id)
-    handle_fund_analysis(chat_id, ["/fundamentals", "all"])
+    handle_fund_analysis(chat_id, ["/fundamentals", "mylist"])
     reply(
         chat_id,
         "\u2705 <b>Favourites done.</b> Use <code>/menu</code> for one-tap commands "
@@ -1647,7 +1649,7 @@ def _parse_stock_range(arg: str):
     token = (arg or "").strip().lower()
     if not token:
         return None
-    if token in ("all", "*", "full", "everything"):
+    if token in ("all", "mylist", "my-list", "my list", "*", "full", "everything"):
         return (1, None)
     m = re.fullmatch(r"(\d+)\s*-\s*(\d+)", token)
     if m:
@@ -1995,14 +1997,15 @@ def handle_single_stock_analysis(chat_id, parts) -> None:
     if len(parts) < 2:
         reply(
             chat_id,
-            "Usage: <code>/stockanalysis SYMBOL</code> (e.g. <code>/stockanalysis TATATECH</code>) "
-            "or <code>/stockanalysis 5</code> / <code>/stockanalysis 5-10</code> (watchlist positions)",
+            "Usage: <code>/fundamentalanalyze SYMBOL</code> (e.g. <code>/fundamentalanalyze TATATECH</code>) "
+            "or <code>/fundamentalanalyze 5</code> / <code>/fundamentalanalyze 5-10</code> / "
+            "<code>/fundamentalanalyze mylist</code> (watchlist positions)",
         )
         return
 
     rng = _parse_stock_range(parts[1])
     if rng is not None:
-        handle_stock_batch(chat_id, "/stockanalysis", rng, deep=False)
+        handle_stock_batch(chat_id, "/fundamentalanalyze", rng, deep=False)
         return
 
     raw_sym = parts[1].upper().strip().removesuffix(".NS").removesuffix(".BO")
@@ -2013,7 +2016,7 @@ def handle_single_stock_analysis(chat_id, parts) -> None:
     fund = sources.get_fundamentals(raw_sym, with_screener=True) or {}
 
     if quote.get("price") is None and not fund:
-        _reply_suggestions(chat_id, raw_sym, "stockanalysis")
+        _reply_suggestions(chat_id, raw_sym, "fundamentalanalyze")
         return
 
     lines = _stock_summary_lines(raw_sym, quote, fund, include_tip=True)
@@ -2093,7 +2096,7 @@ def _build_stock_batch(chat_id, cmd: str, rng, deep: bool) -> tuple[list[str], i
 
 
 def handle_stock_batch(chat_id, cmd: str, rng, deep: bool) -> None:
-    """Render /stockanalysis or /fundamentals for a range of watchlist positions."""
+    """Render /fundamentalanalyze or /fundamentals for a range of watchlist positions."""
     lines, next_start = _build_stock_batch(chat_id, cmd, rng, deep)
     markup = _stock_next_markup(deep, next_start) if next_start else None
     _reply_messages(chat_id, _split_messages(lines), reply_markup=markup)
@@ -2137,7 +2140,7 @@ def handle_callback_query(callback) -> None:
         start = int(start_s)
     except ValueError:
         return
-    cmd = "/fundamentals" if deep else "/stockanalysis"
+    cmd = "/fundamentals" if deep else "/fundamentalanalyze"
     lines, next_start = _build_stock_batch(chat_id, cmd, (start, None), deep)
     markup = _stock_next_markup(deep, next_start) if next_start else None
     _reply_messages(chat_id, _split_messages(lines), reply_markup=markup)
@@ -2146,10 +2149,10 @@ def handle_callback_query(callback) -> None:
 def handle_fund_analysis(chat_id, parts) -> None:
     """Deep fundamental report for one symbol, or a watchlist position range.
 
-    /fund RELIANCE  → single symbol
-    /fund 5         → first 5 watchlist stocks
-    /fund 5-10      → watchlist positions 5..10
-    /fund all       → whole watchlist
+    /fundamentals RELIANCE  → single symbol
+    /fundamentals 5         → first 5 watchlist stocks
+    /fundamentals 5-10      → watchlist positions 5..10
+    /fundamentals mylist    → whole watchlist
     """
     if len(parts) < 2:
         reply(
@@ -2573,7 +2576,7 @@ def register_commands() -> bool:
         {"command": "addstock", "description": "Add a stock: /addstock RELIANCE NSE"},
         {"command": "removestock", "description": "Remove a stock from your watchlist"},
         {"command": "news", "description": "Latest news for your watchlist stocks"},
-        {"command": "stockanalysis", "description": "Stock summary or watchlist range: /stockanalysis 5-10"},
+        {"command": "fundamentalanalyze", "description": "Analysis card or watchlist range: /fundamentalanalyze mylist"},
         {"command": "fundamentals", "description": "Deep fundamentals or range: /fundamentals 3-5"},
         {"command": "harmonicpatterns", "description": "Harmonic pattern scan NIFTY 100/500: /harmonicpatterns all"},
         {"command": "scan500", "description": "NIFTY 500 CNC/MIS technical scanner"},
