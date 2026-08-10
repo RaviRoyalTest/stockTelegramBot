@@ -203,6 +203,9 @@ def format_corporate_action(action: dict) -> str:
     isin = action.get("isin")
     if isin and isin != "-":
         lines.append(f"ISIN: {escape(isin)}")
+    rs, re_ = action.get("rights_start"), action.get("rights_end")
+    if rs and str(rs).strip() not in ("", "-") and re_ and str(re_).strip() not in ("", "-"):
+        lines.append(f"Offer Window: <b>{_fmt_date(rs)}</b> \u2192 <b>{_fmt_date(re_)}</b>")
     dot, tag = status_tag(action)
     lines.append(f"Status: {dot} {escape(tag)}")
     return "\n".join(lines)
@@ -225,6 +228,9 @@ def format_reminder(action: dict) -> str:
     ]
     if record_date and record_date != "-":
         lines.append(f"Record Date: {record_date}")
+    rs, re_ = action.get("rights_start"), action.get("rights_end")
+    if rs and str(rs).strip() not in ("", "-") and re_ and str(re_).strip() not in ("", "-"):
+        lines.append(f"Offer Window: <b>{_fmt_date(rs)}</b> \u2192 <b>{_fmt_date(re_)}</b>")
     quote = action.get("quote")
     if quote and quote.get("price") is not None:
         currency = quote.get("currency", "INR")
@@ -373,6 +379,15 @@ def status_tag(action: dict, today: date | None = None) -> tuple[str, str]:
     if ex >= today:
         return "\U0001F7E2", "Upcoming"
     if typ == "rights":
+        rs, re_ = action.get("rights_start"), action.get("rights_end")
+        s = _parse_iso_date(rs) if rs else None
+        e = _parse_iso_date(re_) if re_ else None
+        if s and e:
+            if today < s:
+                return "\U0001F7E1", f"Offer opens {_fmt_date(s)}"
+            if s <= today <= e:
+                return "\U0001F7E2", f"Offer open until {_fmt_date(e)}"
+            return "\U0001F534", f"Offer closed {_fmt_date(e)}"
         return "\U0001F7E1", "Subscription window open"
     if typ == "dividend":
         if rec:
@@ -427,6 +442,21 @@ def format_action_block(action: dict) -> str:
     rec = action.get("record_date")
     if rec and str(rec).strip() not in ("", "-"):
         lines.append(f"Record Date: {escape(rec)}")
+    ann = action.get("announcement_date")
+    if ann and str(ann).strip() not in ("", "-"):
+        lines.append(f"Announced: {_fmt_date(ann)}")
+    bc_start, bc_end = action.get("bc_start"), action.get("bc_end")
+    if (bc_start and str(bc_start).strip() not in ("", "-")) or (
+        bc_end and str(bc_end).strip() not in ("", "-")
+    ):
+        span = " \u2013 ".join(
+            _fmt_date(d) for d in (bc_start, bc_end)
+            if d and str(d).strip() not in ("", "-")
+        )
+        lines.append(f"Book Closure: {span}")
+    rs, re_ = action.get("rights_start"), action.get("rights_end")
+    if rs and str(rs).strip() not in ("", "-") and re_ and str(re_).strip() not in ("", "-"):
+        lines.append(f"Offer Window: <b>{_fmt_date(rs)}</b> \u2192 <b>{_fmt_date(re_)}</b>")
     dot, tag = status_tag(action)
     lines.append(f"Status: {dot} {escape(tag)}")
     return "\n".join(lines)
@@ -491,10 +521,12 @@ def format_action_entry(action: dict) -> str:
     subject = action.get("subject") or "-"
     typ = sources.action_type(subject)
     label = sources.TYPE_LABELS.get(typ, typ)
-    lines = [
-        f"\u2022 <b>{escape(symbol)}</b> ({escape(exchange)})  "
-        f"Ex-date: <b>{_fmt_date(action.get('ex_date'))}</b>"
-    ]
+    company = action.get("company")
+    head = f"\u2022 <b>{escape(symbol)}</b> ({escape(exchange)})"
+    if company and str(company).strip() not in ("", "-"):
+        head += f" - {escape(company)}"
+    head += f"  Ex-date: <b>{_fmt_date(action.get('ex_date'))}</b>"
+    lines = [head]
     bits = []
     if subject != "-":
         bits.append(f"{label}: {escape(subject)}")
@@ -543,6 +575,9 @@ def format_action_detail(action: dict) -> str:
         if val and str(val).strip() and str(val).strip() != "-":
             display = _fmt_date(val) if fmt == "date" else escape(val)
             lines.append(f"{label}: {display}")
+    rs, re_ = action.get("rights_start"), action.get("rights_end")
+    if rs and str(rs).strip() not in ("", "-") and re_ and str(re_).strip() not in ("", "-"):
+        lines.append(f"Offer Window: <b>{_fmt_date(rs)}</b> \u2192 <b>{_fmt_date(re_)}</b>")
     bc_start, bc_end = action.get("bc_start"), action.get("bc_end")
     if (bc_start and str(bc_start).strip() not in ("", "-")) or (
         bc_end and str(bc_end).strip() not in ("", "-")

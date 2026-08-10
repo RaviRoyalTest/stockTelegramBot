@@ -259,6 +259,25 @@ def _tg_to_markdown(text: str) -> str:
     return text.strip()
 
 
+def _action_meta_caption(a: dict) -> str:
+    """One-line caption for a corporate-action card: announcement date,
+    face value, ISIN, plus Book Closure and the rights Offer Window when
+    the feed carries them."""
+    parts = []
+    if a.get("announcement_date"):
+        parts.append(f"Announced: {a['announcement_date']}")
+    parts.append(f"Face value: {a.get('face_value') or '-'}")
+    parts.append(f"ISIN: {a.get('isin') or '-'}")
+    bc = [d for d in (a.get("bc_start"), a.get("bc_end"))
+          if d and str(d).strip() not in ("", "-")]
+    if bc:
+        parts.append(f"Book Closure: {' \u2013 '.join(bc)}")
+    rs, re_ = a.get("rights_start"), a.get("rights_end")
+    if rs and re_ and str(rs).strip() not in ("", "-") and str(re_).strip() not in ("", "-"):
+        parts.append(f"Offer Window: {rs} \u2192 {re_}")
+    return " \u00b7 ".join(parts)
+
+
 def _md_escape(text: str) -> str:
     """Escape markdown-significant characters in raw data.
 
@@ -795,10 +814,7 @@ with tab_actions:
                     m2.metric("Ex-Date", a.get("ex_date") or "-")
                     m3.metric("Record Date", a.get("record_date") or "-")
                     m4.metric("Price", price, delta=change if change != "-" else None)
-                    if a.get("announcement_date"):
-                        st.caption(f"Announced: {a.get('announcement_date')} · "
-                                   f"Face value: {a.get('face_value') or '-'} · "
-                                   f"ISIN: {a.get('isin') or '-'}")
+                    st.caption(_action_meta_caption(a))
         else:
             results = st.session_state.get("ca_results", [])
             st.subheader(f"{len(results)} action(s) found")
@@ -823,10 +839,7 @@ with tab_actions:
                         m2.metric("Ex-Date", a.get("ex_date") or "-")
                         m3.metric("Record Date", a.get("record_date") or "-")
                         m4.metric("Price", price, delta=change if change != "-" else None)
-                        if a.get("announcement_date"):
-                            st.caption(f"Announced: {a.get('announcement_date')} · "
-                                       f"Face value: {a.get('face_value') or '-'} · "
-                                       f"ISIN: {a.get('isin') or '-'}")
+                        st.caption(_action_meta_caption(a))
             else:
                 st.info("No corporate actions match this query.")
 
