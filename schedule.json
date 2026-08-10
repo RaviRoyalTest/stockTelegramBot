@@ -1,1 +1,9 @@
-[]
+[
+  {
+    "interval_min": 60,
+    "commands": [
+      "/toplosers 1h"
+    ],
+    "chat": "862087765"
+  }
+]
