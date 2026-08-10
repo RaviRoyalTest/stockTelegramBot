@@ -1,5 +1,16 @@
 {
   "862087765": {
     "price_alert_pct": 3.0
+  },
+  "@StockVigilBot": {
+    "action_filters": [
+      "dividend",
+      "bonus",
+      "split",
+      "rights",
+      "buyback",
+      "other"
+    ],
+    "price_alert_pct": 5.0
   }
 }
