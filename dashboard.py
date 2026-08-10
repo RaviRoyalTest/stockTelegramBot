@@ -299,18 +299,48 @@ def _render_linked_analysis(source: str) -> None:
     )
 
 
-def _crosslink_selector(symbols: list, key: str, source: str, label: str = "View deep fundamentals") -> None:
-    """Cross-link widget: pick a symbol from the current view and open its
-    deep fundamental report right there (mirrors the tappable ticker buttons
-    on Telegram reports). Renders the report scoped to this tab.
+def _symbol_fund_button(sym: str, key: str, source: str) -> None:
+    """Single-click deep-fundamentals button next to a symbol/name.
+
+    Clicking it fetches the deep report and renders it below the current
+    view (mirrors tapping a ticker on Telegram). key must be unique across
+    the whole app (Streamlit requires it); source scopes the render.
     """
-    uniq = list(dict.fromkeys(s for s in symbols if s))
-    if not uniq:
+    sym = (sym or "").strip()
+    if not sym:
         return
-    sel = st.selectbox(label, uniq, key=f"xl_{key}", label_visibility="collapsed")
-    if st.button(f"\U0001F4B9 {label}: {sel}", key=f"xlbtn_{key}", width="stretch"):
-        _request_analysis(sel, source)
-    _render_linked_analysis(source)
+    if st.button("\U0001F4B9", key=key, help=f"Deep fundamentals for {sym}",
+                 type="primary", use_container_width=True):
+        _request_analysis(sym, source)
+
+
+def _render_ca_card(a: dict, key: str, source: str) -> None:
+    """One corporate-action card with a single-click deep-fundamentals
+    button right next to the symbol/name (mirrors the Telegram alert block).
+    """
+    sym = a.get("symbol") or "-"
+    company = a.get("company") or "-"
+    subject = a.get("subject") or "-"
+    typ = sources.action_type(subject)
+    type_emoji = notifier._TYPE_EMOJI.get(typ, notifier._TYPE_EMOJI["other"])
+    dot, tag = notifier.status_tag(a)
+
+    h1, h2 = st.columns([1, 5])
+    with h1:
+        _symbol_fund_button(sym, key, source)
+    with h2:
+        st.markdown(f"### {type_emoji} {sym} ({a.get('exchange')})")
+        st.caption(company)
+    st.markdown(f"**Subject:** {subject}")
+    m1, m2, m3, m4 = st.columns(4)
+    m1.metric("Type", sources.TYPE_LABELS.get(typ, typ))
+    m2.metric("Ex-Date", a.get("ex_date") or "-")
+    m3.metric("Record Date", a.get("record_date") or "-")
+    q = a.get("quote") or {}
+    m4.metric("Price", _fmt_price(q.get("price")) if q.get("price") is not None else "-",
+              delta=_fmt_change(q.get("change_pct"))
+              if q.get("change_pct") is not None else None)
+    st.caption(f"{dot} {tag}  ·  " + _action_meta_caption(a))
 
 
 def _action_meta_caption(a: dict) -> str:
@@ -663,11 +693,18 @@ with tab_watch:
                 "Price": price,
                 "Change %": f"{color} {change}",
             })
-        st.dataframe(rows, width="stretch", hide_index=True)
-
-        # Cross-link: click a watchlist ticker to open its deep fundamentals
-        st.caption("Tap a ticker to open its deep fundamentals report.")
-        _crosslink_selector([i["symbol"] for i in current_watchlist], "watch", "watch")
+        for i, r in enumerate(rows):
+            c1, c2, c3, c4 = st.columns([1, 2, 1, 1])
+            with c1:
+                _symbol_fund_button(str(r.get("Symbol", "")), f"watch_{i}", "watch")
+            with c2:
+                st.markdown(f"**{r.get('Symbol', '')}**  ·  {r.get('Company') or ''}")
+            with c3:
+                st.markdown(f"**{r.get('Price', '-')}**")
+            with c4:
+                st.markdown(str(r.get("Change %", "-")))
+        st.caption("Tap the \U0001F4B9 button next to any symbol to open its deep fundamentals report.")
+        _render_linked_analysis("watch")
 
         remove_options = [_label_of(i) for i in current_watchlist]
         rm_col1, rm_col2 = st.columns([3, 1])
@@ -697,11 +734,19 @@ with tab_watch:
             watch = storage.load_watchlist()
             try:
                 matching = fetch_matching(watch)
+                fav["corp_groups"] = {
+                    "upcoming": [a for a in matching if within_reminder_window(a.get("ex_date"))],
+                    "recent": [a for a in matching if recently_passed(a.get("ex_date"))],
+                    "pending": [a for a in matching if not parse_ex_date(a.get("ex_date"))],
+                }
                 fav["corp"] = notifier.format_next_report(
-                    [a for a in matching if within_reminder_window(a.get("ex_date"))],
-                    [a for a in matching if recently_passed(a.get("ex_date"))],
-                    [a for a in matching if not parse_ex_date(a.get("ex_date"))],
+                    fav["corp_groups"]["upcoming"],
+                    fav["corp_groups"]["recent"],
+                    fav["corp_groups"]["pending"],
                 )
+                import run_bot as _rb
+                for group in fav["corp_groups"].values():
+                    _rb._attach_quotes(group)
             except Exception as exc:
                 fav["corp"] = f"Could not fetch corporate actions: {exc}"
             fav["losers_1h"] = _run_screen("1h", "losers", "nifty100", 10)
@@ -712,20 +757,45 @@ with tab_watch:
     fav = st.session_state.get("favourites")
     if fav:
         with st.expander("\U0001f4c5 Corporate actions for your list", expanded=True):
-            st.markdown(_tg_to_markdown(fav["corp"]), unsafe_allow_html=True)
-            fav_syms = re.findall(r"\*\*([A-Z0-9\-]+)\*\*\s*\(NSE\)", fav["corp"])
-            if fav_syms:
-                _crosslink_selector(fav_syms, "favcorp", "fav")
+            if isinstance(fav.get("corp_groups"), dict):
+                idx = 0
+                for title, key in (("\U0001F4C5 Upcoming ex-dates", "upcoming"),
+                                   ("\U0001F4E2 Announced - ex-date not fixed yet", "pending"),
+                                   ("\U0001F504 Recently passed / in progress (past 30 days)", "recent")):
+                    acts = sorted(fav["corp_groups"].get(key) or [],
+                                  key=lambda a: a.get("ex_date") or "9999-99-99",
+                                  reverse=(key == "recent"))
+                    st.subheader(title)
+                    for a in acts:
+                        with st.container(border=True):
+                            _render_ca_card(a, f"favc_{idx}", "fav")
+                        idx += 1
+            else:
+                st.markdown(_tg_to_markdown(fav["corp"]), unsafe_allow_html=True)
         with st.expander("\U0001f4c9 Top losers — last 1h (NIFTY 100)"):
-            st.dataframe(fav["losers_1h"], width="stretch", hide_index=True)
-            _crosslink_selector(
-                [str(r.get("Symbol", "")) for r in fav["losers_1h"]], "fav1h", "fav"
-            )
+            for i, r in enumerate(fav["losers_1h"]):
+                c1, c2, c3, c4 = st.columns([1, 2, 1, 1])
+                with c1:
+                    _symbol_fund_button(str(r.get("Symbol", "")), f"fav1h_{i}", "fav")
+                with c2:
+                    st.markdown(f"**{r.get('Symbol', '')}**  ·  {r.get('Name') or ''}")
+                with c3:
+                    st.markdown(f"**{r.get('Price', '-')}**")
+                with c4:
+                    st.markdown(str(r.get("Change %", "-")))
         with st.expander("\U0001f4c9 Top losers — today (NIFTY 100)"):
-            st.dataframe(fav["losers_today"], width="stretch", hide_index=True)
-            _crosslink_selector(
-                [str(r.get("Symbol", "")) for r in fav["losers_today"]], "fav1d", "fav"
-            )
+            for i, r in enumerate(fav["losers_today"]):
+                c1, c2, c3, c4 = st.columns([1, 2, 1, 1])
+                with c1:
+                    _symbol_fund_button(str(r.get("Symbol", "")), f"fav1d_{i}", "fav")
+                with c2:
+                    st.markdown(f"**{r.get('Symbol', '')}**  ·  {r.get('Name') or ''}")
+                with c3:
+                    st.markdown(f"**{r.get('Price', '-')}**")
+                with c4:
+                    st.markdown(str(r.get("Change %", "-")))
+        st.caption("Tap the \U0001F4B9 button next to any symbol to open its deep fundamentals report.")
+        _render_linked_analysis("fav")
         with st.expander("\U0001f4ca Deep fundamentals — whole watchlist"):
             if isinstance(fav["fund"], list):
                 for sym, lines in fav["fund"]:
@@ -793,6 +863,9 @@ with tab_actions:
                         for group in (upcoming, recent, pending):
                             run_bot._attach_quotes(group)
                         st.session_state["ca_mylist"] = notifier.format_next_report(upcoming, recent, pending)
+                        st.session_state["ca_mylist_groups"] = {
+                            "upcoming": upcoming, "recent": recent, "pending": pending,
+                        }
                         st.session_state["ca_fetched"] = True
             st.session_state["ca_errors"] = []
             st.session_state["ca_warnings"] = []
@@ -848,12 +921,26 @@ with tab_actions:
                 st.warning(w)
 
         if st.session_state.get("ca_mylist"):
-            st.markdown(_tg_to_markdown(st.session_state["ca_mylist"]), unsafe_allow_html=True)
-            # Cross-link: every symbol in the report is tappable -> fundamentals
-            my_syms = re.findall(r"\*\*([A-Z0-9\-]+)\*\*\s*\(NSE\)", st.session_state["ca_mylist"])
-            if my_syms:
-                st.caption("Tap a ticker to open its deep fundamentals report.")
-                _crosslink_selector(my_syms, "camylist", "ca")
+            groups = st.session_state.get("ca_mylist_groups")
+            if groups:
+                # Rich cards with a single-click 💹 button next to each symbol
+                idx = 0
+                for title, key in (("\U0001F4C5 Upcoming ex-dates", "upcoming"),
+                                   ("\U0001F4E2 Announced - ex-date not fixed yet", "pending"),
+                                   ("\U0001F504 Recently passed / in progress (past 30 days)", "recent")):
+                    acts = sorted(groups[key], key=lambda a: a.get("ex_date") or "9999-99-99",
+                                  reverse=(key == "recent")) if groups[key] else []
+                    st.subheader(title)
+                    if not acts:
+                        st.caption("None in this window.")
+                    for a in acts:
+                        with st.container(border=True):
+                            _render_ca_card(a, f"cam_{idx}", "ca")
+                        idx += 1
+                st.caption("Tap the \U0001F4B9 button next to any symbol to open its deep fundamentals report.")
+                _render_linked_analysis("ca")
+            else:
+                st.markdown(_tg_to_markdown(st.session_state["ca_mylist"]), unsafe_allow_html=True)
         elif st.session_state.get("ca_summary"):
             summary = st.session_state["ca_summary"]
             s1, s2 = st.columns(2)
@@ -871,22 +958,14 @@ with tab_actions:
                 quote_map = _fetch_quotes_for(
                     [{"exchange": a["exchange"], "symbol": a["symbol"]} for a in summary["next"]]
                 )
-            for a in summary["next"]:
+            for i, a in enumerate(summary["next"]):
                 q = quote_map.get((a["exchange"], a["symbol"]))
-                price = _fmt_price(q.get("price")) if q and q.get("price") is not None else "-"
-                change = _fmt_change(q.get("change_pct")) if q else "-"
-                color = _change_color(q.get("change_pct")) if q and q.get("change_pct") is not None else ""
-                typ = sources.action_type(a.get("subject"))
+                if q:
+                    a["quote"] = q
                 with st.container(border=True):
-                    st.markdown(f"### {a.get('symbol')} ({a.get('exchange')})")
-                    st.caption(a.get("company") or " ")
-                    st.markdown(f"**{a.get('subject')}**")
-                    m1, m2, m3, m4 = st.columns(4)
-                    m1.metric("Type", sources.TYPE_LABELS.get(typ, typ))
-                    m2.metric("Ex-Date", a.get("ex_date") or "-")
-                    m3.metric("Record Date", a.get("record_date") or "-")
-                    m4.metric("Price", price, delta=change if change != "-" else None)
-                    st.caption(_action_meta_caption(a))
+                    _render_ca_card(a, f"casum_{i}", "ca")
+            st.caption("Tap the \U0001F4B9 button next to any symbol to open its deep fundamentals report.")
+            _render_linked_analysis("ca")
         else:
             results = st.session_state.get("ca_results", [])
             st.subheader(f"{len(results)} action(s) found")
@@ -896,27 +975,13 @@ with tab_actions:
                     quote_map = _fetch_quotes_for(
                         [{"exchange": a["exchange"], "symbol": a["symbol"]} for a in results[:30]]
                     )
-                for a in results:
-                    q = quote_map.get((a["exchange"], a["symbol"]))
-                    price = _fmt_price(q.get("price")) if q and q.get("price") is not None else "-"
-                    change = _fmt_change(q.get("change_pct")) if q else "-"
-                    color = _change_color(q.get("change_pct")) if q and q.get("change_pct") is not None else ""
-                    typ = sources.action_type(a.get("subject"))
+                for i, a in enumerate(results):
+                    if (a.get("quote") or {}).get("price") is None:
+                        a["quote"] = quote_map.get((a["exchange"], a["symbol"])) or {}
                     with st.container(border=True):
-                        st.markdown(f"### {a.get('symbol')} ({a.get('exchange')})")
-                        st.caption(a.get("company") or " ")
-                        st.markdown(f"**{a.get('subject')}**")
-                        m1, m2, m3, m4 = st.columns(4)
-                        m1.metric("Type", sources.TYPE_LABELS.get(typ, typ))
-                        m2.metric("Ex-Date", a.get("ex_date") or "-")
-                        m3.metric("Record Date", a.get("record_date") or "-")
-                        m4.metric("Price", price, delta=change if change != "-" else None)
-                        st.caption(_action_meta_caption(a))
-                # Cross-link: every symbol in the results is tappable -> fundamentals
-                syms = [a.get("symbol") for a in results]
-                if syms:
-                    st.caption("Tap a ticker to open its deep fundamentals report.")
-                    _crosslink_selector(syms, "cares", "ca")
+                        _render_ca_card(a, f"cares_{i}", "ca")
+                st.caption("Tap the \U0001F4B9 button next to any symbol to open its deep fundamentals report.")
+                _render_linked_analysis("ca")
             else:
                 st.info("No corporate actions match this query.")
 
@@ -953,13 +1018,24 @@ with tab_market:
         period_label = run_bot._period_label(*run_bot.MOVERS_PERIODS.get(period_key, ("intraday", 60)))
         universe_label = "NIFTY 500" if universe == "nifty500" else "NIFTY 100"
         st.subheader(f"{screen_type} — {period_label} · {universe_label} (top {n})")
-        st.dataframe(st.session_state["screen_rows"], width="stretch", hide_index=True)
-
-        # Cross-link: pick any symbol from this screen to open its deep
-        # fundamentals right here (like tapping a ticker in Telegram).
-        syms = [str(r.get("Symbol", "")) for r in st.session_state["screen_rows"]]
-        st.caption("Tap a ticker to open its deep fundamentals report.")
-        _crosslink_selector(syms, "screen", "screen")
+        rows = st.session_state["screen_rows"]
+        for i, r in enumerate(rows):
+            c1, c2, c3, c4, c5 = st.columns([1, 2, 1, 1, 1])
+            with c1:
+                _symbol_fund_button(str(r.get("Symbol", "")), f"market_{i}", "screen")
+            with c2:
+                st.markdown(f"**{r.get('Symbol', '')}**")
+                st.caption(r.get("Name") or "")
+            with c3:
+                st.markdown(f"**{r.get('Price', '-')}**")
+            with c4:
+                chg = str(r.get("Change %", "-"))
+                color = _change_color(float(chg.rstrip("%"))) if chg.rstrip("%").replace("-", "").replace("+", "").replace(".", "").isdigit() else ""
+                st.markdown(f"{color} {chg}")
+            with c5:
+                st.write("")
+        st.caption("Tap the \U0001F4B9 button next to any symbol to open its deep fundamentals report.")
+        _render_linked_analysis("screen")
 
 # ================================================================ STOCK ANALYSIS
 def _render_quick_card(quote: dict, fund: dict, sym: str) -> None:
