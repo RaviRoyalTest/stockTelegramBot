@@ -62,7 +62,7 @@ NATURAL_QUERIES = (
 )
 
 # Scheduled reports: run a set of commands to the owner chat on a timer so
-# fresh screens (e.g. "/movers 30m" and "/scan500") arrive without anyone
+# fresh screens (e.g. "/topmovers 30m" and "/scan500") arrive without anyone
 # typing them. Only the always-on server (PROCESS_COMMANDS=true) runs these;
 # the GitHub Actions cron skips them so two processes never send duplicates.
 SCHEDULED_REPORTS_ENABLED = (

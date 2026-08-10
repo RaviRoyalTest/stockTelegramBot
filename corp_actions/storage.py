@@ -275,7 +275,7 @@ def save_seen(keys: set) -> None:
 
 # --------------------------------------------------------------- schedule
 # Scheduled reports live in schedule.json (pushed to GitHub with the rest of
-# the state) so /sched add/remove changes survive redeploys instead of living
+# the state) so /schedule add/remove changes survive redeploys instead of living
 # only in env vars. Each entry: {"interval_min": int, "commands": [str,...],
 # "chat": str}.
 

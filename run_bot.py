@@ -1,7 +1,7 @@
 """Entry point for running in a GitHub Actions cron job.
 
 Two jobs, one run:
-  1. Optionally process Telegram bot commands (/add, /remove, /list, /help)
+  1. Optionally process Telegram bot commands (/addstock, /removestock, /watchlist, /help)
      when PROCESS_COMMANDS=true (default). Set PROCESS_COMMANDS=false in the
      GitHub Actions cron so the always-on bot server is the only process that
      polls getUpdates (avoids double replies and 409 conflicts). Any change
@@ -391,7 +391,7 @@ def handle_command(chat_id, text):
         owner_line = (
             f"<b>Configured owner chat:</b> <code>{html.escape(owner_chat)}</code>"
             + ("" if owner else " - you are NOT this chat, so owner commands "
-               "(/sched, watchlist.json) are unavailable to you")
+               "(/schedule, watchlist.json) are unavailable to you")
         )
         reply(
             chat_id,
@@ -407,7 +407,7 @@ def handle_command(chat_id, text):
                     + ("enabled" if config.SCHEDULED_REPORTS_ENABLED and config.PROCESS_COMMANDS else "off")
                     + " \u00b7 " + html.escape(format_schedule(chat_id).split("\n")[0])
                     + f" \u00b7 manage with /schedule",
-                    "Run /list to see your current watchlist.",
+                    "Run /watchlist to see your current watchlist.",
                 ]
             ),
         )
@@ -778,7 +778,7 @@ def _parse_ca_arg(arg: str) -> dict | None:
         return {"mode": "exdate", "days": max(0, int(token))}
     except ValueError:
         pass
-    if "," in raw:  # e.g. /ca dividend,bonus
+    if "," in raw:  # e.g. /corpactions dividend,bonus
         wanted = [t for p in token.split(",") if (t := _norm_type(p))]
         if wanted:
             return {"mode": "types", "types": wanted}
@@ -934,8 +934,8 @@ def run_ca_query(chat_id, descriptor: dict) -> bool:
     if len(ordered) > MAX_QUERY_ITEMS:
         lines.append(
             f"... and {len(ordered) - MAX_QUERY_ITEMS} more (limit "
-            f"{MAX_QUERY_ITEMS}). Narrow it down with /ca dividend, /ca 7, "
-            "or /ca SYMBOL."
+            f"{MAX_QUERY_ITEMS}). Narrow it down with /corpactions dividend, "
+            "/corpactions 7, or /corpactions SYMBOL."
         )
     _reply_messages(chat_id, _split_messages(lines))
     return True
@@ -986,7 +986,7 @@ def format_settings(chat_id) -> str:
             "Action filters: " + (", ".join(filters) if filters else "all types"),
             "Price alert: " + ("off" if not alert else f"{float(alert):g}%"),
             f"Your list is saved in: {where}",
-            "Customize with /filter and /alert.",
+            "Customize with /alertfilters and /pricealert.",
         ]
     )
 
@@ -1011,14 +1011,14 @@ def _parse_interval_min(raw: str) -> int | None:
 
 
 def format_schedule(chat_id) -> str:
-    """Render the current automated-report schedule (/sched)."""
+    """Render the current automated-report schedule (/schedule)."""
     entries = storage.load_schedule()
     if not entries:
         cmds = [c for c in config.SCHEDULED_COMMANDS if c.strip()]
         if not cmds:
             return "<b>Schedule:</b> no automated reports."
         lines = [
-            "<b>Schedule (env defaults - use /sched to edit)</b>",
+            "<b>Schedule (env defaults - use /schedule to edit)</b>",
             f"  1. every {config.SCHEDULED_REPORTS_INTERVAL_MIN} min: "
             + html.escape(", ".join(cmds)),
         ]
@@ -1117,7 +1117,7 @@ def handle_sched(chat_id, parts) -> None:
             return
         entries = storage.load_schedule()
         if index < 0 or index >= len(entries):
-            reply(chat_id, "No entry at that number. Run /sched to list them.")
+            reply(chat_id, "No entry at that number. Run /schedule to list them.")
             return
         storage.remove_schedule_entry(index)
         log.info("chat %s removed schedule entry %d", chat_id, index)
@@ -1156,7 +1156,7 @@ def handle_news(chat_id, parts) -> None:
         if not items:
             reply(
                 chat_id,
-                "Your watchlist is empty. Add stocks with /add SYMBOL NSE, "
+                "Your watchlist is empty. Add stocks with /addstock SYMBOL NSE, "
                 "then /news.",
             )
             return
@@ -1777,7 +1777,7 @@ def _stock_summary_lines(raw_sym, quote, fund, include_tip=True, label="") -> li
 
     if include_tip:
         lines.append("")
-        lines.append(f"\U0001F4A1 <i>Tip: Track this stock with /add {raw_sym} NSE</i>")
+        lines.append(f"\U0001F4A1 <i>Tip: Track this stock with /addstock {raw_sym} NSE</i>")
     return lines
 
 
@@ -1986,7 +1986,7 @@ def _fund_report_lines(raw_sym, quote, fund, include_tip=True, label="") -> list
 
     if include_tip:
         lines.append("")
-        lines.append(f"\U0001F4A1 <i>Tip: Track this stock with /add {raw_sym} NSE</i>")
+        lines.append(f"\U0001F4A1 <i>Tip: Track this stock with /addstock {raw_sym} NSE</i>")
     return lines
 
 
@@ -2666,10 +2666,10 @@ def start_scheduled_reports():
     twice. The first report fires a short while after startup so the server
     has finished booting before the scans hit the data feeds.
 
-    Entries come from schedule.json (manageable from Telegram with /sched);
+    Entries come from schedule.json (manageable from Telegram with /schedule);
     when the file is empty the env-var defaults (SCHEDULED_COMMANDS +
     SCHEDULED_REPORTS_INTERVAL_MIN) are used so existing deployments keep
-    working. The schedule is re-read each loop, so /sched add/remove/clear
+    working. The schedule is re-read each loop, so /schedule add/remove/clear
     take effect without a redeploy.
     """
     if not config.SCHEDULED_REPORTS_ENABLED:

@@ -2,7 +2,7 @@
 
 Run it on any always-on host (or locally / in the current environment).
 The GitHub Actions cron continues to work 24/7 as a fallback; this process
-just makes responses to /add, /remove, /list, /checknow, /help instant.
+just makes responses to /addstock, /removestock, /watchlist, /checknow, /help instant.
 
 Render treats this as a Web Service and requires the process to bind to
 $PORT (default 10000). This script starts a tiny HTTP health-check server
@@ -281,10 +281,10 @@ def main():
                         log.warning("natural query failed: %s", config.redact(exc))
                     offset = update["update_id"] + 1
                     continue
-                # The bare command name only (e.g. "/add" for "/add HDFCBANK")
+                # The bare command name only (e.g. "/addstock" for "/addstock HDFCBANK")
                 # so write-command detection below actually matches. Comparing
-                # the full text - as before - meant "/add hdfcbank" never
-                # equalled "/add", so the immediate GitHub push after a write
+                # the full text - as before - meant "/addstock hdfcbank" never
+                # equalled "/addstock", so the immediate GitHub push after a write
                 # command never happened and state only reached GitHub via the
                 # periodic flush (or was lost on redeploy).
                 parts = text.strip().split()
@@ -302,10 +302,10 @@ def main():
                         handle_command(chat_id, text)
                         # Persist write commands back to GitHub so workflow
                         # re-runs and redeploys never lose what users added.
-                        # Read-only commands (/list, /status, /next, /help)
+                        # Read-only commands (/watchlist, /status, /corpactionsformylist, /help)
                         # never push or reset - a failed push from a previous
                         # write stays on the disk instead of being wiped by
-                        # reset --hard, and /list always reflects the latest
+                        # reset --hard, and /watchlist always reflects the latest
                         # local state.
                         if cmd in WRITE_COMMANDS:
                             try:
