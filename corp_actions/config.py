@@ -69,11 +69,11 @@ SCHEDULED_REPORTS_ENABLED = (
     os.getenv("SCHEDULED_REPORTS_ENABLED", "true").strip().lower()
     in ("1", "true", "yes", "on")
 )
-SCHEDULED_REPORTS_INTERVAL_MIN = _env_int("SCHEDULED_REPORTS_INTERVAL_MIN", 30, floor=15)
+SCHEDULED_REPORTS_INTERVAL_MIN = _env_int("SCHEDULED_REPORTS_INTERVAL_MIN", 180, floor=15)
 SCHEDULED_REPORTS_CHAT = os.getenv("SCHEDULED_REPORTS_CHAT", "").strip() or TELEGRAM_CHAT_ID
 SCHEDULED_COMMANDS = [
     c.strip() for c in os.getenv(
-        "SCHEDULED_COMMANDS", "/movers 30m,/scan500"
+        "SCHEDULED_COMMANDS", "/scan500"
     ).split(",")
     if c.strip()
 ]
