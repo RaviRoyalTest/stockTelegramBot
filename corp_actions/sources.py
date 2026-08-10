@@ -252,10 +252,19 @@ def search_stocks(query: str, limit: int = 10) -> list[dict]:
     return matches[:limit]
 
 
-def get_nse_corporate_actions() -> list[dict]:
-    """Return corporate actions announced on NSE, normalised records."""
+def get_nse_corporate_actions(symbol: str | None = None) -> list[dict]:
+    """Return corporate actions announced on NSE, normalised records.
+
+    When `symbol` is given, the NSE API returns the full history for that
+    specific symbol (the unfiltered feed only returns ~20 most-recent
+    records, which usually misses most watchlist stocks).
+    """
+    url = config.NSE_ACTIONS_URL
+    params = {}
+    if symbol:
+        params["symbol"] = symbol
     try:
-        resp = _session().get(config.NSE_ACTIONS_URL, timeout=config.HTTP_TIMEOUT)
+        resp = _session().get(url, params=params, timeout=config.HTTP_TIMEOUT)
         resp.raise_for_status()
         data = resp.json()
     except requests.RequestException as exc:
@@ -286,7 +295,7 @@ def get_nse_corporate_actions() -> list[dict]:
                 "series": _pick(item, "series"),
             }
         )
-    log.info("NSE corporate actions fetched: %d record(s)", len(records))
+    log.info("NSE corporate actions fetched: %d record(s) (symbol=%s)", len(records), symbol or "all")
     return records
 
 

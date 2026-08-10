@@ -68,11 +68,57 @@ def fetch_all_actions() -> tuple[list[dict], list[str], list[str]]:
 
 
 def fetch_matching(watchlist: list[dict]) -> list[dict]:
-    """Fetch all actions and return only those matching the watchlist.
+    """Fetch corporate actions matching the watchlist.
+
+    The unfiltered NSE feed only returns ~20 most-recent records, which
+    usually misses most watchlist stocks. To get a complete picture we query
+    the NSE API per-symbol for each watchlist stock (the API returns the full
+    history for a given symbol). BSE is fetched once globally (when enabled).
 
     Never sends anything - used by the /next command and tests.
     """
-    all_actions, _errors, _warnings = fetch_all_actions()
+    if not watchlist:
+        return []
+
+    # Group watchlist items by exchange
+    nse_symbols = [
+        w["symbol"] for w in watchlist
+        if w.get("exchange", "").upper() == "NSE"
+    ]
+    bse_symbols = [
+        w["symbol"] for w in watchlist
+        if w.get("exchange", "").upper() == "BSE"
+    ]
+
+    all_actions: list[dict] = []
+
+    # Query NSE per-symbol (parallel) to get full history for each watchlist stock
+    if nse_symbols:
+        from concurrent.futures import ThreadPoolExecutor, as_completed
+
+        def _fetch_nse(sym):
+            try:
+                return sources.get_nse_corporate_actions(symbol=sym)
+            except Exception:
+                return []
+
+        with ThreadPoolExecutor(max_workers=10) as ex:
+            futures = {ex.submit(_fetch_nse, sym): sym for sym in nse_symbols}
+            for fut in as_completed(futures):
+                try:
+                    all_actions.extend(fut.result())
+                except Exception:
+                    pass
+
+    # Query BSE globally (when enabled)
+    if bse_symbols and config.ENABLE_BSE:
+        try:
+            bse_actions = sources.get_bse_corporate_actions()
+            all_actions.extend(bse_actions)
+        except Exception:
+            pass
+
+    # Filter to only watchlist symbols
     wanted = {
         (w.get("exchange", "").upper(), w.get("symbol", "").upper())
         for w in watchlist
