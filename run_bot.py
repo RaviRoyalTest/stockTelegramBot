@@ -1102,6 +1102,25 @@ def _parse_interval_min(raw: str) -> int | None:
     return minutes
 
 
+def _fmt_next_run(due_ts: float) -> str:
+    """Human-friendly 'next run' for a schedule entry, e.g. 'in 35 min (14:20 IST)'."""
+    import datetime as _dt
+    try:
+        due = _dt.datetime.fromtimestamp(due_ts)
+        mins = int((due_ts - _dt.datetime.now().timestamp()) / 60)
+    except (TypeError, ValueError, OSError):
+        return "soon"
+    if mins <= 0:
+        return "due now"
+    if mins < 60:
+        when = f"in {mins} min"
+    elif mins < 24 * 60:
+        when = f"in {mins // 60}h {mins % 60:02d}m"
+    else:
+        when = f"in {mins // (24 * 60)}d"
+    return f"{when} ({due.strftime('%H:%M')})"
+
+
 def format_schedule(chat_id) -> str:
     """Render the requester's OWN automated-report schedule (/schedule).
 
@@ -1134,7 +1153,11 @@ def format_schedule(chat_id) -> str:
             label = f"every {interval // (24 * 60)}d"
         elif interval and interval % 60 == 0:
             label = f"every {interval // 60}h"
-        lines.append(f"  {i}. {label}: {html.escape(', '.join(cmds))}")
+        line = f"  {i}. {label}: {html.escape(', '.join(cmds))}"
+        due = storage.schedule_next_due_ts(e)
+        if due:
+            line += f"  — next run {_fmt_next_run(due)}"
+        lines.append(line)
     lines.append(
         "\nUsage: <code>/schedule add 3h /scan500</code> (interval: 180, 90m, 3h, 1d)"
     )
@@ -2884,10 +2907,17 @@ def start_scheduled_reports():
                     if not commands:
                         continue
                     key = (chat, tuple(commands))
+                    # Persisted next-due (schedule.json) wins so the cadence
+                    # survives redeploys; without it, fall back to a first-run
+                    # delay (short, so a fresh schedule proves itself fast).
+                    persisted = storage.schedule_next_due_ts(entry)
                     due = next_due.get(key)
                     if due is None:
-                        next_due[key] = now + min(interval * 60, 60)
-                        continue
+                        if persisted is not None:
+                            due = persisted
+                        else:
+                            due = now + min(interval * 60, 60)
+                        next_due[key] = due
                     if now < due:
                         continue
                     for cmd in commands:
@@ -2899,7 +2929,11 @@ def start_scheduled_reports():
                                 "scheduled report %s failed: %s",
                                 cmd, config.redact(exc), exc_info=True,
                             )
-                    next_due[key] = monotonic() + interval * 60
+                    # Schedule the next run AND persist it, so a redeploy
+                    # resumes the same cadence instead of restarting the clock.
+                    nxt = _time.time() + interval * 60
+                    next_due[key] = nxt
+                    storage.set_schedule_next_due(chat, commands, interval, nxt)
             except Exception as exc:  # never let a scheduler hiccup kill the thread
                 log.warning(
                     "scheduled reports loop error: %s",

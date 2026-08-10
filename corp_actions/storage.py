@@ -295,6 +295,9 @@ def load_schedule() -> list[dict]:
                 "interval_min": interval,
                 "commands": [str(c).strip() for c in commands if str(c).strip()],
                 "chat": str(item.get("chat", "") or ""),
+                # Persisted next-run timestamp (ISO) - kept so the cadence
+                # survives redeploys (see set_schedule_next_due).
+                "next_due": item.get("next_due"),
             })
     return cleaned
 
@@ -390,3 +393,50 @@ def clear_schedule(chat_id) -> list[dict]:
         chat_id, len(current) - len(kept),
     )
     return kept
+
+
+def set_schedule_next_due(chat_id, commands: list[str], interval_min: int, due_ts: float) -> None:
+    """Persist the next-run timestamp on the matching schedule entry.
+
+    Stored in schedule.json so the next-run time survives redeploys - after
+    a restart the scheduler resumes the same cadence instead of resetting to
+    "boot + 1 minute". Entries are matched by (chat, commands, interval),
+    the same identity the scheduler keys its in-memory due-times on.
+    """
+    from datetime import datetime
+
+    key = str(chat_id)
+    with _lock, _file_lock(config.SCHEDULE_FILE):
+        current = _read_json(config.SCHEDULE_FILE, [])
+        if not isinstance(current, list):
+            current = []
+        for e in current:
+            if not isinstance(e, dict):
+                continue
+            if (str(e.get("chat") or "") == key
+                    and [c for c in e.get("commands") or [] if c.strip()] == [c for c in commands if c.strip()]
+                    and int(e.get("interval_min") or 0) == int(interval_min)):
+                e["next_due"] = datetime.fromtimestamp(due_ts).isoformat(timespec="seconds")
+                _write_json(config.SCHEDULE_FILE, current)
+                log.info(
+                    "schedule.json: next_due for chat %s set to %s",
+                    chat_id, e["next_due"],
+                )
+                return
+    log.info("schedule.json: no entry matched for next_due update (chat %s)", chat_id)
+
+
+def schedule_next_due_ts(entry: dict) -> float | None:
+    """Parse an entry's persisted next_due (ISO) back to an epoch timestamp.
+
+    Returns None when unset or malformed so callers fall back to a fresh
+    first-run delay.
+    """
+    raw = (entry or {}).get("next_due")
+    if not raw:
+        return None
+    try:
+        from datetime import datetime
+        return datetime.fromisoformat(str(raw)).timestamp()
+    except (TypeError, ValueError):
+        return None

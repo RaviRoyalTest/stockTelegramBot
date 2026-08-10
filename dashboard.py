@@ -1348,7 +1348,9 @@ with tab_status:
                 label = f"every {interval // (24 * 60)}d"
             elif interval and interval % 60 == 0:
                 label = f"every {interval // 60}h"
-            st.markdown(f"**{i}.** {label}: `{'`, `'.join(e.get('commands') or [])}`")
+            due = storage.schedule_next_due_ts(e)
+            next_run = f" — next run {run_bot._fmt_next_run(due)}" if due else ""
+            st.markdown(f"**{i}.** {label}: `{'`, `'.join(e.get('commands') or [])}`{next_run}")
     else:
         cmds = [c for c in config.SCHEDULED_COMMANDS if c.strip()]
         if cmds:
