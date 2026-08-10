@@ -43,13 +43,14 @@ HELP_TEXT = (
     "**Corporate Actions (NSE + BSE)**\n"
     "- `/corpactions [type|symbol|N|today]` — browse all dividend/bonus/split/rights/buyback actions\n"
     "- `/exdates [today|N]` — all actions by ex-date window\n"
-    "- `/summary` — corporate-action snapshot: counts + next ex-dates\n"
-    "- `/upcoming` — your watchlist: ex-dates + in-progress actions (rights/dividends) with status\n\n"
+    "- `/corpactionssummary` — corporate-action snapshot: counts + next ex-dates\n"
+    "- `/corpactionsformylist` — YOUR watchlist: ex-dates + in-progress actions (rights/dividends) with status\n\n"
     "**Stock Analysis**\n"
     "- `/stockanalysis SYMBOL` — quick summary (price, P/E, 52W signal, QoQ holding)\n"
     "- `/fundamentals SYMBOL` — full deep-dive report (valuation, growth, margins, balance sheet)\n\n"
     "**Watchlist**\n"
     "- `/addstock SYMBOL [NSE|BSE]` · `/removestock SYMBOL` · `/watchlist`\n"
+    "- `/myfavourites` — run your favourite commands in one go (corp actions for your list, top losers 1h + today, watchlist, fundamentals)\n"
     "- `/news [N|SYMBOL]` — latest headlines\n\n"
     "**Alerts & Personalisation**\n"
     "- `/alertfilters TYPE,TYPE` — receive only chosen action types\n"
@@ -61,7 +62,7 @@ HELP_TEXT = (
     "- `/checknow` — force-run alerts\n"
     "- `/menu` — one-tap command buttons in Telegram (no typing)\n"
     "- `/help` — this guide\n\n"
-    "_Old short forms still work as aliases: /ca, /next, /add, /list, /movers, /gainers, /losers, /stock, /fund, /filter, /alert, /sched, /exdate._\n"
+    "_Old short forms still work as aliases: /ca, /next, /upcoming, /summary, /add, /list, /movers, /gainers, /losers, /stock, /fund, /filter, /alert, /sched, /exdate._\n"
 )
 
 # Streamlit page config

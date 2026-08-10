@@ -266,6 +266,14 @@ def main():
                 message = update.get("message") or {}
                 text = (message.get("text") or "").strip()
                 chat_id = (message.get("chat") or {}).get("id")
+                callback = update.get("callback_query")
+                if callback:
+                    try:
+                        run_bot_mod.handle_callback_query(callback)
+                    except Exception as exc:
+                        log.warning("callback query failed: %s", config.redact(exc))
+                    offset = update["update_id"] + 1
+                    continue
                 if not text.startswith("/"):
                     try:
                         handle_query_text(chat_id, text)

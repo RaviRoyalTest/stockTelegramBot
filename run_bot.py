@@ -97,9 +97,9 @@ HELP_TEXT = (
     "  /corpactions TATA             \u2192 keyword search (company/subject)\n\n"
     "/exdates <i>[today|N]</i>       \u2192 all actions by ex-date window\n"
     "  (default 5 days) \u00b7  /exdates today  \u00b7  /exdates 10\n\n"
-    "/summary             \u2192 corporate-action snapshot: counts by exchange\n"
+    "/corpactionssummary  \u2192 corporate-action snapshot: counts by exchange\n"
     "                       &amp; type, plus the next ex-dates\n\n"
-    "/upcoming            \u2192 your watchlist: upcoming ex-dates PLUS recently\n"
+    "/corpactionsformylist \u2192 YOUR watchlist: upcoming ex-dates PLUS recently\n"
     "                       passed / in-progress actions with status (rights\n"
     "                       subscription open, dividend payment due/pending,\n"
     "                       bonus credit) \u2014 last 30 days\n\n"
@@ -107,6 +107,9 @@ HELP_TEXT = (
     "\u2B50 <b>Watchlist</b>\n"
     "━━━━━━━━━━━━━━━━━━━━\n"
     "/watchlist           \u2192 show your full watchlist\n"
+    "/myfavourites        \u2192 run your favourite commands in one go:\n"
+    "                       corporate actions for your list, top losers (1h +\n"
+    "                       today), watchlist &amp; fundamentals for your stocks\n"
     "/addstock SYMBOL [NSE|BSE] \u2192 add a stock (default NSE)\n"
     "  /addstock RELIANCE NSE  \u00b7  /addstock PGINVIT\n"
     "/removestock SYMBOL  \u2192 remove a stock from your watchlist\n"
@@ -126,11 +129,11 @@ HELP_TEXT = (
     "  /fundamentals RELIANCE  \u2192 valuation, growth, margins, balance sheet,\n"
     "                     EPS, analyst targets &amp; shareholding\n"
     "  /fundamentals 3-5   \u2192 deep report for watchlist #3..#5\n\n"
-    "/harmonic <i>[all|100|500] [TIMEFRAME]</i>  \u2192 harmonic patterns &amp; PRZ\n"
+    "/harmonicpatterns <i>[all|100|500] [TIMEFRAME]</i>  \u2192 harmonic patterns\n"
     "  Scans for Gartley / Bat / Butterfly / Crab / Shark setups.\n"
-    "  /harmonic all      \u2192 NIFTY 100, daily \u00b7  /harmonic 500 1w  \u2192 weekly\n"
-    "  /harmonic RELIANCE \u2192 full report with PRZ, entry, SL &amp; targets\n"
-    "  Timeframes: 5m 15m 30m 1h 4h 1d 1w\n\n"
+    "  /harmonicpatterns all  \u2192 NIFTY 100, daily \u00b7  /harmonicpatterns 500 1w\n"
+    "  /harmonicpatterns RELIANCE  \u2192 full report with PRZ, entry, SL &amp; targets\n"
+    "  Timeframes: 5m 15m 30m 1h 4h 1d 1w (alias /harmonic)\n\n"
     "/scan500             \u2192 full NIFTY 500 CNC/MIS technical scanner\n"
     "  EMAs, RSI, MACD, ADX, CMF, OBV, Aroon, TTM Squeeze, Supertrend, GMMA,\n"
     "  VWAP &amp; Mansfield RS \u2014 scores survivors /100, picks the #1 setup and\n"
@@ -176,7 +179,8 @@ HELP_TEXT = (
     "/scan500               \u2192 full NIFTY 500 CNC/MIS technical scan\n"
     "/corpactions dividend   \u2192 Upcoming dividends\n"
     "/corpactions RELIANCE   \u2192 RELIANCE corporate actions\n"
-    "/upcoming              \u2192 Watchlist ex-dates + in-progress actions\n"
+    "/corpactionsformylist  \u2192 Watchlist ex-dates + in-progress actions\n"
+    "/myfavourites          \u2192 All your regular commands in one go\n"
     "/addstock INFY NSE      \u2192 Add INFY to watchlist\n"
     "/news RELIANCE          \u2192 Latest RELIANCE headlines\n"
     "/alertfilters bonus,split  \u2192 Only bonus &amp; split alerts\n"
@@ -274,58 +278,15 @@ def handle_command(chat_id, text):
         return
 
     if cmd in ("/list", "/watchlist"):
-        items = storage.get_user_list(chat_id)
-        if not items:
-            reply(chat_id, "Your watchlist is empty.")
-        else:
-            lines = [
-                f"{idx}. <b>{i['symbol']}</b> ({i['exchange']})"
-                for idx, i in enumerate(items, start=1)
-            ]
-            where = (
-                "watchlist.json (owner's list)"
-                if storage.is_owner(chat_id)
-                else f"subscriptions.json (your chat {chat_id})"
-            )
-            persistence = (
-                "pushed to GitHub - it survives redeploys."
-                if github_push_configured()
-                else "NOT pushed to GitHub - it is only on this host's disk "
-                "and WILL BE LOST on redeploy. Run /status to confirm."
-            )
-            reply(
-                chat_id,
-                "<b>Your Watchlist:</b>\n"
-                + "\n".join(lines)
-                + f"\n\nUse <code>/stockanalysis 5-10</code> or <code>/fundamentals 3-5</code> to get details by these numbers."
-                + f"\nSaved in: <code>{html.escape(where)}</code>\nPersistence: {html.escape(persistence)}",
-            )
+        send_watchlist(chat_id)
         return
 
     if cmd == "/checknow":
         reply(chat_id, "Running a forced check now - re-sending all matching alerts shortly.")
         return
 
-    if cmd in ("/next", "/upcoming"):
-        items = storage.get_user_list(chat_id)
-        if not items:
-            reply(chat_id, "Your watchlist is empty.")
-            return
-        try:
-            matching = poller_mod.fetch_matching(items)
-        except Exception as exc:
-            reply(chat_id, f"Could not fetch corporate actions: {html.escape(str(exc))}")
-            return
-        upcoming = [
-            a for a in matching if poller_mod.within_reminder_window(a.get("ex_date"))
-        ]
-        recent = [
-            a for a in matching if poller_mod.recently_passed(a.get("ex_date"))
-        ]
-        pending = [
-            a for a in matching if not poller_mod.parse_ex_date(a.get("ex_date"))
-        ]
-        reply(chat_id, notifier.format_next_report(upcoming, recent, pending))
+    if cmd in ("/next", "/upcoming", "/corpactionsformylist"):
+        send_watchlist_actions(chat_id)
         return
 
     if cmd in ("/filter", "/alertfilters", "/actionfilters"):
@@ -473,12 +434,16 @@ def handle_command(chat_id, text):
         run_ca_query(chat_id, {"mode": "exdate", "days": days})
         return
 
-    if cmd in ("/summary", "/casummary"):
+    if cmd in ("/summary", "/casummary", "/corpactionssummary"):
         run_ca_query(chat_id, {"mode": "overview"})
         return
 
     if cmd == "/settings":
         reply(chat_id, format_settings(chat_id))
+        return
+
+    if cmd in ("/myfavourites", "/favorites", "/favourites", "/mypicks", "/dailybrief"):
+        handle_favourites(chat_id)
         return
 
     if cmd in ("/menu", "/quick", "/shortcuts", "/buttons"):
@@ -506,7 +471,7 @@ def handle_command(chat_id, text):
         handle_fund_analysis(chat_id, parts)
         return
 
-    if cmd == "/harmonic":
+    if cmd in ("/harmonic", "/harmonicpatterns"):
         handle_harmonic(chat_id, parts)
         return
 
@@ -594,6 +559,83 @@ def handle_command(chat_id, text):
         reply(chat_id, f"Removed <b>{symbol}</b> ({exchange}) if it was present.")
     else:
         send_help(chat_id)
+
+
+def send_watchlist(chat_id) -> None:
+    """Show the requester's full watchlist (/watchlist, /list)."""
+    items = storage.get_user_list(chat_id)
+    if not items:
+        reply(chat_id, "Your watchlist is empty.")
+        return
+    lines = [
+        f"{idx}. <b>{i['symbol']}</b> ({i['exchange']})"
+        for idx, i in enumerate(items, start=1)
+    ]
+    where = (
+        "watchlist.json (owner's list)"
+        if storage.is_owner(chat_id)
+        else f"subscriptions.json (your chat {chat_id})"
+    )
+    persistence = (
+        "pushed to GitHub - it survives redeploys."
+        if github_push_configured()
+        else "NOT pushed to GitHub - it is only on this host's disk "
+        "and WILL BE LOST on redeploy. Run /status to confirm."
+    )
+    reply(
+        chat_id,
+        "<b>Your Watchlist:</b>\n"
+        + "\n".join(lines)
+        + f"\n\nUse <code>/stockanalysis 5-10</code> or <code>/fundamentals 3-5</code> to get details by these numbers."
+        + f"\nSaved in: <code>{html.escape(where)}</code>\nPersistence: {html.escape(persistence)}",
+    )
+
+
+def send_watchlist_actions(chat_id) -> None:
+    """Corporate actions for the requester's watchlist with status
+    (/corpactionsformylist, /next, /upcoming).
+    """
+    items = storage.get_user_list(chat_id)
+    if not items:
+        reply(chat_id, "Your watchlist is empty.")
+        return
+    try:
+        matching = poller_mod.fetch_matching(items)
+    except Exception as exc:
+        reply(chat_id, f"Could not fetch corporate actions: {html.escape(str(exc))}")
+        return
+    upcoming = [
+        a for a in matching if poller_mod.within_reminder_window(a.get("ex_date"))
+    ]
+    recent = [
+        a for a in matching if poller_mod.recently_passed(a.get("ex_date"))
+    ]
+    pending = [
+        a for a in matching if not poller_mod.parse_ex_date(a.get("ex_date"))
+    ]
+    reply(chat_id, notifier.format_next_report(upcoming, recent, pending))
+
+
+def handle_favourites(chat_id) -> None:
+    """Run the user's favourite / regular commands in one go (/myfavourites).
+
+    Bundle: corporate actions for the watchlist, top losers (1h + today),
+    the watchlist itself, and deep fundamentals for the watchlist.
+    """
+    reply(
+        chat_id,
+        "\U0001F4CB <b>Your Favourites</b> - running your regular commands...",
+    )
+    send_watchlist_actions(chat_id)
+    handle_gainers_losers(chat_id, ["/toplosers", "1h"], "losers")
+    handle_gainers_losers(chat_id, ["/toplosers", "1d", "10"], "losers")
+    send_watchlist(chat_id)
+    handle_fund_analysis(chat_id, ["/fundamentals", "all"])
+    reply(
+        chat_id,
+        "\u2705 <b>Favourites done.</b> Use <code>/menu</code> for one-tap commands "
+        "or <code>/myfavourites</code> to run this again.",
+    )
 
 
 def _close_symbols(query: str, limit: int = 3) -> list[str]:
@@ -893,11 +935,11 @@ def run_ca_query(chat_id, descriptor: dict) -> bool:
 QUICK_MENU_TEXT = (
     "<b>\U0001F447 One-Tap Command Menu</b>\n"
     "Tap any button below - the command runs instantly, no typing needed.\n\n"
-    "\u2022 <code>/upcoming</code> - watchlist ex-dates + in-progress actions\n"
+    "\u2022 <code>/corpactionsformylist</code> - corporate actions for YOUR list\n"
+    "\u2022 <code>/myfavourites</code> - all your regular commands in one go\n"
     "\u2022 <code>/corpactions</code> - all NSE+BSE corporate actions\n"
-    "\u2022 <code>/summary</code> - counts + next ex-dates\n"
+    "\u2022 <code>/corpactionssummary</code> - counts + next ex-dates\n"
     "\u2022 <code>/topgainers 1h</code> / <code>/toplosers 1h</code> - movers\n"
-    "\u2022 <code>/news</code> - headlines for your watchlist\n"
     "\u2022 <code>/watchlist</code> - your stocks\n\n"
     "The menu stays visible until you hide it with <code>/menu off</code>."
 )
@@ -1950,14 +1992,14 @@ def handle_single_stock_analysis(chat_id, parts) -> None:
     if len(parts) < 2:
         reply(
             chat_id,
-            "Usage: <code>/stock SYMBOL</code> (e.g. <code>/stock TATATECH</code>) "
-            "or <code>/stock 5</code> / <code>/stock 5-10</code> (watchlist positions)",
+            "Usage: <code>/stockanalysis SYMBOL</code> (e.g. <code>/stockanalysis TATATECH</code>) "
+            "or <code>/stockanalysis 5</code> / <code>/stockanalysis 5-10</code> (watchlist positions)",
         )
         return
 
     rng = _parse_stock_range(parts[1])
     if rng is not None:
-        handle_stock_batch(chat_id, "/stock", rng, deep=False)
+        handle_stock_batch(chat_id, "/stockanalysis", rng, deep=False)
         return
 
     raw_sym = parts[1].upper().strip().removesuffix(".NS").removesuffix(".BO")
@@ -1968,7 +2010,7 @@ def handle_single_stock_analysis(chat_id, parts) -> None:
     fund = sources.get_fundamentals(raw_sym, with_screener=True) or {}
 
     if quote.get("price") is None and not fund:
-        _reply_suggestions(chat_id, raw_sym, "stock")
+        _reply_suggestions(chat_id, raw_sym, "stockanalysis")
         return
 
     lines = _stock_summary_lines(raw_sym, quote, fund, include_tip=True)
@@ -1976,23 +2018,34 @@ def handle_single_stock_analysis(chat_id, parts) -> None:
     log.info("handle_single_stock: completed for %s in %.1fs", raw_sym, monotonic() - t0)
 
 
-def handle_stock_batch(chat_id, cmd: str, rng, deep: bool) -> None:
-    """Render /stock or /fund for a range of the user's watchlist positions."""
+def _stock_next_markup(deep: bool, start: int) -> dict:
+    """Inline 'Next' button for a paginated batch (callback_data stknext:deep:start)."""
+    return {
+        "inline_keyboard": [
+            [{"text": "Next \u25b6", "callback_data": f"stknext:{1 if deep else 0}:{start}"}],
+        ]
+    }
+
+
+def _build_stock_batch(chat_id, cmd: str, rng, deep: bool) -> tuple[list[str], int | None]:
+    """Fetch and format a page of watchlist positions (never sends).
+
+    Returns (lines, next_start) where next_start is the 1-based start of the
+    next page, or None when this is the last page.
+    """
     cap = MAX_FUND_BATCH if deep else MAX_STOCK_BATCH
     items = storage.get_user_list(chat_id)
     if not items:
-        reply(chat_id, "Your watchlist is empty. Add stocks with /add SYMBOL NSE")
-        return
+        return ["Your watchlist is empty. Add stocks with /addstock SYMBOL NSE"], None
     start, end = rng
     total = len(items)
     start = max(1, start)
     end = total if end is None else min(end, total)
     if start > total:
-        reply(chat_id, f"Your watchlist has only {total} stock(s) — start position must be 1..{total}.")
-        return
-    work = items[start - 1:end]
-    skipped = max(0, len(work) - cap)
-    work = work[:cap]
+        return [
+            f"Your watchlist has only {total} stock(s) - start position must be 1..{total}."
+        ], None
+    work = items[start - 1:end][:cap]
     t0 = monotonic()
     log.info(
         "%s batch: positions %d-%d (%d stocks, deep=%s)",
@@ -2019,12 +2072,72 @@ def handle_stock_batch(chat_id, cmd: str, rng, deep: bool) -> None:
         body.extend(lines)
         body.append("")
 
-    header = f"\U0001F4CA <b>{cmd.upper()} \u00b7 Watchlist positions {start}\u2013{start + len(work) - 1} of {total}</b>\n"
+    header = (
+        f"\U0001F4CA <b>{cmd.upper()} \u00b7 Watchlist positions "
+        f"{start}\u2013{start + len(work) - 1} of {total}</b>\n"
+    )
     all_lines = [header] + body
-    if skipped:
-        all_lines.append(f"\u2026 and {skipped} more (max {cap} per query).")
-    _reply_messages(chat_id, _split_messages(all_lines))
+    next_start = start + len(work) if start + len(work) <= total else None
+    if next_start is not None:
+        remaining = total - (start + len(work) - 1)
+        page_end = min(total, next_start + cap - 1)
+        all_lines.append(
+            f"\u2026 and {remaining} more. Tap <b>Next \u25b6</b> below or send "
+            f"<code>{cmd} {next_start}-{page_end}</code> for the next batch."
+        )
     log.info("%s batch: done %d stocks in %.1fs", cmd, len(work), monotonic() - t0)
+    return all_lines, next_start
+
+
+def handle_stock_batch(chat_id, cmd: str, rng, deep: bool) -> None:
+    """Render /stockanalysis or /fundamentals for a range of watchlist positions."""
+    lines, next_start = _build_stock_batch(chat_id, cmd, rng, deep)
+    markup = _stock_next_markup(deep, next_start) if next_start else None
+    _reply_messages(chat_id, _split_messages(lines), reply_markup=markup)
+
+
+def _answer_callback(callback_id) -> None:
+    """Acknowledge an inline-button tap so Telegram clears the loading spinner."""
+    if not callback_id:
+        return
+    try:
+        requests.post(
+            f"https://api.telegram.org/bot{config.TELEGRAM_BOT_TOKEN}/answerCallbackQuery",
+            json={"callback_query_id": callback_id},
+            timeout=config.HTTP_TIMEOUT,
+        )
+    except Exception as exc:
+        log.info("answerCallbackQuery failed: %s", config.redact(exc))
+
+
+def handle_callback_query(callback) -> None:
+    """Handle an inline-button tap (currently: the 'Next' pagination button).
+
+    Answers the callback and sends the next page as a new message with its
+    own Next button, so a single tap walks through the whole list.
+    """
+    data = (callback.get("data") or "").strip()
+    msg = callback.get("message") or {}
+    chat_id = (msg.get("chat") or {}).get("id")
+    callback_id = callback.get("id")
+    if not data or chat_id is None:
+        return
+    _answer_callback(callback_id)
+    if not data.startswith("stknext:"):
+        return
+    parts = data.split(":")
+    if len(parts) != 3:
+        return
+    _, deep_s, start_s = parts
+    try:
+        deep = bool(int(deep_s))
+        start = int(start_s)
+    except ValueError:
+        return
+    cmd = "/fundamentals" if deep else "/stockanalysis"
+    lines, next_start = _build_stock_batch(chat_id, cmd, (start, None), deep)
+    markup = _stock_next_markup(deep, next_start) if next_start else None
+    _reply_messages(chat_id, _split_messages(lines), reply_markup=markup)
 
 
 def handle_fund_analysis(chat_id, parts) -> None:
@@ -2038,14 +2151,14 @@ def handle_fund_analysis(chat_id, parts) -> None:
     if len(parts) < 2:
         reply(
             chat_id,
-            "Usage: <code>/fund SYMBOL</code> (e.g. <code>/fund RELIANCE</code>) "
-            "or <code>/fund 5</code> / <code>/fund 5-10</code> (watchlist positions)",
+            "Usage: <code>/fundamentals SYMBOL</code> (e.g. <code>/fundamentals RELIANCE</code>) "
+            "or <code>/fundamentals 5</code> / <code>/fundamentals 5-10</code> (watchlist positions)",
         )
         return
 
     rng = _parse_stock_range(parts[1])
     if rng is not None:
-        handle_stock_batch(chat_id, "/fund", rng, deep=True)
+        handle_stock_batch(chat_id, "/fundamentals", rng, deep=True)
         return
 
     raw_sym = parts[1].upper().strip().removesuffix(".NS").removesuffix(".BO")
@@ -2056,7 +2169,7 @@ def handle_fund_analysis(chat_id, parts) -> None:
     fund = sources.get_fundamentals(raw_sym, with_screener=True) or {}
 
     if quote.get("price") is None and not fund:
-        _reply_suggestions(chat_id, raw_sym, "fund")
+        _reply_suggestions(chat_id, raw_sym, "fundamentals")
         return
 
     lines = _fund_report_lines(raw_sym, quote, fund, include_tip=True)
@@ -2448,17 +2561,18 @@ def register_commands() -> bool:
     if not notifier.is_configured():
         return False
     menu = [
-        {"command": "upcoming", "description": "Watchlist: ex-dates + in-progress actions (rights/dividends)"},
+        {"command": "corpactionsformylist", "description": "Corporate actions for YOUR watchlist with status"},
+        {"command": "myfavourites", "description": "Run your favourite commands in one go"},
         {"command": "corpactions", "description": "Browse all NSE+BSE corporate actions"},
         {"command": "exdates", "description": "All actions by ex-date: today or next N days"},
-        {"command": "summary", "description": "Corporate-action snapshot: counts + next ex-dates"},
+        {"command": "corpactionssummary", "description": "Corporate-action snapshot: counts + next ex-dates"},
         {"command": "watchlist", "description": "Show your watchlist"},
         {"command": "addstock", "description": "Add a stock: /addstock RELIANCE NSE"},
         {"command": "removestock", "description": "Remove a stock from your watchlist"},
         {"command": "news", "description": "Latest news for your watchlist stocks"},
         {"command": "stockanalysis", "description": "Stock summary or watchlist range: /stockanalysis 5-10"},
         {"command": "fundamentals", "description": "Deep fundamentals or range: /fundamentals 3-5"},
-        {"command": "harmonic", "description": "Harmonic scan NIFTY 100/500: /harmonic all / 500"},
+        {"command": "harmonicpatterns", "description": "Harmonic pattern scan NIFTY 100/500: /harmonicpatterns all"},
         {"command": "scan500", "description": "NIFTY 500 CNC/MIS technical scanner"},
         {"command": "topmovers", "description": "Top gainers AND losers with fundamentals"},
         {"command": "topgainers", "description": "Top rising stocks with fundamentals"},
@@ -2505,6 +2619,13 @@ def process_commands():
     for update in updates:
         update_id = update.get("update_id", 0)
         max_offset = max(max_offset, update_id)
+        callback = update.get("callback_query")
+        if callback:
+            try:
+                handle_callback_query(callback)
+            except Exception as exc:  # one bad tap must not break the run
+                log.warning("callback query failed: %s", config.redact(exc))
+            continue
         message = update.get("message") or {}
         text = (message.get("text") or "").strip()
         chat_id = (message.get("chat") or {}).get("id")

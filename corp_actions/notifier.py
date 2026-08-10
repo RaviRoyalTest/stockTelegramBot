@@ -76,9 +76,9 @@ def quick_menu_markup() -> dict:
     """
     return {
         "keyboard": [
-            ["/upcoming"],
-            ["/corpactions", "/summary", "/news"],
-            ["/topgainers 1h", "/toplosers 1h"],
+            ["/corpactionsformylist"],
+            ["/myfavourites", "/corpactions"],
+            ["/corpactionssummary", "/topgainers 1h", "/toplosers 1h"],
             ["/watchlist", "/settings", "/help"],
             ["/menu off"],
         ],
@@ -176,7 +176,7 @@ def format_corporate_action(action: dict) -> str:
     type_emoji = _TYPE_EMOJI.get(typ, _TYPE_EMOJI["other"])
     lines = [
         f"{type_emoji} <b>Corporate Action Alert</b>",
-        f"<b>{escape(symbol)}</b> ({escape(exchange)}) \u2014 {escape(company)}",
+        f"<b>{escape(symbol)}</b> ({escape(exchange)}) - {escape(company)}",
         f"Subject: {escape(subject)}",
     ]
     if typ != "other":
@@ -191,11 +191,11 @@ def format_corporate_action(action: dict) -> str:
             color_icon = "\U0001F7E2" if change >= 0 else "\U0001F534"
             sign = "+" if change >= 0 else ""
             lines.append(
-                f"Price: <b>{fmt_money(price, currency)}</b>  "
+                f"Current Price: <b>{fmt_money(price, currency)}</b>  "
                 f"{color_icon}{arrow} <b>{sign}{change:.2f}%</b>"
             )
         else:
-            lines.append(f"Price: <b>{fmt_money(price, currency)}</b>")
+            lines.append(f"Current Price: <b>{fmt_money(price, currency)}</b>")
     if ex_date and ex_date != "-":
         lines.append(f"\U0001F4C5 Ex-Date: <b>{_fmt_date(ex_date)}</b>")
     if record_date and record_date != "-":
@@ -312,33 +312,31 @@ def action_status(action: dict, today: date | None = None) -> str:
     if typ == "rights":
         return (
             f"Ex-date passed {_fmt_date(ex)} ({days_ago}d ago) - rights "
-            "subscription window usually opens a few days after the record "
-            "date and stays open ~2 weeks; check the company's rights offer "
-            "notice for the last date to apply"
+            "subscription window open; check the company notice for the last "
+            "date to apply"
         )
     if typ == "dividend":
-        base = f"Ex-date passed {_fmt_date(ex)} ({days_ago}d ago) - dividend payment"
         if rec:
             due = rec + timedelta(days=30)
             if today > due:
                 return (
-                    base + f" was due by {_fmt_date(due)} (30 days from record "
-                    f"date {_fmt_date(rec)}). Window passed - not credited yet? "
-                    "Contact your broker/company."
+                    f"Ex-date passed {_fmt_date(ex)} ({days_ago}d ago) - payment "
+                    f"window (30 days from record date {_fmt_date(rec)}) passed; "
+                    "contact broker if not credited"
                 )
             return (
-                base + f" is due within 30 days of record date {_fmt_date(rec)} "
-                f"(by {_fmt_date(due)}). If it isn't credited by then, contact "
-                "your broker/company."
+                f"Ex-date passed {_fmt_date(ex)} ({days_ago}d ago) - payment due "
+                f"by {_fmt_date(due)} (30 days from record date); contact broker "
+                "if not credited"
             )
         return (
-            base + " normally follows within days-weeks of the ex-date; "
-            "contact your broker/company if it isn't credited"
+            f"Ex-date passed {_fmt_date(ex)} ({days_ago}d ago) - payment normally "
+            "follows within days-weeks; contact broker if not credited"
         )
     if typ == "bonus":
         return (
             f"Ex-date passed {_fmt_date(ex)} ({days_ago}d ago) - bonus shares "
-            "are usually credited within ~2 weeks of the record date"
+            "usually credited within ~2 weeks of the record date"
         )
     if typ == "split":
         return (
@@ -432,19 +430,24 @@ def format_action_entry(action: dict) -> str:
 
 
 def format_action_detail(action: dict) -> str:
-    """Full detail block for a single corporate action query result."""
+    """Full detail block for a single corporate action query result.
+
+    Mirrors the alert layout so /corpactions SYMBOL reads exactly like the
+    push notifications: symbol line, subject, type, price, key dates, and a
+    compact derived status.
+    """
     symbol = action.get("symbol") or "-"
     exchange = action.get("exchange") or "-"
     company = action.get("company") or "-"
+    subject = action.get("subject") or "-"
+    typ = sources.action_type(subject)
+    type_emoji = _TYPE_EMOJI.get(typ, _TYPE_EMOJI["other"])
     lines = [
-        f"<b>{escape(symbol)}</b> ({escape(exchange)}) - {escape(company)}",
+        f"{type_emoji} <b>{escape(symbol)}</b> ({escape(exchange)}) - {escape(company)}",
+        f"Subject: {escape(subject)}",
     ]
-    subject = action.get("subject")
-    if subject:
-        lines.append(f"Subject: {escape(subject)}")
-        typ = sources.action_type(subject)
-        if typ != "other":
-            lines.append(f"Type: {sources.TYPE_LABELS.get(typ, typ)}")
+    if typ != "other":
+        lines.append(f"Type: {sources.TYPE_LABELS.get(typ, typ)}")
     price = _fmt_price(action)
     if price:
         lines.append(f"Current Price: <b>{price}</b>")
