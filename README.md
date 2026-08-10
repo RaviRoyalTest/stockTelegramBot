@@ -126,6 +126,35 @@ watchlist persists and survives restarts.
 - Free tier: public repos get ~2000 minutes/month — one hourly run (~30s)
   uses only a few hours per month.
 
+## Web Dashboard (dashboard.py)
+
+A comprehensive, well-organised web dashboard that surfaces **all** bot
+functionality in a browser — no Telegram needed for browsing:
+
+| Tab | What it does |
+| --- | ------------ |
+| 📌 **Watchlist** | Load NSE/BSE stock lists, multi-select stocks, add/remove symbols manually, view live prices |
+| 📋 **Corporate Actions** | Query live NSE+BSE actions by overview, ex-date window, action type, or symbol/keyword |
+| 📊 **Market Screens** | Run movers / gainers / losers screens over NIFTY 100/500 with any period (5m → 1y) |
+| 💹 **Stock Analysis** | Deep single-stock report: price, 52W signal, RSI, P/E, sector P/E, market cap, D/E, div yield, ROCE, ROE, QoQ shareholding |
+| 📰 **News** | Latest headlines for your watchlist or a single symbol |
+| 🎛️ **Alert Settings** | Action-type filters + price-move threshold (same as `/filter` and `/alert`) |
+| 🖥️ **System** | Poller status, config, subscribers, persistence / GitHub push status |
+
+### Run on Render — just redeploy, nothing to change
+
+`bot_server.py` now serves the dashboard **by default** (toggle with
+`SERVE_DASHBOARD=false`). If your Render Web Service already runs
+`python bot_server.py`, simply **push the new code and redeploy** — the
+dashboard appears at your Render service URL while the Telegram bot keeps
+running in the background (same `$PORT`, same health check).
+
+### Run locally
+
+```bash
+streamlit run dashboard.py
+```
+
 ## Always-on Telegram bot (bot_server.py)
 
 For instant `/add`, `/remove`, `/list` and `/checknow` replies, run
@@ -186,7 +215,9 @@ GitHub Actions cron is a second safety net that commits state every hour.
 ## Project layout
 
 ```
-app.py                      # Streamlit UI
+app.py                      # Streamlit UI (original)
+dashboard.py                # Comprehensive web dashboard (all features)
+dashboard_server.py         # Render entry: Telegram bot + dashboard together
 run_bot.py                  # GitHub Actions entry: Telegram commands + poll
 corp_actions/
   config.py                 # env + endpoint configuration

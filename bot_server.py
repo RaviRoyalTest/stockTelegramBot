@@ -204,6 +204,22 @@ def _deployed_commit() -> str:
 
 
 def main():
+    # When SERVE_DASHBOARD is enabled (default), run the Streamlit dashboard
+    # as the main process and the Telegram bot in a background thread. This
+    # means the existing Render start command (`python bot_server.py`) serves
+    # the web dashboard with no extra configuration.
+    serve_dashboard = os.getenv("SERVE_DASHBOARD", "true").strip().lower() in ("1", "true", "yes", "on")
+    if serve_dashboard:
+        log.info("SERVE_DASHBOARD enabled - starting dashboard + bot together")
+        try:
+            import dashboard_server
+            dashboard_server.main()
+            return
+        except ImportError:
+            log.warning(
+                "dashboard_server not importable - falling back to bot-only mode"
+            )
+
     log.info(
         "Deployed commit %s (health server was added in b7231ef - if this "
         "SHA is older, deploy latest main and the timeout will clear)",
@@ -222,7 +238,11 @@ def main():
             "environment to persist state, then use /status in Telegram to "
             "confirm."
         )
-    start_health_server()
+    # When running inside dashboard_server (SERVE_DASHBOARD=false), the
+    # Streamlit process binds $PORT, so skip the separate health server to
+    # avoid a port conflict.
+    if serve_dashboard or os.getenv("SERVE_DASHBOARD", "true").strip().lower() not in ("0", "false", "off", "no"):
+        start_health_server()
     register_commands()
     log.info("Starting long-polling bot (instant responses)...")
     sync_state()
