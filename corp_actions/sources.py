@@ -1277,6 +1277,111 @@ def _parse_screener_fundamentals(symbol: str) -> dict | None:
     return out or None
 
 
+# Deep-fundamental fields that Yahoo quoteSummary should provide. Used to
+# judge how COMPLETE a response is: Yahoo occasionally returns only part of
+# the modules (e.g. summaryDetail but no financialData), which would render a
+# half-empty deep report - so we retry once and shorten the cache TTL.
+_DEEP_FUND_KEYS = (
+    "mcap_cr", "forward_pe", "price_to_sales", "beta", "price_to_book",
+    "book_value", "enterprise_value", "shares_outstanding", "float_shares",
+    "trailing_eps", "forward_eps", "target_high", "target_low", "target_mean",
+    "target_median", "num_analysts", "total_cash", "cash_per_share",
+    "total_debt", "total_revenue", "ebitda", "revenue_per_share",
+    "earnings_growth", "revenue_growth", "gross_margin", "ebitda_margin",
+    "operating_margin", "profit_margin", "current_ratio", "quick_ratio",
+    "free_cashflow", "operating_cashflow",
+)
+
+
+def _deep_completeness(out: dict) -> float:
+    """Fraction of the deep-fundamental field set actually present (0..1)."""
+    if not out:
+        return 0.0
+    have = sum(1 for k in _DEEP_FUND_KEYS if out.get(k) is not None)
+    return have / len(_DEEP_FUND_KEYS)
+
+
+def _extract_quote_summary(res: dict) -> dict:
+    """Pull price + deep-fundamentals fields out of a Yahoo quoteSummary result."""
+    sd = res.get("summaryDetail") or {}
+    fd = res.get("financialData") or {}
+    dks = res.get("defaultKeyStatistics") or {}
+    ap = res.get("assetProfile") or {}
+
+    def _raw(d, k):
+        v = d.get(k) or {}
+        return v.get("raw") if isinstance(v, dict) else v
+
+    out = {}
+    price = _raw(sd, "regularMarketPrice") or _raw(sd, "currentPrice")
+    if price:
+        out["price"] = price
+    for src, dst in (
+        ("fiftyTwoWeekHigh", "wk52_high"),
+        ("fiftyTwoWeekLow", "wk52_low"),
+        ("trailingPE", "pe"),
+    ):
+        val = _raw(sd, src)
+        if val:
+            out[dst] = val
+    dy = _raw(sd, "dividendYield")  # fraction (0.0045 -> 0.45%)
+    if dy is not None:
+        out["div_yield"] = round(dy * 100, 2)
+    de = _raw(fd, "debtToEquity")  # Yahoo reports percent (36.65 -> 0.37)
+    if de is not None:
+        out["debt_to_equity"] = round(de / 100, 2)
+    if ap.get("sector"):
+        out["sector"] = ap["sector"]
+
+    extras = {}
+    for src, src_key, dst_key in (
+        (sd, "marketCap", "mcap_cr"),
+        (sd, "forwardPE", "forward_pe"),
+        (sd, "priceToSalesTrailing12Months", "price_to_sales"),
+        (sd, "beta", "beta"),
+        (dks, "priceToBook", "price_to_book"),
+        (dks, "bookValue", "book_value"),
+        (dks, "enterpriseValue", "enterprise_value"),
+        (dks, "sharesOutstanding", "shares_outstanding"),
+        (dks, "floatShares", "float_shares"),
+        (dks, "trailingEps", "trailing_eps"),
+        (dks, "forwardEps", "forward_eps"),
+        (fd, "targetHighPrice", "target_high"),
+        (fd, "targetLowPrice", "target_low"),
+        (fd, "targetMeanPrice", "target_mean"),
+        (fd, "targetMedianPrice", "target_median"),
+        (fd, "numberOfAnalystOpinions", "num_analysts"),
+        (fd, "totalCash", "total_cash"),
+        (fd, "totalCashPerShare", "cash_per_share"),
+        (fd, "totalDebt", "total_debt"),
+        (fd, "totalRevenue", "total_revenue"),
+        (fd, "ebitda", "ebitda"),
+        (fd, "revenuePerShare", "revenue_per_share"),
+        (fd, "earningsGrowth", "earnings_growth"),
+        (fd, "revenueGrowth", "revenue_growth"),
+        (fd, "grossMargins", "gross_margin"),
+        (fd, "ebitdaMargins", "ebitda_margin"),
+        (fd, "operatingMargins", "operating_margin"),
+        (fd, "profitMargins", "profit_margin"),
+        (fd, "currentRatio", "current_ratio"),
+        (fd, "quickRatio", "quick_ratio"),
+        (fd, "freeCashflow", "free_cashflow"),
+        (fd, "operatingCashflow", "operating_cashflow"),
+    ):
+        val = _raw(src, src_key)
+        if val is not None:
+            extras[dst_key] = val
+    mc = extras.get("mcap_cr")
+    if mc is not None:
+        extras["mcap_cr"] = round(mc / 1e7, 1)  # rupees -> Crore
+    if ap.get("industry"):
+        extras["industry"] = ap["industry"]
+    if ap.get("fullTimeEmployees"):
+        extras["employees"] = ap["fullTimeEmployees"]
+    out.update(extras)
+    return out
+
+
 def get_fundamentals(symbol: str, with_screener: bool = True) -> dict | None:
     """Return fundamentals for an NSE symbol, cached.
 
@@ -1285,6 +1390,10 @@ def get_fundamentals(symbol: str, with_screener: bool = True) -> dict | None:
     true (the default) the slow screener.in part (sector_pe, promoter_pct,
     fii_pct, dii_pct) is added as well. Missing keys mean the value could not
     be obtained; None is returned only when nothing at all was available.
+
+    Yahoo occasionally returns a PARTIAL quoteSummary (some modules missing).
+    For deep requests we detect that, retry once, and cache partial results
+    with a short TTL so the deep report is never served half-empty for long.
     """
     key = symbol.strip().upper()
     # Cache separately per with_screener flag: a fast bulk call (with_screener
@@ -1302,85 +1411,27 @@ def get_fundamentals(symbol: str, with_screener: bool = True) -> dict | None:
     # Primary: Yahoo quoteSummary (needs cookie + crumb)
     res = _quote_summary(key)
     if res:
-        sd = res.get("summaryDetail") or {}
-        fd = res.get("financialData") or {}
-        dks = res.get("defaultKeyStatistics") or {}
-        ap = res.get("assetProfile") or {}
-
-        def _raw(d, k):
-            v = d.get(k) or {}
-            return v.get("raw") if isinstance(v, dict) else v
-
-        price = _raw(sd, "regularMarketPrice") or _raw(sd, "currentPrice")
-        if price:
-            out["price"] = price
-        for src, dst in (
-            ("fiftyTwoWeekHigh", "wk52_high"),
-            ("fiftyTwoWeekLow", "wk52_low"),
-            ("trailingPE", "pe"),
-        ):
-            val = _raw(sd, src)
-            if val:
-                out[dst] = val
-        dy = _raw(sd, "dividendYield")  # fraction (0.0045 -> 0.45%)
-        if dy is not None:
-            out["div_yield"] = round(dy * 100, 2)
-        de = _raw(fd, "debtToEquity")  # Yahoo reports percent (36.65 -> 0.37)
-        if de is not None:
-            out["debt_to_equity"] = round(de / 100, 2)
-        if ap.get("sector"):
-            out["sector"] = ap["sector"]
-
-        # Deep-fundamentals extras (used by the /fund deep report)
-        extras = {}
-        for src, src_key, dst_key in (
-            (sd, "marketCap", "mcap_cr"),
-            (sd, "forwardPE", "forward_pe"),
-            (sd, "priceToSalesTrailing12Months", "price_to_sales"),
-            (sd, "beta", "beta"),
-            (dks, "priceToBook", "price_to_book"),
-            (dks, "bookValue", "book_value"),
-            (dks, "enterpriseValue", "enterprise_value"),
-            (dks, "sharesOutstanding", "shares_outstanding"),
-            (dks, "floatShares", "float_shares"),
-            (dks, "trailingEps", "trailing_eps"),
-            (dks, "forwardEps", "forward_eps"),
-            (fd, "targetHighPrice", "target_high"),
-            (fd, "targetLowPrice", "target_low"),
-            (fd, "targetMeanPrice", "target_mean"),
-            (fd, "targetMedianPrice", "target_median"),
-            (fd, "numberOfAnalystOpinions", "num_analysts"),
-            (fd, "totalCash", "total_cash"),
-            (fd, "totalCashPerShare", "cash_per_share"),
-            (fd, "totalDebt", "total_debt"),
-            (fd, "totalRevenue", "total_revenue"),
-            (fd, "ebitda", "ebitda"),
-            (fd, "revenuePerShare", "revenue_per_share"),
-            (fd, "earningsGrowth", "earnings_growth"),
-            (fd, "revenueGrowth", "revenue_growth"),
-            (fd, "grossMargins", "gross_margin"),
-            (fd, "ebitdaMargins", "ebitda_margin"),
-            (fd, "operatingMargins", "operating_margin"),
-            (fd, "profitMargins", "profit_margin"),
-            (fd, "currentRatio", "current_ratio"),
-            (fd, "quickRatio", "quick_ratio"),
-            (fd, "freeCashflow", "free_cashflow"),
-            (fd, "operatingCashflow", "operating_cashflow"),
-        ):
-            val = _raw(src, src_key)
-            if val is not None:
-                extras[dst_key] = val
-        mc = extras.get("mcap_cr")
-        if mc is not None:
-            extras["mcap_cr"] = round(mc / 1e7, 1)  # rupees -> Crore
-        if ap.get("industry"):
-            extras["industry"] = ap["industry"]
-        if ap.get("fullTimeEmployees"):
-            extras["employees"] = ap["fullTimeEmployees"]
-        out.update(extras)
+        out = _extract_quote_summary(res)
         log.info("get_fundamentals: quoteSummary -> %d fields for %s", len(out), key)
     else:
         log.info("get_fundamentals: quoteSummary unavailable for %s — trying chart fallback", key)
+
+    # Yahoo occasionally returns only PART of the modules (e.g. summaryDetail
+    # without financialData/defaultKeyStatistics), which leaves the deep
+    # report sections empty. Retry once when the deep set looks incomplete.
+    if with_screener and _deep_completeness(out) < 0.5:
+        log.info(
+            "get_fundamentals: %s deep set only %.0f%% complete - retrying quoteSummary once",
+            key, _deep_completeness(out) * 100,
+        )
+        res2 = _quote_summary(key)
+        if res2:
+            more = _extract_quote_summary(res2)
+            out.update({k: v for k, v in more.items() if v is not None})
+            log.info(
+                "get_fundamentals: retry -> %d fields for %s (was %d)",
+                len(out), key, len(out) - len(more),
+            )
 
     # Chart fallback & RSI computation (always run chart to get 14-day RSI and 52W fallback)
     chart_data = _chart_fundamentals(key)
@@ -1404,10 +1455,10 @@ def get_fundamentals(symbol: str, with_screener: bool = True) -> dict | None:
     data = out or None
     ttl = _FUND_TTL
     # Shorten the cache when a part is missing so we retry it sooner instead of
-    # serving a degraded report for the full 24h. This covers both the
-    # rate-limited screener.in part and a failed/empty Yahoo quoteSummary (which
-    # would otherwise leave the deep /fund sections empty).
-    deep_ok = bool(out.get("earnings_growth") or out.get("book_value") or out.get("total_cash"))
+    # serving a degraded report for the full 24h. This covers the rate-limited
+    # screener.in part AND a partial Yahoo quoteSummary (fewer than half the
+    # deep-fundamental fields), so a half-empty deep report never lingers.
+    deep_ok = _deep_completeness(out) >= 0.5
     if (with_screener and not (out.get("promoter_pct") or out.get("sector_pe"))) or not deep_ok:
         ttl = _FUND_RETRY_TTL  # retry the missing part sooner
     _fund_cache[cache_key] = {"ts": now, "data": data, "ttl": ttl}

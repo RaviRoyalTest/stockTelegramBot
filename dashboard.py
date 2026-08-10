@@ -259,6 +259,60 @@ def _tg_to_markdown(text: str) -> str:
     return text.strip()
 
 
+def _fetch_analysis(sym: str) -> dict | None:
+    """Fetch quote + deep fundamentals for a symbol (cross-link button)."""
+    quote = sources.get_quote("NSE", sym) or sources.get_quote("BSE", sym) or {}
+    fund = sources.get_fundamentals(sym, with_screener=True) or {}
+    if not quote and not fund:
+        return None
+    return {"quote": quote, "fund": fund, "sym": sym}
+
+
+def _request_analysis(sym: str, source: str) -> None:
+    """Fetch and stash a linked analysis; only the requesting tab renders it."""
+    if not sym:
+        return
+    res = _fetch_analysis(sym)
+    if res:
+        st.session_state["linked_analysis"] = res
+        st.session_state["linked_source"] = source
+    else:
+        st.warning(f"No data found for {sym}. Check the symbol.")
+
+
+def _render_linked_analysis(source: str) -> None:
+    """Render the deep report requested from another view (cross-link)."""
+    if st.session_state.get("linked_source") != source:
+        return
+    res = st.session_state.get("linked_analysis")
+    if not res:
+        return
+    sym = res["sym"]
+    # Rendered as plain widgets (no expander) so this works both at tab level
+    # and inside the favourites' expanders - Streamlit forbids nested expanders.
+    st.markdown(f"### 💹 {sym} — Deep fundamentals")
+    st.markdown(
+        _tg_to_markdown("\n".join(
+            run_bot._fund_report_lines(sym, res["quote"], res["fund"], include_tip=False)
+        )),
+        unsafe_allow_html=True,
+    )
+
+
+def _crosslink_selector(symbols: list, key: str, source: str, label: str = "View deep fundamentals") -> None:
+    """Cross-link widget: pick a symbol from the current view and open its
+    deep fundamental report right there (mirrors the tappable ticker buttons
+    on Telegram reports). Renders the report scoped to this tab.
+    """
+    uniq = list(dict.fromkeys(s for s in symbols if s))
+    if not uniq:
+        return
+    sel = st.selectbox(label, uniq, key=f"xl_{key}", label_visibility="collapsed")
+    if st.button(f"\U0001F4B9 {label}: {sel}", key=f"xlbtn_{key}", width="stretch"):
+        _request_analysis(sel, source)
+    _render_linked_analysis(source)
+
+
 def _action_meta_caption(a: dict) -> str:
     """One-line caption for a corporate-action card: announcement date,
     face value, ISIN, plus Book Closure and the rights Offer Window when
@@ -611,6 +665,10 @@ with tab_watch:
             })
         st.dataframe(rows, width="stretch", hide_index=True)
 
+        # Cross-link: click a watchlist ticker to open its deep fundamentals
+        st.caption("Tap a ticker to open its deep fundamentals report.")
+        _crosslink_selector([i["symbol"] for i in current_watchlist], "watch", "watch")
+
         remove_options = [_label_of(i) for i in current_watchlist]
         rm_col1, rm_col2 = st.columns([3, 1])
         with rm_col1:
@@ -655,10 +713,19 @@ with tab_watch:
     if fav:
         with st.expander("\U0001f4c5 Corporate actions for your list", expanded=True):
             st.markdown(_tg_to_markdown(fav["corp"]), unsafe_allow_html=True)
+            fav_syms = re.findall(r"\*\*([A-Z0-9\-]+)\*\*\s*\(NSE\)", fav["corp"])
+            if fav_syms:
+                _crosslink_selector(fav_syms, "favcorp", "fav")
         with st.expander("\U0001f4c9 Top losers — last 1h (NIFTY 100)"):
             st.dataframe(fav["losers_1h"], width="stretch", hide_index=True)
+            _crosslink_selector(
+                [str(r.get("Symbol", "")) for r in fav["losers_1h"]], "fav1h", "fav"
+            )
         with st.expander("\U0001f4c9 Top losers — today (NIFTY 100)"):
             st.dataframe(fav["losers_today"], width="stretch", hide_index=True)
+            _crosslink_selector(
+                [str(r.get("Symbol", "")) for r in fav["losers_today"]], "fav1d", "fav"
+            )
         with st.expander("\U0001f4ca Deep fundamentals — whole watchlist"):
             if isinstance(fav["fund"], list):
                 for sym, lines in fav["fund"]:
@@ -782,6 +849,11 @@ with tab_actions:
 
         if st.session_state.get("ca_mylist"):
             st.markdown(_tg_to_markdown(st.session_state["ca_mylist"]), unsafe_allow_html=True)
+            # Cross-link: every symbol in the report is tappable -> fundamentals
+            my_syms = re.findall(r"\*\*([A-Z0-9\-]+)\*\*\s*\(NSE\)", st.session_state["ca_mylist"])
+            if my_syms:
+                st.caption("Tap a ticker to open its deep fundamentals report.")
+                _crosslink_selector(my_syms, "camylist", "ca")
         elif st.session_state.get("ca_summary"):
             summary = st.session_state["ca_summary"]
             s1, s2 = st.columns(2)
@@ -840,6 +912,11 @@ with tab_actions:
                         m3.metric("Record Date", a.get("record_date") or "-")
                         m4.metric("Price", price, delta=change if change != "-" else None)
                         st.caption(_action_meta_caption(a))
+                # Cross-link: every symbol in the results is tappable -> fundamentals
+                syms = [a.get("symbol") for a in results]
+                if syms:
+                    st.caption("Tap a ticker to open its deep fundamentals report.")
+                    _crosslink_selector(syms, "cares", "ca")
             else:
                 st.info("No corporate actions match this query.")
 
@@ -877,6 +954,12 @@ with tab_market:
         universe_label = "NIFTY 500" if universe == "nifty500" else "NIFTY 100"
         st.subheader(f"{screen_type} — {period_label} · {universe_label} (top {n})")
         st.dataframe(st.session_state["screen_rows"], width="stretch", hide_index=True)
+
+        # Cross-link: pick any symbol from this screen to open its deep
+        # fundamentals right here (like tapping a ticker in Telegram).
+        syms = [str(r.get("Symbol", "")) for r in st.session_state["screen_rows"]]
+        st.caption("Tap a ticker to open its deep fundamentals report.")
+        _crosslink_selector(syms, "screen", "screen")
 
 # ================================================================ STOCK ANALYSIS
 def _render_quick_card(quote: dict, fund: dict, sym: str) -> None:

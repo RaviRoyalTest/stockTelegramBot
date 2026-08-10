@@ -163,6 +163,22 @@ _TYPE_EMOJI = {
 }
 
 
+def symbol_buttons(symbols: list[str], prefix: str = "fund", per_row: int = 4) -> dict:
+    """Inline keyboard of one button per symbol, e.g. tap PFC -> deep report.
+
+    prefix is the callback prefix: "fund" opens /fundamentalreport,
+    "ana" opens /fundamentalanalyze. Buttons make every symbol in a report
+    tappable so users jump straight to fundamentals instead of typing.
+    """
+    rows = []
+    for i in range(0, len(symbols), per_row):
+        rows.append([
+            {"text": sym, "callback_data": f"{prefix}:{sym}"}
+            for sym in symbols[i:i + per_row]
+        ])
+    return {"inline_keyboard": rows}
+
+
 def format_corporate_action(action: dict) -> str:
     """Render a corporate action record as an HTML Telegram message."""
     symbol = action.get("symbol") or "-"

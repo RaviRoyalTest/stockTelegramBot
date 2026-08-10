@@ -587,12 +587,16 @@ def send_watchlist(chat_id) -> None:
         else "NOT pushed to GitHub - it is only on this host's disk "
         "and WILL BE LOST on redeploy. Run /status to confirm."
     )
+    # Cross-link: tap a ticker below to open its fundamentals immediately
+    tap_symbols = [i["symbol"] for i in items[:12]]
     reply(
         chat_id,
         "<b>Your Watchlist:</b>\n"
         + "\n".join(lines)
         + f"\n\nUse <code>/fundamentalanalyze 5-10</code> or <code>/fundamentalreport 3-5</code> to get details by these numbers."
+        + "\nTap a ticker below for its fundamentals."
         + f"\nSaved in: <code>{html.escape(where)}</code>\nPersistence: {html.escape(persistence)}",
+        reply_markup=notifier.symbol_buttons(tap_symbols, "fund") if tap_symbols else None,
     )
 
 
@@ -621,7 +625,18 @@ def send_watchlist_actions(chat_id) -> None:
     # Attach live prices so each colorful block can show the current price.
     for group in (upcoming, recent, pending):
         _attach_quotes(group)
-    reply(chat_id, notifier.format_next_report(upcoming, recent, pending))
+    # Cross-link: one tappable button per symbol -> deep fundamentals
+    seen, tap_symbols = set(), []
+    for a in upcoming + recent + pending:
+        sym = (a.get("symbol") or "").upper()
+        if sym and sym not in seen:
+            seen.add(sym)
+            tap_symbols.append(sym)
+    reply(
+        chat_id,
+        notifier.format_next_report(upcoming, recent, pending),
+        reply_markup=notifier.symbol_buttons(tap_symbols[:12], "fund") if tap_symbols else None,
+    )
 
 
 def handle_favourites(chat_id) -> None:
@@ -1508,7 +1523,13 @@ def handle_market_screen(chat_id, parts, default_direction="all",
         )
     if failed:
         enriched_report += f"\n({failed} of {len(symbols)} stocks could not be loaded)"
-    _reply_messages(chat_id, _split_messages(enriched_report.split("\n")))
+    # Cross-link: one tappable button per top symbol -> deep fundamentals
+    tap_symbols = [sym for sym, _ in rows[:10]]
+    _reply_messages(
+        chat_id,
+        _split_messages(enriched_report.split("\n")),
+        reply_markup=notifier.symbol_buttons(tap_symbols, "fund") if tap_symbols else None,
+    )
     log.info(
         "screen %s: final report sent (%d rows) in %.1fs (total %.1fs), "
         "quote failures=%d",
@@ -1868,6 +1889,8 @@ def _fund_report_lines(raw_sym, quote, fund, include_tip=True, label="") -> list
         val.append(f"P/S: <b>{_num(fund['price_to_sales'], 2)}</b>")
     if fund.get("div_yield") is not None:
         val.append(f"Div Yield: <b>{_num(fund['div_yield'], 2)}%</b>")
+    if fund.get("beta") is not None:
+        val.append(f"Beta: <b>{_num(fund['beta'], 2)}</b>")
     lines.append("  \u00b7  ".join(val))
     if fund.get("market_cap") is not None:
         lines.append(f"Market Cap: <b>\u20b9{fund['market_cap']:,.0f}Cr</b>")
@@ -1946,6 +1969,13 @@ def _fund_report_lines(raw_sym, quote, fund, include_tip=True, label="") -> list
             lines.append(
                 f"Cash: <b>{_cr(fund.get('total_cash'))}</b>  \u00b7  Debt: <b>{_cr(fund.get('total_debt'))}</b>"
             )
+        cf = []
+        if fund.get("free_cashflow") is not None:
+            cf.append(f"Free Cash Flow: <b>{_cr(fund['free_cashflow'])}</b>")
+        if fund.get("operating_cashflow") is not None:
+            cf.append(f"Operating Cash Flow: <b>{_cr(fund['operating_cashflow'])}</b>")
+        if cf:
+            lines.append("  \u00b7  ".join(cf))
         lines.append("")
 
     # Section 6: Returns
@@ -2134,10 +2164,14 @@ def _answer_callback(callback_id) -> None:
 
 
 def handle_callback_query(callback) -> None:
-    """Handle an inline-button tap (currently: the 'Next' pagination button).
+    """Handle an inline-button tap.
 
-    Answers the callback and sends the next page as a new message with its
-    own Next button, so a single tap walks through the whole list.
+    Supported buttons:
+      stknext:<deep>:<start> - the 'Next' pagination button on stock batches
+      fund:<SYMBOL>          - symbol button -> /fundamentalreport SYMBOL
+      ana:<SYMBOL>           - symbol button -> /fundamentalanalyze SYMBOL
+
+    Answers the callback first so Telegram clears the loading spinner.
     """
     data = (callback.get("data") or "").strip()
     msg = callback.get("message") or {}
@@ -2146,6 +2180,20 @@ def handle_callback_query(callback) -> None:
     if not data or chat_id is None:
         return
     _answer_callback(callback_id)
+
+    if data.startswith("fund:") or data.startswith("ana:"):
+        # Symbol cross-link buttons: tap a ticker in any report to open its
+        # fundamentals immediately (deep /fundamentalreport or the quick card).
+        sym = data.split(":", 1)[1].strip().upper()
+        if not sym:
+            return
+        log.info("callback %s for symbol %s (chat %s)", data.split(":", 1)[0], sym, chat_id)
+        if data.startswith("fund:"):
+            handle_fund_analysis(chat_id, ["/fundamentalreport", sym])
+        else:
+            handle_single_stock_analysis(chat_id, ["/fundamentalanalyze", sym])
+        return
+
     if not data.startswith("stknext:"):
         return
     parts = data.split(":")
