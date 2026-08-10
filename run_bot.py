@@ -412,18 +412,28 @@ def handle_command(chat_id, text):
                 "Local state vs GitHub: "
                 + (pending or "in sync (nothing uncommitted)")
             )
+            if push_error:
+                push_status += " - last push FAILED"
+                sync_line += f" (last error: {push_error})"
         else:
             push_status = (
                 "NOT set - your changes stay only on this host's disk (lost "
                 "on redeploy). Set GH_TOKEN + GITHUB_REPOSITORY on this host."
             )
             sync_line = "Local state vs GitHub: unknown (no GitHub credentials)"
+        owner_chat = config.TELEGRAM_CHAT_ID or "NOT SET"
+        owner_line = (
+            f"<b>Configured owner chat:</b> <code>{html.escape(owner_chat)}</code>"
+            + ("" if owner else " - you are NOT this chat, so owner commands "
+               "(/sched, watchlist.json) are unavailable to you")
+        )
         reply(
             chat_id,
             "\n".join(
                 [
                     f"<b>Your chat id:</b> <code>{chat_id}</code>",
                     f"<b>Role:</b> {'owner' if owner else 'subscriber'}",
+                    owner_line,
                     f"<b>Saved in:</b> <code>{html.escape(location)}</code>",
                     f"<b>GitHub push:</b> {html.escape(push_status)}",
                     html.escape(sync_line),
@@ -907,7 +917,22 @@ def handle_sched(chat_id, parts) -> None:
     /sched clear               -> remove all entries
     """
     if not storage.is_owner(chat_id):
-        reply(chat_id, "Only the owner can change the schedule.")
+        if not config.TELEGRAM_CHAT_ID:
+            reply(
+                chat_id,
+                "Only the owner can change the schedule, and this host has "
+                "no TELEGRAM_CHAT_ID configured, so nobody is recognized as "
+                "owner. Set TELEGRAM_CHAT_ID on the server (your chat id is "
+                f"<code>{chat_id}</code>), then try again.",
+            )
+        else:
+            reply(
+                chat_id,
+                "Only the owner can change the schedule. Your chat id "
+                f"(<code>{chat_id}</code>) is not the configured owner chat "
+                f"(<code>{html.escape(config.TELEGRAM_CHAT_ID)}</code>). "
+                "Use /status to compare.",
+            )
         return
 
     sub = parts[1].lower() if len(parts) > 1 else ""
@@ -2478,6 +2503,25 @@ def _ahead_of_origin(branch: str) -> bool:
         return False
 
 
+# Reason for the last push_state() failure ("" when OK). bot_server reads this
+# so the "NOT pushed to GitHub" warning can say WHY instead of guessing.
+push_error = ""
+
+
+def _redact_gh(text) -> str:
+    """Mask the GH_TOKEN from git output before it reaches logs or Telegram.
+
+    A failed push echoes the remote URL - including the embedded
+    x-access-token - back on stderr. Without masking, the token would leak
+    into server logs and into the /status "last error" reply.
+    """
+    s = str(text)
+    token = os.getenv("GH_TOKEN")
+    if token:
+        s = s.replace(token, "***")
+    return s
+
+
 def push_state() -> bool:
     """Commit and push watchlist/seen state back to the repo, if changed.
 
@@ -2488,10 +2532,14 @@ def push_state() -> bool:
     Handles the expected race with the hourly cron (both push to the same
     branch): on a rejected push it fetches, rebases onto the remote and
     retries once.
+
+    On failure, sets the module-global `push_error` to a short reason.
     """
+    global push_error
     token = os.getenv("GH_TOKEN")
     repo = os.getenv("GITHUB_REPOSITORY")
     if not token or not repo:
+        push_error = "GH_TOKEN / GITHUB_REPOSITORY not set on this host"
         log.warning(
             "GH_TOKEN/GITHUB_REPOSITORY not set - skipping push. State is "
             "only on this host's disk and WILL BE LOST on redeploy. Set "
@@ -2505,14 +2553,31 @@ def push_state() -> bool:
 
     _git("git", "config", "user.email", "actions@github.com")
     _git("git", "config", "user.name", "github-actions")
-    added = _git("git", "add", *[str(f) for f in STATE_FILES])
-    if added.returncode != 0:
-        log.warning(
-            "git add failed - state NOT pushed (local changes kept): %s",
-            added.stderr.strip()[-300:],
+    # Only stage state files that actually exist on disk. A brand-new state
+    # file (e.g. schedule.json before the first /sched write) is not in a
+    # fresh checkout; "git add" with a nonexistent pathspec aborts with
+    # "pathspec did not match any files" and would fail the ENTIRE push,
+    # leaving every state change stranded on the ephemeral disk.
+    existing = [str(f) for f in STATE_FILES if f.exists()]
+    missing = [f.name for f in STATE_FILES if not f.exists()]
+    if missing:
+        log.info(
+            "Skipping git add for missing state file(s): %s",
+            ", ".join(sorted(missing)),
         )
-        return False
-    staged = _git("git", "diff", "--cached", "--name-only").stdout.strip()
+    if not existing:
+        log.info("No state files on disk - nothing to stage")
+        staged = ""
+    else:
+        added = _git("git", "add", *existing)
+        if added.returncode != 0:
+            push_error = "git add failed: " + (_redact_gh(added.stderr.strip()[-200:]) or "unknown error")
+            log.warning(
+                "git add failed - state NOT pushed (local changes kept): %s",
+                _redact_gh(added.stderr.strip()[-300:]),
+            )
+            return False
+        staged = _git("git", "diff", "--cached", "--name-only").stdout.strip()
     if not staged:
         # Nothing staged. But there may be local commits from a previous run
         # that failed to push. If we are ahead of origin, retry the push
@@ -2522,13 +2587,16 @@ def push_state() -> bool:
             push = _git("git", "push", remote_url, f"HEAD:{branch}")
             if push.returncode == 0:
                 log.info("Pushed previously-unpushed state to %s", branch)
+                push_error = ""
                 return True
+            push_error = "git push failed: " + (_redact_gh(push.stderr.strip()[-200:]) or "unknown error")
             log.warning(
                 "Retry push of existing local commits failed: %s",
-                push.stderr.strip()[-300:],
+                _redact_gh(push.stderr.strip()[-300:]),
             )
             return False
         log.info("No state change to push")
+        push_error = ""
         return True
     log.info(
         "Staged state files: %s", ", ".join(staged.splitlines())
@@ -2538,13 +2606,15 @@ def push_state() -> bool:
     if commit.returncode != 0:
         # Keep the changes in the worktree instead of the index so a later
         # sync (reset --hard) refuses to wipe them.
-        log.warning("State commit failed: %s", commit.stderr.strip()[-300:])
+        push_error = "git commit failed: " + (_redact_gh(commit.stderr.strip()[-200:]) or "unknown error")
+        log.warning("State commit failed: %s", _redact_gh(commit.stderr.strip()[-300:]))
         _git("git", "reset")
         return False
 
     push = _git("git", "push", remote_url, f"HEAD:{branch}")
     if push.returncode == 0:
         log.info("Pushed state to %s", branch)
+        push_error = ""
         return True
 
     # Expected race with the cron: retry once after rebasing onto remote.
@@ -2552,16 +2622,25 @@ def push_state() -> bool:
     rebase = _git("git", "rebase", f"origin/{branch}")
     if rebase.returncode != 0:
         _git("git", "rebase", "--abort")
+        push_error = (
+            "git push failed after rebase conflict: "
+            + (_redact_gh(push.stderr.strip()[-200:]) or "unknown error")
+        )
         log.warning(
             "Push failed and rebase aborted (conflict): %s",
-            push.stderr.strip()[-300:],
+            _redact_gh(push.stderr.strip()[-300:]),
         )
         return False
     push2 = _git("git", "push", remote_url, f"HEAD:{branch}")
     if push2.returncode == 0:
         log.info("Pushed state to %s (after rebase)", branch)
+        push_error = ""
         return True
-    log.warning("Push failed after rebase: %s", push2.stderr.strip()[-500:])
+    push_error = (
+        "git push failed after rebase: "
+        + (_redact_gh(push2.stderr.strip()[-200:]) or "unknown error")
+    )
+    log.warning("Push failed after rebase: %s", _redact_gh(push2.stderr.strip()[-500:]))
     return False
 
 
@@ -2605,10 +2684,10 @@ def sync_state() -> bool:
         if res.returncode == 0:
             log.info("State synced from origin/%s", branch)
             return True
-        log.warning("State sync failed: %s", res.stderr.strip()[-300:])
+        log.warning("State sync failed: %s", _redact_gh(res.stderr.strip()[-300:]))
         return False
     except Exception as exc:
-        log.warning("State sync failed: %s", exc)
+        log.warning("State sync failed: %s", _redact_gh(exc))
         return False
 
 
@@ -2664,7 +2743,7 @@ def main_check() -> int:
         if ls.returncode == 0:
             print("  read  (ls-remote)    : OK")
         else:
-            print(f"  read  (ls-remote)    : FAILED - {ls.stderr.strip()[-200:]}")
+            print(f"  read  (ls-remote)    : FAILED - {_redact_gh(ls.stderr.strip()[-200:])}")
             ok = False
         dry = _git("git", "push", "--dry-run", url, "HEAD:refs/heads/__state_check__")
         if dry.returncode == 0:
@@ -2673,7 +2752,7 @@ def main_check() -> int:
                 "(no branch created)"
             )
         else:
-            print(f"  write (push dry-run) : FAILED - {dry.stderr.strip()[-300:]}")
+            print(f"  write (push dry-run) : FAILED - {_redact_gh(dry.stderr.strip()[-300:])}")
             ok = False
     else:
         print("\n[3] GitHub access: skipped (set GH_TOKEN and GITHUB_REPOSITORY first)")

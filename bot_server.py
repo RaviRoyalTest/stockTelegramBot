@@ -22,6 +22,7 @@ import time
 
 from corp_actions import config
 from corp_actions.poller import poller
+import run_bot as run_bot_mod
 from run_bot import (
     _ahead_of_origin,
     _push_branch,
@@ -289,19 +290,17 @@ def main():
                                     log.warning(
                                         "State NOT pushed for %s - change is "
                                         "saved locally but will be LOST on "
-                                        "redeploy unless GH_TOKEN/"
-                                        "GITHUB_REPOSITORY are set.",
-                                        cmd,
+                                        "redeploy: %s",
+                                        cmd, run_bot_mod.push_error,
                                     )
                                     reply(
                                         chat_id,
                                         "⚠️ Your change was saved only on this "
                                         "server's disk, NOT pushed to GitHub. "
                                         "It will be LOST on the next redeploy. "
-                                        "Run /status to check the GitHub push "
-                                        "configuration (GH_TOKEN / "
-                                        "GITHUB_REPOSITORY must be set on this "
-                                        "host).",
+                                        f"Reason: {run_bot_mod.push_error}. Run "
+                                        "/status for details, or `python "
+                                        "run_bot.py --check` on the host.",
                                     )
                             except Exception as exc:
                                 log.warning(
