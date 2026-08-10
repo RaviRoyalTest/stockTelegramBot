@@ -76,6 +76,7 @@ HELP_TEXT = (
     "- `/status` — where your watchlist is saved & GitHub push status\n"
     "- `/schedule add 3h /scan500` — run a command automatically every 3h (works for every user; each person's reports go to their own chat)\n"
     "- `/checknow` — force-run alerts and re-send all matches\n"
+    "- `/watcher on` / `off` — sudden-move alerts; `set 5` = 5%, `universe nifty500` = nifty100/nifty500/mylist\n"
     "- `/menu` — one-tap command buttons in Telegram (no typing)\n"
     "- `/help` · `/start` — show this guide\n\n"
     "_Old short forms still work as aliases: /ca, /next, /upcoming, /summary, /add, /list, /movers, /gainers, /losers, /stock, /stockanalysis, /fund, /fundamentals, /filter, /alert, /sched, /exdate, /harmonic._\n"
@@ -1296,6 +1297,42 @@ with tab_status:
                 st.success(f"Check done — re-sent {sent} alert(s).")
             except Exception as exc:
                 st.error(f"Check failed: {config.redact(exc)}")
+
+    st.divider()
+    st.subheader("\U0001F6A8 Sudden-move watcher")
+    st.caption("Scans the chosen universe every few minutes and alerts this chat "
+               "when any stock moves \u2265 the threshold % in a session "
+               "(same as /watcher in Telegram - turn it on/off here anytime).")
+    owner_key = str(config.TELEGRAM_CHAT_ID) or "local"
+    ow_settings = storage.get_user_settings(owner_key)
+    watcher = ow_settings.get("watcher") or {}
+    w_enabled = bool(watcher.get("enabled"))
+    w_thresh = float(watcher.get("threshold") or 5.0)
+    w_universe = watcher.get("universe") or "nifty100"
+
+    wc1, wc2, wc3 = st.columns([1, 1, 1])
+    with wc1:
+        w_enabled_new = st.toggle("Watcher ON", value=w_enabled, key="watcher_toggle")
+    with wc2:
+        w_thresh_new = st.number_input("Alert at \u2265 % move", min_value=0.5, max_value=50.0,
+                                       step=0.5, value=min(max(w_thresh, 0.5), 50.0),
+                                       key="watcher_threshold")
+    with wc3:
+        w_uni_new = st.selectbox("Universe", ["nifty100", "nifty500", "mylist"],
+                                 index=["nifty100", "nifty500", "mylist"].index(w_universe)
+                                 if w_universe in ("nifty100", "nifty500", "mylist") else 0,
+                                 key="watcher_universe")
+    if w_enabled_new != w_enabled or w_thresh_new != w_thresh or w_uni_new != w_universe:
+        ow_settings["watcher"] = {
+            "enabled": w_enabled_new,
+            "threshold": float(w_thresh_new),
+            "universe": w_uni_new,
+        }
+        storage.save_user_settings(owner_key, ow_settings)
+        st.success("Watcher settings saved - "
+                   + ("ON, alerts will arrive here." if w_enabled_new else "OFF."))
+    st.caption(f"Scans every {config.MOVERS_WATCH_INTERVAL_SECONDS}s. "
+               "Set the same thing on Telegram with /watcher.")
 
     st.divider()
     st.subheader("Automated reports (schedule)")

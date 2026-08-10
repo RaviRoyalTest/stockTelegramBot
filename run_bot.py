@@ -174,6 +174,7 @@ HELP_TEXT = (
     "/status              \u2192 YOUR personal setup (watchlist, schedule, settings, alerts)\n"
     "/schedule add 3h /scan500  \u2192 YOUR report runs /scan500 automatically every 3h\n"
     "/checknow            \u2192 force-run alerts and re-send all matches\n"
+    "/watcher             \u2192 big-move alerts: /watcher on, off, set 5, universe nifty500\n"
     "/menu                \u2192 one-tap command buttons (tap, no typing)\n"
     "/help \u00b7 /start       \u2192 show this guide\n\n"
     "━━━━━━━━━━━━━━━━━━━━\n"
@@ -357,6 +358,79 @@ def handle_command(chat_id, text):
             chat_id, "off" if val is None else f"{val:g}%",
         )
         reply(chat_id, f"Price alerts {'off' if val is None else 'set to <b>' + format(val, 'g') + '%</b>'}.")
+        return
+
+    if cmd in ("/watcher", "/bigmover", "/moverwatch"):
+        settings = storage.get_user_settings(chat_id)
+        watcher = settings.get("watcher") or {}
+        sub = parts[1].lower() if len(parts) > 1 else "status"
+        if sub in ("on", "enable", "start"):
+            if not watcher.get("threshold"):
+                watcher["threshold"] = 5.0
+            watcher["enabled"] = True
+            settings["watcher"] = watcher
+            storage.save_user_settings(chat_id, settings)
+            reply(chat_id, "\U0001F6A8 <b>Sudden-move watcher ON.</b>\n"
+                  f"I will alert you here when any stock in "
+                  f"<b>{watcher.get('universe', 'nifty100').upper()}</b> moves "
+                  f"\u2265 <b>{watcher.get('threshold', 5.0):g}%</b> in a session.\n"
+                  "Tune with <code>/watcher set 3</code> or <code>/watcher universe nifty500</code>.")
+            return
+        if sub in ("off", "disable", "stop"):
+            watcher["enabled"] = False
+            settings["watcher"] = watcher
+            storage.save_user_settings(chat_id, settings)
+            reply(chat_id, "\U0001F6A8 <b>Sudden-move watcher OFF.</b> No more big-move alerts.")
+            return
+        if sub in ("set", "threshold", "pct"):
+            if len(parts) < 3:
+                reply(chat_id, "Usage: <code>/watcher set 5</code> (percent move, e.g. 5 = 5%)")
+                return
+            try:
+                val = abs(float(parts[2].strip().rstrip("%")))
+            except ValueError:
+                reply(chat_id, "Usage: <code>/watcher set 5</code> (percent move)")
+                return
+            if val == 0:
+                val = 5.0
+            watcher["threshold"] = val
+            watcher["enabled"] = bool(watcher.get("enabled"))
+            settings["watcher"] = watcher
+            storage.save_user_settings(chat_id, settings)
+            reply(chat_id, f"Watcher threshold set to <b>{val:g}%</b> "
+                  f"({"ON" if watcher.get("enabled") else "OFF"} - use <code>/watcher on</code> to enable).")
+            return
+        if sub in ("universe", "scope", "market"):
+            if len(parts) < 3:
+                reply(chat_id, "Usage: <code>/watcher universe nifty100</code> | nifty500 | mylist")
+                return
+            u = parts[2].lower()
+            if u in ("nifty100", "n100", "100"):
+                u = "nifty100"
+            elif u in ("nifty500", "n500", "500", "all"):
+                u = "nifty500"
+            elif u in ("mylist", "watchlist", "list", "my"):
+                u = "mylist"
+            else:
+                reply(chat_id, "Universe must be <code>nifty100</code>, <code>nifty500</code> or <code>mylist</code>.")
+                return
+            watcher["universe"] = u
+            watcher["enabled"] = bool(watcher.get("enabled"))
+            settings["watcher"] = watcher
+            storage.save_user_settings(chat_id, settings)
+            reply(chat_id, f"Watcher universe set to <b>{u.upper()}</b> "
+                  f"({"ON" if watcher.get("enabled") else "OFF"} - use <code>/watcher on</code> to enable).")
+            return
+        # status
+        state = "ON" if watcher.get("enabled") else "OFF"
+        reply(chat_id, "\U0001F6A8 <b>Sudden-move watcher</b>\n"
+              f"Status: <b>{state}</b>\n"
+              f"Threshold: <b>{watcher.get('threshold', 5.0):g}%</b> session move\n"
+              f"Universe: <b>{(watcher.get('universe') or 'nifty100').upper()}</b>\n\n"
+              "Usage:\n"
+              "<code>/watcher on</code> / <code>/watcher off</code>\n"
+              "<code>/watcher set 3</code>  (alert at 3% move)\n"
+              "<code>/watcher universe nifty500</code>  (nifty100 | nifty500 | mylist)")
         return
 
     if cmd == "/status":
@@ -986,6 +1060,7 @@ def format_settings(chat_id) -> str:
     settings = storage.get_user_settings(chat_id)
     filters = settings.get("action_filters") or []
     alert = settings.get("price_alert_pct")
+    watcher = settings.get("watcher") or {}
     owner = storage.is_owner(chat_id)
     where = (
         "watchlist.json (owner's list)"
@@ -999,8 +1074,11 @@ def format_settings(chat_id) -> str:
             f"Role: {'owner' if owner else 'subscriber'}",
             "Action filters: " + (", ".join(filters) if filters else "all types"),
             "Price alert: " + ("off" if not alert else f"{float(alert):g}%"),
+            "Watcher: " + ("off" if not watcher.get("enabled")
+                           else f"on at {float(watcher.get('threshold') or 5):g}% "
+                                f"({(watcher.get('universe') or 'nifty100').upper()})"),
             f"Your list is saved in: {where}",
-            "Customize with /alertfilters and /pricealert.",
+            "Customize with /alertfilters, /pricealert and /watcher.",
         ]
     )
 
@@ -2655,6 +2733,7 @@ def register_commands() -> bool:
         {"command": "schedule", "description": "Auto reports: /schedule add 3h /scan500"},
         {"command": "status", "description": "Check persistence / GitHub push"},
         {"command": "checknow", "description": "Force a check and resend alerts"},
+        {"command": "watcher", "description": "Big-move alerts: /watcher on, off, set 5, universe nifty500"},
         {"command": "menu", "description": "One-tap command buttons - no typing"},
         {"command": "help", "description": "Show all commands and examples"},
     ]

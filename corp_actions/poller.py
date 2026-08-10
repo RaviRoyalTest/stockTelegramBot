@@ -11,6 +11,7 @@ Beyond new-action alerts it also supports:
 import logging
 import threading
 import time
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from datetime import date, datetime, timedelta
 
 from . import config, notifier, sources, storage
@@ -179,6 +180,7 @@ class Poller:
     def __init__(self):
         self._stop = threading.Event()
         self._thread = None
+        self._watcher_thread = None
         self.status = {
             "running": False,
             "last_run": None,
@@ -198,6 +200,9 @@ class Poller:
         self._stop.clear()
         self._thread = threading.Thread(target=self._loop, daemon=True)
         self._thread.start()
+        # Sudden-move watcher runs on its own faster cadence when enabled
+        self._watcher_thread = threading.Thread(target=self._watcher_loop, daemon=True)
+        self._watcher_thread.start()
         self._set("running", True)
         self._set("last_message", "Poller started")
 
@@ -205,6 +210,8 @@ class Poller:
         self._stop.set()
         if self._thread:
             self._thread.join(timeout=5)
+        if self._watcher_thread:
+            self._watcher_thread.join(timeout=5)
         self._set("running", False)
 
     # ----------------------------------------------------------------- loop
@@ -216,6 +223,108 @@ class Poller:
                 self._set("last_error", str(exc))
                 log.exception("poll cycle failed")
             self._stop.wait(config.POLL_INTERVAL_SECONDS)
+
+    # -------------------------------------------------- sudden-move watcher
+    def _watcher_loop(self):
+        """Scans enabled users' universes on its own faster cadence.
+
+        A separate daemon thread (interval MOVERS_WATCH_INTERVAL_SECONDS) so
+        big session moves alert within minutes instead of waiting for the
+        hourly corporate-action poll. Skips the first cycle so it has a
+        baseline, and only runs when at least one user enabled /watcher.
+        """
+        first = True
+        while not self._stop.is_set():
+            if not first:
+                try:
+                    self.run_watcher_once()
+                except Exception as exc:  # never let the watcher die
+                    self._set("last_error", config.redact(str(exc)))
+                    log.warning("watcher cycle failed: %s", config.redact(exc))
+            first = False
+            self._stop.wait(config.MOVERS_WATCH_INTERVAL_SECONDS)
+
+    def _watcher_targets(self) -> list[tuple[str, dict]]:
+        """[(chat_id, watcher_settings)] for every chat with the watcher on."""
+        out = []
+        for chat_id, settings in storage.load_settings().items():
+            w = settings.get("watcher") or {}
+            if w.get("enabled") and float(w.get("threshold") or 0) > 0:
+                out.append((str(chat_id), w))
+        return out
+
+    def _watcher_symbols(self, chat_id: str, universe: str) -> list[str]:
+        """Resolve a watcher universe to symbols: nifty100 / nifty500 / mylist."""
+        u = (universe or "nifty100").lower()
+        if u in ("nifty500", "500", "all"):
+            return sources.get_index_universe("nifty500") or []
+        if u in ("mylist", "watchlist"):
+            items = storage.get_user_list(chat_id)
+            return [i["symbol"] for i in items if isinstance(i, dict)]
+        return sources.get_index_universe("nifty100") or []
+
+    def run_watcher_once(self) -> int:
+        """One scan: alert any enabled user when a universe stock moves >= its
+        threshold (session % from previous close). Returns alerts sent.
+
+        Alerts are de-duplicated per chat per day (seen key `mwatch|...`), so
+        a stock that keeps falling alerts once, not every cycle.
+        """
+        targets = self._watcher_targets()
+        if not targets:
+            return 0
+        today = config.today_ist()
+        sent = 0
+
+        # Unique symbols across all enabled users (quote cache dedupes fetches)
+        uniq: list[tuple[str, str]] = []
+        seen_syms = set()
+        for chat_id, w in targets:
+            for sym in self._watcher_symbols(chat_id, w.get("universe", "nifty100")):
+                key = (chat_id, sym.upper())
+                if key not in seen_syms:
+                    seen_syms.add(key)
+                    uniq.append(key)
+        if not uniq:
+            return 0
+
+        quotes: dict[str, dict] = {}
+        with ThreadPoolExecutor(max_workers=20) as ex:
+            futs = {
+                ex.submit(sources.get_quote, "NSE", sym): (chat_id, sym)
+                for chat_id, sym in uniq
+            }
+            for fut in as_completed(futs):
+                try:
+                    q = fut.result()
+                except Exception:
+                    q = None
+                if q and q.get("change_pct") is not None:
+                    quotes[futs[fut][1].upper()] = q
+
+        for chat_id, w in targets:
+            threshold = float(w.get("threshold") or 0)
+            for sym in self._watcher_symbols(chat_id, w.get("universe", "nifty100")):
+                q = quotes.get(sym.upper())
+                if not q or q.get("change_pct") is None:
+                    continue
+                chg = float(q["change_pct"])
+                if abs(chg) < threshold:
+                    continue
+                key = f"mwatch|{chat_id}|{today.isoformat()}|{sym.upper()}"
+                if key in self._seen:
+                    continue
+                try:
+                    notifier.send_message(
+                        notifier.format_mover_alert(sym, q, chg),
+                        chat_id=chat_id,
+                        reply_markup=notifier.symbol_buttons([sym], "fund"),
+                    )
+                    self._seen.add(key)
+                    sent += 1
+                except notifier.NotifierError as exc:
+                    log.warning("watcher alert failed for %s: %s", sym, config.redact(exc))
+        return sent
 
     def _collect_targets(self, only_chat: str | None) -> list[tuple[str, list]]:
         """Return [(chat_id, watchlist), ...] for every chat with a list."""

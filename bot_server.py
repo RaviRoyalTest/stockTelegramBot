@@ -252,6 +252,12 @@ def main():
         start_health_server()
     register_commands()
     start_scheduled_reports()
+    # The always-on server runs the background poller (corporate-action alerts,
+    # ex-date reminders, price alerts AND the sudden-move watcher). The GitHub
+    # Actions cron runs with PROCESS_COMMANDS=false so it never double-polls.
+    if config.PROCESS_COMMANDS:
+        poller.start()
+        log.info("Background poller + sudden-move watcher started")
     log.info("Starting long-polling bot (instant responses)...")
     sync_state()
     # Push anything a previous run left behind (failed push, crash before

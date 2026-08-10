@@ -40,6 +40,9 @@ def _env_int(name: str, default: int, floor: int | None = None) -> int:
 
 
 POLL_INTERVAL_SECONDS = _env_int("POLL_INTERVAL_SECONDS", 3600, floor=60)
+# How often the sudden-move watcher scans its universes for big session moves
+# (see /watcher in Telegram and the System tab in the web dashboard).
+MOVERS_WATCH_INTERVAL_SECONDS = _env_int("MOVERS_WATCH_INTERVAL_SECONDS", 180, floor=60)
 LOOKBACK_DAYS = _env_int("LOOKBACK_DAYS", 30, floor=1)
 # How many days ahead of the ex-date a reminder is sent (0 disables reminders).
 REMINDER_DAYS = _env_int("REMINDER_DAYS", 5, floor=0)

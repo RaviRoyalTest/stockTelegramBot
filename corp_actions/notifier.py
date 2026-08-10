@@ -166,6 +166,31 @@ _TYPE_EMOJI = {
 }
 
 
+def format_mover_alert(symbol: str, quote: dict, change_pct: float) -> str:
+    """Compact sudden-move alert for the /watcher background scanner.
+
+    e.g. a stock moving >=5% in the session from its previous close:
+
+        \U0001F6A8 BIG MOVER
+        **INFY** (NSE) - Infosys Limited
+        Current Price: \u20b91,183.00  \U0001F534\u25bc -5.62%
+        (session move vs previous close)
+    """
+    price = quote.get("price")
+    name = quote.get("name") or symbol
+    arrow = "\u25b2" if change_pct >= 0 else "\u25bc"
+    color_icon = "\U0001F7E2" if change_pct >= 0 else "\U0001F534"
+    sign = "+" if change_pct >= 0 else ""
+    lines = [
+        "\U0001F6A8 <b>BIG MOVER</b>",
+        f"<b>{escape(symbol)}</b> (NSE) - {escape(name)}",
+    ]
+    if price is not None:
+        lines.append(f"Current Price: <b>{fmt_money(price)}</b>  {color_icon}{arrow} <b>{sign}{change_pct:.2f}%</b>")
+    lines.append("Session move vs previous close - tap below for deep fundamentals.")
+    return "\n".join(lines)
+
+
 def symbol_buttons(symbols: list[str], prefix: str = "fund", per_row: int = 4) -> dict:
     """Inline keyboard of one button per symbol, e.g. tap PFC -> deep report.
 
