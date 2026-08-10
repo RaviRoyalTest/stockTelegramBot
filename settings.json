@@ -3,14 +3,7 @@
     "price_alert_pct": 3.0
   },
   "@StockVigilBot": {
-    "action_filters": [
-      "dividend",
-      "bonus",
-      "split",
-      "rights",
-      "buyback",
-      "other"
-    ],
+    "action_filters": [],
     "price_alert_pct": 5.0
   }
 }

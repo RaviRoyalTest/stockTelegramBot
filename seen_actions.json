@@ -1,7 +1,16 @@
 [
   "6090749599|NSE|GENESYS|Rights 3:5 @ Premium Rs 45/-|2026-08-06|2026-08-06",
+  "862087765|NSE|ASKAUTOLTD|Dividend - Rs 1.85 Per Share|2026-07-31|2026-07-31",
+  "862087765|NSE|CHOLAFIN|Dividend - Re 0.70 Per Share|2026-07-21|2026-07-21",
+  "862087765|NSE|COALINDIA|Interim Dividend - Rs 5.50 Per Share|2026-07-31|2026-07-31",
   "862087765|NSE|GENESYS|Rights 3:5 @ Premium Rs 45/-|2026-08-06|2026-08-06",
+  "862087765|NSE|HAPPSTMNDS|Dividend - Rs 3.65 Per Share|2026-07-17|2026-07-17",
+  "862087765|NSE|KPITTECH|Dividend - Rs 5.25 Per Share|2026-08-12|2026-08-12",
   "862087765|NSE|MARUTI|Dividend - Rs 140 Per Share|2026-08-07|2026-08-07",
+  "862087765|NSE|PGINVIT|Distribution - Rs 3 Per Unit Consist Of Rs 1.72 Per Unit As Interest/ Re 0.62 Per Unit As Dividend/ Re 0.65 Per Unit As Repayment Of Spv Debt/ Re 0.01 Per Unit As Treasury Income|2026-07-31|2026-07-31",
+  "862087765|NSE|SHAKTIPUMP|Dividend - Re 1 Per Share|2026-07-29|2026-07-29",
+  "862087765|NSE|SOUTHBANK|Dividend - Re 0.45 Per Share|2026-08-13|2026-08-13",
+  "862087765|NSE|VBL|Interim Dividend - Re 0.50 Per Share|2026-07-31|2026-08-01",
   "NSE|GENESYS|Rights 3:5 @ Premium Rs 45/-|2026-08-06|2026-08-06",
   "NSE|GRASIM|Dividend - Rs 10 Per Share|2026-08-07|2026-08-07",
   "NSE|IPCALAB|Dividend - Rs 6 Per Share|2026-08-07|2026-08-07",
@@ -22,5 +31,7 @@
   "price|862087765|NSE|UNIONBANK|2026-08-06",
   "remind|6090749599|NSE|GENESYS|Rights 3:5 @ Premium Rs 45/-|2026-08-06|2026-08-06",
   "remind|862087765|NSE|GENESYS|Rights 3:5 @ Premium Rs 45/-|2026-08-06|2026-08-06",
-  "remind|862087765|NSE|MARUTI|Dividend - Rs 140 Per Share|2026-08-07|2026-08-07"
+  "remind|862087765|NSE|KPITTECH|Dividend - Rs 5.25 Per Share|2026-08-12|2026-08-12",
+  "remind|862087765|NSE|MARUTI|Dividend - Rs 140 Per Share|2026-08-07|2026-08-07",
+  "remind|862087765|NSE|SOUTHBANK|Dividend - Re 0.45 Per Share|2026-08-13|2026-08-13"
 ]
