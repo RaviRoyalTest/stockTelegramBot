@@ -2,7 +2,7 @@
 import html
 import logging
 import re
-from datetime import datetime, timedelta
+from datetime import date, datetime, timedelta
 
 import requests
 
@@ -243,6 +243,128 @@ def format_upcoming_list(actions: list[dict]) -> str:
     return "\n".join(lines)
 
 
+def _parse_iso_date(value) -> date | None:
+    """Parse an ISO date string, returning None when unset/invalid."""
+    try:
+        return date.fromisoformat(str(value).strip())
+    except (TypeError, ValueError):
+        return None
+
+
+def action_status(action: dict, today: date | None = None) -> str:
+    """Derived one-line status for a corporate action, based on its dates.
+
+    The NSE/BSE feeds carry announcement, ex and record dates but never a
+    payment status, so this derives an honest, checkable status from them:
+    announced-but-undated, upcoming, or ex-date passed with type-specific
+    settlement guidance (rights subscription window, dividend payment
+    window, bonus/split credit).
+    """
+    today = today or config.today_ist()
+    typ = sources.action_type(action.get("subject"))
+    ex = _parse_iso_date(action.get("ex_date"))
+    rec = _parse_iso_date(action.get("record_date"))
+    ann = _parse_iso_date(action.get("announcement_date"))
+
+    if ex is None:
+        return "Announced - ex-date not fixed yet (check the company notice for dates)"
+    if ex >= today:
+        return f"Upcoming - ex-date on {_fmt_date(ex)}"
+
+    days_ago = (today - ex).days
+    if typ == "rights":
+        return (
+            f"Ex-date passed {_fmt_date(ex)} ({days_ago}d ago) - rights "
+            "subscription window usually opens a few days after the record "
+            "date and stays open ~2 weeks; check the company's rights offer "
+            "notice for the last date to apply"
+        )
+    if typ == "dividend":
+        base = f"Ex-date passed {_fmt_date(ex)} ({days_ago}d ago) - dividend payment"
+        if rec:
+            due = rec + timedelta(days=30)
+            if today > due:
+                return (
+                    base + f" was due by {_fmt_date(due)} (30 days from record "
+                    f"date {_fmt_date(rec)}). Window passed - not credited yet? "
+                    "Contact your broker/company."
+                )
+            return (
+                base + f" is due within 30 days of record date {_fmt_date(rec)} "
+                f"(by {_fmt_date(due)}). If it isn't credited by then, contact "
+                "your broker/company."
+            )
+        return (
+            base + " normally follows within days-weeks of the ex-date; "
+            "contact your broker/company if it isn't credited"
+        )
+    if typ == "bonus":
+        return (
+            f"Ex-date passed {_fmt_date(ex)} ({days_ago}d ago) - bonus shares "
+            "are usually credited within ~2 weeks of the record date"
+        )
+    if typ == "split":
+        return (
+            f"Ex-date passed {_fmt_date(ex)} ({days_ago}d ago) - shares "
+            "re-denominated to the new face value"
+        )
+    if typ == "buyback":
+        return (
+            f"Ex-date passed {_fmt_date(ex)} ({days_ago}d ago) - buyback offer "
+            "window ongoing; check the offer notice"
+        )
+    return f"Ex-date passed {_fmt_date(ex)} ({days_ago}d ago)"
+
+
+def format_next_report(
+    upcoming: list[dict], recent: list[dict], pending: list[dict] | None = None
+) -> str:
+    """Render the /next report: upcoming ex-dates plus recently passed / in-
+    progress actions and announced actions with no ex-date yet.
+
+    `recent` catches exactly the cases /next used to miss - a rights issue
+    whose ex-date has just passed (subscription still open) or a dividend
+    whose payment is still pending.
+    """
+    sections = []
+    if upcoming:
+        lines = ["<b>Upcoming ex-dates</b>"]
+        for action in sorted(upcoming, key=lambda a: a.get("ex_date") or "9999-99-99"):
+            typ = sources.action_type(action.get("subject"))
+            lines.append(
+                f"\u2022 <b>{escape(action.get('symbol'))}</b> ({escape(action.get('exchange'))}) - "
+                f"{escape(action.get('ex_date'))} [{sources.TYPE_LABELS.get(typ, typ)}]"
+            )
+        sections.append("\n".join(lines))
+    else:
+        sections.append("<b>Upcoming ex-dates</b>\nNone in the reminder window.")
+
+    if pending:
+        lines = ["<b>Announced - ex-date not fixed yet</b>"]
+        for action in pending:
+            typ = sources.action_type(action.get("subject"))
+            lines.append(
+                f"\u2022 <b>{escape(action.get('symbol'))}</b> ({escape(action.get('exchange'))}) - "
+                f"{escape(action.get('subject'))} [{sources.TYPE_LABELS.get(typ, typ)}]"
+            )
+        sections.append("\n".join(lines))
+
+    if recent:
+        lines = ["<b>Recently passed / in progress</b> (past 30 days)"]
+        for action in sorted(
+            recent, key=lambda a: a.get("ex_date") or "0000-01-01", reverse=True
+        ):
+            lines.append(
+                f"\u2022 <b>{escape(action.get('symbol'))}</b> ({escape(action.get('exchange'))}) - "
+                f"{action_status(action)}"
+            )
+        sections.append("\n".join(lines))
+
+    if not sections:
+        return "No corporate actions for your watchlist right now."
+    return "\n\n".join(sections)
+
+
 def format_action_entry(action: dict) -> str:
     """Two-line entry used by /ca, /exdate and /summary query results.
 
@@ -301,6 +423,16 @@ def format_action_detail(action: dict) -> str:
         if val and str(val).strip() and str(val).strip() != "-":
             display = _fmt_date(val) if fmt == "date" else escape(val)
             lines.append(f"{label}: {display}")
+    bc_start, bc_end = action.get("bc_start"), action.get("bc_end")
+    if (bc_start and str(bc_start).strip() not in ("", "-")) or (
+        bc_end and str(bc_end).strip() not in ("", "-")
+    ):
+        span = " \u2013 ".join(
+            _fmt_date(d) for d in (bc_start, bc_end)
+            if d and str(d).strip() not in ("", "-")
+        )
+        lines.append(f"Book Closure: {span}")
+    lines.append(f"Status: {action_status(action)}")
     return "\n".join(lines)
 
 

@@ -19,7 +19,9 @@ dropdown, then continuously polls both exchanges for corporate actions
   (dividend / bonus / split / rights / buyback) via `/filter` or the web UI.
 - **Price-move alerts** - get a Telegram alert when a watched stock moves
   beyond a threshold (e.g. ±3% in a day) via `/alert 3` or the web UI.
-- `/next` bot command - instantly list upcoming ex-dates for your watchlist.
+- `/next` bot command - instantly list upcoming ex-dates for your watchlist,
+  plus recently passed / in-progress actions (e.g. a rights issue whose
+  ex-date has just passed, or a dividend whose payment is still pending).
 - "Check now" button to force an immediate poll.
 - Graceful handling when a source is unavailable (e.g. BSE is Cloudflare-blocked
   from datacenter IPs).
@@ -114,7 +116,7 @@ Announced date. `/ca SYMBOL` shows full detail (face value, series, ISIN).
 | `/add SYMBOL [NSE/BSE]` | `/add RELIANCE NSE` | Add a stock (validated via Yahoo) |
 | `/remove SYMBOL [NSE/BSE]` | `/remove TCS` | Remove a stock |
 | `/list` | `/list` | Show the current watchlist |
-| `/next` | `/next` | List upcoming ex-dates (next `REMINDER_DAYS` days) |
+| `/next` | `/next` | Upcoming ex-dates + recently passed / in-progress actions (last 30 days) with status |
 | `/filter TYPE,...` | `/filter dividend,bonus` | Only receive these action types (`/filter all` resets) |
 | `/alert PCT` | `/alert 3` | Alert on daily moves of ±PCT% (`/alert off` disables) |
 | `/settings` | `/settings` | Show your current filters, price-alert and list location |

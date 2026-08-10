@@ -290,6 +290,8 @@ def get_nse_corporate_actions(symbol: str | None = None) -> list[dict]:
                 "announcement_date": _parse_nse_date(
                     _pick(item, "caBroadcastDate", default="-")
                 ),
+                "bc_start": _parse_nse_date(_pick(item, "bcStartDate", default="-")),
+                "bc_end": _parse_nse_date(_pick(item, "bcEndDate", default="-")),
                 "face_value": _pick(item, "faceVal"),
                 "isin": _pick(item, "isin"),
                 "series": _pick(item, "series"),

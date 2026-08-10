@@ -162,7 +162,8 @@ HELP_TEXT = (
     "/remove SYMBOL       \u2192 remove from watchlist\n"
     "  /remove TCS\n"
     "/list                \u2192 view your full watchlist\n"
-    "/next                \u2192 upcoming ex-dates for your watchlist\n"
+    "/next                \u2192 ex-dates + in-progress actions (rights/dividends)\n"
+    "                       for your watchlist (upcoming + last 30 days)\n"
     "/news [N|SYMBOL]     \u2192 latest headlines\n"
     "  /news              \u2192 news for all watchlist stocks\n"
     "  /news 5            \u2192 5 headlines per stock\n"
@@ -326,7 +327,13 @@ def handle_command(chat_id, text):
         upcoming = [
             a for a in matching if poller_mod.within_reminder_window(a.get("ex_date"))
         ]
-        reply(chat_id, notifier.format_upcoming_list(upcoming))
+        recent = [
+            a for a in matching if poller_mod.recently_passed(a.get("ex_date"))
+        ]
+        pending = [
+            a for a in matching if not poller_mod.parse_ex_date(a.get("ex_date"))
+        ]
+        reply(chat_id, notifier.format_next_report(upcoming, recent, pending))
         return
 
     if cmd == "/filter":
@@ -593,6 +600,22 @@ def handle_command(chat_id, text):
         send_help(chat_id)
 
 
+def _close_symbols(query: str, limit: int = 3) -> list[str]:
+    """Fuzzy NSE symbol suggestions via difflib (e.g. 'gensys' -> GENESYS).
+
+    Exact substring search fails on typos and symbol-vs-company-name
+    mismatches, so fall back to close matches from the full NSE list.
+    """
+    try:
+        from difflib import get_close_matches
+
+        stocks = sources.get_nse_stock_list_cached()
+        symbols = [s["symbol"] for s in stocks]
+    except Exception:
+        return []
+    return get_close_matches((query or "").upper(), symbols, n=limit, cutoff=0.72)
+
+
 def _reply_suggestions(chat_id, query, cmd="add"):
     """Reply with matching stocks from the NSE list when an exact symbol fails.
 
@@ -816,7 +839,9 @@ def run_ca_query(chat_id, descriptor: dict) -> bool:
         if symbol_matches:
             _attach_quotes(symbol_matches)
             messages = [f"<b>Corporate actions for {notifier.escape(term.upper())}</b>"]
-            for a in sorted(symbol_matches, key=lambda x: x.get("ex_date") or "9999-99-99"):
+            for a in sorted(
+                symbol_matches, key=lambda x: x.get("ex_date") or "9999-99-99", reverse=True
+            ):
                 messages.append(notifier.format_action_detail(a))
             _reply_messages(chat_id, messages)
             return True
@@ -826,6 +851,16 @@ def run_ca_query(chat_id, descriptor: dict) -> bool:
             if q in (a.get("company") or "").lower()
             or q in (a.get("subject") or "").lower()
         ]
+        if not results:
+            close = _close_symbols(term)
+            if close:
+                lines = [
+                    f"No corporate actions match '{notifier.escape(term)}'. "
+                    "Did you mean (NSE):"
+                ]
+                lines += [f"  /ca {c}" for c in close]
+                reply(chat_id, "\n".join(lines))
+                return True
         title = f"<b>Search results for '{notifier.escape(term)}'</b> (NSE + BSE)"
 
     if not results:
