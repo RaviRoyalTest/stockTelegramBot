@@ -26,7 +26,14 @@ import streamlit as st
 import run_bot
 
 from corp_actions import config, notifier, sources, storage
-from corp_actions.poller import fetch_all_actions, parse_ex_date, poller
+from corp_actions.poller import (
+    fetch_all_actions,
+    fetch_matching,
+    parse_ex_date,
+    poller,
+    recently_passed,
+    within_reminder_window,
+)
 
 logging.basicConfig(level=logging.INFO, stream=sys.stdout)
 
@@ -182,6 +189,41 @@ def _run_screen(period_key: str, direction: str, universe: str, count: int) -> l
         }
         for sym, d in fetched[:count]
     ]
+
+
+def _fetch_fund_lines(items: list[dict], deep: bool = True) -> list | str:
+    """Fundamental report lines for every watchlist item (parallel).
+
+    deep=True renders the DEEP report (like /fundamentalreport); deep=False
+    renders the quick card (like /fundamentalanalyze). Returns a list of
+    (symbol, markdown) pairs, or an error string.
+    """
+    import run_bot
+
+    def _one(item):
+        sym = item["symbol"]
+        try:
+            quote = sources.get_quote(item["exchange"], sym) or {}
+            fund = sources.get_fundamentals(sym, with_screener=True) or {}
+            if deep:
+                lines = run_bot._fund_report_lines(sym, quote, fund, include_tip=False)
+            else:
+                lines = run_bot._stock_summary_lines(sym, quote, fund, include_tip=False)
+            return sym, "\n".join(lines)
+        except Exception as exc:
+            return sym, f"**{sym}** — could not fetch fundamentals: {exc}"
+
+    if not items:
+        return "Your watchlist is empty."
+    results = []
+    with ThreadPoolExecutor(max_workers=6) as ex:
+        futures = [ex.submit(_one, i) for i in items]
+        for fut in as_completed(futures):
+            results.append(fut.result())
+    # Keep the watchlist order
+    order = {i["symbol"]: i for i in items}
+    results.sort(key=lambda r: list(order).index(r[0]) if r[0] in order else 999)
+    return results
 
 
 def _parse_telegram_watchlist(text: str) -> list[dict]:
@@ -485,19 +527,62 @@ with tab_watch:
     else:
         st.info("Watchlist is empty. Select stocks above or add a symbol manually.")
 
+    # --- My Favourites bundle (mirrors /myfavourites in Telegram)
+    st.divider()
+    st.subheader("\u2b50 My Favourites (bundle)")
+    st.caption("Runs your regular commands in one go — corporate actions for your "
+               "list, top losers (last 1h + today), your watchlist, and deep "
+               "fundamentals for every watchlist stock.")
+    if st.button("\U0001f3c1 Run My Favourites", width="stretch"):
+        with st.spinner("Running your favourites (corp actions, losers, fundamentals)..."):
+            fav = {}
+            watch = storage.load_watchlist()
+            try:
+                matching = fetch_matching(watch)
+                fav["corp"] = notifier.format_next_report(
+                    [a for a in matching if within_reminder_window(a.get("ex_date"))],
+                    [a for a in matching if recently_passed(a.get("ex_date"))],
+                    [a for a in matching if not parse_ex_date(a.get("ex_date"))],
+                )
+            except Exception as exc:
+                fav["corp"] = f"Could not fetch corporate actions: {exc}"
+            fav["losers_1h"] = _run_screen("1h", "losers", "nifty100", 10)
+            fav["losers_today"] = _run_screen("1d", "losers", "nifty100", 10)
+            fav["fund"] = _fetch_fund_lines(watch)
+            st.session_state["favourites"] = fav
+
+    fav = st.session_state.get("favourites")
+    if fav:
+        with st.expander("\U0001f4c5 Corporate actions for your list", expanded=True):
+            st.markdown(fav["corp"])
+        with st.expander("\U0001f4c9 Top losers — last 1h (NIFTY 100)"):
+            st.dataframe(fav["losers_1h"], width="stretch", hide_index=True)
+        with st.expander("\U0001f4c9 Top losers — today (NIFTY 100)"):
+            st.dataframe(fav["losers_today"], width="stretch", hide_index=True)
+        with st.expander("\U0001f4ca Deep fundamentals — whole watchlist"):
+            if isinstance(fav["fund"], list):
+                for sym, lines in fav["fund"]:
+                    st.markdown(lines)
+                    st.divider()
+            else:
+                st.warning(fav["fund"])
+
 # ================================================================ CORPORATE ACTIONS
 with tab_actions:
     st.header("📋 Corporate Actions (NSE + BSE)")
-    st.caption("Query live corporate actions — dividends, bonus, splits, rights, buybacks.")
+    st.caption("Query live corporate actions — dividends, bonus, splits, rights, buybacks — "
+               "including a dedicated view for YOUR watchlist.")
 
     q_mode = st.radio(
         "Query type",
-        ["📊 Overview", "🗓️ By ex-date", "🔤 By type", "🔍 By symbol / keyword"],
+        ["⭐ My List", "📊 Summary", "🗓️ By ex-date", "🔤 By type", "🔍 By symbol / keyword"],
         horizontal=True,
     )
 
     descriptor = None
-    if q_mode == "📊 Overview":
+    if q_mode == "⭐ My List":
+        descriptor = {"mode": "mylist"}
+    elif q_mode == "📊 Summary":
         descriptor = {"mode": "overview"}
     elif q_mode == "🗓️ By ex-date":
         days = st.slider("Days ahead (0 = today)", 0, 30, config.REMINDER_DAYS)
@@ -517,38 +602,73 @@ with tab_actions:
             descriptor = {"mode": "term", "term": term.strip()}
 
     if st.button("🔍 Run query", width="stretch", disabled=descriptor is None):
-        with st.spinner("Fetching corporate actions..."):
-            all_actions, errors, warnings = fetch_all_actions()
         mode = descriptor["mode"]
-        results = []
-        if mode == "overview":
-            results = sorted(
-                (a for a in all_actions if parse_ex_date(a.get("ex_date"))),
-                key=lambda a: a.get("ex_date"),
-            )[:50]
-        elif mode == "exdate":
-            today = date.today()
-            cutoff = today + timedelta(days=descriptor["days"])
-            results = [
-                a for a in all_actions
-                if (d := parse_ex_date(a.get("ex_date"))) and today <= d <= cutoff
-            ]
-        elif mode == "types":
-            wanted = set(descriptor["types"])
-            results = [a for a in all_actions if sources.action_type(a.get("subject")) in wanted]
+        st.session_state["ca_summary"] = None
+        st.session_state["ca_mylist"] = None
+        if mode == "mylist":
+            # Corporate actions for the watchlist - mirrors /corpactionsformylist
+            watch = storage.load_watchlist()
+            if not watch:
+                st.error("Your watchlist is empty. Add stocks in the 📌 Watchlist tab first.")
+                st.session_state["ca_fetched"] = False
+            else:
+                with st.spinner("Fetching corporate actions for your list..."):
+                    try:
+                        matching = fetch_matching(watch)
+                    except Exception as exc:
+                        st.error(f"Could not fetch corporate actions: {exc}")
+                        st.session_state["ca_fetched"] = False
+                    else:
+                        import run_bot
+                        upcoming = [a for a in matching if within_reminder_window(a.get("ex_date"))]
+                        recent = [a for a in matching if recently_passed(a.get("ex_date"))]
+                        pending = [a for a in matching if not parse_ex_date(a.get("ex_date"))]
+                        for group in (upcoming, recent, pending):
+                            run_bot._attach_quotes(group)
+                        st.session_state["ca_mylist"] = notifier.format_next_report(upcoming, recent, pending)
+                        st.session_state["ca_fetched"] = True
+            st.session_state["ca_errors"] = []
+            st.session_state["ca_warnings"] = []
         else:
-            term = descriptor["term"].upper()
-            results = [
-                a for a in all_actions
-                if (a.get("symbol") or "").upper() == term
-                or term.lower() in (a.get("company") or "").lower()
-                or term.lower() in (a.get("subject") or "").lower()
-            ]
-        results = sorted(results, key=lambda a: (a.get("ex_date") or "9999-99-99"))
-        st.session_state["ca_results"] = results
-        st.session_state["ca_fetched"] = True
-        st.session_state["ca_errors"] = errors
-        st.session_state["ca_warnings"] = warnings
+            with st.spinner("Fetching corporate actions..."):
+                all_actions, errors, warnings = fetch_all_actions()
+            results = []
+            if mode == "overview":
+                # Mirror /corpactionssummary: counts by exchange & type + next ex-dates
+                by_ex, by_type = {}, {}
+                for a in all_actions:
+                    ex = a.get("exchange") or "?"
+                    by_ex[ex] = by_ex.get(ex, 0) + 1
+                    t = sources.action_type(a.get("subject"))
+                    by_type[t] = by_type.get(t, 0) + 1
+                dated = sorted(
+                    (a for a in all_actions if parse_ex_date(a.get("ex_date"))),
+                    key=lambda a: a.get("ex_date"),
+                )[:15]
+                st.session_state["ca_summary"] = {"by_ex": by_ex, "by_type": by_type, "next": dated}
+            elif mode == "exdate":
+                today = date.today()
+                cutoff = today + timedelta(days=descriptor["days"])
+                results = [
+                    a for a in all_actions
+                    if (d := parse_ex_date(a.get("ex_date"))) and today <= d <= cutoff
+                ]
+            elif mode == "types":
+                wanted = set(descriptor["types"])
+                results = [a for a in all_actions if sources.action_type(a.get("subject")) in wanted]
+            else:
+                term = descriptor["term"].upper()
+                results = [
+                    a for a in all_actions
+                    if (a.get("symbol") or "").upper() == term
+                    or term.lower() in (a.get("company") or "").lower()
+                    or term.lower() in (a.get("subject") or "").lower()
+                ]
+            results = sorted(results, key=lambda a: (a.get("ex_date") or "9999-99-99"))
+            st.session_state["ca_results"] = results
+            st.session_state["ca_fetched"] = True
+            st.session_state["ca_errors"] = errors
+            st.session_state["ca_warnings"] = warnings
 
     if st.session_state.get("ca_fetched"):
         errors = st.session_state.get("ca_errors", [])
@@ -559,15 +679,27 @@ with tab_actions:
         if warnings:
             for w in warnings:
                 st.warning(w)
-        results = st.session_state.get("ca_results", [])
-        st.subheader(f"{len(results)} action(s) found")
-        if results:
-            # Add quotes for the first ~30
+
+        if st.session_state.get("ca_mylist"):
+            st.markdown(st.session_state["ca_mylist"])
+        elif st.session_state.get("ca_summary"):
+            summary = st.session_state["ca_summary"]
+            s1, s2 = st.columns(2)
+            by_ex = summary["by_ex"]
+            s1.markdown("**Count by exchange**  \n" + " · ".join(
+                f"{k}: {v}" for k, v in by_ex.items()
+            ))
+            by_type = summary["by_type"]
+            s2.markdown("**Count by type**  \n" + (", ".join(
+                f"{sources.TYPE_LABELS.get(t, t)} {by_type.get(t, 0)}"
+                for t in sources.ACTION_TYPES if by_type.get(t)
+            ) or "none"))
+            st.subheader("Next ex-dates")
             with st.spinner("Fetching prices..."):
                 quote_map = _fetch_quotes_for(
-                    [{"exchange": a["exchange"], "symbol": a["symbol"]} for a in results[:30]]
+                    [{"exchange": a["exchange"], "symbol": a["symbol"]} for a in summary["next"]]
                 )
-            for a in results:
+            for a in summary["next"]:
                 q = quote_map.get((a["exchange"], a["symbol"]))
                 price = _fmt_price(q.get("price")) if q and q.get("price") is not None else "-"
                 change = _fmt_change(q.get("change_pct")) if q else "-"
@@ -587,7 +719,35 @@ with tab_actions:
                                    f"Face value: {a.get('face_value') or '-'} · "
                                    f"ISIN: {a.get('isin') or '-'}")
         else:
-            st.info("No corporate actions match this query.")
+            results = st.session_state.get("ca_results", [])
+            st.subheader(f"{len(results)} action(s) found")
+            if results:
+                # Add quotes for the first ~30
+                with st.spinner("Fetching prices..."):
+                    quote_map = _fetch_quotes_for(
+                        [{"exchange": a["exchange"], "symbol": a["symbol"]} for a in results[:30]]
+                    )
+                for a in results:
+                    q = quote_map.get((a["exchange"], a["symbol"]))
+                    price = _fmt_price(q.get("price")) if q and q.get("price") is not None else "-"
+                    change = _fmt_change(q.get("change_pct")) if q else "-"
+                    color = _change_color(q.get("change_pct")) if q and q.get("change_pct") is not None else ""
+                    typ = sources.action_type(a.get("subject"))
+                    with st.container(border=True):
+                        st.markdown(f"### {a.get('symbol')} ({a.get('exchange')})")
+                        st.caption(a.get("company") or "&nbsp;")
+                        st.markdown(f"**{a.get('subject')}**")
+                        m1, m2, m3, m4 = st.columns(4)
+                        m1.metric("Type", sources.TYPE_LABELS.get(typ, typ))
+                        m2.metric("Ex-Date", a.get("ex_date") or "-")
+                        m3.metric("Record Date", a.get("record_date") or "-")
+                        m4.metric("Price", price, delta=change if change != "-" else None)
+                        if a.get("announcement_date"):
+                            st.caption(f"Announced: {a.get('announcement_date')} · "
+                                       f"Face value: {a.get('face_value') or '-'} · "
+                                       f"ISIN: {a.get('isin') or '-'}")
+            else:
+                st.info("No corporate actions match this query.")
 
 # ================================================================ MARKET SCREENS
 with tab_market:
@@ -625,113 +785,149 @@ with tab_market:
         st.dataframe(st.session_state["screen_rows"], width="stretch", hide_index=True)
 
 # ================================================================ STOCK ANALYSIS
+def _render_quick_card(quote: dict, fund: dict, sym: str) -> None:
+    """Render the quick analysis card widgets for one stock."""
+    price = quote.get("price")
+    change_pct = quote.get("change_pct")
+    comp_name = quote.get("name") or sym
+
+    st.subheader(f"{comp_name} ({sym})")
+    if fund.get("sector"):
+        st.caption(f"Sector: {fund['sector']}")
+
+    # Price & today's movement
+    col1, col2, col3 = st.columns(3)
+    if price is not None:
+        col1.metric("Current Price", _fmt_price(price),
+                    delta=_fmt_change(change_pct) if change_pct is not None else None)
+    else:
+        col1.metric("Current Price", "-")
+    col2.metric("52W High", _fmt_price(fund.get("wk52_high")) if fund.get("wk52_high") else "-")
+    col3.metric("52W Low", _fmt_price(fund.get("wk52_low")) if fund.get("wk52_low") else "-")
+
+    # 52-week signal
+    if price and fund.get("wk52_high") and fund.get("wk52_low"):
+        try:
+            lo, hi = float(fund["wk52_low"]), float(fund["wk52_high"])
+            spread = hi - lo
+            if spread > 0:
+                pct_pos = (float(price) - lo) / spread
+                if pct_pos <= 0.15:
+                    sig = "✅ Strong Buy — near 52-week LOW"
+                elif pct_pos <= 0.35:
+                    sig = "📈 Buy Zone — low zone"
+                elif pct_pos >= 0.85:
+                    sig = "🚫 Avoid — at/near 52-week HIGH"
+                elif pct_pos >= 0.65:
+                    sig = "⚠️ High Zone — near 52-week HIGH"
+                else:
+                    sig = "🟡 Mid-Range — middle of 52-week range"
+                st.info(sig)
+        except (TypeError, ValueError):
+            pass
+
+    # RSI
+    if fund.get("rsi") is not None:
+        rsi = fund["rsi"]
+        if rsi <= 30:
+            rsi_txt = f"🟢 RSI {rsi} (Oversold)"
+        elif rsi <= 45:
+            rsi_txt = f"🟢 RSI {rsi} (Low)"
+        elif rsi >= 70:
+            rsi_txt = f"🔴 RSI {rsi} (Overbought)"
+        elif rsi >= 60:
+            rsi_txt = f"🔴 RSI {rsi} (High)"
+        else:
+            rsi_txt = f"🟡 RSI {rsi}"
+        st.metric("RSI (14)", rsi_txt)
+
+    # Fundamentals grid
+    st.subheader("Valuation & Ratios")
+    f1, f2, f3, f4, f5 = st.columns(5)
+    f1.metric("P/E", f"{fund['pe']:.1f}" if fund.get("pe") else "N/A (Loss)")
+    f2.metric("Sector P/E", f"{fund['sector_pe']:.1f}" if fund.get("sector_pe") else "-")
+    f3.metric("Market Cap", f"₹{fund['market_cap']:,.0f}Cr" if fund.get("market_cap") else "-")
+    f4.metric("D/E", f"{fund['debt_to_equity']:.2f}" if fund.get("debt_to_equity") else "-")
+    f5.metric("Div Yield", f"{fund['div_yield']:.2f}%" if fund.get("div_yield") else "-")
+
+    st.subheader("Profitability")
+    p1, p2 = st.columns(2)
+    p1.metric("ROCE", f"{fund['roce']:.1f}%" if fund.get("roce") else "-")
+    p2.metric("ROE", f"{fund['roe']:.1f}%" if fund.get("roe") else "-")
+
+    # Shareholding
+    st.subheader("Shareholding Pattern (QoQ)")
+    if any(fund.get(k) for k in ("promoter_pct", "fii_pct", "dii_pct", "public_pct")):
+        h1, h2, h3, h4 = st.columns(4)
+        h1.metric("Promoter", fund.get("promoter_pct") or "-")
+        h2.metric("FII", fund.get("fii_pct") or "-")
+        h3.metric("DII", fund.get("dii_pct") or "-")
+        h4.metric("Public", fund.get("public_pct") or "-")
+    else:
+        st.info("No shareholding breakdown available.")
+
+    # Distance from 52 week
+    if price and fund.get("wk52_high") and fund.get("wk52_low"):
+        try:
+            lo, hi = float(fund["wk52_low"]), float(fund["wk52_high"])
+            dist_lo = ((float(price) - lo) / lo) * 100
+            dist_hi = ((hi - float(price)) / hi) * 100
+            st.caption(f"📍 +{dist_lo:.1f}% from 52w Low · -{dist_hi:.1f}% from 52w High")
+        except (TypeError, ValueError, ZeroDivisionError):
+            pass
+
+
 with tab_stock:
     st.header("💹 Fundamental Analysis")
-    st.caption("Quick analysis card (like /fundamentalanalyze) with full fundamentals, technicals, 52-week signal and QoQ holding for any NSE/BSE stock.")
+    st.caption("Quick analysis card (like /fundamentalanalyze) or the DEEP report "
+               "(like /fundamentalreport) — for one stock or your whole watchlist.")
+
+    stock_scope = st.radio("Scope", ["Single symbol", "My whole watchlist"],
+                           horizontal=True, key="stock_scope")
+    stock_deep = st.radio(
+        "Report type",
+        ["Quick card (like /fundamentalanalyze)", "Deep report (like /fundamentalreport)"],
+        horizontal=True, key="stock_rtype",
+    )
+    deep = stock_deep.startswith("Deep")
 
     sym = st.text_input("Symbol (e.g. TATATECH, RELIANCE, INFY)", key="stock_sym").strip().upper()
-    if st.button("🔍 Analyze", width="stretch", disabled=not sym):
-        with st.spinner(f"Fetching analysis for {sym}..."):
-            import run_bot
-            quote = sources.get_quote("NSE", sym) or sources.get_quote("BSE", sym) or {}
-            fund = sources.get_fundamentals(sym, with_screener=True) or {}
-
-            if not quote and not fund:
-                st.error(f"No data found for {sym}. Check the symbol.")
+    if st.button("🔍 Analyze", width="stretch",
+                 disabled=(stock_scope == "Single symbol" and not sym)):
+        if stock_scope == "My whole watchlist":
+            watch = storage.load_watchlist()
+            if not watch:
+                st.error("Your watchlist is empty. Add stocks in the 📌 Watchlist tab first.")
             else:
-                st.session_state["stock_result"] = {"quote": quote, "fund": fund, "sym": sym}
+                with st.spinner("Fetching analysis for your whole watchlist..."):
+                    st.session_state["stock_mylist"] = _fetch_fund_lines(watch, deep=deep)
+        else:
+            with st.spinner(f"Fetching analysis for {sym}..."):
+                quote = sources.get_quote("NSE", sym) or sources.get_quote("BSE", sym) or {}
+                fund = sources.get_fundamentals(sym, with_screener=True) or {}
+                if not quote and not fund:
+                    st.error(f"No data found for {sym}. Check the symbol.")
+                else:
+                    st.session_state["stock_result"] = {"quote": quote, "fund": fund, "sym": sym, "deep": deep}
+
+    if st.session_state.get("stock_mylist"):
+        items = st.session_state["stock_mylist"]
+        if isinstance(items, str):
+            st.warning(items)
+        else:
+            st.subheader(f"Whole watchlist — {'Deep report' if deep else 'Quick card'}")
+            for sym, md in items:
+                with st.expander(sym, expanded=False):
+                    st.markdown(md)
 
     if st.session_state.get("stock_result"):
         res = st.session_state["stock_result"]
         quote, fund, sym = res["quote"], res["fund"], res["sym"]
-        price = quote.get("price")
-        change_pct = quote.get("change_pct")
-        comp_name = quote.get("name") or sym
-
-        st.subheader(f"{comp_name} ({sym})")
-        if fund.get("sector"):
-            st.caption(f"Sector: {fund['sector']}")
-
-        # Price & today's movement
-        col1, col2, col3 = st.columns(3)
-        if price is not None:
-            col1.metric("Current Price", _fmt_price(price),
-                        delta=_fmt_change(change_pct) if change_pct is not None else None)
+        if res.get("deep"):
+            import run_bot
+            st.markdown("\n".join(run_bot._fund_report_lines(sym, quote, fund, include_tip=False)))
         else:
-            col1.metric("Current Price", "-")
-        col2.metric("52W High", _fmt_price(fund.get("wk52_high")) if fund.get("wk52_high") else "-")
-        col3.metric("52W Low", _fmt_price(fund.get("wk52_low")) if fund.get("wk52_low") else "-")
-
-        # 52-week signal
-        if price and fund.get("wk52_high") and fund.get("wk52_low"):
-            try:
-                lo, hi = float(fund["wk52_low"]), float(fund["wk52_high"])
-                spread = hi - lo
-                if spread > 0:
-                    pct_pos = (float(price) - lo) / spread
-                    if pct_pos <= 0.15:
-                        sig = "✅ Strong Buy — near 52-week LOW"
-                    elif pct_pos <= 0.35:
-                        sig = "📈 Buy Zone — low zone"
-                    elif pct_pos >= 0.85:
-                        sig = "🚫 Avoid — at/near 52-week HIGH"
-                    elif pct_pos >= 0.65:
-                        sig = "⚠️ High Zone — near 52-week HIGH"
-                    else:
-                        sig = "🟡 Mid-Range — middle of 52-week range"
-                    st.info(sig)
-            except (TypeError, ValueError):
-                pass
-
-        # RSI
-        if fund.get("rsi") is not None:
-            rsi = fund["rsi"]
-            if rsi <= 30:
-                rsi_txt = f"🟢 RSI {rsi} (Oversold)"
-            elif rsi <= 45:
-                rsi_txt = f"🟢 RSI {rsi} (Low)"
-            elif rsi >= 70:
-                rsi_txt = f"🔴 RSI {rsi} (Overbought)"
-            elif rsi >= 60:
-                rsi_txt = f"🔴 RSI {rsi} (High)"
-            else:
-                rsi_txt = f"🟡 RSI {rsi}"
-            st.metric("RSI (14)", rsi_txt)
-
-        # Fundamentals grid
-        st.subheader("Valuation & Ratios")
-        f1, f2, f3, f4, f5 = st.columns(5)
-        f1.metric("P/E", f"{fund['pe']:.1f}" if fund.get("pe") else "N/A (Loss)")
-        f2.metric("Sector P/E", f"{fund['sector_pe']:.1f}" if fund.get("sector_pe") else "-")
-        f3.metric("Market Cap", f"₹{fund['market_cap']:,.0f}Cr" if fund.get("market_cap") else "-")
-        f4.metric("D/E", f"{fund['debt_to_equity']:.2f}" if fund.get("debt_to_equity") else "-")
-        f5.metric("Div Yield", f"{fund['div_yield']:.2f}%" if fund.get("div_yield") else "-")
-
-        st.subheader("Profitability")
-        p1, p2 = st.columns(2)
-        p1.metric("ROCE", f"{fund['roce']:.1f}%" if fund.get("roce") else "-")
-        p2.metric("ROE", f"{fund['roe']:.1f}%" if fund.get("roe") else "-")
-
-        # Shareholding
-        st.subheader("Shareholding Pattern (QoQ)")
-        if any(fund.get(k) for k in ("promoter_pct", "fii_pct", "dii_pct", "public_pct")):
-            h1, h2, h3, h4 = st.columns(4)
-            h1.metric("Promoter", fund.get("promoter_pct") or "-")
-            h2.metric("FII", fund.get("fii_pct") or "-")
-            h3.metric("DII", fund.get("dii_pct") or "-")
-            h4.metric("Public", fund.get("public_pct") or "-")
-        else:
-            st.info("No shareholding breakdown available.")
-
-        # Distance from 52 week
-        if price and fund.get("wk52_high") and fund.get("wk52_low"):
-            try:
-                lo, hi = float(fund["wk52_low"]), float(fund["wk52_high"])
-                dist_lo = ((float(price) - lo) / lo) * 100
-                dist_hi = ((hi - float(price)) / hi) * 100
-                st.caption(f"📍 +{dist_lo:.1f}% from 52w Low · -{dist_hi:.1f}% from 52w High")
-            except (TypeError, ValueError, ZeroDivisionError):
-                pass
+            _render_quick_card(quote, fund, sym)
 
 # ================================================================ NEWS
 with tab_news:
@@ -837,6 +1033,61 @@ with tab_status:
     if status["last_message"]:
         st.info(status["last_message"])
 
+    # --- Force a check now (mirrors /checknow in Telegram)
+    if st.button("⚡ Force check now (re-send all matching alerts)", width="stretch"):
+        with st.spinner("Running a forced poll cycle..."):
+            try:
+                sent = poller.run_once(force=True)
+                st.success(f"Check done — re-sent {sent} alert(s).")
+            except Exception as exc:
+                st.error(f"Check failed: {exc}")
+
+    st.divider()
+    st.subheader("Automated reports (schedule)")
+    st.caption("Every user manages their OWN schedule from Telegram with /schedule; "
+               "this is the owner's view.")
+    owner_key = str(config.TELEGRAM_CHAT_ID) or "local"
+    sched_entries = storage.load_schedule_for(owner_key)
+    if sched_entries:
+        for i, e in enumerate(sched_entries, start=1):
+            interval = int(e.get("interval_min") or 0)
+            label = f"every {interval} min"
+            if interval and interval % (24 * 60) == 0:
+                label = f"every {interval // (24 * 60)}d"
+            elif interval and interval % 60 == 0:
+                label = f"every {interval // 60}h"
+            st.markdown(f"**{i}.** {label}: `{'`, `'.join(e.get('commands') or [])}`")
+    else:
+        cmds = [c for c in config.SCHEDULED_COMMANDS if c.strip()]
+        if cmds:
+            st.info("No file entries — env defaults run: "
+                    f"every {config.SCHEDULED_REPORTS_INTERVAL_MIN} min → "
+                    + ", ".join(cmds))
+        else:
+            st.info("No automated reports scheduled yet.")
+
+    s1, s2, s3 = st.columns([2, 1, 1])
+    with s1:
+        new_interval = st.text_input("Interval (minutes / 3h / 1d)", value="3h", key="sched_interval")
+    with s2:
+        st.write("")
+        if st.button("➕ Add", width="stretch", key="sched_add_btn"):
+            interval = run_bot._parse_interval_min(new_interval.strip())
+            if interval is None:
+                st.error("Bad interval. Use e.g. 180, 90m, 3h or 1d (min 15).")
+            else:
+                storage.add_schedule_entry(interval, ["/scan500"], owner_key)
+                st.success(f"Added /scan500 every {interval} min.")
+                st.rerun()
+    with s3:
+        st.write("")
+        if st.button("🗑️ Remove #1", width="stretch", key="sched_rm_btn") and sched_entries:
+            storage.remove_schedule_entry(owner_key, 0)
+            st.success("Removed entry 1.")
+            st.rerun()
+    st.caption("Add always schedules `/scan500`; use Telegram `/schedule add 3h /scan500` "
+               "for any command. Remove deletes the first entry (use /schedule in "
+               "Telegram for full control).")
     st.divider()
     st.subheader("Configuration")
     cfg_cols = st.columns(3)
