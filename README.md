@@ -56,9 +56,9 @@ Open the URL shown in the terminal, then:
 | `LOOKBACK_DAYS`         | `30`    | Past-days window used for BSE fetch      |
 | `REMINDER_DAYS`         | `5`     | Days ahead of ex-date to send a reminder (`0` = off) |
 | `SCHEDULED_REPORTS_ENABLED` | `true` | Run scheduled screens to the owner chat on a timer (always-on server only) |
-| `SCHEDULED_REPORTS_INTERVAL_MIN` | `180` | Minutes between scheduled reports (min 15) |
+| `SCHEDULED_REPORTS_INTERVAL_MIN` | `180` | Minutes between scheduled reports (min 15) - used only when `schedule.json` has no entries |
 | `SCHEDULED_REPORTS_CHAT` | owner | Chat id to send scheduled reports to (defaults to `TELEGRAM_CHAT_ID`) |
-| `SCHEDULED_COMMANDS`     | `/scan500` | Comma-separated commands run on the schedule |
+| `SCHEDULED_COMMANDS`     | `/scan500` | Comma-separated commands run on the schedule - used only when `schedule.json` has no entries |
 
 ## Deploy free on GitHub Actions (24/7 polling, no server)
 
@@ -104,6 +104,7 @@ Send these to your bot:
 | `/fund N` / `/fund N-M` / `/fund all` | `/fund 3-5` | Deep report for a range of watchlist positions (same syntax as `/stock`, max 5 per query) |
 | `/harmonic [all\|100\|500] [TIMEFRAME]` | `/harmonic all` / `/harmonic 500` | Harmonic-pattern scan. With a universe keyword it scans the whole index (default NIFTY 100) and lists every stock showing a formation, sorted most actionable first (top 25). Each entry is clear and compact: line 1 = symbol, current price with +/-% move, pattern (Gartley/Bat/Butterfly/Crab/Shark), direction, status & signal; line 2 = the PRZ zone, the projected/completed D level and how far price is from it (e.g. `inside PRZ`, `2.8% below PRZ`). `/harmonic 500 1w` scans NIFTY 500 on the weekly chart. Without a universe keyword it stays the single-stock deep report: `/harmonic TATATECH 1h` (PRZ, Fibonacci ratios, entry/SL/targets, R:R, final signal) or `/harmonic 3` (watchlist position). Timeframes: `5m 15m 30m 1h 4h 1d 1w`. Not investment advice — entries wait for PRZ confirmation |
 | `/scan500` | `/scan500` | Full NIFTY 500 multi-indicator CNC/MIS scanner. Computes EMAs (20/50/100/200), RSI, MACD, ADX, CMF, MFI, OBV, Aroon, TTM Squeeze, Donchian 52-week channel, weekly Supertrend, GMMA, anchored VWAP and Mansfield RS for all ~500 stocks, applies the strict "do not buy / do not show" rejection rules (weekly supertrend red, below 200 SMA, CMF < 0, MRS < 0, R:R < 1:2, SL > 8%, ADTV < ₹10cr), scores survivors /100 (≥75 qualifies) and reports: market regime + breadth, rejected stocks with reasons, #1 top trade setup with a 09:15–15:30 hourly execution roadmap, an approved-stocks matrix and a CNC vs MIS execution table. Takes ~1 minute. Delivery % is estimated from money-flow (real NSE delivery data isn't public via this feed) |
+| `/sched [add <interval> <cmd> \| remove <n> \| clear]` | `/sched add 3h /scan500` | Owner-only: manage automated reports on the always-on server. `/sched` lists the current schedule. `/sched add <interval> <command>` runs a command on its own timer — interval is minutes (`180`), `m` (`90m`), `h` (`3h`) or `d` (`1d`), minimum 15 minutes, e.g. `/sched add 3h /scan500`, `/sched add 90m /movers 30m`. `/sched remove <n>` deletes entry n (1-based as shown by `/sched`), `/sched clear` removes everything. Entries are saved to `schedule.json` and pushed to GitHub, so they survive redeploys. Without any file entries the `SCHEDULED_COMMANDS` env defaults are used |
 
 For the universe token you can use the short forms too: `n100`/`nifty100` and `n500`/`nifty500` (e.g. `/gainers n100` = today's top NIFTY 100 gainers, `/movers 1w n500`).
 

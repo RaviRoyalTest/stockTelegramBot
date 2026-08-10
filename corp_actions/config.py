@@ -82,6 +82,7 @@ WATCHLIST_FILE = Path(os.getenv("WATCHLIST_FILE", str(BASE_DIR / "watchlist.json
 SUBSCRIPTIONS_FILE = Path(os.getenv("SUBSCRIPTIONS_FILE", str(BASE_DIR / "subscriptions.json")))
 SETTINGS_FILE = Path(os.getenv("SETTINGS_FILE", str(BASE_DIR / "settings.json")))
 SEEN_FILE = Path(os.getenv("SEEN_FILE", str(BASE_DIR / "seen_actions.json")))
+SCHEDULE_FILE = Path(os.getenv("SCHEDULE_FILE", str(BASE_DIR / "schedule.json")))
 
 USER_AGENT = (
     "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "

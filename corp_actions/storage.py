@@ -271,3 +271,67 @@ def load_seen() -> set:
 def save_seen(keys: set) -> None:
     with _lock, _file_lock(config.SEEN_FILE):
         _write_json(config.SEEN_FILE, sorted(keys))
+
+
+# --------------------------------------------------------------- schedule
+# Scheduled reports live in schedule.json (pushed to GitHub with the rest of
+# the state) so /sched add/remove changes survive redeploys instead of living
+# only in env vars. Each entry: {"interval_min": int, "commands": [str,...],
+# "chat": str}.
+
+def load_schedule() -> list[dict]:
+    """Return list of {'interval_min', 'commands', 'chat'} schedule entries."""
+    with _lock:
+        data = _read_json(config.SCHEDULE_FILE, [])
+    cleaned = []
+    for item in data if isinstance(data, list) else []:
+        if not isinstance(item, dict):
+            continue
+        interval = item.get("interval_min")
+        commands = item.get("commands")
+        if isinstance(interval, int) and interval >= 1 and isinstance(commands, list):
+            cleaned.append({
+                "interval_min": interval,
+                "commands": [str(c).strip() for c in commands if str(c).strip()],
+                "chat": str(item.get("chat", "") or ""),
+            })
+    return cleaned
+
+
+def save_schedule(entries: list[dict]) -> None:
+    with _lock, _file_lock(config.SCHEDULE_FILE):
+        _write_json(config.SCHEDULE_FILE, entries)
+    log.info("schedule.json: %d scheduled report entry(s)", len(entries))
+
+
+def add_schedule_entry(interval_min: int, commands: list[str], chat: str) -> list[dict]:
+    """Append a schedule entry, then return the new full schedule."""
+    with _lock, _file_lock(config.SCHEDULE_FILE):
+        current = _read_json(config.SCHEDULE_FILE, [])
+        if not isinstance(current, list):
+            current = []
+        current.append({
+            "interval_min": interval_min,
+            "commands": [c for c in commands if c.strip()],
+            "chat": str(chat),
+        })
+        _write_json(config.SCHEDULE_FILE, current)
+    log.info(
+        "schedule.json: added entry every %d min -> %s (chat %s)",
+        interval_min, ", ".join(commands), chat,
+    )
+    return current
+
+
+def remove_schedule_entry(index: int) -> list[dict]:
+    """Remove the entry at index (0-based). Returns the new full schedule."""
+    with _lock, _file_lock(config.SCHEDULE_FILE):
+        current = _read_json(config.SCHEDULE_FILE, [])
+        if not isinstance(current, list):
+            current = []
+        removed = None
+        if 0 <= index < len(current):
+            removed = current.pop(index)
+            _write_json(config.SCHEDULE_FILE, current)
+    log.info("schedule.json: removed entry %d -> %s", index, removed if removed else "not found")
+    return current

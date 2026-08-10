@@ -60,7 +60,7 @@ logging.basicConfig(
 log = logging.getLogger("bot_server")
 
 # Commands that modify state and therefore need to be pushed back to GitHub.
-WRITE_COMMANDS = {"/add", "/remove", "/filter", "/alert"}
+WRITE_COMMANDS = {"/add", "/remove", "/filter", "/alert", "/sched"}
 
 # How often to retry pushing state that did not reach GitHub (seconds). A
 # failed push is retried automatically so a transient GitHub hiccup never

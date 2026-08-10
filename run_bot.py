@@ -181,6 +181,7 @@ HELP_TEXT = (
     "\U0001F6E0 <b>System</b>\n"
     "━━━━━━━━━━━━━━━━━━━━\n"
     "/status              \u2192 where your watchlist is saved &amp; GitHub push status\n"
+    "/sched add 3h /scan500 \u2192 run /scan500 automatically every 3h\n"
     "/checknow            \u2192 force-run alerts and re-send all matches\n"
     "/help \u00b7 /start       \u2192 show this guide\n\n"
     "━━━━━━━━━━━━━━━━━━━━\n"
@@ -428,9 +429,8 @@ def handle_command(chat_id, text):
                     html.escape(sync_line),
                     f"<b>Scheduled reports:</b> "
                     + ("enabled" if config.SCHEDULED_REPORTS_ENABLED and config.PROCESS_COMMANDS else "off")
-                    + f" \u00b7 every {config.SCHEDULED_REPORTS_INTERVAL_MIN} min \u00b7 "
-                    + ", ".join(config.SCHEDULED_COMMANDS)
-                    + f" \u00b7 to {config.SCHEDULED_REPORTS_CHAT or '(owner chat)'}",
+                    + " \u00b7 " + html.escape(format_schedule(chat_id).split("\n")[0])
+                    + f" \u00b7 manage with /sched",
                     "Run /list to see your current watchlist.",
                 ]
             ),
@@ -470,6 +470,10 @@ def handle_command(chat_id, text):
 
     if cmd == "/settings":
         reply(chat_id, format_settings(chat_id))
+        return
+
+    if cmd == "/sched":
+        handle_sched(chat_id, parts)
         return
 
     if cmd == "/news":
@@ -839,6 +843,133 @@ def format_settings(chat_id) -> str:
             "Customize with /filter and /alert.",
         ]
     )
+
+
+def _parse_interval_min(raw: str) -> int | None:
+    """Parse an interval like '180', '3h', '90m', '1d' into minutes.
+
+    Returns None when the value is unparseable or below the 15-minute floor.
+    """
+    m = re.fullmatch(r"(\d+)\s*([mhd])?", str(raw or "").strip().lower())
+    if not m:
+        return None
+    minutes = int(m.group(1))
+    unit = m.group(2) or "m"
+    if unit == "h":
+        minutes *= 60
+    elif unit == "d":
+        minutes *= 24 * 60
+    if minutes < 15:
+        return None
+    return minutes
+
+
+def format_schedule(chat_id) -> str:
+    """Render the current automated-report schedule (/sched)."""
+    entries = storage.load_schedule()
+    if not entries:
+        cmds = [c for c in config.SCHEDULED_COMMANDS if c.strip()]
+        if not cmds:
+            return "<b>Schedule:</b> no automated reports."
+        lines = [
+            "<b>Schedule (env defaults - use /sched to edit)</b>",
+            f"  1. every {config.SCHEDULED_REPORTS_INTERVAL_MIN} min: "
+            + html.escape(", ".join(cmds)),
+        ]
+    else:
+        lines = ["<b>Schedule (schedule.json - pushed to GitHub)</b>"]
+        for i, e in enumerate(entries, start=1):
+            interval = int(e.get("interval_min") or 0)
+            cmds = e.get("commands") or []
+            chat = e.get("chat")
+            label = f"every {interval} min"
+            if interval and interval % (24 * 60) == 0:
+                label = f"every {interval // (24 * 60)}d"
+            elif interval and interval % 60 == 0:
+                label = f"every {interval // 60}h"
+            target = f" to {chat}" if chat and str(chat) != str(config.TELEGRAM_CHAT_ID) else ""
+            lines.append(
+                f"  {i}. {label}: {html.escape(', '.join(cmds))}{html.escape(target)}"
+            )
+    lines.append(
+        "\nUsage: <code>/sched add 3h /scan500</code> (interval: 180, 90m, 3h, 1d)"
+    )
+    lines.append("<code>/sched remove 1</code>  /  <code>/sched clear</code>")
+    return "\n".join(lines)
+
+
+def handle_sched(chat_id, parts) -> None:
+    """Manage the automated-report schedule (owner only).
+
+    /sched                     -> show the current schedule
+    /sched add <int> <cmd...>  -> add a command on its own timer (e.g. /sched add 3h /scan500)
+    /sched remove <n>          -> remove entry n (1-based, as shown by /sched)
+    /sched clear               -> remove all entries
+    """
+    if not storage.is_owner(chat_id):
+        reply(chat_id, "Only the owner can change the schedule.")
+        return
+
+    sub = parts[1].lower() if len(parts) > 1 else ""
+    if sub == "add":
+        if len(parts) < 4:
+            reply(
+                chat_id,
+                "Usage: <code>/sched add &lt;interval&gt; &lt;command&gt;</code>\n"
+                "e.g. <code>/sched add 3h /scan500</code> or "
+                "<code>/sched add 90m /movers 30m</code>\n"
+                "Interval: minutes (180), m (90m), h (3h) or d (1d), min 15.",
+            )
+            return
+        interval = _parse_interval_min(parts[2])
+        if interval is None:
+            reply(
+                chat_id,
+                "Bad interval. Use e.g. <code>180</code>, <code>90m</code>, "
+                "<code>3h</code> or <code>1d</code> (min 15 minutes).",
+            )
+            return
+        command = " ".join(parts[3:]).strip()
+        if not command.startswith("/"):
+            reply(chat_id, "The command must start with / (e.g. <code>/scan500</code>).")
+            return
+        if command.lower().split()[0] in ("/sched",):
+            reply(chat_id, "You cannot schedule /sched itself.")
+            return
+        storage.add_schedule_entry(interval, [command], str(config.TELEGRAM_CHAT_ID))
+        log.info("chat %s added schedule entry: every %d min -> %s", chat_id, interval, command)
+        reply(
+            chat_id,
+            f"Added: <code>{html.escape(command)}</code> every "
+            f"<b>{interval} min</b>.\n\n{format_schedule(chat_id)}",
+        )
+        return
+
+    if sub == "remove":
+        if len(parts) < 3:
+            reply(chat_id, "Usage: <code>/sched remove &lt;n&gt;</code> (number shown by /sched).")
+            return
+        try:
+            index = int(parts[2]) - 1
+        except ValueError:
+            reply(chat_id, "Usage: <code>/sched remove &lt;n&gt;</code>")
+            return
+        entries = storage.load_schedule()
+        if index < 0 or index >= len(entries):
+            reply(chat_id, "No entry at that number. Run /sched to list them.")
+            return
+        storage.remove_schedule_entry(index)
+        log.info("chat %s removed schedule entry %d", chat_id, index)
+        reply(chat_id, f"Removed entry {index + 1}.\n\n{format_schedule(chat_id)}")
+        return
+
+    if sub == "clear":
+        storage.save_schedule([])
+        log.info("chat %s cleared the schedule", chat_id)
+        reply(chat_id, "Schedule cleared - no automated reports will run.")
+        return
+
+    reply(chat_id, format_schedule(chat_id))
 
 
 def handle_news(chat_id, parts) -> None:
@@ -2109,6 +2240,7 @@ def register_commands() -> bool:
         {"command": "filter", "description": "Receive only chosen action types"},
         {"command": "alert", "description": "Price-move alert threshold percent"},
         {"command": "settings", "description": "Show your current settings"},
+        {"command": "sched", "description": "Schedule auto reports: /sched add 3h /scan500"},
         {"command": "status", "description": "Check persistence / GitHub push"},
         {"command": "checknow", "description": "Force a check and resend alerts"},
         {"command": "help", "description": "Show all commands and examples"},
@@ -2168,12 +2300,18 @@ def process_commands():
 
 
 def start_scheduled_reports():
-    """Run SCHEDULED_COMMANDS to the owner chat on a timer (daemon thread).
+    """Run scheduled reports to the owner chat on a timer (daemon thread).
 
     Only the always-on server runs these (PROCESS_COMMANDS=true); the GitHub
     Actions cron and any other process skip them so scans are never sent
-    twice. The first report fires one interval after startup so the server
+    twice. The first report fires a short while after startup so the server
     has finished booting before the scans hit the data feeds.
+
+    Entries come from schedule.json (manageable from Telegram with /sched);
+    when the file is empty the env-var defaults (SCHEDULED_COMMANDS +
+    SCHEDULED_REPORTS_INTERVAL_MIN) are used so existing deployments keep
+    working. The schedule is re-read each loop, so /sched add/remove/clear
+    take effect without a redeploy.
     """
     if not config.SCHEDULED_REPORTS_ENABLED:
         log.info("SCHEDULED_REPORTS_ENABLED=false - scheduled reports off")
@@ -2181,32 +2319,65 @@ def start_scheduled_reports():
     if not config.PROCESS_COMMANDS:
         log.info("PROCESS_COMMANDS=false - scheduled reports skipped (cron instance)")
         return
-    target = config.SCHEDULED_REPORTS_CHAT or config.TELEGRAM_CHAT_ID
-    commands = list(config.SCHEDULED_COMMANDS)
-    if not target:
+    default_chat = config.SCHEDULED_REPORTS_CHAT or config.TELEGRAM_CHAT_ID
+    if not default_chat:
         log.warning("SCHEDULED_REPORTS_CHAT / TELEGRAM_CHAT_ID not set - scheduled reports off")
         return
-    if not commands:
-        log.info("SCHEDULED_COMMANDS empty - scheduled reports off")
-        return
 
-    interval = config.SCHEDULED_REPORTS_INTERVAL_MIN * 60
-    log.info(
-        "scheduled reports: %s every %d min to chat %s",
-        commands, config.SCHEDULED_REPORTS_INTERVAL_MIN, target,
-    )
+    def _entries():
+        entries = storage.load_schedule()
+        if entries:
+            return entries
+        cmds = [c for c in config.SCHEDULED_COMMANDS if c.strip()]
+        if not cmds:
+            return []
+        return [{
+            "interval_min": config.SCHEDULED_REPORTS_INTERVAL_MIN,
+            "commands": cmds,
+            "chat": default_chat,
+        }]
+
+    next_due = {}  # index -> monotonic() seconds when the next run is due
 
     def _loop():
         import time as _time
-        _time.sleep(min(interval, 60))
         while True:
-            for cmd in commands:
-                try:
-                    log.info("scheduled report: running %s", cmd)
-                    handle_command(target, cmd)
-                except Exception as exc:  # one bad report must not stop the loop
-                    log.warning("scheduled report %s failed: %s", cmd, config.redact(exc), exc_info=True)
-            _time.sleep(interval)
+            try:
+                now = monotonic()
+                entries = _entries()
+                if not entries:
+                    log.info("scheduled reports: schedule is empty - nothing to run")
+                    next_due.clear()
+                    _time.sleep(60)
+                    continue
+                for idx, entry in enumerate(entries):
+                    interval = int(entry.get("interval_min") or config.SCHEDULED_REPORTS_INTERVAL_MIN)
+                    commands = [c for c in entry.get("commands") or [] if c.strip()]
+                    chat = str(entry.get("chat") or default_chat)
+                    if not commands:
+                        continue
+                    due = next_due.get(idx)
+                    if due is None:
+                        next_due[idx] = now + min(interval * 60, 60)
+                        continue
+                    if now < due:
+                        continue
+                    for cmd in commands:
+                        try:
+                            log.info("scheduled report: running %s (chat %s)", cmd, chat)
+                            handle_command(chat, cmd)
+                        except Exception as exc:  # one bad report must not stop the loop
+                            log.warning(
+                                "scheduled report %s failed: %s",
+                                cmd, config.redact(exc), exc_info=True,
+                            )
+                    next_due[idx] = monotonic() + interval * 60
+            except Exception as exc:  # never let a scheduler hiccup kill the thread
+                log.warning(
+                    "scheduled reports loop error: %s",
+                    config.redact(exc), exc_info=True,
+                )
+            _time.sleep(30)
 
     threading.Thread(target=_loop, daemon=True, name="scheduled-reports").start()
 
@@ -2269,6 +2440,7 @@ STATE_FILES = (
     config.SUBSCRIPTIONS_FILE,
     config.SETTINGS_FILE,
     config.SEEN_FILE,
+    config.SCHEDULE_FILE,
 )
 
 
