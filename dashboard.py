@@ -26,7 +26,7 @@ import streamlit as st
 import run_bot
 
 from corp_actions import config, notifier, sources, storage
-from corp_actions.poller import poller
+from corp_actions.poller import fetch_all_actions, parse_ex_date, poller
 
 logging.basicConfig(level=logging.INFO, stream=sys.stdout)
 
@@ -503,12 +503,12 @@ with tab_actions:
 
     if st.button("🔍 Run query", width="stretch", disabled=descriptor is None):
         with st.spinner("Fetching corporate actions..."):
-            all_actions, errors, warnings = poller.fetch_all_actions()
+            all_actions, errors, warnings = fetch_all_actions()
         mode = descriptor["mode"]
         results = []
         if mode == "overview":
             results = sorted(
-                (a for a in all_actions if poller.parse_ex_date(a.get("ex_date"))),
+                (a for a in all_actions if parse_ex_date(a.get("ex_date"))),
                 key=lambda a: a.get("ex_date"),
             )[:50]
         elif mode == "exdate":
@@ -516,7 +516,7 @@ with tab_actions:
             cutoff = today + timedelta(days=descriptor["days"])
             results = [
                 a for a in all_actions
-                if (d := poller.parse_ex_date(a.get("ex_date"))) and today <= d <= cutoff
+                if (d := parse_ex_date(a.get("ex_date"))) and today <= d <= cutoff
             ]
         elif mode == "types":
             wanted = set(descriptor["types"])
