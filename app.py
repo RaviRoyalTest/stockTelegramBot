@@ -46,7 +46,7 @@ def persist_watchlist(selected_labels, stock_list):
 def parse_telegram_watchlist(text: str) -> list[dict]:
     """Parse a Telegram watchlist message into a list of {'symbol', 'exchange'}.
 
-    Handles the format produced by the bot's /list command, e.g.:
+    Handles the format produced by the bot's /watchlist command, e.g.:
 
         Your Watchlist:
         1. AMBER (NSE)
@@ -54,7 +54,7 @@ def parse_telegram_watchlist(text: str) -> list[dict]:
         ...
         44. VBL (NSE)
 
-        Use /stock 5-10 or /fund 3-5 to get details by these numbers.
+        Use /fundamentalanalyze 5-10 or /fundamentalreport 3-5 to get details by these numbers.
         Saved in: subscriptions.json (your chat 862087765)
         Persistence: pushed to GitHub - it survives redeploys.
 

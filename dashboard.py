@@ -34,35 +34,44 @@ logging.basicConfig(level=logging.INFO, stream=sys.stdout)
 HELP_TEXT = (
     "\U0001F4CA **Stock Alert Bot — Command Guide**\n"
     "_Real-time NSE/BSE corporate actions, market movers & news_\n\n"
+    "Every command name explains what it does. The old short forms still work\n"
+    "as aliases (e.g. `/ca` = `/corpactions`, `/next` = `/corpactionsformylist`).\n\n"
+    "**Corporate Actions (NSE + BSE)**\n"
+    "- `/corpactions [TYPE | SYMBOL | N | today]` — browse all dividend / bonus / split / rights / buyback actions. `dividend`/`bonus`/`split`/`rights`/`buyback` = one type; `increase` = shareholder increase (bonus + split + rights); `today`/`N` = ex-date window; a symbol (e.g. `RELIANCE`) = full details; any other word = keyword search\n"
+    "- `/exdates [today|N]` — all actions by ex-date window (default 5 days)\n"
+    "- `/corpactionssummary` — corporate-action snapshot: counts by exchange & type, plus the next ex-dates\n"
+    "- `/corpactionsformylist` — YOUR watchlist: upcoming ex-dates + recently passed / in-progress actions with status (rights subscription, dividend payment, bonus credit) — last 30 days\n\n"
+    "**Watchlist**\n"
+    "- `/watchlist` — show your full watchlist\n"
+    "- `/myfavourites` — run your favourite commands in one go (corp actions for your list, top losers 1h + today, watchlist, fundamentals)\n"
+    "- `/addstock SYMBOL [NSE|BSE]` — add a stock (default NSE)\n"
+    "- `/removestock SYMBOL` — remove a stock\n"
+    "- `/news [N|SYMBOL]` — latest headlines for your watchlist stocks\n\n"
+    "**Stock Analysis**\n"
+    "- `/fundamentalanalyze SYMBOL` — quick analysis card (price, P/E, 52W signal, QoQ holding)\n"
+    "- `/fundamentalanalyze mylist` / `N` / `N-M` — same card for your watchlist (10 per page, Next button)\n"
+    "- `/fundamentalreport SYMBOL` — DEEP fundamental report (valuation, growth, margins, balance sheet, EPS, analyst targets) — much more detailed than `/fundamentalanalyze`\n"
+    "- `/fundamentalreport mylist` / `N` / `N-M` — deep reports for your watchlist (5 per page)\n"
+    "- `/harmonicpatterns [all|100|500] [TIMEFRAME]` — harmonic pattern scan & PRZ reports (alias `/harmonic`)\n"
+    "- `/scan500` — full NIFTY 500 CNC/MIS technical scanner\n\n"
     "**Market Screens**\n"
     "- `/topmovers [period] [N] [100|500]` — top gainers AND losers in a window\n"
     "- `/topgainers [period] [N] [100|500]` — top rising stocks\n"
     "- `/toplosers [period] [N] [100|500]` — top falling stocks\n"
-    "  Periods: 5m · 15m · 30m · 1h · 2h · 4h · 1d · 2d · 5d · 1w · 2w · 1mo · 3mo · 6mo · 1y\n"
-    "  Universe: 100/nifty100=NIFTY 100 · 500/nifty500=NIFTY 500\n\n"
-    "**Corporate Actions (NSE + BSE)**\n"
-    "- `/corpactions [type|symbol|N|today]` — browse all dividend/bonus/split/rights/buyback actions\n"
-    "- `/exdates [today|N]` — all actions by ex-date window\n"
-    "- `/corpactionssummary` — corporate-action snapshot: counts + next ex-dates\n"
-    "- `/corpactionsformylist` — YOUR watchlist: ex-dates + in-progress actions (rights/dividends) with status\n\n"
-    "**Stock Analysis**\n"
-    "- `/fundamentalanalyze SYMBOL` — quick analysis card (price, P/E, 52W signal, QoQ holding); `/fundamentalanalyze mylist` for your whole watchlist\n"
-    "- `/fundamentalreport SYMBOL` — deep fundamental report (valuation, growth, margins, balance sheet); `/fundamentalreport mylist` for your whole watchlist\n\n"
-    "**Watchlist**\n"
-    "- `/addstock SYMBOL [NSE|BSE]` · `/removestock SYMBOL` · `/watchlist`\n"
-    "- `/myfavourites` — run your favourite commands in one go (corp actions for your list, top losers 1h + today, watchlist, fundamentals)\n"
-    "- `/news [N|SYMBOL]` — latest headlines\n\n"
+    "  Periods: 5m · 15m · 30m · 1h · 2h · 4h · today · 1d · 2d · 5d · 1w · 2w · 1mo · 3mo · 6mo · 1y\n"
+    "  Universe: n100/nifty100 = NIFTY 100 · n500/nifty500 = NIFTY 500\n"
+    "  Tip: for `/topgainers` & `/toplosers` a bare 100/500 means the top-N count (e.g. `/topgainers 100` = top 100) — use `nifty100`/`nifty500` for the index. For `/topmovers` a bare 100/500 picks the index.\n\n"
     "**Alerts & Personalisation**\n"
-    "- `/alertfilters TYPE,TYPE` — receive only chosen action types\n"
-    "- `/pricealert PCT` — alert on ±PCT% daily move\n"
-    "- `/settings` — view current config\n\n"
+    "- `/alertfilters TYPE,TYPE` — receive only the action types you choose (`all` resets)\n"
+    "- `/pricealert PCT` — alert when a stock moves ±PCT% in a day (`off` disables)\n"
+    "- `/settings` — view your current filter & alert config\n\n"
     "**System**\n"
-    "- `/status` — where list is saved & GitHub push status\n"
-    "- `/schedule add 3h /scan500` — run a command automatically\n"
-    "- `/checknow` — force-run alerts\n"
+    "- `/status` — where your watchlist is saved & GitHub push status\n"
+    "- `/schedule add 3h /scan500` — run a command automatically every 3h\n"
+    "- `/checknow` — force-run alerts and re-send all matches\n"
     "- `/menu` — one-tap command buttons in Telegram (no typing)\n"
-    "- `/help` — this guide\n\n"
-    "_Old short forms still work as aliases: /ca, /next, /upcoming, /summary, /add, /list, /movers, /gainers, /losers, /stock, /stockanalysis, /fund, /fundamentals, /filter, /alert, /sched, /exdate._\n"
+    "- `/help` · `/start` — show this guide\n\n"
+    "_Old short forms still work as aliases: /ca, /next, /upcoming, /summary, /add, /list, /movers, /gainers, /losers, /stock, /stockanalysis, /fund, /fundamentals, /filter, /alert, /sched, /exdate, /harmonic._\n"
 )
 
 # Streamlit page config
@@ -178,7 +187,7 @@ def _run_screen(period_key: str, direction: str, universe: str, count: int) -> l
 def _parse_telegram_watchlist(text: str) -> list[dict]:
     """Parse a Telegram watchlist message into a list of {'symbol', 'exchange'}.
 
-    Handles the format produced by the bot's /list command, e.g.:
+    Handles the format produced by the bot's /watchlist command, e.g.:
 
         Your Watchlist:
         1. AMBER (NSE)
@@ -186,7 +195,7 @@ def _parse_telegram_watchlist(text: str) -> list[dict]:
         ...
         44. VBL (NSE)
 
-        Use /stock 5-10 or /fund 3-5 to get details by these numbers.
+        Use /fundamentalanalyze 5-10 or /fundamentalreport 3-5 to get details by these numbers.
         Saved in: subscriptions.json (your chat 862087765)
         Persistence: pushed to GitHub - it survives redeploys.
 
@@ -319,7 +328,7 @@ tab_watch, tab_actions, tab_market, tab_stock, tab_news, tab_settings, tab_statu
         "📌 Watchlist",
         "📋 Corporate Actions",
         "📊 Market Screens",
-        "💹 Stock Analysis",
+        "💹 Fundamental Analysis",
         "📰 News",
         "🎛️ Alert Settings",
         "🖥️ System",
@@ -384,7 +393,7 @@ with tab_watch:
 
     # --- Paste Telegram watchlist
     st.subheader("📋 Paste Telegram Watchlist")
-    st.caption("Paste the full watchlist message from Telegram (e.g. from /list) "
+    st.caption("Paste the full watchlist message from Telegram (e.g. from /watchlist) "
                "to replace the current watchlist in one go.")
     pasted_text = st.text_area(
         "Paste watchlist text here",
@@ -617,8 +626,8 @@ with tab_market:
 
 # ================================================================ STOCK ANALYSIS
 with tab_stock:
-    st.header("💹 Single Stock Deep Analysis")
-    st.caption("Full fundamentals, technicals, 52-week signal and QoQ holding for any NSE/BSE stock.")
+    st.header("💹 Fundamental Analysis")
+    st.caption("Quick analysis card (like /fundamentalanalyze) with full fundamentals, technicals, 52-week signal and QoQ holding for any NSE/BSE stock.")
 
     sym = st.text_input("Symbol (e.g. TATATECH, RELIANCE, INFY)", key="stock_sym").strip().upper()
     if st.button("🔍 Analyze", width="stretch", disabled=not sym):
