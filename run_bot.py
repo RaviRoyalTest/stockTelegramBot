@@ -258,6 +258,177 @@ def reply(chat_id, text, parse_mode="HTML", reply_markup=None):
         )
 
 
+# When a main command is typed with NO arguments, show its subcommands and
+# examples (like /watcher does) instead of silently running a default. Each
+# command's bare form still works for anyone who prefers the default - this
+# is only a help hint layer, it never changes what an argument-ful command
+# does.
+COMMAND_USAGE = {
+    "/corpactions": CA_HELP,
+    "/exdates": (
+        "<b>/exdates</b> - corporate actions by ex-date window\n"
+        "/exdates today   \u2192 ex-dates due today\n"
+        "/exdates 7       \u2192 ex-dates within the next 7 days\n"
+        "/exdates         \u2192 default window (5 days)"
+    ),
+    "/news": (
+        "<b>/news</b> - latest headlines for your watchlist stocks\n"
+        "/news            \u2192 news for all watchlist stocks\n"
+        "/news 5          \u2192 5 headlines per stock\n"
+        "/news RELIANCE   \u2192 news for RELIANCE only"
+    ),
+    "/fundamentalanalyze": (
+        "<b>/fundamentalanalyze</b> - quick analysis card\n"
+        "/fundamentalanalyze TATATECH  \u2192 one stock\n"
+        "/fundamentalanalyze mylist    \u2192 your whole watchlist\n"
+        "/fundamentalanalyze 5-10      \u2192 watchlist stocks #5-#10"
+    ),
+    "/fundamentalreport": (
+        "<b>/fundamentalreport</b> - DEEP fundamental report\n"
+        "/fundamentalreport RELIANCE  \u2192 one stock\n"
+        "/fundamentalreport mylist    \u2192 your whole watchlist\n"
+        "/fundamentalreport 3-5       \u2192 watchlist stocks #3-#5"
+    ),
+    "/harmonicpatterns": (
+        "<b>/harmonicpatterns</b> - harmonic pattern scanner\n"
+        "/harmonicpatterns all       \u2192 NIFTY 100, daily\n"
+        "/harmonicpatterns 500 1w    \u2192 NIFTY 500, weekly\n"
+        "/harmonicpatterns RELIANCE  \u2192 full report (PRZ, entry, SL)\n"
+        "Timeframes: 5m 15m 30m 1h 4h 1d 1w  (alias /harmonic)"
+    ),
+    "/topmovers": (
+        "<b>/topmovers</b> - top gainers AND losers\n"
+        "/topmovers          \u2192 last 1h, NIFTY 100\n"
+        "/topmovers 2d 500   \u2192 2-day movers, NIFTY 500\n"
+        "/topmovers 1w 10    \u2192 top 10 movers this week"
+    ),
+    "/topgainers": (
+        "<b>/topgainers</b> - top rising stocks\n"
+        "/topgainers 1h         \u2192 last 1h gainers\n"
+        "/topgainers 1mo 20 500 \u2192 top 20 gainers this month, NIFTY 500\n"
+        "/topgainers 100        \u2192 top 100 gainers"
+    ),
+    "/toplosers": (
+        "<b>/toplosers</b> - top falling stocks\n"
+        "/toplosers 1h 10       \u2192 top 10 losers last hour\n"
+        "/toplosers 1w nifty100 \u2192 weekly losers, NIFTY 100\n"
+        "/toplosers 100         \u2192 top 100 losers"
+    ),
+    "/schedule": (
+        "<b>/schedule</b> - your automated reports (per user)\n"
+        "/schedule add 3h /scan500          \u2192 every 3 hours\n"
+        "/schedule add at 09:15 /toplosers 1h  \u2192 daily at 09:15 IST\n"
+        "/schedule remove 1                 \u2192 remove YOUR entry #1\n"
+        "/schedule clear                    \u2192 remove all of yours"
+    ),
+    "/pricealert": (
+        "<b>/pricealert</b> - daily price-move alerts\n"
+        "/pricealert 3   \u2192 alert when a stock moves \u00b13% in a day\n"
+        "/pricealert off \u2192 disable price alerts\n"
+        "/pricealert     \u2192 show current threshold"
+    ),
+    "/alertfilters": (
+        "<b>/alertfilters</b> - receive only the action types you choose\n"
+        "/alertfilters dividend,bonus \u2192 only those types\n"
+        "/alertfilters all            \u2192 reset to all types"
+    ),
+    "/watcher": (
+        "\U0001F6A8 <b>Sudden-move watcher</b>\n"
+        "/watcher on    \u2192 turn it ON\n"
+        "/watcher off   \u2192 turn it OFF\n"
+        "/watcher set 3 \u2192 alert at a 3% session move\n"
+        "/watcher universe nifty500 \u2192 nifty100 | nifty500 | mylist\n"
+        "/watcher       \u2192 show current status"
+    ),
+    "/addstock": (
+        "<b>/addstock</b> - add a stock to your watchlist\n"
+        "/addstock RELIANCE NSE  \u2192 add RELIANCE (NSE)\n"
+        "/addstock PGINVIT       \u2192 add with default exchange NSE"
+    ),
+    "/removestock": (
+        "<b>/removestock</b> - remove a stock from your watchlist\n"
+        "/removestock TCS        \u2192 remove TCS"
+    ),
+    "/menu": (
+        "<b>/menu</b> - one-tap command buttons (no typing)\n"
+        "/menu       \u2192 show the quick menu\n"
+        "/menu off   \u2192 hide the quick menu"
+    ),
+}
+
+
+# Commands that already do something useful when typed bare: describe them
+# first, then still run them, so the user sees BOTH what it does and the
+# result. value = (description, runnable(chat_id)).
+DESCRIBE_AND_RUN = {
+    "/watchlist": (
+        "\U0001F4CB <b>/watchlist</b> - shows YOUR current watchlist with prices. "
+        "Add stocks with /addstock, remove with /removestock.",
+        lambda cid: send_watchlist(cid),
+    ),
+    "/settings": (
+        "\U00002699\ufe0f <b>/settings</b> - shows YOUR filters, price-alert and watcher "
+        "settings. Change them with /alertfilters, /pricealert and /watcher.",
+        lambda cid: reply(cid, format_settings(cid)),
+    ),
+    "/status": (
+        "\U0001F4CA <b>/status</b> - where your watchlist is saved, GitHub push status "
+        "and your personal data scope.",
+        lambda cid: handle_status(cid),
+    ),
+    "/myfavourites": (
+        "\u2B50 <b>/myfavourites</b> - runs your regular commands in ONE go: "
+        "corporate actions for your list, top losers (1h + today), your watchlist "
+        "and deep fundamentals for your stocks.",
+        lambda cid: handle_favourites(cid),
+    ),
+    "/corpactionssummary": (
+        "\U0001F4CA <b>/corpactionssummary</b> - corporate-action snapshot: counts "
+        "by exchange &amp; type plus the next ex-dates. Details: /corpactions.",
+        lambda cid: run_ca_query(cid, {"mode": "overview"}),
+    ),
+    "/corpactionsformylist": (
+        "\U0001F4C5 <b>/corpactionsformylist</b> - corporate actions for YOUR "
+        "watchlist: upcoming ex-dates plus recently passed / in-progress actions "
+        "with status (payment due, rights window, etc.).",
+        lambda cid: send_watchlist_actions(cid),
+    ),
+    "/scan500": (
+        "\U0001F50D <b>/scan500</b> - full NIFTY 500 technical scanner (EMAs, RSI, "
+        "MACD, ADX, Supertrend, VWAP...). Takes ~1-2 min - starting it now.",
+        lambda cid: handle_scan500(cid, ["/scan500"]),
+    ),
+    "/checknow": (
+        "\u26A1 <b>/checknow</b> - force-runs an alert check now and re-sends "
+        "every matching alert (corporate actions, reminders, price moves).",
+        lambda cid: reply(
+            cid,
+            "Running a forced check now - re-sending all matching alerts shortly.",
+        ),
+    ),
+}
+
+
+def _bare_command_usage(chat_id, cmd) -> bool:
+    """When a main command is typed with no arguments, explain it.
+
+    Commands with subcommands get the subcommand list (COMMAND_USAGE);
+    commands that already produce useful output get a short description AND
+    are still run (DESCRIBE_AND_RUN), so nothing useful is lost.
+    Returns True when a hint was sent.
+    """
+    usage = COMMAND_USAGE.get(cmd)
+    if usage:
+        reply(chat_id, usage)
+        return True
+    described = DESCRIBE_AND_RUN.get(cmd)
+    if described:
+        reply(chat_id, described[0])
+        described[1](chat_id)
+        return True
+    return False
+
+
 def send_help(chat_id):
     """Send the styled HTML help message (/help, /start, unknown commands)."""
     _reply_messages(
@@ -282,6 +453,11 @@ def handle_command(chat_id, text):
 
     if cmd in ("/start", "/help", "/"):
         send_help(chat_id)
+        return
+
+    # Bare main command -> list its subcommands (like /watcher does). Only
+    # fires when NO arguments were given, so nothing with arguments changes.
+    if len(parts) == 1 and _bare_command_usage(chat_id, cmd):
         return
 
     if cmd in ("/list", "/watchlist"):
@@ -434,56 +610,7 @@ def handle_command(chat_id, text):
         return
 
     if cmd == "/status":
-        gh_configured = github_push_configured()
-        owner = storage.is_owner(chat_id)
-        location = (
-            "watchlist.json (the owner's list)"
-            if owner
-            else f"subscriptions.json (your chat {chat_id})"
-        )
-        if gh_configured:
-            branch = _push_branch("")
-            pending = pending_state_changes()
-            push_status = (
-                f"configured - changes are pushed to GitHub (branch {branch}) "
-                "after each command"
-            )
-            sync_line = (
-                "Local state vs GitHub: "
-                + (pending or "in sync (nothing uncommitted)")
-            )
-            if push_error:
-                push_status += " - last push FAILED"
-                sync_line += f" (last error: {push_error})"
-        else:
-            push_status = (
-                "NOT set - your changes stay only on this host's disk (lost "
-                "on redeploy). Set GH_TOKEN + GITHUB_REPOSITORY on this host."
-            )
-            sync_line = "Local state vs GitHub: unknown (no GitHub credentials)"
-        personal_line = (
-            "<b>Personal:</b> everything here is yours alone - your watchlist, "
-            "schedule, settings and alerts. Other users' data never mixes "
-            "with yours and they cannot touch yours."
-        )
-        reply(
-            chat_id,
-            "\n".join(
-                [
-                    f"<b>Your chat id:</b> <code>{chat_id}</code>",
-                    f"<b>Role:</b> {'owner' if owner else 'subscriber'}",
-                    personal_line,
-                    f"<b>Saved in:</b> <code>{html.escape(location)}</code>",
-                    f"<b>GitHub push:</b> {html.escape(push_status)}",
-                    html.escape(sync_line),
-                    f"<b>Scheduled reports:</b> "
-                    + ("enabled" if config.SCHEDULED_REPORTS_ENABLED and config.PROCESS_COMMANDS else "off")
-                    + " \u00b7 " + html.escape(format_schedule(chat_id).split("\n")[0])
-                    + f" \u00b7 manage with /schedule",
-                    "Run /watchlist to see your current watchlist.",
-                ]
-            ),
-        )
+        handle_status(chat_id)
         return
 
     if cmd in ("/ca", "/corpactions", "/corporate-actions", "/corp-actions", "/actions", "/shareholder", "/increase"):
@@ -710,6 +837,60 @@ def send_watchlist_actions(chat_id) -> None:
         chat_id,
         notifier.format_next_report(upcoming, recent, pending),
         reply_markup=notifier.symbol_buttons(tap_symbols[:12], "fund") if tap_symbols else None,
+    )
+
+
+def handle_status(chat_id) -> None:
+    """Render the /status report: role, where your data lives, GitHub push."""
+    gh_configured = github_push_configured()
+    owner = storage.is_owner(chat_id)
+    location = (
+        "watchlist.json (the owner's list)"
+        if owner
+        else f"subscriptions.json (your chat {chat_id})"
+    )
+    if gh_configured:
+        branch = _push_branch("")
+        pending = pending_state_changes()
+        push_status = (
+            f"configured - changes are pushed to GitHub (branch {branch}) "
+            "after each command"
+        )
+        sync_line = (
+            "Local state vs GitHub: "
+            + (pending or "in sync (nothing uncommitted)")
+        )
+        if push_error:
+            push_status += " - last push FAILED"
+            sync_line += f" (last error: {push_error})"
+    else:
+        push_status = (
+            "NOT set - your changes stay only on this host's disk (lost "
+            "on redeploy). Set GH_TOKEN + GITHUB_REPOSITORY on this host."
+        )
+        sync_line = "Local state vs GitHub: unknown (no GitHub credentials)"
+    personal_line = (
+        "<b>Personal:</b> everything here is yours alone - your watchlist, "
+        "schedule, settings and alerts. Other users' data never mixes "
+        "with yours and they cannot touch yours."
+    )
+    reply(
+        chat_id,
+        "\n".join(
+            [
+                f"<b>Your chat id:</b> <code>{chat_id}</code>",
+                f"<b>Role:</b> {'owner' if owner else 'subscriber'}",
+                personal_line,
+                f"<b>Saved in:</b> <code>{html.escape(location)}</code>",
+                f"<b>GitHub push:</b> {html.escape(push_status)}",
+                html.escape(sync_line),
+                f"<b>Scheduled reports:</b> "
+                + ("enabled" if config.SCHEDULED_REPORTS_ENABLED and config.PROCESS_COMMANDS else "off")
+                + " \u00b7 " + html.escape(format_schedule(chat_id).split("\n")[0])
+                + f" \u00b7 manage with /schedule",
+                "Run /watchlist to see your current watchlist.",
+            ]
+        ),
     )
 
 
