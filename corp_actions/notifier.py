@@ -203,6 +203,8 @@ def format_corporate_action(action: dict) -> str:
     isin = action.get("isin")
     if isin and isin != "-":
         lines.append(f"ISIN: {escape(isin)}")
+    dot, tag = status_tag(action)
+    lines.append(f"Status: {dot} {escape(tag)}")
     return "\n".join(lines)
 
 
@@ -354,6 +356,40 @@ def action_status(action: dict, today: date | None = None) -> str:
     return f"Ex-date passed {_fmt_date(ex)} ({days_ago}d ago)"
 
 
+def status_tag(action: dict, today: date | None = None) -> tuple[str, str]:
+    """(colored-dot emoji, short status tag) for a corporate action.
+
+    Used to colour-code the alert blocks and /corpactionsformylist report at
+    a glance: green = on track (upcoming, settled), yellow = in progress
+    (subscription/payment window open), red = needs attention (payment
+    window passed).
+    """
+    today = today or config.today_ist()
+    typ = sources.action_type(action.get("subject"))
+    ex = _parse_iso_date(action.get("ex_date"))
+    rec = _parse_iso_date(action.get("record_date"))
+    if ex is None:
+        return "\U0001F7E1", "Announced - dates pending"
+    if ex >= today:
+        return "\U0001F7E2", "Upcoming"
+    if typ == "rights":
+        return "\U0001F7E1", "Subscription window open"
+    if typ == "dividend":
+        if rec:
+            due = rec + timedelta(days=30)
+            if today > due:
+                return "\U0001F534", "Payment window passed"
+            return "\U0001F7E1", f"Payment due by {_fmt_date(due)}"
+        return "\U0001F7E1", "Payment pending"
+    if typ == "bonus":
+        return "\U0001F7E1", "Credit within ~2 wks"
+    if typ == "split":
+        return "\U0001F7E2", "Re-denominated"
+    if typ == "buyback":
+        return "\U0001F7E1", "Offer open"
+    return "\U0001F7E1", "Ex-date passed"
+
+
 def format_action_block(action: dict) -> str:
     """Full colorful block for ONE action, as used by /corpactionsformylist.
 
@@ -391,6 +427,8 @@ def format_action_block(action: dict) -> str:
     rec = action.get("record_date")
     if rec and str(rec).strip() not in ("", "-"):
         lines.append(f"Record Date: {escape(rec)}")
+    dot, tag = status_tag(action)
+    lines.append(f"Status: {dot} {escape(tag)}")
     return "\n".join(lines)
 
 

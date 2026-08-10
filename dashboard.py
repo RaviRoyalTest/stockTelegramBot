@@ -89,6 +89,39 @@ st.set_page_config(
     initial_sidebar_state="expanded",
 )
 
+# Responsive layout: on phones/tablets stack every column block vertically so
+# metric grids and multi-column rows stay readable instead of squeezing into
+# unreadable slivers. Tablets get a slightly larger breakpoint.
+st.markdown(
+    """
+    <style>
+    @media (max-width: 1024px) {
+      /* tablets: two-up instead of cramming 4-5 metrics in a row */
+      [data-testid="stHorizontalBlock"] > div {
+        flex: 1 1 50% !important;
+        min-width: 45% !important;
+      }
+    }
+    @media (max-width: 720px) {
+      /* phones: everything stacks to full width */
+      [data-testid="stHorizontalBlock"] { flex-wrap: wrap !important; }
+      [data-testid="stHorizontalBlock"] > div {
+        flex: 1 1 100% !important;
+        min-width: 100% !important;
+      }
+      [data-testid="stMetric"] { padding: 0.25rem 0.5rem !important; }
+      .stMarkdown { font-size: 0.95rem !important; }
+      [data-testid="stMetricValue"] { font-size: 1.1rem !important; }
+    }
+    @media (max-width: 420px) {
+      [data-testid="stMetricValue"] { font-size: 0.95rem !important; }
+      .stMarkdown { font-size: 0.9rem !important; }
+    }
+    </style>
+    """,
+    unsafe_allow_html=True,
+)
+
 # ---------------------------------------------------------------- helpers
 
 def _label_of(item: dict) -> str:
@@ -199,8 +232,24 @@ def _tg_to_markdown(text: str) -> str:
     trailing spaces) so the compact block layout - symbol, company, subject,
     price and dates each on their own line - survives the web renderer
     instead of collapsing into one blob of raw tags.
+
+    Price-change lines (the green/red arrow + percent) additionally get a
+    real color span so they read colour-coded on the web; callers render
+    this with unsafe_allow_html=True.
     """
     text = text or ""
+
+    def _colorize(m):
+        color = "#16a34a" if "\U0001F7E2" in m.group(1) else "#dc2626"
+        return f'{m.group(1)}<span style="color:{color}">{m.group(2)} {m.group(3)}</span>'
+
+    # "🟢▲ <b>+0.43%</b>" (and 🟡/🔴 variants) -> colored percent span.
+    # The bold group must end in % so only price changes get colored, never
+    # the bold symbol that follows the arrow in movers-style rows.
+    text = re.sub(
+        r"([\U0001F7E2\U0001F7E1\U0001F534])(\u25b2+|\u25bc+)\s*(<b>[^<]*%</b>)",
+        _colorize, text,
+    )
     text = re.sub(r"<b>(.*?)</b>", r"**\1**", text, flags=re.S)
     text = re.sub(r"<i>(.*?)</i>", r"*\1*", text, flags=re.S)
     text = re.sub(r"<code>(.*?)</code>", r"`\1`", text, flags=re.S)
@@ -586,7 +635,7 @@ with tab_watch:
     fav = st.session_state.get("favourites")
     if fav:
         with st.expander("\U0001f4c5 Corporate actions for your list", expanded=True):
-            st.markdown(_tg_to_markdown(fav["corp"]))
+            st.markdown(_tg_to_markdown(fav["corp"]), unsafe_allow_html=True)
         with st.expander("\U0001f4c9 Top losers — last 1h (NIFTY 100)"):
             st.dataframe(fav["losers_1h"], width="stretch", hide_index=True)
         with st.expander("\U0001f4c9 Top losers — today (NIFTY 100)"):
@@ -594,7 +643,7 @@ with tab_watch:
         with st.expander("\U0001f4ca Deep fundamentals — whole watchlist"):
             if isinstance(fav["fund"], list):
                 for sym, lines in fav["fund"]:
-                    st.markdown(lines)
+                    st.markdown(lines, unsafe_allow_html=True)
                     st.divider()
             else:
                 st.warning(fav["fund"])
@@ -713,7 +762,7 @@ with tab_actions:
                 st.warning(w)
 
         if st.session_state.get("ca_mylist"):
-            st.markdown(_tg_to_markdown(st.session_state["ca_mylist"]))
+            st.markdown(_tg_to_markdown(st.session_state["ca_mylist"]), unsafe_allow_html=True)
         elif st.session_state.get("ca_summary"):
             summary = st.session_state["ca_summary"]
             s1, s2 = st.columns(2)
@@ -950,7 +999,7 @@ with tab_stock:
             st.subheader(f"Whole watchlist — {'Deep report' if deep else 'Quick card'}")
             for sym, md in items:
                 with st.expander(sym, expanded=False):
-                    st.markdown(md)
+                    st.markdown(md, unsafe_allow_html=True)
 
     if st.session_state.get("stock_result"):
         res = st.session_state["stock_result"]
@@ -959,7 +1008,7 @@ with tab_stock:
             import run_bot
             st.markdown(_tg_to_markdown("\n".join(
                 run_bot._fund_report_lines(sym, quote, fund, include_tip=False)
-            )))
+            )), unsafe_allow_html=True)
         else:
             _render_quick_card(quote, fund, sym)
 

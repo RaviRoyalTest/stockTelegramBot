@@ -1698,7 +1698,12 @@ def _stock_summary_lines(raw_sym, quote, fund, include_tip=True, label="") -> li
             if change_pct is not None:
                 sign = "+" if change_pct >= 0 else ""
                 abs_str = f" ({sign}{notifier.fmt_money(change_abs)})" if change_abs is not None else ""
-                lines.append(f"Current Price: <b>{p_str}</b>  {sign}{change_pct:.2f}%{abs_str}")
+                arrow = "\u25b2" if change_pct >= 0 else "\u25bc"
+                color_icon = "\U0001F7E2" if change_pct >= 0 else "\U0001F534"
+                lines.append(
+                    f"Current Price: <b>{p_str}</b>  {color_icon}{arrow} "
+                    f"<b>{sign}{change_pct:.2f}%</b>{abs_str}"
+                )
             else:
                 lines.append(f"Current Price: <b>{p_str}</b>")
 
@@ -1830,7 +1835,12 @@ def _fund_report_lines(raw_sym, quote, fund, include_tip=True, label="") -> list
             if change_pct is not None:
                 sign = "+" if change_pct >= 0 else ""
                 abs_str = f" ({sign}{notifier.fmt_money(change_abs)})" if change_abs is not None else ""
-                lines.append(f"Current Price: <b>{p_str}</b>  <b>{sign}{change_pct:.2f}%</b>{abs_str}")
+                arrow = "\u25b2" if change_pct >= 0 else "\u25bc"
+                color_icon = "\U0001F7E2" if change_pct >= 0 else "\U0001F534"
+                lines.append(
+                    f"Current Price: <b>{p_str}</b>  {color_icon}{arrow} "
+                    f"<b>{sign}{change_pct:.2f}%</b>{abs_str}"
+                )
             else:
                 lines.append(f"Current Price: <b>{p_str}</b>")
         if fund.get("wk52_high") is not None and fund.get("wk52_low") is not None:
@@ -1868,11 +1878,21 @@ def _fund_report_lines(raw_sym, quote, fund, include_tip=True, label="") -> list
     lines.append("")
 
     # Section 3: Growth & margins (YoY)
+    def _growth_pct(value) -> str:
+        """YoY growth % with a green/red arrow so up/down reads at a glance."""
+        s = _pct(value)
+        try:
+            v = float(value)
+        except (TypeError, ValueError):
+            return s
+        arrow = "\U0001F7E2\u25b2" if v >= 0 else "\U0001F534\u25bc"
+        return f"{arrow} {s}"
+
     grow = []
     if fund.get("earnings_growth") is not None:
-        grow.append(f"Earnings: <b>{_pct(fund['earnings_growth'])}</b>")
+        grow.append(f"Earnings: <b>{_growth_pct(fund['earnings_growth'])}</b>")
     if fund.get("revenue_growth") is not None:
-        grow.append(f"Revenue: <b>{_pct(fund['revenue_growth'])}</b>")
+        grow.append(f"Revenue: <b>{_growth_pct(fund['revenue_growth'])}</b>")
     marg = []
     if fund.get("gross_margin") is not None:
         marg.append(f"Gross: <b>{_pct(fund['gross_margin'])}</b>")
