@@ -1,5 +1,7 @@
 """Central configuration loaded from environment / .env file."""
+import logging
 import os
+from datetime import date, datetime
 from pathlib import Path
 
 try:
@@ -9,16 +11,39 @@ try:
 except ImportError:  # dotenv optional at import time
     pass
 
+log = logging.getLogger(__name__)
+
 BASE_DIR = Path(__file__).resolve().parent.parent
 
 TELEGRAM_BOT_TOKEN = os.getenv("TELEGRAM_BOT_TOKEN", "").strip()
 TELEGRAM_CHAT_ID = os.getenv("TELEGRAM_CHAT_ID", "").strip()
 
-POLL_INTERVAL_SECONDS = int(os.getenv("POLL_INTERVAL_SECONDS", "3600"))
-LOOKBACK_DAYS = int(os.getenv("LOOKBACK_DAYS", "30"))
+
+def _env_int(name: str, default: int, floor: int | None = None) -> int:
+    """Parse an int env var defensively.
+
+    A malformed value must not crash the whole app at import time, so we fall
+    back to the default and log a warning instead of raising ValueError.
+    """
+    raw = os.getenv(name)
+    if raw is None or not str(raw).strip():
+        return default
+    try:
+        val = int(str(raw).strip())
+    except (TypeError, ValueError):
+        log.warning("Invalid integer for %s=%r - using default %d", name, raw, default)
+        return default
+    if floor is not None and val < floor:
+        log.warning("%s=%d is below minimum %d - using %d", name, val, floor, floor)
+        return floor
+    return val
+
+
+POLL_INTERVAL_SECONDS = _env_int("POLL_INTERVAL_SECONDS", 3600, floor=60)
+LOOKBACK_DAYS = _env_int("LOOKBACK_DAYS", 30, floor=1)
 # How many days ahead of the ex-date a reminder is sent (0 disables reminders).
-REMINDER_DAYS = int(os.getenv("REMINDER_DAYS", "5"))
-HTTP_TIMEOUT = int(os.getenv("HTTP_TIMEOUT", "20"))
+REMINDER_DAYS = _env_int("REMINDER_DAYS", 5, floor=0)
+HTTP_TIMEOUT = _env_int("HTTP_TIMEOUT", 20, floor=5)
 ENABLE_BSE = os.getenv("ENABLE_BSE", "true").strip().lower() in ("1", "true", "yes", "on")
 # Only ONE process may poll Telegram's getUpdates for a bot token at a time.
 # The always-on server (bot_server.py) handles commands; the GitHub Actions
@@ -36,10 +61,28 @@ NATURAL_QUERIES = (
     in ("1", "true", "yes", "on")
 )
 
+# Scheduled reports: run a set of commands to the owner chat on a timer so
+# fresh screens (e.g. "/movers 30m" and "/scan500") arrive without anyone
+# typing them. Only the always-on server (PROCESS_COMMANDS=true) runs these;
+# the GitHub Actions cron skips them so two processes never send duplicates.
+SCHEDULED_REPORTS_ENABLED = (
+    os.getenv("SCHEDULED_REPORTS_ENABLED", "true").strip().lower()
+    in ("1", "true", "yes", "on")
+)
+SCHEDULED_REPORTS_INTERVAL_MIN = _env_int("SCHEDULED_REPORTS_INTERVAL_MIN", 180, floor=15)
+SCHEDULED_REPORTS_CHAT = os.getenv("SCHEDULED_REPORTS_CHAT", "").strip() or TELEGRAM_CHAT_ID
+SCHEDULED_COMMANDS = [
+    c.strip() for c in os.getenv(
+        "SCHEDULED_COMMANDS", "/scan500"
+    ).split(",")
+    if c.strip()
+]
+
 WATCHLIST_FILE = Path(os.getenv("WATCHLIST_FILE", str(BASE_DIR / "watchlist.json")))
 SUBSCRIPTIONS_FILE = Path(os.getenv("SUBSCRIPTIONS_FILE", str(BASE_DIR / "subscriptions.json")))
 SETTINGS_FILE = Path(os.getenv("SETTINGS_FILE", str(BASE_DIR / "settings.json")))
 SEEN_FILE = Path(os.getenv("SEEN_FILE", str(BASE_DIR / "seen_actions.json")))
+SCHEDULE_FILE = Path(os.getenv("SCHEDULE_FILE", str(BASE_DIR / "schedule.json")))
 
 USER_AGENT = (
     "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "
@@ -61,6 +104,21 @@ BSE_LIST_URL = (
     "?Group=Main&Scripcode=&Debttype=Equity&industry=&segment=Equity&Status=Active"
 )
 BSE_ACTIONS_URL = "https://api.bseindia.com/BseIndiaAPI/api/CorpActionAnncmentW/w"
+
+
+def today_ist() -> date:
+    """Today's date in India Standard Time (Asia/Kolkata).
+
+    The host often runs on UTC, where the date flips at 18:30 IST. Reminder
+    windows, per-day alert dedupe keys and corporate-action lookback windows
+    must follow the market's calendar, not the host's local date.
+    """
+    try:
+        from zoneinfo import ZoneInfo
+
+        return datetime.now(ZoneInfo("Asia/Kolkata")).date()
+    except Exception:  # zoneinfo/tzdata unavailable - fall back to host local
+        return date.today()
 
 
 def redact(text) -> str:

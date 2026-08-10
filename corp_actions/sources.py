@@ -10,7 +10,7 @@ import logging
 import re
 import threading
 import time
-from datetime import date, datetime, timedelta
+from datetime import datetime, timedelta
 from time import mktime, strptime
 from urllib.parse import quote, quote_plus
 from xml.etree import ElementTree as ET
@@ -238,7 +238,7 @@ def get_nse_stock_list_cached() -> list[dict]:
 
 
 def search_stocks(query: str, limit: int = 10) -> list[dict]:
-    """Fuzzy search the NSE list by symbol or company name (case-insensitive)."""
+    """Case-insensitive substring search of the NSE list by symbol or company name."""
     q = (query or "").upper()
     try:
         stocks = get_nse_stock_list_cached()
@@ -332,7 +332,7 @@ def get_bse_stock_list() -> list[dict]:
 
 def get_bse_corporate_actions() -> list[dict]:
     """Return BSE corporate actions for the configured lookback window."""
-    today = date.today()
+    today = config.today_ist()
     start = today - timedelta(days=config.LOOKBACK_DAYS)
     params = {
         "pageno": 1,
@@ -398,7 +398,10 @@ def get_stock_news(exchange: str, symbol: str, limit: int = 3) -> list[dict]:
     # Google News RSS gives India-relevant headlines for Indian tickers;
     # Yahoo search is the fallback when Google is unreachable.
     items = _google_news(symbol, limit) or _yf_news(exchange, symbol, limit)
-    _news_cache[cache_key] = {"ts": now, "data": items}
+    # Don't cache an empty result: a transient outage would otherwise make the
+    # bot report "no news" for the full 10 minutes after sources recover.
+    if items:
+        _news_cache[cache_key] = {"ts": now, "data": items}
     return items
 
 
@@ -510,7 +513,11 @@ def get_index_universe(index: str = "nifty100") -> list[str]:
     except Exception as exc:
         log.warning("NSE index universe unavailable (%s): %s", index, exc)
         symbols = []
-    _universe_cache[url] = {"ts": now, "data": symbols}
+    # Only cache a successful (non-empty) load. Caching an empty list for 24h
+    # after one transient failure would silently make /movers and /harmonic
+    # scans return nothing for the rest of the day.
+    if symbols:
+        _universe_cache[url] = {"ts": now, "data": symbols}
     return symbols
 
 
@@ -663,6 +670,167 @@ def get_daily_change(exchange: str, symbol: str, days: int) -> dict | None:
     return data
 
 
+# ------------------------------------------------------------- OHLC bars
+# Raw candlestick series for a symbol/timeframe (used by the harmonic-pattern
+# scanner). Yahoo chart endpoint, cached a short while.
+
+_ohlc_cache: dict = {}
+_OHLC_TTL = 120  # seconds
+
+OHLC_TIMEFRAMES = {
+    "5m": ("5m", "1d"),
+    "15m": ("15m", "5d"),
+    "30m": ("30m", "1mo"),
+    "1h": ("1h", "3mo"),
+    "4h": ("4h", "6mo"),
+    "1d": ("1d", "2y"),
+    "1w": ("1wk", "5y"),
+    "1mo": ("1mo", "10y"),
+}
+
+_HFT_LADDER = {
+    "5m": "15m",
+    "15m": "1h",
+    "30m": "4h",
+    "1h": "4h",
+    "4h": "1d",
+    "1d": "1w",
+    "1w": "1mo",
+}
+
+
+def get_ohlc(exchange: str, symbol: str, timeframe: str = "1d") -> dict | None:
+    """Return OHLC bars for a symbol/timeframe via Yahoo chart, cached.
+
+    Returns {'timestamp','open','high','low','close','volume','interval',
+    'name','exchange','symbol','timeframe'} with the arrays aligned to the
+    same bars, or None on any failure. Incomplete leading/trailing bars are
+    dropped.
+    """
+    timeframe = (timeframe or "1d").lower()
+    if timeframe not in OHLC_TIMEFRAMES:
+        log.info("ohlc: unknown timeframe %r for %s:%s — returning None", timeframe, exchange, symbol)
+        return None
+    interval, rng = OHLC_TIMEFRAMES[timeframe]
+    key = (exchange.upper(), symbol.upper(), interval)
+    now = time.time()
+    cached = _ohlc_cache.get(key)
+    if cached and now - cached["ts"] < _OHLC_TTL:
+        log.debug("ohlc cache hit for %s:%s (%s)", exchange, symbol, interval)
+        return cached["data"]
+    suffix = ".BO" if exchange.upper() == "BSE" else ".NS"
+    url = (
+        f"https://query1.finance.yahoo.com/v8/finance/chart/{symbol}{suffix}"
+        f"?range={rng}&interval={interval}&includePrePost=false"
+    )
+    data = None
+    try:
+        resp = _quote_session().get(url, timeout=config.HTTP_TIMEOUT)
+        resp.raise_for_status()
+        res = resp.json()["chart"]["result"][0]
+        meta = res.get("meta") or {}
+        ts = res.get("timestamp") or []
+        quotes = (res.get("indicators") or {}).get("quote") or [{}]
+        q = quotes[0] or {}
+        opens, highs, lows, closes, vols = q.get("open") or [], q.get("high") or [], \
+            q.get("low") or [], q.get("close") or [], q.get("volume") or []
+        rows = []
+        for i in range(len(ts)):
+            if i >= len(opens) or i >= len(highs) or i >= len(lows) or i >= len(closes):
+                break
+            o, h, l, c = opens[i], highs[i], lows[i], closes[i]
+            if None in (o, h, l, c):
+                continue
+            v = vols[i] if i < len(vols) and vols[i] is not None else 0
+            rows.append((ts[i], o, h, l, c, v))
+        if not rows:
+            data = None
+        else:
+            data = {
+                "timestamp": [r[0] for r in rows],
+                "open": [r[1] for r in rows],
+                "high": [r[2] for r in rows],
+                "low": [r[3] for r in rows],
+                "close": [r[4] for r in rows],
+                "volume": [r[5] for r in rows],
+                "interval": interval,
+                "timeframe": timeframe,
+                "name": meta.get("longName") or meta.get("shortName") or symbol,
+                "exchange": exchange.upper(),
+                "symbol": symbol.upper(),
+            }
+            log.info("ohlc: %d %s bars for %s:%s", len(rows), interval, exchange, symbol)
+    except Exception as exc:
+        log.info("ohlc failed for %s:%s (%s) - %s", exchange, symbol, interval, exc)
+    _ohlc_cache[key] = {"ts": now, "data": data}
+    return data
+
+
+_index_ohlc_cache: dict = {}
+_INDEX_OHLC_TTL = 180  # seconds
+
+
+def get_index_ohlc(index_symbol: str, range_: str = "6mo",
+                   interval: str = "1d") -> dict | None:
+    """Return OHLC bars for a Yahoo index symbol (e.g. ^NSEI, ^INDIAVIX).
+
+    Index symbols carry no exchange suffix, so this bypasses the .NS/.BO
+    logic in get_ohlc. Same dict shape as get_ohlc. Cached briefly.
+    """
+    index_symbol = (index_symbol or "").strip()
+    if not index_symbol:
+        return None
+    key = (index_symbol.upper(), range_, interval)
+    now = time.time()
+    cached = _index_ohlc_cache.get(key)
+    if cached and now - cached["ts"] < _INDEX_OHLC_TTL:
+        log.debug("index ohlc cache hit for %s", index_symbol)
+        return cached["data"]
+    url = (
+        f"https://query1.finance.yahoo.com/v8/finance/chart/{index_symbol}"
+        f"?range={range_}&interval={interval}&includePrePost=false"
+    )
+    data = None
+    try:
+        resp = _quote_session().get(url, timeout=config.HTTP_TIMEOUT)
+        resp.raise_for_status()
+        res = resp.json()["chart"]["result"][0]
+        meta = res.get("meta") or {}
+        ts = res.get("timestamp") or []
+        quotes = (res.get("indicators") or {}).get("quote") or [{}]
+        q = quotes[0] or {}
+        opens, highs, lows, closes, vols = q.get("open") or [], q.get("high") or [], \
+            q.get("low") or [], q.get("close") or [], q.get("volume") or []
+        rows = []
+        for i in range(len(ts)):
+            if i >= len(opens) or i >= len(highs) or i >= len(lows) or i >= len(closes):
+                break
+            o, h, l, c = opens[i], highs[i], lows[i], closes[i]
+            if None in (o, h, l, c):
+                continue
+            v = vols[i] if i < len(vols) and vols[i] is not None else 0
+            rows.append((ts[i], o, h, l, c, v))
+        if rows:
+            data = {
+                "timestamp": [r[0] for r in rows],
+                "open": [r[1] for r in rows],
+                "high": [r[2] for r in rows],
+                "low": [r[3] for r in rows],
+                "close": [r[4] for r in rows],
+                "volume": [r[5] for r in rows],
+                "interval": interval,
+                "timeframe": interval,
+                "name": meta.get("longName") or meta.get("shortName") or index_symbol,
+                "exchange": "IDX",
+                "symbol": index_symbol,
+            }
+            log.info("index ohlc: %d %s bars for %s", len(rows), interval, index_symbol)
+    except Exception as exc:
+        log.info("index ohlc failed for %s - %s", index_symbol, exc)
+    _index_ohlc_cache[key] = {"ts": now, "data": data}
+    return data
+
+
 # ------------------------------------------------------------- fundamentals
 # Stock fundamentals for the movement screens. Two public sources, both cached
 # 24h (fundamentals change slowly):
@@ -730,6 +898,19 @@ _global_fund_crumb_ts = 0.0
 _CRUMB_TTL = 3600  # 1 hour
 
 
+def _invalidate_crumb():
+    """Drop the cached Yahoo crumb so the next call re-fetches it.
+
+    A 401 from quoteSummary means the current crumb is stale (usually after a
+    cookie/crumb rotation server-side). The crumb lives in a process-wide global
+    shared by every thread, so an expired one must be cleared globally -
+    otherwise every /fund would keep 401ing until the 1h TTL expires.
+    """
+    global _global_fund_crumb, _global_fund_crumb_ts
+    _global_fund_crumb = ""
+    _global_fund_crumb_ts = 0.0
+
+
 def _fund_session():
     """A thread-safe global Yahoo session with cached crumb (prevents HTTP 429)."""
     global _global_fund_sess, _global_fund_crumb, _global_fund_crumb_ts
@@ -764,34 +945,42 @@ def _fund_session():
 
 
 def _quote_summary(symbol: str) -> dict | None:
-    """Yahoo quoteSummary result (summaryDetail/financialData/assetProfile)."""
-    sess, crumb = _fund_session()
-    if not crumb:
-        log.info("_quote_summary: no crumb for %s — skipping", symbol)
-        return None
-    for host in (
-        "https://query1.finance.yahoo.com",
-        "https://query2.finance.yahoo.com",
-    ):
-        url = f"{host}/v10/finance/quoteSummary/{quote(symbol)}.NS"
-        try:
-            resp = sess.get(
-                url,
-                params={"modules": "summaryDetail,financialData,assetProfile", "crumb": crumb},
-                timeout=config.HTTP_TIMEOUT,
-            )
-            if resp.status_code == 401:
-                log.info("_quote_summary: 401 for %s on %s — clearing crumb", symbol, host)
-                _tls.fund_crumb = ""
-                break
-            resp.raise_for_status()
-            result = resp.json()["quoteSummary"]["result"]
-            if result:
-                log.info("_quote_summary: OK for %s from %s", symbol, host)
-                return result[0]
-            log.info("_quote_summary: empty result for %s from %s", symbol, host)
-        except Exception as exc:
-            log.info("_quote_summary: failed for %s on %s: %s", symbol, host, exc)
+    """Yahoo quoteSummary result (summaryDetail/financialData/defaultKeyStatistics/assetProfile)."""
+    for attempt in range(2):  # second attempt after a 401 crumb refresh
+        sess, crumb = _fund_session()
+        if not crumb:
+            log.info("_quote_summary: no crumb for %s — skipping", symbol)
+            return None
+        auth_retry = False
+        for host in (
+            "https://query1.finance.yahoo.com",
+            "https://query2.finance.yahoo.com",
+        ):
+            url = f"{host}/v10/finance/quoteSummary/{quote(symbol)}.NS"
+            try:
+                resp = sess.get(
+                    url,
+                    params={
+                        "modules": "summaryDetail,financialData,defaultKeyStatistics,assetProfile",
+                        "crumb": crumb,
+                    },
+                    timeout=config.HTTP_TIMEOUT,
+                )
+                if resp.status_code == 401:
+                    log.info("_quote_summary: 401 for %s on %s — refreshing crumb", symbol, host)
+                    _invalidate_crumb()
+                    auth_retry = True
+                    break
+                resp.raise_for_status()
+                result = resp.json()["quoteSummary"]["result"]
+                if result:
+                    log.info("_quote_summary: OK for %s from %s", symbol, host)
+                    return result[0]
+                log.info("_quote_summary: empty result for %s from %s", symbol, host)
+            except Exception as exc:
+                log.info("_quote_summary: failed for %s on %s: %s", symbol, host, exc)
+        if not auth_retry:
+            break
     return None
 
 
@@ -870,6 +1059,7 @@ def _chart_fundamentals(symbol: str) -> dict:
 
 _sector_pe_cache: dict = {}
 _SECTOR_PE_TTL = 86400  # 24 hours - sectors change rarely
+_SECTOR_PE_RETRY_TTL = 600  # 10 min when the fetch failed, so we retry soon
 
 
 def get_sector_pe(slug: str) -> float | None:
@@ -879,7 +1069,7 @@ def get_sector_pe(slug: str) -> float | None:
         return None
     now = time.time()
     cached = _sector_pe_cache.get(slug)
-    if cached and now - cached["ts"] < _SECTOR_PE_TTL:
+    if cached and now - cached["ts"] < cached.get("ttl", _SECTOR_PE_TTL):
         return cached["data"]
     pe = None
     page = _screener_get(f"https://www.screener.in{slug}")
@@ -901,7 +1091,14 @@ def get_sector_pe(slug: str) -> float | None:
                         continue
             if values:
                 pe = round(sum(values) / len(values), 1)
-    _sector_pe_cache[slug] = {"ts": now, "data": pe}
+    # A failed/empty fetch is cached only briefly so a transient screener.in
+    # outage (or the 10-min circuit breaker) doesn't suppress the sector P/E
+    # for a full day.
+    _sector_pe_cache[slug] = {
+        "ts": now,
+        "data": pe,
+        "ttl": _SECTOR_PE_TTL if pe else _SECTOR_PE_RETRY_TTL,
+    }
     return pe
 
 
@@ -1009,10 +1206,14 @@ def get_fundamentals(symbol: str, with_screener: bool = True) -> dict | None:
     be obtained; None is returned only when nothing at all was available.
     """
     key = symbol.strip().upper()
+    # Cache separately per with_screener flag: a fast bulk call (with_screener
+    # False) must not poison the deep /fund cache entry for the same symbol,
+    # and a deep call must not leak screener.in fields into the fast path.
+    cache_key = (key, bool(with_screener))
     now = time.time()
-    cached = _fund_cache.get(key)
+    cached = _fund_cache.get(cache_key)
     if cached and now - cached["ts"] < cached["ttl"]:
-        log.info("get_fundamentals: cache hit for %s (%d fields)", key, len(cached["data"] or {}))
+        log.info("get_fundamentals: cache hit for %s (screener=%s, %d fields)", key, bool(with_screener), len(cached["data"] or {}))
         return cached["data"]
     out = {}
     log.info("get_fundamentals: fetching %s (with_screener=%s)", key, with_screener)
@@ -1022,6 +1223,7 @@ def get_fundamentals(symbol: str, with_screener: bool = True) -> dict | None:
     if res:
         sd = res.get("summaryDetail") or {}
         fd = res.get("financialData") or {}
+        dks = res.get("defaultKeyStatistics") or {}
         ap = res.get("assetProfile") or {}
 
         def _raw(d, k):
@@ -1040,13 +1242,61 @@ def get_fundamentals(symbol: str, with_screener: bool = True) -> dict | None:
             if val:
                 out[dst] = val
         dy = _raw(sd, "dividendYield")  # fraction (0.0045 -> 0.45%)
-        if dy:
+        if dy is not None:
             out["div_yield"] = round(dy * 100, 2)
         de = _raw(fd, "debtToEquity")  # Yahoo reports percent (36.65 -> 0.37)
-        if de:
+        if de is not None:
             out["debt_to_equity"] = round(de / 100, 2)
         if ap.get("sector"):
             out["sector"] = ap["sector"]
+
+        # Deep-fundamentals extras (used by the /fund deep report)
+        extras = {}
+        for src, src_key, dst_key in (
+            (sd, "marketCap", "mcap_cr"),
+            (sd, "forwardPE", "forward_pe"),
+            (sd, "priceToSalesTrailing12Months", "price_to_sales"),
+            (sd, "beta", "beta"),
+            (dks, "priceToBook", "price_to_book"),
+            (dks, "bookValue", "book_value"),
+            (dks, "enterpriseValue", "enterprise_value"),
+            (dks, "sharesOutstanding", "shares_outstanding"),
+            (dks, "floatShares", "float_shares"),
+            (dks, "trailingEps", "trailing_eps"),
+            (dks, "forwardEps", "forward_eps"),
+            (fd, "targetHighPrice", "target_high"),
+            (fd, "targetLowPrice", "target_low"),
+            (fd, "targetMeanPrice", "target_mean"),
+            (fd, "targetMedianPrice", "target_median"),
+            (fd, "numberOfAnalystOpinions", "num_analysts"),
+            (fd, "totalCash", "total_cash"),
+            (fd, "totalCashPerShare", "cash_per_share"),
+            (fd, "totalDebt", "total_debt"),
+            (fd, "totalRevenue", "total_revenue"),
+            (fd, "ebitda", "ebitda"),
+            (fd, "revenuePerShare", "revenue_per_share"),
+            (fd, "earningsGrowth", "earnings_growth"),
+            (fd, "revenueGrowth", "revenue_growth"),
+            (fd, "grossMargins", "gross_margin"),
+            (fd, "ebitdaMargins", "ebitda_margin"),
+            (fd, "operatingMargins", "operating_margin"),
+            (fd, "profitMargins", "profit_margin"),
+            (fd, "currentRatio", "current_ratio"),
+            (fd, "quickRatio", "quick_ratio"),
+            (fd, "freeCashflow", "free_cashflow"),
+            (fd, "operatingCashflow", "operating_cashflow"),
+        ):
+            val = _raw(src, src_key)
+            if val is not None:
+                extras[dst_key] = val
+        mc = extras.get("mcap_cr")
+        if mc is not None:
+            extras["mcap_cr"] = round(mc / 1e7, 1)  # rupees -> Crore
+        if ap.get("industry"):
+            extras["industry"] = ap["industry"]
+        if ap.get("fullTimeEmployees"):
+            extras["employees"] = ap["fullTimeEmployees"]
+        out.update(extras)
         log.info("get_fundamentals: quoteSummary -> %d fields for %s", len(out), key)
     else:
         log.info("get_fundamentals: quoteSummary unavailable for %s — trying chart fallback", key)
@@ -1072,9 +1322,14 @@ def get_fundamentals(symbol: str, with_screener: bool = True) -> dict | None:
 
     data = out or None
     ttl = _FUND_TTL
-    if with_screener and not (out.get("promoter_pct") or out.get("sector_pe")):
-        ttl = _FUND_RETRY_TTL  # retry the rate-limited part sooner
-    _fund_cache[key] = {"ts": now, "data": data, "ttl": ttl}
+    # Shorten the cache when a part is missing so we retry it sooner instead of
+    # serving a degraded report for the full 24h. This covers both the
+    # rate-limited screener.in part and a failed/empty Yahoo quoteSummary (which
+    # would otherwise leave the deep /fund sections empty).
+    deep_ok = bool(out.get("earnings_growth") or out.get("book_value") or out.get("total_cash"))
+    if (with_screener and not (out.get("promoter_pct") or out.get("sector_pe"))) or not deep_ok:
+        ttl = _FUND_RETRY_TTL  # retry the missing part sooner
+    _fund_cache[cache_key] = {"ts": now, "data": data, "ttl": ttl}
     log.info(
         "get_fundamentals: done %s -> %d field(s): %s",
         key, len(out), list(out.keys()) if out else [],
