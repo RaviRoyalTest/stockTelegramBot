@@ -214,11 +214,13 @@ def _run_screen(period_key: str, direction: str, universe: str, count: int) -> l
     else:
         fetched.sort(key=lambda r: r[1]["change_pct"])
 
+    # Raw numeric Price / Change % so the sortable table orders numerically;
+    # the dataframe column_config applies the display formatting.
     return [
         {
             "Symbol": sym,
-            "Price": _fmt_price(d.get("price")),
-            "Change %": _fmt_change(d.get("change_pct")),
+            "Price": d.get("price"),
+            "Change %": d.get("change_pct"),
             "Name": d.get("name") or "",
         }
         for sym, d in fetched[:count]
@@ -684,27 +686,36 @@ with tab_watch:
         rows = []
         for i in current_watchlist:
             q = prices.get((i["exchange"], i["symbol"]))
-            price = _fmt_price(q.get("price")) if q and q.get("price") is not None else "-"
-            change = _fmt_change(q.get("change_pct")) if q else "-"
-            color = _change_color(q.get("change_pct")) if q and q.get("change_pct") is not None else ""
+            # Raw numeric values so the table sorts correctly; display
+            # formatting is applied by the column_config below.
             rows.append({
                 "Exchange": i["exchange"],
                 "Symbol": i["symbol"],
                 "Company": i.get("company", ""),
-                "Price": price,
-                "Change %": f"{color} {change}",
+                "Price": q.get("price") if q and q.get("price") is not None else None,
+                "Change %": q.get("change_pct") if q and q.get("change_pct") is not None else None,
             })
-        for i, r in enumerate(rows):
-            c1, c2, c3, c4 = st.columns([1, 2, 1, 1])
-            with c1:
-                _symbol_fund_button(str(r.get("Symbol", "")), f"watch_{i}", "watch")
-            with c2:
-                st.markdown(f"**{r.get('Symbol', '')}**  ·  {r.get('Company') or ''}")
-            with c3:
-                st.markdown(f"**{r.get('Price', '-')}**")
-            with c4:
-                st.markdown(str(r.get("Change %", "-")))
-        st.caption("Tap the \U0001F4B9 button next to any symbol to open its deep fundamentals report.")
+        # Sortable table (tap the column headers to sort) with one 💹 button
+        # per row below - single click opens that stock's deep fundamentals.
+        st.caption("Tap a column header to sort the table.")
+        st.dataframe(
+            rows,
+            width="stretch",
+            hide_index=True,
+            column_config={
+                "Price": st.column_config.NumberColumn("Price", format="₹%.2f"),
+                "Change %": st.column_config.NumberColumn("Change %", format="%+.2f%%"),
+            },
+        )
+        watch_syms = [r.get("Symbol", "") for r in rows]
+        st.caption("Tap the \U0001F4B9 button to open a stock's deep fundamentals report.")
+        if watch_syms:
+            per_row = 10
+            for start in range(0, len(watch_syms), per_row):
+                cols = st.columns(per_row)
+                for j, sym in enumerate(watch_syms[start:start + per_row]):
+                    with cols[j]:
+                        _symbol_fund_button(sym, f"watch_{start + j}", "watch")
         _render_linked_analysis("watch")
 
         remove_options = [_label_of(i) for i in current_watchlist]
@@ -774,27 +785,35 @@ with tab_watch:
             else:
                 st.markdown(_tg_to_markdown(fav["corp"]), unsafe_allow_html=True)
         with st.expander("\U0001f4c9 Top losers — last 1h (NIFTY 100)"):
-            for i, r in enumerate(fav["losers_1h"]):
-                c1, c2, c3, c4 = st.columns([1, 2, 1, 1])
-                with c1:
-                    _symbol_fund_button(str(r.get("Symbol", "")), f"fav1h_{i}", "fav")
-                with c2:
-                    st.markdown(f"**{r.get('Symbol', '')}**  ·  {r.get('Name') or ''}")
-                with c3:
-                    st.markdown(f"**{r.get('Price', '-')}**")
-                with c4:
-                    st.markdown(str(r.get("Change %", "-")))
+            st.dataframe(
+                fav["losers_1h"], width="stretch", hide_index=True,
+                column_config={
+                    "Price": st.column_config.NumberColumn("Price", format="₹%.2f"),
+                    "Change %": st.column_config.NumberColumn("Change %", format="%+.2f%%"),
+                },
+            )
+            syms = [str(r.get("Symbol", "")) for r in fav["losers_1h"]]
+            if syms:
+                for start in range(0, len(syms), 10):
+                    cols = st.columns(10)
+                    for j, sym in enumerate(syms[start:start + 10]):
+                        with cols[j]:
+                            _symbol_fund_button(sym, f"fav1h_{start + j}", "fav")
         with st.expander("\U0001f4c9 Top losers — today (NIFTY 100)"):
-            for i, r in enumerate(fav["losers_today"]):
-                c1, c2, c3, c4 = st.columns([1, 2, 1, 1])
-                with c1:
-                    _symbol_fund_button(str(r.get("Symbol", "")), f"fav1d_{i}", "fav")
-                with c2:
-                    st.markdown(f"**{r.get('Symbol', '')}**  ·  {r.get('Name') or ''}")
-                with c3:
-                    st.markdown(f"**{r.get('Price', '-')}**")
-                with c4:
-                    st.markdown(str(r.get("Change %", "-")))
+            st.dataframe(
+                fav["losers_today"], width="stretch", hide_index=True,
+                column_config={
+                    "Price": st.column_config.NumberColumn("Price", format="₹%.2f"),
+                    "Change %": st.column_config.NumberColumn("Change %", format="%+.2f%%"),
+                },
+            )
+            syms = [str(r.get("Symbol", "")) for r in fav["losers_today"]]
+            if syms:
+                for start in range(0, len(syms), 10):
+                    cols = st.columns(10)
+                    for j, sym in enumerate(syms[start:start + 10]):
+                        with cols[j]:
+                            _symbol_fund_button(sym, f"fav1d_{start + j}", "fav")
         st.caption("Tap the \U0001F4B9 button next to any symbol to open its deep fundamentals report.")
         _render_linked_analysis("fav")
         with st.expander("\U0001f4ca Deep fundamentals — whole watchlist"):
@@ -1020,22 +1039,25 @@ with tab_market:
         universe_label = "NIFTY 500" if universe == "nifty500" else "NIFTY 100"
         st.subheader(f"{screen_type} — {period_label} · {universe_label} (top {n})")
         rows = st.session_state["screen_rows"]
-        for i, r in enumerate(rows):
-            c1, c2, c3, c4, c5 = st.columns([1, 2, 1, 1, 1])
-            with c1:
-                _symbol_fund_button(str(r.get("Symbol", "")), f"market_{i}", "screen")
-            with c2:
-                st.markdown(f"**{r.get('Symbol', '')}**")
-                st.caption(r.get("Name") or "")
-            with c3:
-                st.markdown(f"**{r.get('Price', '-')}**")
-            with c4:
-                chg = str(r.get("Change %", "-"))
-                color = _change_color(float(chg.rstrip("%"))) if chg.rstrip("%").replace("-", "").replace("+", "").replace(".", "").isdigit() else ""
-                st.markdown(f"{color} {chg}")
-            with c5:
-                st.write("")
-        st.caption("Tap the \U0001F4B9 button next to any symbol to open its deep fundamentals report.")
+        st.caption("Tap a column header to sort the table.")
+        st.dataframe(
+            rows,
+            width="stretch",
+            hide_index=True,
+            column_config={
+                "Price": st.column_config.NumberColumn("Price", format="₹%.2f"),
+                "Change %": st.column_config.NumberColumn("Change %", format="%+.2f%%"),
+            },
+        )
+        screen_syms = [str(r.get("Symbol", "")) for r in rows]
+        st.caption("Tap the \U0001F4B9 button to open a stock's deep fundamentals report.")
+        if screen_syms:
+            per_row = 10
+            for start in range(0, len(screen_syms), per_row):
+                cols = st.columns(per_row)
+                for j, sym in enumerate(screen_syms[start:start + per_row]):
+                    with cols[j]:
+                        _symbol_fund_button(sym, f"market_{start + j}", "screen")
         _render_linked_analysis("screen")
 
 # ================================================================ STOCK ANALYSIS
