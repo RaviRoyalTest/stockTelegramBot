@@ -258,11 +258,47 @@ def reply(chat_id, text, parse_mode="HTML", reply_markup=None):
         )
 
 
-# When a main command is typed with NO arguments, show its subcommands and
-# examples (like /watcher does) instead of silently running a default. Each
-# command's bare form still works for anyone who prefers the default - this
-# is only a help hint layer, it never changes what an argument-ful command
-# does.
+# When a main command is typed with NO arguments, show its CURRENT STATUS
+# plus its subcommands and examples (like /watcher does). Each command's bare
+# form still works for anyone who prefers the default - this is only a help
+# hint layer, it never changes what an argument-ful command does.
+#
+# COMMAND_STATUS maps a command to a function(chat_id) -> current-state text
+# (or "" when nothing to show). It is prepended to the subcommand list so the
+# user sees BOTH where things stand AND what they can do.
+def _watcher_status_text(chat_id) -> str:
+    watcher = (storage.get_user_settings(chat_id) or {}).get("watcher") or {}
+    state = "ON" if watcher.get("enabled") else "OFF"
+    return (
+        f"\U0001F6A8 <b>Sudden-move watcher</b>\n"
+        f"Status: <b>{state}</b>\n"
+        f"Threshold: <b>{watcher.get('threshold', 5.0):g}%</b> session move\n"
+        f"Universe: <b>{(watcher.get('universe') or 'nifty100').upper()}</b>"
+    )
+
+
+def _pricealert_status_text(chat_id) -> str:
+    alert = (storage.get_user_settings(chat_id) or {}).get("price_alert_pct")
+    return "Price alerts: <b>" + ("off" if not alert else f"{float(alert):g}%") + "</b>"
+
+
+def _alertfilters_status_text(chat_id) -> str:
+    filters = (storage.get_user_settings(chat_id) or {}).get("action_filters") or []
+    return "Action filters: <b>" + (", ".join(filters) if filters else "all types") + "</b>"
+
+
+def _schedule_status_text(chat_id) -> str:
+    return format_schedule(chat_id)
+
+
+COMMAND_STATUS = {
+    "/watcher": _watcher_status_text,
+    "/pricealert": _pricealert_status_text,
+    "/alertfilters": _alertfilters_status_text,
+    "/schedule": _schedule_status_text,
+}
+
+
 COMMAND_USAGE = {
     "/corpactions": CA_HELP,
     "/exdates": (
@@ -333,7 +369,7 @@ COMMAND_USAGE = {
         "/alertfilters all            \u2192 reset to all types"
     ),
     "/watcher": (
-        "\U0001F6A8 <b>Sudden-move watcher</b>\n"
+        "Usage:\n"
         "/watcher on    \u2192 turn it ON\n"
         "/watcher off   \u2192 turn it OFF\n"
         "/watcher set 3 \u2192 alert at a 3% session move\n"
@@ -419,7 +455,11 @@ def _bare_command_usage(chat_id, cmd) -> bool:
     """
     usage = COMMAND_USAGE.get(cmd)
     if usage:
-        reply(chat_id, usage)
+        # CURRENT status first (e.g. watcher ON/OFF, current filters, your
+        # schedule), then the subcommand list - so nothing is lost.
+        status_fn = COMMAND_STATUS.get(cmd)
+        status = status_fn(chat_id) if status_fn else ""
+        reply(chat_id, (status + "\n\n" if status else "") + usage)
         return True
     described = DESCRIBE_AND_RUN.get(cmd)
     if described:
