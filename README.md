@@ -121,6 +121,7 @@ plus a derived Status and book-closure dates.
 | `/watchlist` | `/watchlist` | Show the current watchlist. Alias: `/list` |
 | `/alertfilters TYPE,...` | `/alertfilters dividend,bonus` | Only receive these action types (`/alertfilters all` resets). Alias: `/filter` |
 | `/pricealert PCT` | `/pricealert 3` | Alert on daily moves of ±PCT% (`/pricealert off` disables). Alias: `/alert` |
+| `/menu` | `/menu` | Show a one-tap button menu in Telegram — tap a button to run the command (no typing). `/menu off` hides it |
 | `/settings` | `/settings` | Show your current filters, price-alert and list location |
 | `/status` | `/status` | Show where your list is saved and whether GitHub push is configured |
 | `/checknow` | `/checknow` | Force a check and re-send all matching alerts to your chat |

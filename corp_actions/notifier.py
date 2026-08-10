@@ -67,6 +67,30 @@ def _fmt_price(action) -> str:
     return money
 
 
+def quick_menu_markup() -> dict:
+    """Persistent one-tap reply keyboard of the main commands.
+
+    Each button label IS the command text (Telegram sends the label verbatim
+    when tapped), so a tap runs the command through the normal dispatcher -
+    no callback handling, no typing. Attach with send_message(reply_markup=...).
+    """
+    return {
+        "keyboard": [
+            ["/upcoming"],
+            ["/corpactions", "/summary", "/news"],
+            ["/topgainers 1h", "/toplosers 1h"],
+            ["/watchlist", "/settings", "/help"],
+            ["/menu off"],
+        ],
+        "resize_keyboard": True,
+    }
+
+
+def hide_keyboard_markup() -> dict:
+    """Remove the persistent quick-menu keyboard (ReplyKeyboardRemove)."""
+    return {"remove_keyboard": True}
+
+
 class NotifierError(Exception):
     """Raised when Telegram rejects a message."""
 
@@ -75,8 +99,17 @@ def is_configured() -> bool:
     return bool(config.TELEGRAM_BOT_TOKEN)
 
 
-def send_message(text: str, parse_mode: str = "HTML", chat_id: str | None = None) -> dict:
-    """Send a text message to a chat. Returns Telegram response."""
+def send_message(
+    text: str,
+    parse_mode: str = "HTML",
+    chat_id: str | None = None,
+    reply_markup: dict | None = None,
+) -> dict:
+    """Send a text message to a chat. Returns Telegram response.
+
+    `reply_markup` is a Telegram keyboard dict (e.g. a ReplyKeyboardMarkup),
+    sent as-is in the payload so buttons work without extra processing.
+    """
     target = chat_id or config.TELEGRAM_CHAT_ID
     if not config.TELEGRAM_BOT_TOKEN or not target:
         raise NotifierError(
@@ -86,6 +119,8 @@ def send_message(text: str, parse_mode: str = "HTML", chat_id: str | None = None
     payload = {"chat_id": target, "text": text}
     if parse_mode:
         payload["parse_mode"] = parse_mode
+    if reply_markup is not None:
+        payload["reply_markup"] = reply_markup
     try:
         resp = requests.post(url, json=payload, timeout=config.HTTP_TIMEOUT)
         resp.raise_for_status()
@@ -104,6 +139,8 @@ def send_message(text: str, parse_mode: str = "HTML", chat_id: str | None = None
             log.warning("Telegram HTML parse failed for chat %s — retrying plain text fallback", target)
             plain_text = re.sub(r"<[^>]+>", "", text)
             plain_payload = {"chat_id": target, "text": plain_text}
+            if reply_markup is not None:
+                plain_payload["reply_markup"] = reply_markup
             try:
                 resp2 = requests.post(url, json=plain_payload, timeout=config.HTTP_TIMEOUT)
                 resp2.raise_for_status()

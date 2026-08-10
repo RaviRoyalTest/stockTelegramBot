@@ -165,6 +165,7 @@ HELP_TEXT = (
     "/status              \u2192 where your watchlist is saved &amp; GitHub push status\n"
     "/schedule add 3h /scan500  \u2192 run /scan500 automatically every 3h\n"
     "/checknow            \u2192 force-run alerts and re-send all matches\n"
+    "/menu                \u2192 one-tap command buttons (tap, no typing)\n"
     "/help \u00b7 /start       \u2192 show this guide\n\n"
     "━━━━━━━━━━━━━━━━━━━━\n"
     "\U0001F4A1 <b>Quick Examples</b>\n"
@@ -208,16 +209,21 @@ def get_updates(offset=None):
     return updates
 
 
-def reply(chat_id, text, parse_mode="HTML"):
-    """Send a message to a chat, splitting into chunks if text exceeds Telegram limits."""
+def reply(chat_id, text, parse_mode="HTML", reply_markup=None):
+    """Send a message to a chat, splitting into chunks if text exceeds Telegram limits.
+
+    `reply_markup` is an optional Telegram keyboard dict (see /menu).
+    """
     if len(text) > 3800:
         msgs = _split_messages(text.split("\n"))
-        _reply_messages(chat_id, msgs)
+        _reply_messages(chat_id, msgs, reply_markup=reply_markup)
         return
     url = f"https://api.telegram.org/bot{config.TELEGRAM_BOT_TOKEN}/sendMessage"
     payload = {"chat_id": chat_id, "text": text}
     if parse_mode:
         payload["parse_mode"] = parse_mode
+    if reply_markup is not None:
+        payload["reply_markup"] = reply_markup
     try:
         resp = requests.post(url, json=payload, timeout=config.HTTP_TIMEOUT)
         resp.raise_for_status()
@@ -243,7 +249,11 @@ def reply(chat_id, text, parse_mode="HTML"):
 
 def send_help(chat_id):
     """Send the styled HTML help message (/help, /start, unknown commands)."""
-    _reply_messages(chat_id, _split_messages(HELP_TEXT.split("\n")))
+    _reply_messages(
+        chat_id,
+        _split_messages(HELP_TEXT.split("\n")),
+        reply_markup=notifier.quick_menu_markup(),
+    )
 
 
 def github_push_configured() -> bool:
@@ -471,6 +481,10 @@ def handle_command(chat_id, text):
         reply(chat_id, format_settings(chat_id))
         return
 
+    if cmd in ("/menu", "/quick", "/shortcuts", "/buttons"):
+        handle_menu(chat_id, parts)
+        return
+
     if cmd in ("/sched", "/schedule"):
         handle_sched(chat_id, parts)
         return
@@ -645,10 +659,18 @@ def _split_messages(lines: list[str], max_len: int = 3800) -> list[str]:
     return messages or [""]
 
 
-def _reply_messages(chat_id, messages: list[str]) -> None:
-    for msg in messages:
+def _reply_messages(
+    chat_id, messages: list[str], reply_markup: dict | None = None
+) -> None:
+    for i, msg in enumerate(messages):
         try:
-            notifier.send_message(msg, chat_id=chat_id)
+            # The keyboard rides on the first chunk; it persists in the chat
+            # regardless of which message it is attached to.
+            notifier.send_message(
+                msg,
+                chat_id=chat_id,
+                reply_markup=reply_markup if i == 0 else None,
+            )
         except notifier.NotifierError as exc:
             log.warning("query reply failed for chat %s: %s", chat_id, exc)
             return
@@ -866,6 +888,32 @@ def run_ca_query(chat_id, descriptor: dict) -> bool:
         )
     _reply_messages(chat_id, _split_messages(lines))
     return True
+
+
+QUICK_MENU_TEXT = (
+    "<b>\U0001F447 One-Tap Command Menu</b>\n"
+    "Tap any button below - the command runs instantly, no typing needed.\n\n"
+    "\u2022 <code>/upcoming</code> - watchlist ex-dates + in-progress actions\n"
+    "\u2022 <code>/corpactions</code> - all NSE+BSE corporate actions\n"
+    "\u2022 <code>/summary</code> - counts + next ex-dates\n"
+    "\u2022 <code>/topgainers 1h</code> / <code>/toplosers 1h</code> - movers\n"
+    "\u2022 <code>/news</code> - headlines for your watchlist\n"
+    "\u2022 <code>/watchlist</code> - your stocks\n\n"
+    "The menu stays visible until you hide it with <code>/menu off</code>."
+)
+
+
+def handle_menu(chat_id, parts) -> None:
+    """Show (or hide) the one-tap reply-keyboard menu (/menu, /quick)."""
+    sub = parts[1].lower() if len(parts) > 1 else ""
+    if sub in ("off", "hide", "none", "remove"):
+        reply(
+            chat_id,
+            "Quick menu hidden. Send <code>/menu</code> anytime to bring it back.",
+            reply_markup=notifier.hide_keyboard_markup(),
+        )
+        return
+    reply(chat_id, QUICK_MENU_TEXT, reply_markup=notifier.quick_menu_markup())
 
 
 def format_settings(chat_id) -> str:
@@ -2421,6 +2469,7 @@ def register_commands() -> bool:
         {"command": "schedule", "description": "Auto reports: /schedule add 3h /scan500"},
         {"command": "status", "description": "Check persistence / GitHub push"},
         {"command": "checknow", "description": "Force a check and resend alerts"},
+        {"command": "menu", "description": "One-tap command buttons - no typing"},
         {"command": "help", "description": "Show all commands and examples"},
     ]
     url = f"https://api.telegram.org/bot{config.TELEGRAM_BOT_TOKEN}/setMyCommands"

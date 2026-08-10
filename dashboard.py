@@ -59,6 +59,7 @@ HELP_TEXT = (
     "- `/status` — where list is saved & GitHub push status\n"
     "- `/schedule add 3h /scan500` — run a command automatically\n"
     "- `/checknow` — force-run alerts\n"
+    "- `/menu` — one-tap command buttons in Telegram (no typing)\n"
     "- `/help` — this guide\n\n"
     "_Old short forms still work as aliases: /ca, /next, /add, /list, /movers, /gainers, /losers, /stock, /fund, /filter, /alert, /sched, /exdate._\n"
 )
