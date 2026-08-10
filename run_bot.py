@@ -299,6 +299,51 @@ COMMAND_STATUS = {
 }
 
 
+# Old short aliases -> their canonical command. Used so a BARE alias (e.g.
+# /next, /summary, /stock, /fund) shows the same self-explaining hint as its
+# main command, while argument-ful aliases keep working exactly as before.
+ALIAS_TO_MAIN = {
+    "/list": "/watchlist",
+    "/next": "/corpactionsformylist",
+    "/upcoming": "/corpactionsformylist",
+    "/summary": "/corpactionssummary",
+    "/casummary": "/corpactionssummary",
+    "/ca": "/corpactions",
+    "/corporate-actions": "/corpactions",
+    "/corp-actions": "/corpactions",
+    "/actions": "/corpactions",
+    "/exdate": "/exdates",
+    "/ex-dates": "/exdates",
+    "/sched": "/schedule",
+    "/alert": "/pricealert",
+    "/filter": "/alertfilters",
+    "/actionfilters": "/alertfilters",
+    "/stock": "/fundamentalanalyze",
+    "/info": "/fundamentalanalyze",
+    "/quote": "/fundamentalanalyze",
+    "/analysis": "/fundamentalanalyze",
+    "/stockanalysis": "/fundamentalanalyze",
+    "/stock-analysis": "/fundamentalanalyze",
+    "/fundamental-analysis": "/fundamentalanalyze",
+    "/fund": "/fundamentalreport",
+    "/fundamentals": "/fundamentalreport",
+    "/harmonic": "/harmonicpatterns",
+    "/movers": "/topmovers",
+    "/marketmovers": "/topmovers",
+    "/gainers": "/topgainers",
+    "/losers": "/toplosers",
+    "/favorites": "/myfavourites",
+    "/favourites": "/myfavourites",
+    "/mypicks": "/myfavourites",
+    "/dailybrief": "/myfavourites",
+    "/quick": "/menu",
+    "/shortcuts": "/menu",
+    "/buttons": "/menu",
+    "/bigmover": "/watcher",
+    "/moverwatch": "/watcher",
+}
+
+
 COMMAND_USAGE = {
     "/corpactions": CA_HELP,
     "/exdates": (
@@ -497,8 +542,14 @@ def handle_command(chat_id, text):
 
     # Bare main command -> list its subcommands (like /watcher does). Only
     # fires when NO arguments were given, so nothing with arguments changes.
-    if len(parts) == 1 and _bare_command_usage(chat_id, cmd):
-        return
+    # Aliases map to their canonical command first, so /next, /summary, /ca,
+    # /stock, /fund, /sched etc. show the same hints as their main names.
+    if len(parts) == 1:
+        canonical = ALIAS_TO_MAIN.get(cmd, cmd)
+        if canonical != cmd and _bare_command_usage(chat_id, canonical):
+            return
+        if _bare_command_usage(chat_id, cmd):
+            return
 
     if cmd in ("/list", "/watchlist"):
         send_watchlist(chat_id)
