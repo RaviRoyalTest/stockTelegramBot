@@ -191,6 +191,38 @@ def _run_screen(period_key: str, direction: str, universe: str, count: int) -> l
     ]
 
 
+def _tg_to_markdown(text: str) -> str:
+    """Convert Telegram-HTML text into readable Streamlit markdown.
+
+    Bold / italic / code / link tags become markdown equivalents, HTML
+    entities are unescaped, and every line becomes a hard line break (two
+    trailing spaces) so the compact block layout - symbol, company, subject,
+    price and dates each on their own line - survives the web renderer
+    instead of collapsing into one blob of raw tags.
+    """
+    text = text or ""
+    text = re.sub(r"<b>(.*?)</b>", r"**\1**", text, flags=re.S)
+    text = re.sub(r"<i>(.*?)</i>", r"*\1*", text, flags=re.S)
+    text = re.sub(r"<code>(.*?)</code>", r"`\1`", text, flags=re.S)
+    text = re.sub(r'<a href="([^"]*)">(.*?)</a>', r"[\2](\1)", text, flags=re.S)
+    text = text.replace("&amp;", "&").replace("&lt;", "<").replace("&gt;", ">")
+    text = re.sub(r"\n", "  \n", text)
+    return text.strip()
+
+
+def _md_escape(text: str) -> str:
+    """Escape markdown-significant characters in raw data.
+
+    Keeps titles/links from breaking the surrounding markdown (square
+    brackets, parens, asterisks etc. would otherwise render as formatting
+    or swallow the link). Also unescapes common HTML entities the feeds
+    return.
+    """
+    text = (text or "")
+    text = text.replace("&amp;", "&").replace("&lt;", "<").replace("&gt;", ">")
+    return re.sub(r"([\\`*_\[\]()#!|])", r"\\\1", text)
+
+
 def _fetch_fund_lines(items: list[dict], deep: bool = True) -> list | str:
     """Fundamental report lines for every watchlist item (parallel).
 
@@ -209,7 +241,7 @@ def _fetch_fund_lines(items: list[dict], deep: bool = True) -> list | str:
                 lines = run_bot._fund_report_lines(sym, quote, fund, include_tip=False)
             else:
                 lines = run_bot._stock_summary_lines(sym, quote, fund, include_tip=False)
-            return sym, "\n".join(lines)
+            return sym, _tg_to_markdown("\n".join(lines))
         except Exception as exc:
             return sym, f"**{sym}** — could not fetch fundamentals: {exc}"
 
@@ -554,7 +586,7 @@ with tab_watch:
     fav = st.session_state.get("favourites")
     if fav:
         with st.expander("\U0001f4c5 Corporate actions for your list", expanded=True):
-            st.markdown(fav["corp"])
+            st.markdown(_tg_to_markdown(fav["corp"]))
         with st.expander("\U0001f4c9 Top losers — last 1h (NIFTY 100)"):
             st.dataframe(fav["losers_1h"], width="stretch", hide_index=True)
         with st.expander("\U0001f4c9 Top losers — today (NIFTY 100)"):
@@ -681,7 +713,7 @@ with tab_actions:
                 st.warning(w)
 
         if st.session_state.get("ca_mylist"):
-            st.markdown(st.session_state["ca_mylist"])
+            st.markdown(_tg_to_markdown(st.session_state["ca_mylist"]))
         elif st.session_state.get("ca_summary"):
             summary = st.session_state["ca_summary"]
             s1, s2 = st.columns(2)
@@ -707,7 +739,7 @@ with tab_actions:
                 typ = sources.action_type(a.get("subject"))
                 with st.container(border=True):
                     st.markdown(f"### {a.get('symbol')} ({a.get('exchange')})")
-                    st.caption(a.get("company") or "&nbsp;")
+                    st.caption(a.get("company") or " ")
                     st.markdown(f"**{a.get('subject')}**")
                     m1, m2, m3, m4 = st.columns(4)
                     m1.metric("Type", sources.TYPE_LABELS.get(typ, typ))
@@ -735,7 +767,7 @@ with tab_actions:
                     typ = sources.action_type(a.get("subject"))
                     with st.container(border=True):
                         st.markdown(f"### {a.get('symbol')} ({a.get('exchange')})")
-                        st.caption(a.get("company") or "&nbsp;")
+                        st.caption(a.get("company") or " ")
                         st.markdown(f"**{a.get('subject')}**")
                         m1, m2, m3, m4 = st.columns(4)
                         m1.metric("Type", sources.TYPE_LABELS.get(typ, typ))
@@ -925,7 +957,9 @@ with tab_stock:
         quote, fund, sym = res["quote"], res["fund"], res["sym"]
         if res.get("deep"):
             import run_bot
-            st.markdown("\n".join(run_bot._fund_report_lines(sym, quote, fund, include_tip=False)))
+            st.markdown(_tg_to_markdown("\n".join(
+                run_bot._fund_report_lines(sym, quote, fund, include_tip=False)
+            )))
         else:
             _render_quick_card(quote, fund, sym)
 
@@ -968,9 +1002,9 @@ with tab_news:
                 publisher = n.get("publisher") or ""
                 meta = " | ".join(p for p in (publisher, notifier._fmt_ts(pub)) if p)
                 if link:
-                    st.markdown(f"{i}. [{title}]({link})")
+                    st.markdown(f"{i}. [{_md_escape(title)}](<{_md_escape(link)}>)")
                 else:
-                    st.markdown(f"{i}. {title}")
+                    st.markdown(f"{i}. {_md_escape(title)}")
                 if meta:
                     st.caption(meta)
             st.divider()

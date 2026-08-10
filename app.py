@@ -150,7 +150,7 @@ def show_results_dialog(results: list[dict]):
 
             with st.container(border=True):
                 st.markdown(f"### {a.get('symbol')} ({a.get('exchange')})")
-                st.caption(a.get("company") or "&nbsp;")
+                st.caption(a.get("company") or " ")
                 st.markdown(f"**{a.get('subject')}**")
 
                 m1, m2, m3 = st.columns(3)
@@ -313,7 +313,7 @@ if stock_list:
 
     # ------------------------------------------------------- paste watchlist
     st.subheader("2.5. Paste Telegram Watchlist")
-    st.caption("Paste the full watchlist message from Telegram (e.g. from /list) "
+    st.caption("Paste the full watchlist message from Telegram (e.g. from /watchlist) "
                "to replace the current watchlist in one go.")
     pasted_text = st.text_area(
         "Paste watchlist text here",
