@@ -625,6 +625,14 @@ SCAN_PRIORITY = {
 SCAN_MAX_ROWS = 25
 
 
+def _fmt_chg(change_pct: float) -> str:
+    """Format a price-move % with the green-up / red-down arrow icon."""
+    arrow = "\u25b2" if change_pct >= 0 else "\u25bc"
+    color_icon = "\U0001F7E2" if change_pct >= 0 else "\U0001F534"
+    sign = "+" if change_pct >= 0 else ""
+    return f" {color_icon}{arrow} ({sign}{change_pct:.2f}%)"
+
+
 def format_scan_row(r) -> str:
     """One compact entry (two lines) per stock for the bulk harmonic screener.
 
@@ -640,9 +648,11 @@ def format_scan_row(r) -> str:
     arrow = "\u25b2" if r.get("direction") == "bullish" else "\u25bc"
     chg = ""
     if r.get("change_pct") is not None:
-        chg = f" ({r['change_pct']:+.2f}%)"
+        chg_pct = r["change_pct"]
+        chg = _fmt_chg(chg_pct)
     elif r.get("prev_close"):
-        chg = f" ({(r['price'] / r['prev_close'] - 1) * 100:+.2f}%)"
+        chg_pct = (r["price"] / r["prev_close"] - 1) * 100
+        chg = _fmt_chg(chg_pct)
     pattern = notifier.escape(r.get("pattern") or "?")
     status = notifier.escape(r.get("status") or "")
     line = (

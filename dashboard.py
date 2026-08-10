@@ -146,12 +146,14 @@ def _fmt_price(price) -> str:
 
 
 def _fmt_change(change) -> str:
+    """Format a % change with the green-up / red-down arrow icon."""
     if change is None:
         return "-"
     try:
         c = float(change)
         sign = "+" if c >= 0 else ""
-        return f"{sign}{c:.2f}%"
+        icon = "🟢▲" if c >= 0 else "🔴▼"
+        return f"{icon} {sign}{c:.2f}%"
     except (TypeError, ValueError):
         return "-"
 
@@ -163,20 +165,24 @@ def _change_color(change) -> str:
         return "⚪"
 
 
-def _signal_dot(change_pct) -> str:
-    """Return a coloured dot for the Signal column in sortable tables."""
+def _signal_icon(change_pct) -> str:
+    """Return a green-up / red-down arrow icon for the Signal column.
+
+    Matches the Telegram alerts' convention (🟢▲ / 🔴▼): up arrow in green
+    for gainers, down arrow in red for losers, neutral dot when no data.
+    """
     if change_pct is None:
         return "⚪"
     try:
-        return "🟢" if float(change_pct) >= 0 else "🔴"
+        return "🟢▲" if float(change_pct) >= 0 else "🔴▼"
     except (TypeError, ValueError):
         return "⚪"
 
 
 def _symbol_fund_label(sym: str, change_pct=None) -> str:
-    """Label for a deep-fundamentals button, with colour dot when available."""
-    dot = _signal_dot(change_pct)
-    return f"{dot} {sym} \U0001f4b9" if change_pct is not None else f"{sym} \U0001f4b9"
+    """Label for a deep-fundamentals button, with green-up/red-down arrow."""
+    icon = _signal_icon(change_pct)
+    return f"{icon} {sym} \U0001f4b9" if change_pct is not None else f"{sym} \U0001f4b9"
 
 
 def _fetch_quotes_for(items: list[dict]) -> dict:
@@ -235,7 +241,7 @@ def _run_screen(period_key: str, direction: str, universe: str, count: int) -> l
     return [
         {
             "Symbol": sym,
-            "Signal": _signal_dot(d.get("change_pct")),
+            "Signal": _signal_icon(d.get("change_pct")),
             "Price": d.get("price"),
             "Change %": d.get("change_pct"),
             "Name": d.get("name") or "",
@@ -722,13 +728,13 @@ with tab_watch:
                 "Exchange": i["exchange"],
                 "Symbol": i["symbol"],
                 "Company": i.get("company", ""),
-                "Signal": _signal_dot(chg),
+                "Signal": _signal_icon(chg),
                 "Price": q.get("price") if q and q.get("price") is not None else None,
                 "Change %": chg,
             })
         # Sortable table (tap the column headers to sort) with one 💹 button
         # per row below - single click opens that stock's deep fundamentals.
-        st.caption("Tap a column header to sort the table.  🟢 = gainer · 🔴 = loser")
+        st.caption("Tap a column header to sort the table.  🟢▲ = gainer · 🔴▼ = loser · ⚪ = no data")
         st.dataframe(
             rows,
             width="stretch",
@@ -819,7 +825,7 @@ with tab_watch:
             else:
                 st.markdown(_tg_to_markdown(fav["corp"]), unsafe_allow_html=True)
         with st.expander("\U0001f4c9 Top losers — last 1h (NIFTY 100)"):
-            st.caption("🟢 = gainer · 🔴 = loser · ⚪ = no data")
+            st.caption("🟢▲ = gainer · 🔴▼ = loser · ⚪ = no data")
             st.dataframe(
                 fav["losers_1h"], width="stretch", hide_index=True,
                 column_config={
@@ -838,7 +844,7 @@ with tab_watch:
                             _symbol_fund_button(sym, f"fav1h_{start + j}", "fav",
                                                 change_pct=chgs.get(sym))
         with st.expander("\U0001f4c9 Top losers — today (NIFTY 100)"):
-            st.caption("🟢 = gainer · 🔴 = loser · ⚪ = no data")
+            st.caption("🟢▲ = gainer · 🔴▼ = loser · ⚪ = no data")
             st.dataframe(
                 fav["losers_today"], width="stretch", hide_index=True,
                 column_config={
@@ -1081,7 +1087,7 @@ with tab_market:
         universe_label = "NIFTY 500" if universe == "nifty500" else "NIFTY 100"
         st.subheader(f"{screen_type} — {period_label} · {universe_label} (top {n})")
         rows = st.session_state["screen_rows"]
-        st.caption("Tap a column header to sort the table.  🟢 = gainer · 🔴 = loser")
+        st.caption("Tap a column header to sort the table.  🟢▲ = gainer · 🔴▼ = loser · ⚪ = no data")
         st.dataframe(
             rows,
             width="stretch",

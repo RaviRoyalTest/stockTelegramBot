@@ -62,8 +62,10 @@ def _fmt_price(action) -> str:
     change = quote.get("change_pct")
     money = fmt_money(price, currency)
     if change is not None:
+        arrow = "\u25b2" if change >= 0 else "\u25bc"
+        color_icon = "\U0001F7E2" if change >= 0 else "\U0001F534"
         sign = "+" if change >= 0 else ""
-        return f"{money} ({sign}{change:.2f}%)"
+        return f"{money} {color_icon}{arrow} ({sign}{change:.2f}%)"
     return money
 
 
