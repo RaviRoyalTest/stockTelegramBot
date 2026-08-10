@@ -16,6 +16,7 @@ from __future__ import annotations
 
 import html
 import logging
+import re
 import sys
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from datetime import date, timedelta
@@ -168,6 +169,92 @@ def _run_screen(period_key: str, direction: str, universe: str, count: int) -> l
     ]
 
 
+def _parse_telegram_watchlist(text: str) -> list[dict]:
+    """Parse a Telegram watchlist message into a list of {'symbol', 'exchange'}.
+
+    Handles the format produced by the bot's /list command, e.g.:
+
+        Your Watchlist:
+        1. AMBER (NSE)
+        2. ASHOKLEY (NSE)
+        ...
+        44. VBL (NSE)
+
+        Use /stock 5-10 or /fund 3-5 to get details by these numbers.
+        Saved in: subscriptions.json (your chat 862087765)
+        Persistence: pushed to GitHub - it survives redeploys.
+
+    Returns a list of dicts with 'symbol' and 'exchange' keys, preserving
+    the order they appear in the pasted text.
+    """
+    items: list[dict] = []
+    seen: set = set()
+    # Match lines like "1. AMBER (NSE)" or "12. GOLDBEES (NSE)"
+    pattern = re.compile(
+        r"^\s*\d+[\.\)]\s*([A-Za-z0-9\-]+)\s*\(([A-Za-z0-9]+)\)\s*$",
+        re.IGNORECASE,
+    )
+    for line in text.splitlines():
+        line = line.strip()
+        m = pattern.match(line)
+        if not m:
+            continue
+        symbol = m.group(1).upper()
+        exchange = m.group(2).upper()
+        if exchange not in ("NSE", "BSE"):
+            exchange = "NSE"
+        key = (exchange, symbol)
+        if key not in seen:
+            seen.add(key)
+            items.append({"symbol": symbol, "exchange": exchange})
+    return items
+
+
+def _resolve_company_names(items: list[dict]) -> list[dict]:
+    """Attach company names to watchlist items using the NSE stock list.
+
+    Falls back to fetching a quote for symbols not found in the stock list.
+    """
+    if not items:
+        return items
+
+    # Build a lookup from the NSE stock list (cached).
+    symbol_to_company: dict[str, str] = {}
+    try:
+        nse_list = sources.get_nse_stock_list_cached()
+        for s in nse_list:
+            symbol_to_company[s["symbol"].upper()] = s.get("company", "")
+    except Exception:
+        nse_list = []
+
+    resolved = []
+    missing = []
+    for item in items:
+        company = symbol_to_company.get(item["symbol"].upper(), "")
+        if company:
+            resolved.append({**item, "company": company})
+        else:
+            missing.append(item)
+
+    # For symbols not in the NSE list, try fetching a quote to get the name.
+    if missing:
+        with ThreadPoolExecutor(max_workers=10) as ex:
+            futures = {
+                ex.submit(sources.get_quote, i["exchange"], i["symbol"]): i
+                for i in missing
+            }
+            for fut in as_completed(futures):
+                item = futures[fut]
+                try:
+                    quote = fut.result()
+                except Exception:
+                    quote = None
+                company = (quote or {}).get("name", "") if quote else ""
+                resolved.append({**item, "company": company})
+
+    return resolved
+
+
 # ---------------------------------------------------------------- sidebar
 with st.sidebar:
     st.title("📈 Stock Alert Bot")
@@ -288,6 +375,35 @@ with tab_watch:
     else:
         st.info("Load the stock list above to select stocks. You can also add "
                 "symbols manually below.")
+
+    # --- Paste Telegram watchlist
+    st.subheader("📋 Paste Telegram Watchlist")
+    st.caption("Paste the full watchlist message from Telegram (e.g. from /list) "
+               "to replace the current watchlist in one go.")
+    pasted_text = st.text_area(
+        "Paste watchlist text here",
+        height=200,
+        key="paste_watchlist",
+        placeholder=(
+            "Your Watchlist:\n"
+            "1. AMBER (NSE)\n"
+            "2. ASHOKLEY (NSE)\n"
+            "3. ASKAUTOLTD (NSE)\n"
+            "...\n"
+            "44. VBL (NSE)\n"
+        ),
+    )
+    if st.button("📥 Update watchlist from pasted text", width="stretch", disabled=not pasted_text.strip()):
+        parsed = _parse_telegram_watchlist(pasted_text)
+        if not parsed:
+            st.error("No watchlist entries found in the pasted text. "
+                     "Expected lines like `1. AMBER (NSE)`.")
+        else:
+            with st.spinner(f"Resolving {len(parsed)} symbols..."):
+                resolved = _resolve_company_names(parsed)
+            storage.save_watchlist(resolved)
+            st.success(f"Watchlist updated with {len(resolved)} stocks.")
+            st.rerun()
 
     # --- Manual add / remove
     st.subheader("Add / Remove symbols")
