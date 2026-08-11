@@ -17,7 +17,7 @@ import threading
 # Streamlit must be installed; it is in requirements.txt.
 import streamlit  # noqa: F401
 
-from corp_actions import config
+from corporate_actions import config
 
 logging.basicConfig(
     level=logging.INFO,
@@ -44,8 +44,8 @@ def run_bot_server():
     try:
         import bot_server
         bot_server.main()
-    except Exception as exc:
-        log.error("bot_server failed: %s", config.redact(exc))
+    except Exception as error:
+        log.error("bot_server failed: %s", config.redact(error))
         _flush()
 
 
@@ -63,7 +63,7 @@ def main():
     port = os.getenv("PORT", "10000")
     # Run Streamlit as a subprocess so we can pass the port and disable the
     # default telemetry / dev mode checks.
-    cmd = [
+    command = [
         sys.executable,
         "-m", "streamlit",
         "run",
@@ -73,10 +73,10 @@ def main():
         "--server.headless", "true",
         "--browser.gatherUsageStats", "false",
     ]
-    log.info("Streamlit command: %s", " ".join(cmd))
+    log.info("Streamlit command: %s", " ".join(command))
     _flush()
     try:
-        proc = subprocess.run(cmd, check=False)
+        proc = subprocess.run(command, check=False)
         sys.exit(proc.returncode)
     except KeyboardInterrupt:
         log.info("Shutting down...")

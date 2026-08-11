@@ -20,12 +20,12 @@ import sys
 import threading
 import time
 
-from corp_actions import config
-from corp_actions.bot.dispatch import handle_callback_query, handle_command, handle_query_text
-from corp_actions.bot.registry import register_commands
-from corp_actions.bot.reply import reply
-from corp_actions.bot.runner import start_scheduled_reports
-from corp_actions.github import (
+from corporate_actions import config
+from corporate_actions.bot.dispatch import handle_callback_query, handle_command, handle_query_text
+from corporate_actions.bot.registry import register_commands
+from corporate_actions.bot.reply import reply
+from corporate_actions.bot.runner import start_scheduled_reports
+from corporate_actions.github import (
     _ahead_of_origin,
     _push_branch,
     github_push_configured,
@@ -34,8 +34,8 @@ from corp_actions.github import (
     push_state,
     sync_state,
 )
-from corp_actions.poller import poller
-from corp_actions.telegram.client import get_updates
+from corporate_actions.poller import poller
+from corporate_actions.telegram.client import get_updates
 
 
 class _ImmediateStreamHandler(logging.StreamHandler):
@@ -142,13 +142,13 @@ def start_health_server():
         try:
             server = _ThreadingHTTPServer(("0.0.0.0", port), _HealthHandler)
             break
-        except OSError as exc:
-            last_error = exc
+        except OSError as error:
+            last_error = error
             if attempt < _BIND_ATTEMPTS:
                 log.warning(
                     "Health server bind attempt %s/%s failed on port %s "
                     "(%s) - retrying...",
-                    attempt, _BIND_ATTEMPTS, port, exc,
+                    attempt, _BIND_ATTEMPTS, port, error,
                 )
                 time.sleep(_BIND_RETRY_DELAY)
     if server is None:
@@ -204,8 +204,8 @@ def flush_pending_state() -> None:
             log.warning(
                 "Flush push failed - will retry in %ss", PUSH_FLUSH_SECONDS
             )
-    except Exception as exc:
-        log.warning("Flush push failed: %s", config.redact(exc))
+    except Exception as error:
+        log.warning("Flush push failed: %s", config.redact(error))
 
 
 def _deployed_commit() -> str:
@@ -286,15 +286,15 @@ def main():
                 if callback:
                     try:
                         handle_callback_query(callback)
-                    except Exception as exc:
-                        log.warning("callback query failed: %s", config.redact(exc))
+                    except Exception as error:
+                        log.warning("callback query failed: %s", config.redact(error))
                     offset = update["update_id"] + 1
                     continue
                 if not text.startswith("/"):
                     try:
                         handle_query_text(chat_id, text)
-                    except Exception as exc:
-                        log.warning("natural query failed: %s", config.redact(exc))
+                    except Exception as error:
+                        log.warning("natural query failed: %s", config.redact(error))
                     offset = update["update_id"] + 1
                     continue
                 # The bare command name only (e.g. "/addstock" for "/addstock HDFCBANK")
@@ -304,15 +304,15 @@ def main():
                 # command never happened and state only reached GitHub via the
                 # periodic flush (or was lost on redeploy).
                 parts = text.strip().split()
-                cmd = parts[0].lower().split("@")[0] if parts else ""
+                command = parts[0].lower().split("@")[0] if parts else ""
                 log.info("command from chat %s: %s", chat_id, text)
-                if cmd == "/checknow":
+                if command == "/checknow":
                     handle_command(chat_id, text)
                     try:
                         sent = poller.run_once(force=True, only_chat=str(chat_id))
                         reply(chat_id, f"Check done - re-sent {sent} alert(s) to this chat.")
-                    except Exception as exc:  # keep the loop alive
-                        reply(chat_id, f"Check failed: {config.redact(exc)}")
+                    except Exception as error:  # keep the loop alive
+                        reply(chat_id, f"Check failed: {config.redact(error)}")
                 else:
                     try:
                         handle_command(chat_id, text)
@@ -323,14 +323,14 @@ def main():
                         # write stays on the disk instead of being wiped by
                         # reset --hard, and /watchlist always reflects the latest
                         # local state.
-                        if cmd in WRITE_COMMANDS:
+                        if command in WRITE_COMMANDS:
                             try:
-                                ok = push_state()
-                                if ok:
+                                success = push_state()
+                                if success:
                                     log.info(
                                         "State pushed to GitHub after %s "
                                         "(chat %s)",
-                                        cmd, chat_id,
+                                        command, chat_id,
                                     )
                                     # Pull anything the cron pushed so we
                                     # never overwrite newer commits.
@@ -340,7 +340,7 @@ def main():
                                         "State NOT pushed for %s - change is "
                                         "saved locally but will be LOST on "
                                         "redeploy: %s",
-                                        cmd, push_error,
+                                        command, push_error,
                                     )
                                     reply(
                                         chat_id,
@@ -351,28 +351,28 @@ def main():
                                         "/status for details, or `python "
                                         "run_bot.py --check` on the host.",
                                     )
-                            except Exception as exc:
+                            except Exception as error:
                                 log.warning(
-                                    "state push failed: %s", config.redact(exc)
+                                    "state push failed: %s", config.redact(error)
                                 )
-                    except Exception as exc:
+                    except Exception as error:
                         log.warning(
                             "command %s from chat %s failed: %s",
-                            cmd, chat_id, config.redact(exc),
+                            command, chat_id, config.redact(error),
                         )
                         reply(
                             chat_id,
                             "Command failed on the server: "
-                            f"{config.redact(exc)}. Use /help.",
+                            f"{config.redact(error)}. Use /help.",
                         )
                 offset = update["update_id"] + 1
             now = time.monotonic()
             if now - last_flush >= PUSH_FLUSH_SECONDS:
                 last_flush = now
                 flush_pending_state()
-        except Exception as exc:
-            err = config.redact(exc)
-            if "409" in err:
+        except Exception as error:
+            error = config.redact(error)
+            if "409" in error:
                 # Another process currently holds getUpdates for this token -
                 # normally the OLD Render instance still shutting down during
                 # a deploy (both call getUpdates until the old one dies). Back
@@ -384,11 +384,11 @@ def main():
                     "instance shuts down - backing off %.1fs. If it persists, "
                     "stop the other bot_server.py / ensure the GitHub Actions "
                     "cron keeps PROCESS_COMMANDS=false. %s",
-                    _CONFLICT_BACKOFF, err,
+                    _CONFLICT_BACKOFF, error,
                 )
                 time.sleep(_CONFLICT_BACKOFF)
             else:
-                log.warning("poll error (retrying): %s", err)
+                log.warning("poll error (retrying): %s", error)
         time.sleep(1)
 
 

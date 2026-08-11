@@ -15,19 +15,19 @@ Rules for any AI agent or human working on this repository.
 
 - Single Responsibility: one module = one job. Do not grow `run_bot.py`
   further — command handling, scheduling, and GitHub state-push concerns
-  belong in their own modules (`corp_actions/scheduler.py`, etc.).
+  belong in their own modules (`corporate_actions/scheduler.py`, etc.).
 - Open/Closed: extend behavior by adding new modules/commands, not by
   editing the dispatch core for every new feature.
 - Liskov Substitution / Interface Segregation: keep module APIs narrow and
   stable; pass the exact dependencies a function needs (dependency injection
   via parameters) instead of importing the giant `run_bot` module everywhere.
-- Dependency Inversion: modules in `corp_actions/` must not import
+- Dependency Inversion: modules in `corporate_actions/` must not import
   `run_bot` (it would create circular imports). Pass callbacks (e.g. the
   command runner) in as parameters instead.
 
 ### Folder structure
 
-All entry points are thin wrappers - the logic lives in `corp_actions/`,
+All entry points are thin wrappers - the logic lives in `corporate_actions/`,
 organised as small packages of single-purpose modules:
 
 ```
@@ -36,7 +36,7 @@ bot_server.py                 always-on long-polling server entry (thin)
 dashboard.py                  Streamlit dashboard entry (thin)
 dashboard_server.py           Render entry: dashboard + bot together
 app.py                        Streamlit watchlist editor (thin)
-corp_actions/
+corporate_actions/
   config.py                   env + endpoint configuration (no deps)
   github.py                   git state sync: push/pull JSON state files + --check diag
   scheduler.py                scheduled-reports loop (per-user /schedule)
@@ -61,10 +61,10 @@ corp_actions/
   bot/                        Telegram bot package: dispatch.py (router),
                               registry.py (aliases + menu), reply.py, helpers.py,
                               runner.py (cron loop + CLI), and one module per
-                              command family (ca_cmds, watchlist_cmds,
-                              settings_cmds, schedule_cmds, movers_cmds,
-                              fund_cmds, harmonic_cmds, scan_cmds, status)
-  dashboard_ui/               web dashboard: helpers.py (pure), widgets.py (st),
+                              command family (corporate_action_commands, watchlist_commands,
+                              settings_commands, schedule_commands, movers_commands,
+                              fundamentals_commands, harmonic_commands, scanner_commands, status)
+  dashboard_interface/               web dashboard: helpers.py (pure), widgets.py (st),
                               help_text.py, tabs/ (one module per tab), app.py
 ```
 

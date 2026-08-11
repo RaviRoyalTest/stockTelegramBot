@@ -11,7 +11,7 @@ Two jobs, one run:
 
 Local usage:  python run_bot.py
 
-All logic lives in corp_actions.bot (dispatcher, command families, runner);
+All logic lives in corporate_actions.bot (dispatcher, command families, runner);
 this file only configures logging and calls the runner.
 """
 import logging
@@ -20,12 +20,12 @@ import sys
 # The --check diagnostic only talks to git / the environment, so it must run
 # even when requirements.txt hasn't been installed yet - import it directly
 # from the dependency-light github module (no third-party deps).
-if any(a.lower() == "--check" for a in sys.argv[1:]):
-    from corp_actions.github import main_check
+if any(argument.lower() == "--check" for argument in sys.argv[1:]):
+    from corporate_actions.github import main_check
 
     sys.exit(main_check())
 
-from corp_actions.bot.runner import ImmediateStreamHandler, main
+from corporate_actions.bot.runner import ImmediateStreamHandler, main
 
 logging.basicConfig(
     level=logging.INFO,

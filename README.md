@@ -234,7 +234,7 @@ GitHub Actions cron is a second safety net that commits state every hour.
 ## Project layout
 
 Entry points are thin wrappers; the logic lives in small single-purpose
-packages under `corp_actions/`:
+packages under `corporate_actions/`:
 
 ```
 app.py                      # Streamlit watchlist editor (thin)
@@ -242,7 +242,7 @@ dashboard.py                # Comprehensive web dashboard (thin)
 dashboard_server.py         # Render entry: Telegram bot + dashboard together
 run_bot.py                  # GitHub Actions entry: Telegram commands + poll
 bot_server.py               # always-on long-polling server (thin)
-corp_actions/
+corporate_actions/
   config.py                 # env + endpoint configuration (dependency-light)
   github.py                 # git state sync + `run_bot.py --check` diagnostic
   scheduler.py              # scheduled-reports loop (per-user /schedule)
@@ -258,15 +258,16 @@ corp_actions/
   scanner/                  # NIFTY 500 scanner (indicators, rules, scoring, ...)
   harmonic/                 # harmonic patterns (patterns, analysis, report)
   bot/                      # Telegram bot: dispatch, registry, runner + one
-                            #   module per command family (ca_cmds, watchlist_cmds, ...)
-  dashboard_ui/             # web dashboard: helpers, widgets, tabs/, app
+                            #   module per command family (corporate_action_commands,
+                            #   watchlist_commands, settings_commands, ...)
+  dashboard_interface/             # web dashboard: helpers, widgets, tabs/, app
 .github/workflows/poller.yml  # hourly cron workflow
 ```
 
 > Keep the entry points thin: new logic belongs in a module under
-> `corp_actions/` (one module = one job), and `corp_actions/` modules must not
+> `corporate_actions/` (one module = one job), and `corporate_actions/` modules must not
 > `import run_bot` (circular import). Pass the command runner / callbacks in
-> as parameters instead - see `corp_actions/scheduler.py`.
+> as parameters instead - see `corporate_actions/scheduler.py`.
 
 ## Notes
 
@@ -313,5 +314,5 @@ corp_actions/
   per-row failures, timings) so you can watch what the pipeline is doing.
 - To mute one source entirely (e.g. run NSE-only), the poller only iterates
   the exchanges it knows about — edit `FETCHERS` in
-  `corp_actions/poller/fetchers.py`.
+  `corporate_actions/poller/fetchers.py`.
 - Data comes from public NSE/BSE endpoints; use for informational purposes.

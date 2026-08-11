@@ -9,7 +9,7 @@ Surfaces ALL bot functionality in a well-organized, customisable UI:
   * Alert settings (action-type filters + price threshold)
   * System status & persistence
 
-All rendering logic lives in corp_actions.dashboard_ui (helpers, widgets,
+All rendering logic lives in corporate_actions.dashboard_interface (helpers, widgets,
 per-tab renderers); this file is a thin wrapper that Streamlit runs.
 
 Run locally:       streamlit run dashboard.py
@@ -18,7 +18,7 @@ Run on Render:     streamlit run dashboard.py --server.port $PORT
 import logging
 import sys
 
-from corp_actions.dashboard_ui.app import main
+from corporate_actions.dashboard_interface.app import main
 
 logging.basicConfig(level=logging.INFO, stream=sys.stdout)
 
