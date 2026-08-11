@@ -27,18 +27,45 @@ Rules for any AI agent or human working on this repository.
 
 ### Folder structure
 
+All entry points are thin wrappers - the logic lives in `corp_actions/`,
+organised as small packages of single-purpose modules:
+
 ```
-run_bot.py              entry point for the GitHub Actions cron (thin)
-bot_server.py           always-on long-polling server entry (thin)
-app.py / dashboard.py / dashboard_server.py   Streamlit UI / combined server
-corp_actions/           the actual logic, split by responsibility:
-    config.py           env config / defaults
-    sources.py          NSE/BSE/Yahoo fetch + parsing
-    storage.py          JSON state files + locking
-    notifier.py         Telegram send / formatting
-    poller.py           background poll cycle
-    scheduler.py        scheduled-reports loop (owns its own timing state)
-    harmonic.py         harmonic-pattern analysis
+run_bot.py                    cron entry: commands + one poll cycle (thin)
+bot_server.py                 always-on long-polling server entry (thin)
+dashboard.py                  Streamlit dashboard entry (thin)
+dashboard_server.py           Render entry: dashboard + bot together
+app.py                        Streamlit watchlist editor (thin)
+corp_actions/
+  config.py                   env + endpoint configuration (no deps)
+  github.py                   git state sync: push/pull JSON state files + --check diag
+  scheduler.py                scheduled-reports loop (per-user /schedule)
+  core/                       pure primitives: dates.py, numbers.py, text.py
+  sources/                    one module per data source (nse, bse, quotes,
+                              news, universe, ohlc, screener, fundamentals,
+                              rights, types, http, errors) + package facade
+  storage/                    one module per state file (watchlist,
+                              subscriptions, settings, seen, schedule) over
+                              json_file.py atomic base + package facade
+  telegram/                   protocol layer: client.py (send/getUpdates),
+                              markup.py (keyboard builders)
+  formatting/                 message renderers: actions, news, stock,
+                              schedule + package facade
+  market/                     movement-screen helpers shared by bot + dashboard
+                              (periods.py, change.py)
+  poller/                     polling engine: engine.py (Poller), events.py,
+                              fetchers.py, watcher.py
+  scanner/                    NIFTY 500 scanner: indicators, rules, scan,
+                              scoring, regime, report
+  harmonic/                   harmonic patterns: patterns, analysis, report
+  bot/                        Telegram bot package: dispatch.py (router),
+                              registry.py (aliases + menu), reply.py, helpers.py,
+                              runner.py (cron loop + CLI), and one module per
+                              command family (ca_cmds, watchlist_cmds,
+                              settings_cmds, schedule_cmds, movers_cmds,
+                              fund_cmds, harmonic_cmds, scan_cmds, status)
+  dashboard_ui/               web dashboard: helpers.py (pure), widgets.py (st),
+                              help_text.py, tabs/ (one module per tab), app.py
 ```
 
 ## 3. Other conventions

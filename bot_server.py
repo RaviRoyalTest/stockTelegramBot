@@ -21,22 +21,21 @@ import threading
 import time
 
 from corp_actions import config
-from corp_actions.poller import poller
-import run_bot as run_bot_mod
-from run_bot import (
+from corp_actions.bot.dispatch import handle_callback_query, handle_command, handle_query_text
+from corp_actions.bot.registry import register_commands
+from corp_actions.bot.reply import reply
+from corp_actions.bot.runner import start_scheduled_reports
+from corp_actions.github import (
     _ahead_of_origin,
     _push_branch,
-    get_updates,
     github_push_configured,
-    handle_command,
-    handle_query_text,
     pending_state_changes,
+    push_error,
     push_state,
-    register_commands,
-    reply,
-    start_scheduled_reports,
     sync_state,
 )
+from corp_actions.poller import poller
+from corp_actions.telegram.client import get_updates
 
 
 class _ImmediateStreamHandler(logging.StreamHandler):
@@ -286,7 +285,7 @@ def main():
                 callback = update.get("callback_query")
                 if callback:
                     try:
-                        run_bot_mod.handle_callback_query(callback)
+                        handle_callback_query(callback)
                     except Exception as exc:
                         log.warning("callback query failed: %s", config.redact(exc))
                     offset = update["update_id"] + 1
@@ -341,14 +340,14 @@ def main():
                                         "State NOT pushed for %s - change is "
                                         "saved locally but will be LOST on "
                                         "redeploy: %s",
-                                        cmd, run_bot_mod.push_error,
+                                        cmd, push_error,
                                     )
                                     reply(
                                         chat_id,
                                         "⚠️ Your change was saved only on this "
                                         "server's disk, NOT pushed to GitHub. "
                                         "It will be LOST on the next redeploy. "
-                                        f"Reason: {run_bot_mod.push_error}. Run "
+                                        f"Reason: {push_error}. Run "
                                         "/status for details, or `python "
                                         "run_bot.py --check` on the host.",
                                     )

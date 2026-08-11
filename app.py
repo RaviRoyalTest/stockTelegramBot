@@ -1,28 +1,25 @@
-"""Streamlit UI for selecting stocks and monitoring corporate-action alerts."""
+"""Streamlit UI for selecting stocks and monitoring corporate-action alerts.
+
+A simpler companion to dashboard.py: watchlist editing + poller control. The
+pure helpers (labels, parsing, company resolution) are shared with the main
+dashboard via corp_actions.dashboard_ui.helpers.
+"""
 import logging
-import re
 import sys
-from concurrent.futures import ThreadPoolExecutor, as_completed
 
 import streamlit as st
 
-from corp_actions import config, notifier, sources, storage
+from corp_actions import config, sources, storage
+from corp_actions.dashboard_ui.helpers import (
+    item_from_label,
+    label_of,
+    parse_telegram_watchlist,
+    resolve_company_names,
+)
 from corp_actions.poller import poller
+from corp_actions.telegram.client import NotifierError, is_configured, send_message
 
 logging.basicConfig(level=logging.INFO, stream=sys.stdout)
-
-
-def label_of(item: dict) -> str:
-    company = f" - {item['company']}" if item.get("company") else ""
-    code = f" [{item['code']}]" if item.get("code") else ""
-    return f"{item['exchange']} · {item['symbol']}{code}{company}"
-
-
-def item_from_label(label: str, stock_list: list[dict]) -> dict | None:
-    for item in stock_list:
-        if label_of(item) == label:
-            return item
-    return None
 
 
 def persist_watchlist(selected_labels, stock_list):
@@ -41,92 +38,6 @@ def persist_watchlist(selected_labels, stock_list):
         if (i["exchange"].upper(), i["symbol"].upper()) not in options_keys
     ]
     return storage.save_watchlist(selected + extras)
-
-
-def parse_telegram_watchlist(text: str) -> list[dict]:
-    """Parse a Telegram watchlist message into a list of {'symbol', 'exchange'}.
-
-    Handles the format produced by the bot's /watchlist command, e.g.:
-
-        Your Watchlist:
-        1. AMBER (NSE)
-        2. ASHOKLEY (NSE)
-        ...
-        44. VBL (NSE)
-
-        Use /fundamentalanalyze 5-10 or /fundamentalreport 3-5 to get details by these numbers.
-        Saved in: subscriptions.json (your chat 862087765)
-        Persistence: pushed to GitHub - it survives redeploys.
-
-    Returns a list of dicts with 'symbol' and 'exchange' keys, preserving
-    the order they appear in the pasted text.
-    """
-    items: list[dict] = []
-    seen: set = set()
-    # Match lines like "1. AMBER (NSE)" or "12. GOLDBEES (NSE)"
-    pattern = re.compile(
-        r"^\s*\d+[\.\)]\s*([A-Za-z0-9\-]+)\s*\(([A-Za-z0-9]+)\)\s*$",
-        re.IGNORECASE,
-    )
-    for line in text.splitlines():
-        line = line.strip()
-        m = pattern.match(line)
-        if not m:
-            continue
-        symbol = m.group(1).upper()
-        exchange = m.group(2).upper()
-        if exchange not in ("NSE", "BSE"):
-            exchange = "NSE"
-        key = (exchange, symbol)
-        if key not in seen:
-            seen.add(key)
-            items.append({"symbol": symbol, "exchange": exchange})
-    return items
-
-
-def resolve_company_names(items: list[dict]) -> list[dict]:
-    """Attach company names to watchlist items using the NSE stock list.
-
-    Falls back to fetching a quote for symbols not found in the stock list.
-    """
-    if not items:
-        return items
-
-    # Build a lookup from the NSE stock list (cached).
-    symbol_to_company: dict[str, str] = {}
-    try:
-        nse_list = sources.get_nse_stock_list_cached()
-        for s in nse_list:
-            symbol_to_company[s["symbol"].upper()] = s.get("company", "")
-    except Exception:
-        nse_list = []
-
-    resolved = []
-    missing = []
-    for item in items:
-        company = symbol_to_company.get(item["symbol"].upper(), "")
-        if company:
-            resolved.append({**item, "company": company})
-        else:
-            missing.append(item)
-
-    # For symbols not in the NSE list, try fetching a quote to get the name.
-    if missing:
-        with ThreadPoolExecutor(max_workers=10) as ex:
-            futures = {
-                ex.submit(sources.get_quote, i["exchange"], i["symbol"]): i
-                for i in missing
-            }
-            for fut in as_completed(futures):
-                item = futures[fut]
-                try:
-                    quote = fut.result()
-                except Exception:
-                    quote = None
-                company = (quote or {}).get("name", "") if quote else ""
-                resolved.append({**item, "company": company})
-
-    return resolved
 
 
 @st.dialog("Check Results", width="large", dismissible=True)
@@ -176,16 +87,16 @@ st.caption("Watch NSE & BSE corporate actions (dividends, splits, bonus, rights)
 # ---------------------------------------------------------------- sidebar
 with st.sidebar:
     st.header("Telegram")
-    if notifier.is_configured():
+    if is_configured():
         st.success(f"Configured · chat_id {config.TELEGRAM_CHAT_ID}")
     else:
         st.warning("Not configured. Copy `.env.example` to `.env` and set "
                    "`TELEGRAM_BOT_TOKEN` and `TELEGRAM_CHAT_ID`.")
-    if st.button("Send test message", disabled=not notifier.is_configured()):
+    if st.button("Send test message", disabled=not is_configured()):
         try:
-            notifier.send_message("<b>Corporate Action Alerts</b> test message OK.")
+            send_message("<b>Corporate Action Alerts</b> test message OK.")
             st.success("Test message sent.")
-        except notifier.NotifierError as exc:
+        except NotifierError as exc:
             st.error(str(exc))
 
     st.header("Sources")
