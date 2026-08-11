@@ -79,9 +79,9 @@ def quick_menu_markup() -> dict:
     return {
         "keyboard": [
             ["/corpactionsformylist"],
-            ["/myfavourites", "/corpactions"],
+            ["/myfavourites run", "/corpactions"],
             ["/corpactionssummary", "/topgainers 1h", "/toplosers 1h"],
-            ["/watchlist", "/settings", "/help"],
+            ["/watchlist", "/all", "/help"],
             ["/menu off"],
         ],
         "resize_keyboard": True,
@@ -207,6 +207,16 @@ def symbol_buttons(symbols: list[str], prefix: str = "fund", per_row: int = 4) -
             for sym in symbols[i:i + per_row]
         ])
     return {"inline_keyboard": rows}
+
+
+def fundamentals_button(label: str = "Get Fundamentals") -> dict:
+    """One-tap button that enriches the current movers report with fundamentals.
+
+    callback_data "mfund" tells the bot to fetch fundamentals for the last
+    screen the user ran and send the full enriched report - so price-only
+    movers reports stay fast and fundamentals are fetched only on demand.
+    """
+    return {"inline_keyboard": [[{"text": label, "callback_data": "mfund"}]]}
 
 
 def format_corporate_action(action: dict) -> str:

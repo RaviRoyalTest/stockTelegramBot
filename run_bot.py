@@ -107,9 +107,8 @@ HELP_TEXT = (
     "\u2B50 <b>Watchlist</b>\n"
     "━━━━━━━━━━━━━━━━━━━━\n"
     "/watchlist           \u2192 show your full watchlist\n"
-    "/myfavourites        \u2192 run your favourite commands in one go:\n"
-    "                       corporate actions for your list, top losers (1h +\n"
-    "                       today), watchlist &amp; fundamentals for your stocks\n"
+    "/myfavourites        \u2192 see / run / edit your favourite commands:\n"
+    "                       <code>/myfavourites run</code> fires them all now\n"
     "/addstock SYMBOL [NSE|BSE] \u2192 add a stock (default NSE)\n"
     "  /addstock RELIANCE NSE  \u00b7  /addstock PGINVIT\n"
     "/removestock SYMBOL  \u2192 remove a stock from your watchlist\n"
@@ -153,7 +152,9 @@ HELP_TEXT = (
     "  /topgainers 1mo 20 500  \u2192 top 20 gainers this month, NIFTY 500\n\n"
     "/toplosers <i>[period] [N] [100|500]</i>  \u2192 top falling stocks\n"
     "  /toplosers 1h 10       \u2192 top 10 losers last hour\n"
-    "  /toplosers 1w nifty100 \u2192 weekly losers, NIFTY 100\n\n"
+    "  /toplosers 1w nifty100 \u2192 weekly losers, NIFTY 100\n"
+    "  Movers reports end with a <b>Get Fundamentals</b> button - tap it for\n"
+    "  P/E, ROCE/ROE, dividend yield etc. Change this with /moversfund.\n\n"
     "Periods: 5m \u00b7 15m \u00b7 30m \u00b7 1h \u00b7 2h \u00b7 4h \u00b7 today \u00b7 1d \u00b7 2d \u00b7 5d \u00b7 1w \u00b7 2w \u00b7 1mo \u00b7 3mo \u00b7 6mo \u00b7 1y\n"
     "Universe: n100/nifty100=NIFTY 100 \u00b7 n500/nifty500=NIFTY 500\n"
     "Tip: for /topgainers &amp; /toplosers a bare 100/500 means the top-N count\n"
@@ -173,9 +174,12 @@ HELP_TEXT = (
     "━━━━━━━━━━━━━━━━━━━━\n"
     "/status              \u2192 YOUR personal setup (watchlist, schedule, settings, alerts)\n"
     "/schedule add 3h /scan500  \u2192 YOUR report runs /scan500 automatically every 3h\n"
+    "/schedule run \u00b7 /schednow  \u2192 run all YOUR scheduled reports right now\n"
     "/checknow            \u2192 force-run alerts and re-send all matches\n"
     "/watcher             \u2192 big-move alerts: /watcher on, off, set 5, universe nifty500\n"
+    "/moversfund          \u2192 movers: fundamentals via button or automatically\n"
     "/menu                \u2192 one-tap command buttons (tap, no typing)\n"
+    "/all                 \u2192 every command in one copyable list\n"
     "/help \u00b7 /start       \u2192 show this guide\n\n"
     "━━━━━━━━━━━━━━━━━━━━\n"
     "\U0001F4A1 <b>Quick Examples</b>\n"
@@ -187,7 +191,7 @@ HELP_TEXT = (
     "/corpactions dividend   \u2192 Upcoming dividends\n"
     "/corpactions RELIANCE   \u2192 RELIANCE corporate actions\n"
     "/corpactionsformylist  \u2192 Watchlist ex-dates + in-progress actions\n"
-    "/myfavourites          \u2192 All your regular commands in one go\n"
+    "/myfavourites run        \u2192 All your regular commands in one go\n"
     "/addstock INFY NSE      \u2192 Add INFY to watchlist\n"
     "/news RELIANCE          \u2192 Latest RELIANCE headlines\n"
     "/alertfilters bonus,split  \u2192 Only bonus &amp; split alerts\n"
@@ -282,6 +286,15 @@ def _pricealert_status_text(chat_id) -> str:
     return "Price alerts: <b>" + ("off" if not alert else f"{float(alert):g}%") + "</b>"
 
 
+def _moversfund_status_text(chat_id) -> str:
+    mode = (storage.get_user_settings(chat_id) or {}).get("movers_fund", "button")
+    if mode == "auto":
+        state = "fundamentals sent automatically with every report"
+    else:
+        state = "price report ends with a <b>Get Fundamentals</b> button"
+    return f"\U0001F4CA <b>Movers fundamentals</b>\nMode: {state}"
+
+
 def _watcher_universe(raw) -> str | None:
     """Normalize a watcher universe token (nifty100 / nifty500 / mylist).
 
@@ -312,6 +325,7 @@ COMMAND_STATUS = {
     "/pricealert": _pricealert_status_text,
     "/alertfilters": _alertfilters_status_text,
     "/schedule": _schedule_status_text,
+    "/moversfund": _moversfund_status_text,
 }
 
 
@@ -415,6 +429,7 @@ COMMAND_USAGE = {
         "<b>/schedule</b> - your automated reports (per user)\n"
         "/schedule add 3h /scan500          \u2192 every 3 hours\n"
         "/schedule add at 09:15 /toplosers 1h  \u2192 daily at 09:15 IST\n"
+        "/schedule run | /schednow          \u2192 run them all right now\n"
         "/schedule remove 1                 \u2192 remove YOUR entry #1\n"
         "/schedule clear                    \u2192 remove all of yours"
     ),
@@ -437,6 +452,12 @@ COMMAND_USAGE = {
         "/watcher universe nifty500 \u2192 nifty100 | nifty500 | mylist\n"
         "/watcher       \u2192 show current status"
     ),
+    "/moversfund": (
+        "<b>/moversfund</b> - how movers reports show fundamentals\n"
+        "/moversfund button \u2192 price report ends with a <b>Get Fundamentals</b> button (default)\n"
+        "/moversfund auto   \u2192 send full fundamentals automatically with every report\n"
+        "/moversfund        \u2192 show current mode"
+    ),
     "/addstock": (
         "<b>/addstock</b> - add a stock to your watchlist\n"
         "/addstock RELIANCE NSE  \u2192 add RELIANCE (NSE)\n"
@@ -445,11 +466,6 @@ COMMAND_USAGE = {
     "/removestock": (
         "<b>/removestock</b> - remove a stock from your watchlist\n"
         "/removestock TCS        \u2192 remove TCS"
-    ),
-    "/menu": (
-        "<b>/menu</b> - one-tap command buttons (no typing)\n"
-        "/menu       \u2192 show the quick menu\n"
-        "/menu off   \u2192 hide the quick menu"
     ),
 }
 
@@ -472,12 +488,6 @@ DESCRIBE_AND_RUN = {
         "\U0001F4CA <b>/status</b> - where your watchlist is saved, GitHub push status "
         "and your personal data scope.",
         lambda cid: handle_status(cid),
-    ),
-    "/myfavourites": (
-        "\u2B50 <b>/myfavourites</b> - runs your regular commands in ONE go: "
-        "corporate actions for your list, top losers (1h + today), your watchlist "
-        "and deep fundamentals for your stocks.",
-        lambda cid: handle_favourites(cid),
     ),
     "/corpactionssummary": (
         "\U0001F4CA <b>/corpactionssummary</b> - corporate-action snapshot: counts "
@@ -554,6 +564,14 @@ def handle_command(chat_id, text):
 
     if cmd in ("/start", "/help", "/"):
         send_help(chat_id)
+        return
+
+    if cmd == "/all":
+        _reply_messages(
+            chat_id,
+            _split_messages(ALL_COMMANDS_TEXT.split("\n")),
+            reply_markup=notifier.quick_menu_markup(),
+        )
         return
 
     # Bare main command -> list its subcommands (like /watcher does). Only
@@ -712,7 +730,8 @@ def handle_command(chat_id, text):
             settings["watcher"] = watcher
             storage.save_user_settings(chat_id, settings)
             reply(chat_id, f"Watcher universe set to <b>{u.upper()}</b> "
-                  f"({"ON" if watcher.get("enabled") else "OFF"} - use <code>/watcher on</code> to enable).")
+                  + ("ON" if watcher.get("enabled") else "OFF")
+                  + " - use <code>/watcher on</code> to enable.")
             return
         # status
         state = "ON" if watcher.get("enabled") else "OFF"
@@ -724,6 +743,32 @@ def handle_command(chat_id, text):
               "<code>/watcher on</code> / <code>/watcher off</code>\n"
               "<code>/watcher set 3</code>  (alert at 3% move)\n"
               "<code>/watcher universe nifty500</code>  (nifty100 | nifty500 | mylist)")
+        return
+
+    if cmd == "/moversfund":
+        settings = storage.get_user_settings(chat_id)
+        sub = parts[1].lower() if len(parts) > 1 else "status"
+        if sub in ("button", "on", "manual", "tap"):
+            settings["movers_fund"] = "button"
+            storage.save_user_settings(chat_id, settings)
+            reply(chat_id, "\U0001F4CA <b>Movers fundamentals: button mode.</b>\n"
+                  "Every movers report now ends with a <b>Get Fundamentals</b> "
+                  "button - tap it to fetch P/E, ROCE/ROE, dividend yield etc. "
+                  "for that screen.")
+            return
+        if sub in ("auto", "full", "always", "complete"):
+            settings["movers_fund"] = "auto"
+            storage.save_user_settings(chat_id, settings)
+            reply(chat_id, "\U0001F4CA <b>Movers fundamentals: auto mode.</b>\n"
+                  "Full fundamentals are now sent automatically with every "
+                  "movers report.")
+            return
+        mode = settings.get("movers_fund", "button")
+        state = ("fundamentals sent automatically with every report"
+                 if mode == "auto"
+                 else "reports end with a <b>Get Fundamentals</b> button")
+        reply(chat_id, f"\U0001F4CA <b>Movers fundamentals</b>\nMode: {state}\n\n"
+              "Change it with <code>/moversfund button</code> or <code>/moversfund auto</code>.")
         return
 
     if cmd == "/status":
@@ -766,14 +811,14 @@ def handle_command(chat_id, text):
         return
 
     if cmd in ("/myfavourites", "/favorites", "/favourites", "/mypicks", "/dailybrief"):
-        handle_favourites(chat_id)
+        handle_favourites(chat_id, parts)
         return
 
     if cmd in ("/menu", "/quick", "/shortcuts", "/buttons"):
         handle_menu(chat_id, parts)
         return
 
-    if cmd in ("/sched", "/schedule"):
+    if cmd in ("/sched", "/schedule", "/schednow"):
         handle_sched(chat_id, parts)
         return
 
@@ -1011,26 +1056,144 @@ def handle_status(chat_id) -> None:
     )
 
 
-def handle_favourites(chat_id) -> None:
-    """Run the user's favourite / regular commands in one go (/myfavourites).
+DEFAULT_FAVOURITES = [
+    "/corpactionsformylist",
+    "/toplosers 1h",
+    "/toplosers 1d 10",
+    "/watchlist",
+    "/fundamentalreport mylist",
+]
 
-    Bundle: corporate actions for the watchlist, top losers (1h + today),
-    the watchlist itself, and deep fundamentals for the watchlist.
+
+def _get_favourites(chat_id) -> list[str]:
+    """Return the chat's favourite-command list (defaults when not set)."""
+    cmds = storage.get_user_settings(chat_id).get("favourites")
+    if isinstance(cmds, list) and cmds:
+        return [str(c).strip() for c in cmds if str(c).strip()]
+    return list(DEFAULT_FAVOURITES)
+
+
+def _save_favourites(chat_id, cmds: list[str]) -> None:
+    settings = storage.get_user_settings(chat_id)
+    settings["favourites"] = cmds
+    storage.save_user_settings(chat_id, settings)
+
+
+def _favourites_summary(chat_id) -> str:
+    cmds = _get_favourites(chat_id)
+    lines = ["\U0001F4CB <b>Your Favourites</b> - these run when you type "
+             "<code>/myfavourites run</code>:\n"]
+    for i, c in enumerate(cmds, 1):
+        lines.append(f"  {i}. <code>{html.escape(c)}</code>")
+    lines.append(
+        "\nChange them: <code>/myfavourites set /cmd</code>, "
+        "<code>/myfavourites add /cmd</code>, "
+        "<code>/myfavourites remove N</code>, <code>/myfavourites reset</code>."
+    )
+    return "\n".join(lines)
+
+
+def _run_favourites(chat_id) -> None:
+    cmds = _get_favourites(chat_id)
+    reply(
+        chat_id,
+        "\U0001F4CB <b>Your Favourites</b> - running your commands...\n"
+        + "\n".join(f"  \u2022 <code>{html.escape(c)}</code>" for c in cmds),
+    )
+    for cmd in cmds:
+        try:
+            log.info("favourites: running %s (chat %s)", cmd, chat_id)
+            handle_command(chat_id, cmd)
+        except Exception as exc:
+            log.warning("favourites: command %s failed: %s", cmd, config.redact(exc), exc_info=True)
+            try:
+                reply(chat_id, f"<code>{html.escape(cmd)}</code> failed: {html.escape(config.redact(str(exc)))}")
+            except Exception:
+                pass
+    reply(
+        chat_id,
+        "\u2705 <b>Favourites done.</b> Run again with <code>/myfavourites run</code> "
+        "or edit the list with <code>/myfavourites set /cmd</code>.",
+    )
+
+
+def _group_favourite_cmds(tokens: list[str]) -> list[str]:
+    """Group raw tokens into commands, starting a new command at each '/' token.
+
+    /myfavourites set /toplosers 1h /news -> ['/toplosers 1h', '/news']
     """
-    reply(
-        chat_id,
-        "\U0001F4CB <b>Your Favourites</b> - running your regular commands...",
-    )
-    send_watchlist_actions(chat_id)
-    handle_gainers_losers(chat_id, ["/toplosers", "1h"], "losers")
-    handle_gainers_losers(chat_id, ["/toplosers", "1d", "10"], "losers")
-    send_watchlist(chat_id)
-    handle_fund_analysis(chat_id, ["/fundamentalreport", "mylist"])
-    reply(
-        chat_id,
-        "\u2705 <b>Favourites done.</b> Use <code>/menu</code> for one-tap commands "
-        "or <code>/myfavourites</code> to run this again.",
-    )
+    cmds: list[str] = []
+    for tok in tokens:
+        if not tok:
+            continue
+        if tok.startswith("/") or not cmds:
+            cmds.append(tok)
+        else:
+            cmds[-1] += " " + tok
+    return [c for c in cmds if c.startswith("/")]
+
+
+def handle_favourites(chat_id, parts=None) -> None:
+    """Show / run / edit the user's favourite commands (/myfavourites).
+
+    /myfavourites          -> show the current list (and how to edit it)
+    /myfavourites run      -> run the list now
+    /myfavourites set /c1 /c2 ... -> replace the whole list
+    /myfavourites add /c   -> append a command
+    /myfavourites remove N -> drop command #N (1-based)
+    /myfavourites reset    -> restore the default list
+    """
+    parts = parts or ["/myfavourites"]
+    sub = parts[1].lower() if len(parts) > 1 else ""
+
+    if sub in ("run", "now", "execute"):
+        _run_favourites(chat_id)
+        return
+
+    if sub == "set":
+        cmds = _group_favourite_cmds(parts[2:])
+        if not cmds:
+            reply(chat_id, "Usage: <code>/myfavourites set /cmd1 /cmd2 ...</code>")
+            return
+        _save_favourites(chat_id, cmds)
+        log.info("chat %s set favourites: %s", chat_id, cmds)
+        reply(chat_id, f"\u2705 Favourites updated.\n\n{_favourites_summary(chat_id)}")
+        return
+
+    if sub == "add":
+        cmds = _get_favourites(chat_id)
+        added = _group_favourite_cmds(parts[2:])
+        if not added:
+            reply(chat_id, "Usage: <code>/myfavourites add /cmd</code>")
+            return
+        cmds.extend(added)
+        _save_favourites(chat_id, cmds)
+        log.info("chat %s added favourites: %s", chat_id, added)
+        reply(chat_id, f"\u2705 Favourites updated.\n\n{_favourites_summary(chat_id)}")
+        return
+
+    if sub == "remove":
+        cmds = _get_favourites(chat_id)
+        try:
+            n = int(parts[2]) - 1 if len(parts) > 2 else -1
+        except ValueError:
+            n = -1
+        if n < 0 or n >= len(cmds):
+            reply(chat_id, "Usage: <code>/myfavourites remove N</code> (number from the list).")
+            return
+        removed = cmds.pop(n)
+        _save_favourites(chat_id, cmds)
+        log.info("chat %s removed favourite %s", chat_id, removed)
+        reply(chat_id, f"\u2705 Removed <code>{html.escape(removed)}</code>.\n\n{_favourites_summary(chat_id)}")
+        return
+
+    if sub == "reset":
+        _save_favourites(chat_id, list(DEFAULT_FAVOURITES))
+        log.info("chat %s reset favourites to defaults", chat_id)
+        reply(chat_id, f"\u2705 Favourites reset to defaults.\n\n{_favourites_summary(chat_id)}")
+        return
+
+    reply(chat_id, _favourites_summary(chat_id))
 
 
 def _close_symbols(query: str, limit: int = 3) -> list[str]:
@@ -1331,12 +1494,82 @@ QUICK_MENU_TEXT = (
     "<b>\U0001F447 One-Tap Command Menu</b>\n"
     "Tap any button below - the command runs instantly, no typing needed.\n\n"
     "\u2022 <code>/corpactionsformylist</code> - corporate actions for YOUR list\n"
-    "\u2022 <code>/myfavourites</code> - all your regular commands in one go\n"
+    "\u2022 <code>/myfavourites run</code> - all your regular commands in one go\n"
     "\u2022 <code>/corpactions</code> - all NSE+BSE corporate actions\n"
     "\u2022 <code>/corpactionssummary</code> - counts + next ex-dates\n"
     "\u2022 <code>/topgainers 1h</code> / <code>/toplosers 1h</code> - movers\n"
-    "\u2022 <code>/watchlist</code> - your stocks\n\n"
+    "\u2022 <code>/watchlist</code> - your stocks\n"
+    "\u2022 <code>/all</code> - copy the full list of every command\n\n"
     "The menu stays visible until you hide it with <code>/menu off</code>."
+)
+
+
+ALL_COMMANDS_TEXT = (
+    "<b>\U0001F4DA All Commands - copy any line and send it</b>\n"
+    "<i>Every command you can use, grouped by purpose.</i>\n\n"
+    "\u2B50 <b>One-Tap Menu</b>\n"
+    "  /menu                    \u2192 show the button menu (always on until /menu off)\n"
+    "  /menu off                \u2192 hide the button menu\n"
+    "  /all                     \u2192 this list, always up to date\n\n"
+    "\U0001F4C5 <b>Corporate Actions</b>\n"
+    "  /corpactionsformylist    \u2192 corporate actions for YOUR watchlist\n"
+    "  /corpactions             \u2192 all NSE+BSE corporate actions\n"
+    "  /corpactionssummary      \u2192 counts + next ex-dates\n"
+    "  /corpactions dividend    \u2192 only dividends\n"
+    "  /corpactions bonus|split|rights|buyback \u2192 one type\n"
+    "  /corpactions today       \u2192 ex-dates due today\n"
+    "  /corpactions 7           \u2192 ex-dates in the next 7 days\n"
+    "  /corpactions RELIANCE    \u2192 full details for one symbol\n"
+    "  /corpactions TATA        \u2192 keyword search\n"
+    "  /exdates [today|N]       \u2192 all actions by ex-date window\n\n"
+    "\u2B50 <b>Watchlist &amp; Favourites</b>\n"
+    "  /watchlist               \u2192 show your watchlist\n"
+    "  /myfavourites            \u2192 see the commands it runs\n"
+    "  /myfavourites run        \u2192 run your favourite commands\n"
+    "  /myfavourites set /cmd   \u2192 replace your favourite commands\n"
+    "  /myfavourites add /cmd   \u2192 append a command\n"
+    "  /myfavourites remove N   \u2192 remove command #N\n"
+    "  /myfavourites reset      \u2192 restore the default list\n"
+    "  /addstock SYMBOL NSE|BSE \u2192 add a stock\n"
+    "  /removestock SYMBOL      \u2192 remove a stock\n"
+    "  /news [N|SYMBOL]         \u2192 headlines for your stocks\n\n"
+    "\U0001F50D <b>Stock Analysis</b>\n"
+    "  /fundamentalanalyze SYM  \u2192 quick analysis card\n"
+    "  /fundamentalanalyze mylist | N-M \u2192 your stocks\n"
+    "  /fundamentalreport SYM   \u2192 DEEP fundamental report\n"
+    "  /fundamentalreport mylist|N-M \u2192 deep reports for your stocks\n"
+    "  /harmonicpatterns [100|500] [TF] \u2192 harmonic scan\n"
+    "  /scan500                 \u2192 full NIFTY 500 technical scanner\n\n"
+    "\U0001F4C8 <b>Market Screens</b>\n"
+    "  /topmovers [period] [N] [100|500]  \u2192 gainers AND losers\n"
+    "  /topgainers [period] [N] [100|500] \u2192 top rising stocks\n"
+    "  /toplosers [period] [N] [100|500]  \u2192 top falling stocks\n"
+    "  Periods: 5m 15m 30m 1h 2h 4h today 1d 2d 5d 1w 2w 1mo 3mo 6mo 1y\n"
+    "  Universe: n100/nifty100 \u00b7 n500/nifty500\n\n"
+    "\u2699\ufe0f <b>Alerts &amp; Personalisation</b>\n"
+    "  /alertfilters TYPE,TYPE  \u2192 only chosen action types (dividend,bonus,split,rights,buyback)\n"
+    "  /pricealert PCT          \u2192 alert on \u00b1PCT% daily move (off to disable)\n"
+    "  /watcher on|off|set N|universe U \u2192 big-move alerts\n"
+    "  /moversfund button|auto  \u2192 movers reports: fundamentals via button or auto\n"
+    "  /settings                \u2192 view your filters, alerts &amp; screen options\n\n"
+    "\U0001F6E0 <b>Automation</b>\n"
+    "  /schedule                \u2192 show YOUR schedule\n"
+    "  /schedule add 3h /scan500 \u2192 run every 3h\n"
+    "  /schedule add at 09:15 /toplosers 1h \u2192 run daily at 09:15 IST\n"
+    "  /schedule run            \u2192 run all your scheduled commands NOW\n"
+    "  /schednow                \u2192 alias of /schedule run\n"
+    "  /schedule remove N       \u2192 remove entry #N\n"
+    "  /schedule clear          \u2192 remove all of yours\n"
+    "  /checknow                \u2192 force-run alert checks now\n"
+    "  /status                  \u2192 your personal setup + GitHub push status\n\n"
+    "\U0001F4A1 <b>Quick Examples</b>\n"
+    "  /topgainers 1h 10        \u2192 Top 10 gainers last hour\n"
+    "  /toplosers 1mo nifty500  \u2192 Monthly losers, NIFTY 500\n"
+    "  /topmovers 2d 10 500     \u2192 2-day movers, top 10\n"
+    "  /corpactions dividend    \u2192 Upcoming dividends\n"
+    "  /myfavourites run        \u2192 All your regular commands in one go\n"
+    "  /addstock INFY NSE       \u2192 Add INFY to watchlist\n"
+    "\U0001F4DD You can also just type plain text: \"gainers\", \"dividends\", \"news\"."
 )
 
 
@@ -1375,8 +1608,9 @@ def format_settings(chat_id) -> str:
             "Watcher: " + ("off" if not watcher.get("enabled")
                            else f"on at {float(watcher.get('threshold') or 5):g}% "
                                 f"({(watcher.get('universe') or 'nifty100').upper()})"),
+            "Movers fundamentals: " + ("auto" if settings.get("movers_fund") == "auto" else "button"),
             f"Your list is saved in: {where}",
-            "Customize with /alertfilters, /pricealert and /watcher.",
+            "Customize with /alertfilters, /pricealert, /watcher and /moversfund.",
         ]
     )
 
@@ -1496,7 +1730,46 @@ def format_schedule(chat_id) -> str:
         "\nUsage: <code>/schedule add 3h /scan500</code> (interval: 180, 90m, 3h, 1d)"
     )
     lines.append("<code>/schedule remove 1</code>  /  <code>/schedule clear</code>")
+    lines.append("<code>/schedule run</code>  /  <code>/schednow</code> — run them all now")
     return "\n".join(lines)
+
+
+def _run_schedule_now(chat_id) -> None:
+    """Run every command in the requester's OWN schedule immediately (/schednow).
+
+    Loads the chat's schedule entries (including the owner's env defaults when
+    the owner has no file entries) and fires each command now, in order. This
+    is purely a manual trigger - it does not change the auto-schedule timing.
+    """
+    mine = storage.load_schedule_for(chat_id)
+    cmds = []
+    for e in mine:
+        cmds.extend(c for c in (e.get("commands") or []) if c.strip())
+    if not cmds:
+        if storage.is_owner(chat_id):
+            cmds = [c for c in config.SCHEDULED_COMMANDS if c.strip()]
+        if not cmds:
+            reply(chat_id, "No scheduled commands for your chat yet.\n"
+                  "Add one with <code>/schedule add 3h /scan500</code>, then "
+                  "use <code>/schedule run</code> to fire it now.")
+            return
+    reply(
+        chat_id,
+        "\u23f0 <b>Running your schedule now</b>\n"
+        + "\n".join(f"  \u2022 <code>{html.escape(c)}</code>" for c in cmds)
+        + "\n\nReports are on their way - the bigger scans take a minute or two.",
+    )
+    for cmd in cmds:
+        try:
+            log.info("schednow: running %s (chat %s)", cmd, chat_id)
+            handle_command(chat_id, cmd)
+        except Exception as exc:
+            log.warning("schednow: command %s failed: %s", cmd, config.redact(exc), exc_info=True)
+            try:
+                reply(chat_id, f"<code>{html.escape(cmd)}</code> failed: {html.escape(config.redact(str(exc)))}")
+            except Exception:
+                pass
+    reply(chat_id, "\u2705 <b>Schedule run complete.</b>")
 
 
 def handle_sched(chat_id, parts) -> None:
@@ -1510,7 +1783,11 @@ def handle_sched(chat_id, parts) -> None:
     Everything is scoped to the requesting chat - one user's schedule can
     never change or disturb another user's.
     """
+    cmd_name = parts[0].lower()
     sub = parts[1].lower() if len(parts) > 1 else ""
+    if cmd_name == "/schednow" and not sub:
+        _run_schedule_now(chat_id)
+        return
     if sub == "add":
         if len(parts) < 4:
             reply(
@@ -1603,6 +1880,10 @@ def handle_sched(chat_id, parts) -> None:
             "Your schedule cleared - no automated reports will run "
             "for your chat. Other users' schedules are untouched.",
         )
+        return
+
+    if sub in ("run", "now", "force"):
+        _run_schedule_now(chat_id)
         return
 
     reply(chat_id, format_schedule(chat_id))
@@ -1936,12 +2217,38 @@ def handle_market_screen(chat_id, parts, default_direction="all",
     phase1_lines = _format_price_movers_report(rows, header)
     if failed:
         phase1_lines += f"\n({failed} of {len(symbols)} stocks could not be loaded)"
-    _reply_messages(chat_id, _split_messages(phase1_lines.split("\n")))
+    fund_mode = (storage.get_user_settings(chat_id) or {}).get("movers_fund", "button")
+    phase1_markup = None
+    if fund_mode == "button":
+        # Remember this screen so the "Get Fundamentals" button can enrich it.
+        _LAST_SCREEN[chat_id] = {
+            "rows": rows,
+            "header": header,
+            "failed": failed,
+            "symbols": len(symbols),
+        }
+        phase1_markup = notifier.fundamentals_button()
+    _reply_messages(chat_id, _split_messages(phase1_lines.split("\n")), reply_markup=phase1_markup)
     log.info(
-        "screen %s: initial report sent (%d rows) in %.1fs",
-        parts[0], len(rows), monotonic() - t0,
+        "screen %s: initial report sent (%d rows) in %.1fs (fundamentals=%s)",
+        parts[0], len(rows), monotonic() - t0, fund_mode,
     )
+    if fund_mode == "button":
+        return
 
+    _send_screen_fundamentals(chat_id, rows, header, failed, len(symbols), parts[0], t0)
+
+
+_LAST_SCREEN: dict[int, dict] = {}
+
+
+def _send_screen_fundamentals(chat_id, rows, header, failed, symbols_total, screen_cmd, t0) -> None:
+    """Fetch fundamentals and send the enriched movers report.
+
+    Used by the "Get Fundamentals" button (button mode) and as Phase 2 of a
+    normal screen run (auto mode). Rows come from the live screen context so
+    the button always enriches the exact report the user just saw.
+    """
     # Phase 2 - fetch fundamentals (Screener + Yahoo Finance) and send the
     # enriched report. To protect against screener.in's aggressive rate
     # limiting, the slow screener.in part is only fetched for the first
@@ -1970,16 +2277,16 @@ def handle_market_screen(chat_id, parts, default_direction="all",
                 fund_by_sym[sym] = None
                 log.info(
                     "screen %s: fundamentals failed for %s: %s",
-                    parts[0], sym, exc,
+                    screen_cmd, sym, exc,
                 )
             if done % 10 == 0 or done == len(tasks):
                 log.info(
                     "screen %s: fundamentals progress %d/%d rows",
-                    parts[0], done, len(tasks),
+                    screen_cmd, done, len(tasks),
                 )
     log.info(
         "screen %s: fundamentals fetch complete (%d rows) in %.1fs",
-        parts[0], len(tasks), monotonic() - t_fund,
+        screen_cmd, len(tasks), monotonic() - t_fund,
     )
 
     enriched_report = _format_enriched_movers_report(rows, header, fund_by_sym)
@@ -1989,7 +2296,7 @@ def handle_market_screen(chat_id, parts, default_direction="all",
             f"{sources.FUND_MAX_ROWS} stocks)"
         )
     if failed:
-        enriched_report += f"\n({failed} of {len(symbols)} stocks could not be loaded)"
+        enriched_report += f"\n({failed} of {symbols_total} stocks could not be loaded)"
     # Cross-link: one tappable button per top symbol -> deep fundamentals
     tap_symbols = [sym for sym, _ in rows[:10]]
     _reply_messages(
@@ -2000,7 +2307,7 @@ def handle_market_screen(chat_id, parts, default_direction="all",
     log.info(
         "screen %s: final report sent (%d rows) in %.1fs (total %.1fs), "
         "quote failures=%d",
-        parts[0], len(rows), monotonic() - t_fund, monotonic() - t0, failed,
+        screen_cmd, len(rows), monotonic() - t_fund, monotonic() - t0, failed,
     )
 
 
@@ -2648,6 +2955,23 @@ def handle_callback_query(callback) -> None:
         return
     _answer_callback(callback_id)
 
+    if data == "mfund":
+        # "Get Fundamentals" button on a movers report: enrich the last
+        # screen this chat ran (stored at Phase-1 time) and send the full
+        # fundamentals report. If the stored screen is gone (bot restarted),
+        # tell the user to re-run the movers command.
+        ctx = _LAST_SCREEN.get(chat_id)
+        if not ctx:
+            reply(chat_id, "The movers screen expired - please re-run your movers command, then tap again.")
+            return
+        log.info("callback mfund for chat %s (%d symbols)", chat_id, len(ctx["rows"]))
+        _send_screen_fundamentals(
+            chat_id,
+            ctx["rows"], ctx["header"], ctx["failed"], ctx["symbols"],
+            "mfund", monotonic(),
+        )
+        return
+
     if data.startswith("fund:") or data.startswith("ana:"):
         # Symbol cross-link buttons: tap a ticker in any report to open its
         # fundamentals immediately (deep /fundamentalreport or the quick card).
@@ -3123,7 +3447,10 @@ def register_commands() -> bool:
         {"command": "status", "description": "Check persistence / GitHub push"},
         {"command": "checknow", "description": "Force a check and resend alerts"},
         {"command": "watcher", "description": "Big-move alerts: /watcher on, off, set 5, universe nifty500"},
+        {"command": "moversfund", "description": "Movers: button vs auto fundamentals"},
+        {"command": "all", "description": "Show every command - copy & send any line"},
         {"command": "menu", "description": "One-tap command buttons - no typing"},
+        {"command": "schednow", "description": "Run all your scheduled commands right now"},
         {"command": "help", "description": "Show all commands and examples"},
     ]
     url = f"https://api.telegram.org/bot{config.TELEGRAM_BOT_TOKEN}/setMyCommands"

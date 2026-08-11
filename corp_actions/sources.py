@@ -978,6 +978,28 @@ _global_fund_crumb = ""
 _global_fund_crumb_ts = 0.0
 _CRUMB_TTL = 3600  # 1 hour
 
+_fund_req_lock = threading.Lock()
+_last_fund_req = 0.0
+_FUND_REQ_INTERVAL = 0.15  # seconds between quoteSummary requests (Yahoo 429 guard)
+
+
+def _throttle_fund_req():
+    """Enforce a minimum gap between Yahoo quoteSummary requests.
+
+    Yahoo aggressively rate-limits (HTTP 429 "Edge: Too Many Requests"),
+    which is the root cause of the missing P/E, MCap, ROCE/ROE and dividend
+    yield on the movers reports. A tiny global inter-request gap plus the
+    existing per-thread sessions keeps bulk fundamentals well under the
+    limit even when the movers enrichment fans out across 10 threads.
+    """
+    global _last_fund_req
+    now = time.time()
+    with _fund_req_lock:
+        wait = _last_fund_req + _FUND_REQ_INTERVAL - now
+        if wait > 0:
+            time.sleep(wait)
+        _last_fund_req = time.time()
+
 
 def _invalidate_crumb():
     """Drop the cached Yahoo crumb so the next call re-fetches it.
@@ -1037,6 +1059,7 @@ def _quote_summary(symbol: str) -> dict | None:
             "https://query1.finance.yahoo.com",
             "https://query2.finance.yahoo.com",
         ):
+            _throttle_fund_req()
             url = f"{host}/v10/finance/quoteSummary/{quote(symbol)}.NS"
             try:
                 resp = sess.get(
@@ -1047,6 +1070,9 @@ def _quote_summary(symbol: str) -> dict | None:
                     },
                     timeout=config.HTTP_TIMEOUT,
                 )
+                if resp.status_code == 429:
+                    log.info("_quote_summary: 429 rate-limited for %s on %s — trying other host", symbol, host)
+                    continue
                 if resp.status_code == 401:
                     log.info("_quote_summary: 401 for %s on %s — refreshing crumb", symbol, host)
                     _invalidate_crumb()
@@ -1099,7 +1125,11 @@ def _chart_fundamentals(symbol: str) -> dict:
             "?range=1y&interval=1d&includePrePost=false"
         )
         try:
+            _throttle_fund_req()
             resp = _quote_session().get(url, timeout=config.HTTP_TIMEOUT)
+            if resp.status_code == 429:
+                log.info("_chart_fundamentals: 429 rate-limited for %s on %s — trying other host", symbol, host)
+                continue
             resp.raise_for_status()
             res = resp.json()
             result = (res.get("chart") or {}).get("result") or []
