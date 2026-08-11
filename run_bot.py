@@ -28,7 +28,7 @@ try:
     import requests
 
     import corp_actions.poller as poller_mod
-    from corp_actions import harmonic, notifier, sources, storage
+    from corp_actions import harmonic, notifier, scheduler, sources, storage
     from corp_actions.poller import poller
 except ImportError:
     # The dependency-light --check diagnostic must still run when
@@ -1637,35 +1637,11 @@ def _parse_interval_min(raw: str) -> int | None:
 def _next_at_ist(hhmm: str) -> float | None:
     """Epoch seconds of the next occurrence of an "HH:MM" wall-clock time in IST.
 
-    Returns None when the string is not a valid HH:MM. Used by the schedule
-    so a report can be tied to an exact clock time (e.g. run at 09:15 IST)
-    instead of only an interval - and it lands on that minute regardless of
-    the host's timezone.
+    Delegates to corp_actions.scheduler (kept here so command handlers and
+    the dashboard can keep using run_bot._next_at_ist without importing the
+    scheduler module directly).
     """
-    import datetime as _dt
-    m = re.fullmatch(r"(\d{1,2}):(\d{2})", str(hhmm or "").strip())
-    if not m:
-        return None
-    hour, minute = int(m.group(1)), int(m.group(2))
-    if not (0 <= hour <= 23 and 0 <= minute <= 59):
-        return None
-    try:
-        from zoneinfo import ZoneInfo
-        tz = ZoneInfo("Asia/Kolkata")
-    except Exception:
-        tz = None
-    now_utc = _dt.datetime.now(_dt.timezone.utc)
-    if tz is None:
-        now_local = _dt.datetime.now()
-        cand = now_local.replace(hour=hour, minute=minute, second=0, microsecond=0)
-        if cand <= now_local:
-            cand += _dt.timedelta(days=1)
-        return cand.timestamp()
-    now_ist = now_utc.astimezone(tz)
-    cand = now_ist.replace(hour=hour, minute=minute, second=0, microsecond=0)
-    if cand <= now_ist:
-        cand += _dt.timedelta(days=1)
-    return cand.timestamp()
+    return scheduler.next_at_ist(hhmm)
 
 
 def _fmt_next_run(due_ts: float) -> str:
@@ -3514,132 +3490,15 @@ def process_commands():
     return checknow_chat
 
 
-def _schedule_entries_with_defaults(default_chat: str) -> list[dict]:
-    """schedule.json entries plus the owner's env-default report.
-
-    The env defaults (SCHEDULED_COMMANDS) keep running for the owner chat
-    until the owner adds their own file entries. Subscribers adding their
-    own entries must never suppress those defaults - this guarantees one
-    user's schedule never disturbs another's.
-    """
-    entries = storage.load_schedule()
-    cmds = [c for c in config.SCHEDULED_COMMANDS if c.strip()]
-    if cmds:
-        owner_has_entries = any(
-            str(e.get("chat") or default_chat) == str(default_chat)
-            for e in entries
-        )
-        if not owner_has_entries:
-            entries = entries + [{
-                "interval_min": config.SCHEDULED_REPORTS_INTERVAL_MIN,
-                "commands": cmds,
-                "chat": default_chat,
-            }]
-    return entries
-
-
 def start_scheduled_reports():
-    """Run scheduled reports to EACH user's own chat on a timer (daemon thread).
+    """Start scheduled reports in a daemon thread.
 
-    Only the always-on server runs these (PROCESS_COMMANDS=true); the GitHub
-    Actions cron and any other process skip them so scans are never sent
-    twice. The first report fires a short while after startup so the server
-    has finished booting before the scans hit the data feeds.
-
-    Entries come from schedule.json (manageable from Telegram with /schedule)
-    and every entry is delivered to the chat that created it - schedules are
-    fully per-user. When the owner has no file entries the env-var defaults
-    (SCHEDULED_COMMANDS + SCHEDULED_REPORTS_INTERVAL_MIN) are used so existing
-    deployments keep working; other users' entries never suppress those
-    defaults. The schedule is re-read each loop, so /schedule add/remove/clear
-    take effect without a redeploy.
+    Delegates to corp_actions.scheduler, injecting run_bot's command handler
+    as the runner (dependency inversion - the scheduler never imports run_bot,
+    so there is no circular import). See corp_actions/scheduler.py for the
+    loop, timing and per-user schedule logic.
     """
-    if not config.SCHEDULED_REPORTS_ENABLED:
-        log.info("SCHEDULED_REPORTS_ENABLED=false - scheduled reports off")
-        return
-    if not config.PROCESS_COMMANDS:
-        log.info("PROCESS_COMMANDS=false - scheduled reports skipped (cron instance)")
-        return
-    default_chat = config.SCHEDULED_REPORTS_CHAT or config.TELEGRAM_CHAT_ID
-    if not default_chat:
-        log.warning("SCHEDULED_REPORTS_CHAT / TELEGRAM_CHAT_ID not set - scheduled reports off")
-        return
-
-    def _entries():
-        return _schedule_entries_with_defaults(default_chat)
-
-    # (chat, commands) -> monotonic() seconds when the next run is due.
-    # Keyed on the entry's identity (not its list index) so one user adding
-    # or removing their entries never changes another user's timing.
-    next_due = {}
-
-    def _loop():
-        import time as _time
-        while True:
-            try:
-                now = monotonic()
-                entries = _entries()
-                if not entries:
-                    log.info("scheduled reports: schedule is empty - nothing to run")
-                    next_due.clear()
-                    _time.sleep(60)
-                    continue
-                # Drop due-times for entries that no longer exist so removed
-                # schedules never linger, and (chat, commands) stays stable
-                # across add/remove in other users' rows.
-                alive = {
-                    (str(e.get("chat") or default_chat),
-                     tuple(c for c in e.get("commands") or [] if c.strip()))
-                    for e in entries
-                }
-                next_due = {k: v for k, v in next_due.items() if k in alive}
-                for entry in entries:
-                    interval = int(entry.get("interval_min") or config.SCHEDULED_REPORTS_INTERVAL_MIN)
-                    commands = [c for c in entry.get("commands") or [] if c.strip()]
-                    chat = str(entry.get("chat") or default_chat)
-                    if not commands:
-                        continue
-                    key = (chat, tuple(commands))
-                    # Persisted next-due (schedule.json) wins so the cadence
-                    # survives redeploys. For a clock-time entry (run_at) the
-                    # first due is the next occurrence of HH:MM in IST. Plain
-                    # interval entries fall back to a short first-run delay.
-                    persisted = storage.schedule_next_due_ts(entry)
-                    due = next_due.get(key)
-                    if due is None:
-                        if persisted is not None:
-                            due = persisted
-                        elif entry.get("run_at"):
-                            due = _next_at_ist(entry["run_at"])
-                            if due is None:
-                                due = now + min(interval * 60, 60)
-                        else:
-                            due = now + min(interval * 60, 60)
-                        next_due[key] = due
-                    if now < due:
-                        continue
-                    for cmd in commands:
-                        try:
-                            log.info("scheduled report: running %s (chat %s)", cmd, chat)
-                            handle_command(chat, cmd)
-                        except Exception as exc:  # one bad report must not stop the loop
-                            log.warning(
-                                "scheduled report %s failed: %s",
-                                cmd, config.redact(exc), exc_info=True,
-                            )
-                    # Schedule the next run AND persist it, so a redeploy
-                    # resumes the same cadence instead of restarting the clock.
-                    nxt = _time.time() + interval * 60
-                    next_due[key] = nxt
-                    storage.set_schedule_next_due(chat, commands, interval, nxt)
-            except Exception as exc:  # never let a scheduler hiccup kill the thread
-                log.warning(
-                    "scheduled reports loop error: %s",
-                    config.redact(exc), exc_info=True,
-                )
-            _time.sleep(30)
-
-    threading.Thread(target=_loop, daemon=True, name="scheduled-reports").start()
+    scheduler.start_scheduled_reports(run_command=handle_command)
 
 
 # ----------------------------------------------------------------------- git

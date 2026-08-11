@@ -18,6 +18,14 @@ from . import config, notifier, sources, storage
 
 log = logging.getLogger(__name__)
 
+# Symbols whose per-symbol NSE corporate-action fetch failed recently. A
+# delisted / renamed / non-equity symbol (ETF, gold bond, InvIT) is NOT in
+# NSE's corporate-action feed, so the per-symbol API errors on it every
+# cycle. Caching the miss stops the same symbol from failing + being counted
+# as a poll error again and again (noisy "N error(s)" lines and wasted calls).
+_nse_fetch_fail: dict[str, float] = {}
+_NSE_FETCH_FAIL_TTL = 3600  # seconds - re-check the symbol hourly
+
 FETCHERS = {
     "NSE": sources.get_nse_corporate_actions,
     "BSE": sources.get_bse_corporate_actions,
@@ -395,8 +403,17 @@ class Poller:
 
             def _fetch_nse(sym):
                 try:
-                    return sources.get_nse_corporate_actions(symbol=sym), None
+                    res = sources.get_nse_corporate_actions(symbol=sym)
+                    _nse_fetch_fail.pop(sym, None)
+                    return res, None
                 except Exception as exc:
+                    now = time.monotonic()
+                    last = _nse_fetch_fail.get(sym)
+                    if last and now - last < _NSE_FETCH_FAIL_TTL:
+                        # Known miss (delisted / non-equity symbol) - skip
+                        # quietly instead of failing the whole cycle again.
+                        return [], None
+                    _nse_fetch_fail[sym] = now
                     return [], f"NSE:{sym}: {exc}"
 
             with ThreadPoolExecutor(max_workers=10) as ex:

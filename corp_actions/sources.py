@@ -113,7 +113,11 @@ def _pick(obj, *keys, default=""):
 # Finance (public, no key). Suffixes: .NS = NSE, .BO = BSE.
 
 _quote_cache: dict = {}
+_quote_fail_cache: dict = {}
 _QUOTE_TTL = 60  # seconds
+_QUOTE_FAIL_TTL = 600  # seconds: remember a symbol Yahoo doesn't have, so a
+# watchlist full of delisted/renamed stocks does not re-hit Yahoo every cycle
+# (and spam INFO logs) - it is re-checked only after the window expires.
 
 _tls = threading.local()
 
@@ -146,6 +150,10 @@ def get_quote(exchange: str, symbol: str) -> dict | None:
     if cached and now - cached["ts"] < _QUOTE_TTL:
         log.debug("quote cache hit for %s:%s", exchange, symbol)
         return cached["data"]
+    failed = _quote_fail_cache.get((exchange, symbol))
+    if failed and now - failed < _QUOTE_FAIL_TTL:
+        log.debug("quote negative-cache hit for %s:%s", exchange, symbol)
+        return None
 
     suffix = ".BO" if exchange == "BSE" else ".NS"
     hosts = [
@@ -171,6 +179,10 @@ def get_quote(exchange: str, symbol: str) -> dict | None:
             continue
 
     if not meta:
+        # Yahoo has no data for this symbol (delisted, renamed, or a typo).
+        # Cache the miss so a stock that will never resolve does not hammer
+        # Yahoo every poll cycle and flood the logs with INFO lines.
+        _quote_fail_cache[(exchange, symbol)] = now
         log.info("quote lookup failed for %s:%s (Yahoo %s)", exchange, symbol, suffix)
         return None
 

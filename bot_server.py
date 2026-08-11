@@ -78,6 +78,13 @@ WRITE_COMMANDS = {
 # exactly how a stock can 'vanish' on the next redeploy.
 PUSH_FLUSH_SECONDS = int(os.getenv("PUSH_FLUSH_SECONDS", "180"))
 
+# Backoff (seconds) after a Telegram getUpdates 409 conflict. During a Render
+# deploy the old and new instances briefly overlap and both poll getUpdates;
+# the conflict clears when the old one shuts down. Sleeping here instead of
+# polling every second keeps the log quiet and stops the loop from fighting
+# the other process for the whole deploy window.
+_CONFLICT_BACKOFF = float(os.getenv("GETUPDATES_CONFLICT_BACKOFF", "20"))
+
 # Bind retry for the health server: PaaS instance swaps can briefly leave
 # the port held by the previous process, and Render only waits ~90s for the
 # first health check before timing the deploy out.
@@ -367,13 +374,20 @@ def main():
         except Exception as exc:
             err = config.redact(exc)
             if "409" in err:
+                # Another process currently holds getUpdates for this token -
+                # normally the OLD Render instance still shutting down during
+                # a deploy (both call getUpdates until the old one dies). Back
+                # off instead of hammering every second; the conflict clears
+                # on its own once the other process exits.
                 log.warning(
                     "409 Conflict: another process is polling this bot token. "
-                    "Only ONE process may call getUpdates - stop the other "
-                    "bot_server.py / disable command processing in the GitHub "
-                    "Actions cron (PROCESS_COMMANDS=false). %s",
-                    err,
+                    "This usually clears on its own when the old deploy "
+                    "instance shuts down - backing off %.1fs. If it persists, "
+                    "stop the other bot_server.py / ensure the GitHub Actions "
+                    "cron keeps PROCESS_COMMANDS=false. %s",
+                    _CONFLICT_BACKOFF, err,
                 )
+                time.sleep(_CONFLICT_BACKOFF)
             else:
                 log.warning("poll error (retrying): %s", err)
         time.sleep(1)

@@ -389,7 +389,7 @@ def _action_meta_caption(a: dict) -> str:
     bc = [d for d in (a.get("bc_start"), a.get("bc_end"))
           if d and str(d).strip() not in ("", "-")]
     if bc:
-        parts.append(f"Book Closure: {' \u2013 '.join(bc)}")
+        parts.append("Book Closure: " + " \u2013 ".join(bc))
     rs, re_ = a.get("rights_start"), a.get("rights_end")
     if rs and re_ and str(rs).strip() not in ("", "-") and str(re_).strip() not in ("", "-"):
         parts.append(f"Offer Window: {rs} \u2192 {re_}")

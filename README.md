@@ -244,8 +244,15 @@ corp_actions/
   storage.py                # watchlist + seen-cache persistence
   notifier.py               # Telegram send + message formatting
   poller.py                 # background polling loop
+  scheduler.py              # scheduled-reports loop (per-user /schedule)
+  harmonic.py               # harmonic-pattern analysis
 .github/workflows/poller.yml  # hourly cron workflow
 ```
+
+> Keep `run_bot.py` thin: new logic belongs in a module under `corp_actions/`
+> (one module = one job), and `corp_actions/` modules must not `import run_bot`
+> (circular import). Pass the command runner / callbacks in as parameters
+> instead - see `corp_actions/scheduler.py`.
 
 ## Notes
 
