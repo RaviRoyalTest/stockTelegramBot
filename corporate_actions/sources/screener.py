@@ -111,14 +111,15 @@ def get_sector_pe(slug: str) -> float | None:
 
 
 def _parse_chg(curr_str, prev_str):
+    """Append the QoQ change as a colour-coded (emoji) delta, e.g. '50.2% (\U0001F7E2\u25b2+0.48%)'."""
     try:
         current_price = float(re.sub(r"[^\d\.-]", "", curr_str))
         previous_price = float(re.sub(r"[^\d\.-]", "", prev_str))
         diff = round(current_price - previous_price, 2)
         if diff > 0:
-            return f"{curr_str} (\u25b2+{diff:.2f}%)"
+            return f"{curr_str} (\U0001F7E2\u25b2+{diff:.2f}%)"
         elif diff < 0:
-            return f"{curr_str} (\u25bc{diff:.2f}%)"
+            return f"{curr_str} (\U0001F534\u25bc{diff:.2f}%)"
         else:
             return curr_str
     except Exception:
