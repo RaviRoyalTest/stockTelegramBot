@@ -5,6 +5,8 @@ fundamentals), these functions only turn them into Telegram HTML.
 """
 from __future__ import annotations
 
+import re
+
 from ..core.numbers import format_money
 from ..core.text import escape
 
@@ -289,6 +291,107 @@ def _growth_pct_str(value) -> str:
     return f"{arrow} {formatted}"
 
 
+def _short_year(label) -> str:
+    """'Mar 2022' / 'Jun 2026' -> 'Mar'22' / 'Jun'26'."""
+    match = re.search(r"([A-Za-z]+)\s*(\d{4})", label or "")
+    if match:
+        return f"{match.group(1)}'{match.group(2)[2:]}"
+    return label or ""
+
+
+def _cr_cr(value) -> str:
+    """screener.in money in \u20b9 Crore (the source already reports Cr units)."""
+    try:
+        number = float(value)
+    except (TypeError, ValueError):
+        return "N/A"
+    sign = "\u2212" if number < 0 else ""
+    return f"{sign}\u20b9{abs(number):,.0f}Cr"
+
+
+def _arrow_pct(percent) -> str:
+    """Percent (already in % units) with a green/red arrow."""
+    if percent is None:
+        return "N/A"
+    arrow = "\U0001F7E2\u25b2" if percent >= 0 else "\U0001F534\u25bc"
+    return f"{arrow} {percent:+.1f}%"
+
+
+def _annual_trend_lines(fund: dict) -> list[str]:
+    """5-6 fiscal-year P&L trend in a monospace table (screener.in annuals)."""
+    annuals = fund.get("annuals") or []
+    if not annuals:
+        return []
+    recent = annuals[-6:]
+    lines = ["<b>\U0001F4C8 ANNUAL PERFORMANCE (5-YR TREND)</b>"]
+    header = (
+        f"{'Fiscal':<7}{'Sales':>10}{'S-YoY':>7}{'OPM':>6}"
+        f"{'NetPr':>10}{'NP-YoY':>7}{'EPS':>6}{'ROCE':>6}"
+    )
+    lines.append(f"<code>{header}</code>")
+    for item in recent:
+        year = _short_year(item.get("year"))
+        sales = f"{item['sales']:,.0f}" if item.get("sales") is not None else "N/A"
+        s_growth = f"{item['sales_growth']:+.1f}" if item.get("sales_growth") is not None else "N/A"
+        opm = f"{item['opm']:.0f}" if item.get("opm") is not None else "N/A"
+        net = f"{item['net_profit']:,.0f}" if item.get("net_profit") is not None else "N/A"
+        n_growth = f"{item['profit_growth']:+.1f}" if item.get("profit_growth") is not None else "N/A"
+        eps = f"{item['eps']:.1f}" if item.get("eps") is not None else "N/A"
+        roce = f"{item['roce']:.0f}" if item.get("roce") is not None else "N/A"
+        line = (
+            f"{year:<7}{sales:>10}{s_growth:>7}{opm:>6}"
+            f"{net:>10}{n_growth:>7}{eps:>6}{roce:>6}"
+        )
+        lines.append(f"<code>{line}</code>")
+    latest = recent[-1]
+    bits = []
+    if latest.get("sales_growth") is not None:
+        bits.append(f"Sales {_arrow_pct(latest['sales_growth'])}")
+    if latest.get("profit_growth") is not None:
+        bits.append(f"Profit {_arrow_pct(latest['profit_growth'])}")
+    if latest.get("interest_coverage") is not None:
+        bits.append(f"Int Coverage <b>{_num_or_na(latest['interest_coverage'], 1)}x</b>")
+    if bits:
+        lines.append("  \u00b7  ".join(bits))
+    return lines
+
+
+def _quarterly_lines(fund: dict) -> list[str]:
+    """Last-6-quarters Sales/OPM/Net Profit/EPS in a monospace table."""
+    quarters = fund.get("quarters") or []
+    if not quarters:
+        return []
+    recent = quarters[-6:]
+    lines = ["<b>\U0001F4C5 QUARTERLY RESULTS (LAST 6 QUARTERS)</b>"]
+    header = f"{'Quarter':<8}{'Sales':>10}{'OPM':>6}{'NetPr':>10}{'EPS':>7}"
+    lines.append(f"<code>{header}</code>")
+    for item in recent:
+        quarter = _short_year(item.get("quarter"))
+        sales = f"{item['sales']:,.0f}" if item.get("sales") is not None else "N/A"
+        opm = f"{item['opm']:.0f}" if item.get("opm") is not None else "N/A"
+        net = f"{item['net_profit']:,.0f}" if item.get("net_profit") is not None else "N/A"
+        eps = f"{item['eps']:.1f}" if item.get("eps") is not None else "N/A"
+        line = f"{quarter:<8}{sales:>10}{opm:>6}{net:>10}{eps:>7}"
+        lines.append(f"<code>{line}</code>")
+    latest, previous = recent[-1], recent[-2] if len(recent) >= 2 else None
+    bits = []
+    if (
+        previous
+        and latest.get("net_profit") is not None
+        and previous.get("net_profit") is not None
+        and previous["net_profit"] != 0
+    ):
+        qoq = (latest["net_profit"] - previous["net_profit"]) / abs(previous["net_profit"]) * 100
+        bits.append(f"NP QoQ {_arrow_pct(qoq)}")
+    if latest.get("opm") is not None:
+        bits.append(f"OPM {latest['opm']:.0f}%")
+    if latest.get("eps") is not None:
+        bits.append(f"EPS {_num_or_na(latest['eps'], 2)}")
+    if bits:
+        lines.append("  \u00b7  ".join(bits))
+    return lines
+
+
 def _fund_report_lines(raw_symbol, quote, fund, include_tip=True, label="") -> list[str]:
     """Build the deep /fund fundamental report for one symbol."""
     price = quote.get("price")
@@ -397,7 +500,9 @@ def _fund_report_lines(raw_symbol, quote, fund, include_tip=True, label="") -> l
             lines.append(f"Shares Outstanding: <b>{fund['shares_outstanding'] / 1e7:,.2f}Cr</b>")
         lines.append("")
 
-    # Section 5: Balance sheet
+    # Section 5: Balance sheet & cash flow
+    balance_sheet = fund.get("balance_sheet") or {}
+    cash_flow = fund.get("cash_flow") or {}
     balance_sheet_parts = []
     if fund.get("debt_to_equity") is not None:
         balance_sheet_parts.append(f"D/E: <b>{_num_or_na(fund['debt_to_equity'], 2)}</b>")
@@ -405,14 +510,43 @@ def _fund_report_lines(raw_symbol, quote, fund, include_tip=True, label="") -> l
         balance_sheet_parts.append(f"Current Ratio: <b>{_num_or_na(fund['current_ratio'], 2)}</b>")
     if fund.get("quick_ratio") is not None:
         balance_sheet_parts.append(f"Quick Ratio: <b>{_num_or_na(fund['quick_ratio'], 2)}</b>")
-    if balance_sheet_parts or fund.get("total_cash") is not None or fund.get("total_debt") is not None:
-        lines.append("<b>\U0001F4C9 BALANCE SHEET</b>")
+    if (
+        balance_sheet_parts
+        or fund.get("total_cash") is not None
+        or fund.get("total_debt") is not None
+        or balance_sheet
+        or cash_flow
+    ):
+        lines.append("<b>\U0001F4C9 BALANCE SHEET & CASH FLOW</b>")
         if balance_sheet_parts:
             lines.append("  \u00b7  ".join(balance_sheet_parts))
         if fund.get("total_cash") is not None or fund.get("total_debt") is not None:
             lines.append(
                 f"Cash: <b>{_cr_str(fund.get('total_cash'))}</b>  \u00b7  Debt: <b>{_cr_str(fund.get('total_debt'))}</b>"
             )
+        # screener.in snapshot (values already in \u20b9 Crore)
+        bs_bits = []
+        if balance_sheet.get("net_worth") is not None:
+            bs_bits.append(f"Net Worth: <b>{_cr_cr(balance_sheet['net_worth'])}</b>")
+        if balance_sheet.get("borrowings") is not None:
+            bs_bits.append(f"Borrowings: <b>{_cr_cr(balance_sheet['borrowings'])}</b>")
+        if balance_sheet.get("total_assets") is not None:
+            bs_bits.append(f"Total Assets: <b>{_cr_cr(balance_sheet['total_assets'])}</b>")
+        if bs_bits:
+            year_tag = f" <i>(FY {_short_year(balance_sheet.get('year'))})</i>" if balance_sheet.get("year") else ""
+            lines.append("\U0001F7E2 " + "  \u00b7  ".join(bs_bits) + year_tag)
+        cf_bits = []
+        if cash_flow.get("cfo") is not None:
+            cf_bits.append(f"CFO {_cr_cr(cash_flow['cfo'])}")
+        if cash_flow.get("cfi") is not None:
+            cf_bits.append(f"CFI {_cr_cr(cash_flow['cfi'])}")
+        if cash_flow.get("cff") is not None:
+            cf_bits.append(f"CFF {_cr_cr(cash_flow['cff'])}")
+        if cash_flow.get("free_cash_flow") is not None:
+            cf_bits.append(f"FCF {_cr_cr(cash_flow['free_cash_flow'])}")
+        if cf_bits:
+            year_tag = f" <i>(FY {_short_year(cash_flow.get('year'))})</i>" if cash_flow.get("year") else ""
+            lines.append("\U0001F4B5 " + "  \u00b7  ".join(cf_bits) + year_tag)
         cash_flow_parts = []
         if fund.get("free_cashflow") is not None:
             cash_flow_parts.append(f"Free Cash Flow: <b>{_cr_str(fund['free_cashflow'])}</b>")
@@ -433,7 +567,19 @@ def _fund_report_lines(raw_symbol, quote, fund, include_tip=True, label="") -> l
         lines.append("  \u00b7  ".join(returns_parts))
         lines.append("")
 
-    # Section 7: Analyst view
+    # Section 7: Annual P&L trend (screener.in)
+    annual_lines = _annual_trend_lines(fund)
+    if annual_lines:
+        lines.extend(annual_lines)
+        lines.append("")
+
+    # Section 8: Quarterly results (screener.in)
+    quarter_lines = _quarterly_lines(fund)
+    if quarter_lines:
+        lines.extend(quarter_lines)
+        lines.append("")
+
+    # Section 9: Analyst view
     if fund.get("num_analysts") or fund.get("target_mean"):
         lines.append("<b>\U0001F52D ANALYST VIEW</b>")
         if fund.get("target_mean") is not None:
@@ -457,7 +603,7 @@ def _fund_report_lines(raw_symbol, quote, fund, include_tip=True, label="") -> l
             lines.append(f"Analysts Covering: <b>{fund['num_analysts']}</b>")
         lines.append("")
 
-    # Section 8: Shareholding QoQ trend
+    # Section 10: Shareholding QoQ trend
     lines.append("<b>\U0001F4BC SHAREHOLDING (QoQ TREND)</b>")
     if any(fund.get(key) for key in ("promoter_pct", "fii_pct", "dii_pct", "public_pct")):
         lines.extend(_holding_lines(
