@@ -90,6 +90,10 @@ ALIAS_TO_MAIN = {
     "/fundamental-analysis": "/fundamentalanalyze",
     "/fund": "/fundamentalreport",
     "/fundamentals": "/fundamentalreport",
+    "/investcheck": "/checklist",
+    "/scorecard": "/checklist",
+    "/qualitycheck": "/checklist",
+    "/quality": "/checklist",
     "/harmonic": "/harmonicpatterns",
     "/movers": "/topmovers",
     "/marketmovers": "/topmovers",
@@ -141,22 +145,66 @@ COMMAND_USAGE = {
         "Timeframes: 5m 15m 30m 1h 4h 1d 1w  (alias /harmonic)"
     ),
     "/topmovers": (
-        "<b>/topmovers</b> - top gainers AND losers\n"
-        "/topmovers          \u2192 last 1h, NIFTY 100\n"
-        "/topmovers 2d 500   \u2192 2-day movers, NIFTY 500\n"
-        "/topmovers 1w 10    \u2192 top 10 movers this week"
+        "<b>/topmovers</b> - top gainers AND losers (default: last 1h, NIFTY 100)\n"
+        "Tap a command below to copy it, then send it.\n\n"
+        "<b>Quick picks</b>\n"
+        "<code>/topmovers</code>             \u2192 last 1h, NIFTY 100\n"
+        "<code>/topmovers 1h 10</code>       \u2192 top 10 movers last hour\n"
+        "<code>/topmovers today 25</code>    \u2192 today\u2019s top 25 movers\n"
+        "<code>/topmovers 1w 500</code>      \u2192 weekly movers, NIFTY 500\n"
+        "<code>/topmovers 1mo nifty100</code> \u2192 monthly movers, NIFTY 100\n\n"
+        "<b>Periods</b>  5m 15m 30m 1h 2h 4h today 1d 2d 5d 1w 2w 1mo 3mo 6mo 1y\n"
+        "<b>Universe</b>  n100/nifty100 \u00b7 n500/nifty500 (bare 100/500 picks the index here)\n"
+        "Each row shows P/E, sector P/E, 52W range, div yield, holdings &amp; D/E "
+        "(via the Get Fundamentals button - change with /moversfund)."
     ),
     "/topgainers": (
-        "<b>/topgainers</b> - top rising stocks\n"
-        "/topgainers 1h         \u2192 last 1h gainers\n"
-        "/topgainers 1mo 20 500 \u2192 top 20 gainers this month, NIFTY 500\n"
-        "/topgainers 100        \u2192 top 100 gainers"
+        "<b>/topgainers</b> - top rising stocks (default: today, NIFTY 500, top 30)\n"
+        "Tap a command below to copy it, then send it.\n\n"
+        "<b>Quick picks</b>\n"
+        "<code>/topgainers</code>          \u2192 today\u2019s top 30 gainers\n"
+        "<code>/topgainers 1h</code>       \u2192 last 1h gainers\n"
+        "<code>/topgainers 1h 10</code>    \u2192 top 10 gainers last hour\n"
+        "<code>/topgainers 100</code>      \u2192 top 100 gainers today\n"
+        "<code>/topgainers 1mo 20 500</code> \u2192 top 20 monthly gainers, NIFTY 500\n\n"
+        "<b>Periods</b>  5m 15m 30m 1h 2h 4h today 1d 2d 5d 1w 2w 1mo 3mo 6mo 1y\n"
+        "<b>Universe</b>  n100/nifty100 \u00b7 n500/nifty500\n"
+        "Note: for gainers a bare 100/500 is the top-N count (e.g. /topgainers 100 = "
+        "top 100) - use nifty100/nifty500 to pick the index. "
+        "Each row also shows P/E, sector P/E, 52W range, div yield, holdings &amp; D/E."
     ),
     "/toplosers": (
-        "<b>/toplosers</b> - top falling stocks\n"
-        "/toplosers 1h 10       \u2192 top 10 losers last hour\n"
-        "/toplosers 1w nifty100 \u2192 weekly losers, NIFTY 100\n"
-        "/toplosers 100         \u2192 top 100 losers"
+        "<b>/toplosers</b> - top falling stocks (default: today, NIFTY 500, top 30)\n"
+        "Tap a command below to copy it, then send it.\n\n"
+        "<b>Quick picks</b>\n"
+        "<code>/toplosers</code>              \u2192 today\u2019s top 30 losers\n"
+        "<code>/toplosers 1h</code>           \u2192 losers in the last hour\n"
+        "<code>/toplosers 1h 10</code>        \u2192 top 10 losers last hour\n"
+        "<code>/toplosers 100</code>          \u2192 top 100 losers today\n"
+        "<code>/toplosers 1w nifty100</code>  \u2192 weekly losers, NIFTY 100\n\n"
+        "<b>More periods</b>\n"
+        "<code>/toplosers 30m</code>          \u2192 last 30 minutes\n"
+        "<code>/toplosers 2d</code>           \u2192 last 2 days\n"
+        "<code>/toplosers 1w</code>           \u2192 last week\n"
+        "<code>/toplosers 1mo</code>          \u2192 last month\n\n"
+        "<b>Universe + count</b>\n"
+        "<code>/toplosers nifty500</code>     \u2192 whole NIFTY 500\n"
+        "<code>/toplosers 20 500</code>       \u2192 top 20 losers, NIFTY 500\n"
+        "<code>/toplosers 1h 5 nifty100</code> \u2192 top 5 losers last hour, NIFTY 100\n\n"
+        "<b>Periods</b>  5m 15m 30m 1h 2h 4h today 1d 2d 5d 1w 2w 1mo 3mo 6mo 1y\n"
+        "<b>Universe</b>  n100/nifty100 \u00b7 n500/nifty500\n"
+        "Note: for losers a bare 100/500 is the top-N count (e.g. /toplosers 100 = "
+        "top 100) - use nifty100/nifty500 to pick the index. "
+        "Each row shows P/E, sector P/E, 52W range, div yield, holdings &amp; D/E "
+        "(via the Get Fundamentals button - change with /moversfund)."
+    ),
+    "/checklist": (
+        "<b>/checklist</b> - 32-point investment scorecard "
+        "(10 personal + 22 AI criteria)\n"
+        "/checklist RELIANCE  \u2192 scorecard for one stock\n"
+        "/checklist mylist    \u2192 your whole watchlist (3 per batch)\n"
+        "/checklist 5-10      \u2192 watchlist positions #5-#10\n"
+        "Aliases: /investcheck, /scorecard, /qualitycheck"
     ),
     "/schedule": (
         "<b>/schedule</b> - your automated reports (per user)\n"
@@ -300,6 +348,7 @@ def register_commands() -> bool:
         {"command": "news", "description": "Latest news for your watchlist stocks"},
         {"command": "fundamentalanalyze", "description": "Analysis card or watchlist range: /fundamentalanalyze mylist"},
         {"command": "fundamentalreport", "description": "Deep report or range: /fundamentalreport mylist"},
+        {"command": "checklist", "description": "32-point investment scorecard: /checklist RELIANCE"},
         {"command": "harmonicpatterns", "description": "Harmonic pattern scan NIFTY 100/500: /harmonicpatterns all"},
         {"command": "scan500", "description": "NIFTY 500 CNC/MIS technical scanner"},
         {"command": "topmovers", "description": "Top gainers AND losers with fundamentals"},

@@ -16,6 +16,7 @@ from ..poller import poller
 from ..telegram.client import get_updates, is_configured
 from . import dispatch
 from .registry import register_commands
+from .reply import reply
 
 log = logging.getLogger(__name__)
 
@@ -83,15 +84,31 @@ def process_commands() -> str | None:
     return checknow_chat
 
 
+def _run_scheduled_command(chat_id, command, source_label=None) -> None:
+    """Run one scheduled command, announcing which task produced it first.
+
+    The scheduler passes a source label (schedule entry, cadence, command and
+    watchlist) so an automatic report is never anonymous - the user always
+    knows exactly which scheduled task the following results come from.
+    """
+    if source_label:
+        try:
+            reply(chat_id, source_label)
+        except Exception as error:  # a broken banner must never drop the report
+            log.warning("scheduled banner failed for chat %s: %s", chat_id, config.redact(error))
+    dispatch.handle_command(chat_id, command)
+
+
 def start_scheduled_reports() -> None:
     """Start scheduled reports in a daemon thread.
 
     Delegates to corporate_actions.scheduler, injecting the bot's command handler
     as the runner (dependency inversion - the scheduler never imports the bot
-    package, so there is no circular import). See corporate_actions/scheduler.py
-    for the loop, timing and per-user schedule logic.
+    package, so there is no circular import). The injected wrapper announces
+    the source of each scheduled report before running it. See
+    corporate_actions/scheduler.py for the loop, timing and per-user logic.
     """
-    scheduler.start_scheduled_reports(run_command=dispatch.handle_command)
+    scheduler.start_scheduled_reports(run_command=_run_scheduled_command)
 
 
 def main():

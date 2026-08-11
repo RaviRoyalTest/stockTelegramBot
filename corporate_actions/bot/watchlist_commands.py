@@ -18,7 +18,7 @@ from ..sources import (
 )
 from ..telegram.client import NotifierError, send_message
 from ..telegram.markup import symbol_buttons
-from .helpers import MAX_NEWS_STOCKS, attach_quotes, reply_suggestions
+from .helpers import MAX_NEWS_STOCKS, attach_quotes, reply_suggestions, run_command_sequence
 from .reply import reply
 
 log = logging.getLogger(__name__)
@@ -42,11 +42,7 @@ def send_watchlist(chat_id) -> None:
         f"{index}. <b>{item['symbol']}</b> ({item['exchange']})"
         for index, item in enumerate(items, start=1)
     ]
-    where = (
-        "watchlist.json (owner's list)"
-        if storage.is_owner(chat_id)
-        else f"subscriptions.json (your chat {chat_id})"
-    )
+    where = storage.list_location(chat_id)
     persistence = (
         "pushed to GitHub - it survives redeploys."
         if github_push_configured()
@@ -159,11 +155,7 @@ def handle_add_remove(chat_id, parts, command) -> None:
             chat_id,
             {"symbol": symbol, "company": company, "exchange": exchange},
         )
-        where = (
-            "watchlist.json (owner's list)"
-            if storage.is_owner(chat_id)
-            else f"subscriptions.json (chat {chat_id})"
-        )
+        where = storage.list_location(chat_id)
         log.info("Added %s (%s) for chat %s -> %s", symbol, exchange, chat_id, where)
         reply(
             chat_id,
@@ -207,26 +199,14 @@ def _favourites_summary(chat_id) -> str:
 
 def _run_favourites(chat_id) -> None:
     commands = _get_favourites(chat_id)
-    reply(
+    run_command_sequence(
         chat_id,
-        "\U0001F4CB <b>Your Favourites</b> - running your commands...\n"
-        + "\n".join(f"  \u2022 <code>{html.escape(command)}</code>" for command in commands),
-    )
-    for command in commands:
-        try:
-            log.info("favourites: running %s (chat %s)", command, chat_id)
-            from .dispatch import handle_command  # late import: breaks the module cycle
-            handle_command(chat_id, command)
-        except Exception as error:
-            log.warning("favourites: command %s failed: %s", command, config.redact(error), exc_info=True)
-            try:
-                reply(chat_id, f"<code>{html.escape(command)}</code> failed: {html.escape(config.redact(str(error)))}")
-            except Exception:
-                pass
-    reply(
-        chat_id,
-        "\u2705 <b>Favourites done.</b> Run again with <code>/myfavourites run</code> "
-        "or edit the list with <code>/myfavourites set /cmd</code>.",
+        commands,
+        intro="\U0001F4CB <b>Your Favourites</b> - running your commands...",
+        done="\u2705 <b>Favourites done.</b> Run again with "
+             "<code>/myfavourites run</code> or edit the list with "
+             "<code>/myfavourites set /cmd</code>.",
+        source_note=storage.list_location(chat_id),
     )
 
 

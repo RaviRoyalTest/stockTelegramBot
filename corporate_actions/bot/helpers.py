@@ -1,6 +1,7 @@
 """Small helpers shared by several command families."""
 from __future__ import annotations
 
+import html
 import logging
 from concurrent.futures import ThreadPoolExecutor
 
@@ -15,6 +16,46 @@ MAX_QUERY_ITEMS = 20  # entries per message batch
 MAX_NEWS_STOCKS = 10  # stocks processed by /news per request
 MAX_STOCK_BATCH = 10
 MAX_FUND_BATCH = 5
+
+
+def run_command_sequence(chat_id, commands: list[str], intro: str,
+                         done: str | None = None, source_note: str | None = None) -> None:
+    """Run a list of commands with a labelled intro and per-command isolation.
+
+    Shared by /myfavourites run and /schedule run (and /schednow): sends the
+    intro + the commands being run, executes each one (a failing command must
+    never stop the rest), and optionally closes with a completion line. The
+    source_note names the watchlist the results relate to, so automatic runs
+    are never anonymous.
+    """
+    if source_note:
+        intro += f"\nSource list: <code>{html.escape(source_note)}</code>"
+    reply(
+        chat_id,
+        intro + "\n" + "\n".join(
+            f"  \u2022 <code>{html.escape(command)}</code>" for command in commands
+        ),
+    )
+    for command in commands:
+        try:
+            log.info("run sequence: executing %s (chat %s)", command, chat_id)
+            from .dispatch import handle_command  # late import: breaks the module cycle
+            handle_command(chat_id, command)
+        except Exception as error:
+            log.warning(
+                "run sequence: command %s failed: %s",
+                command, config.redact(error), exc_info=True,
+            )
+            try:
+                reply(
+                    chat_id,
+                    f"<code>{html.escape(command)}</code> failed: "
+                    f"{html.escape(config.redact(str(error)))}",
+                )
+            except Exception:
+                pass
+    if done:
+        reply(chat_id, done)
 
 
 def attach_quotes(actions: list[dict], max_workers: int = 6) -> None:

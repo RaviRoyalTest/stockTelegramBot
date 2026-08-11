@@ -7,6 +7,16 @@ import html
 from .. import config, storage
 
 
+def format_interval(interval_min: int) -> str:
+    """Human label for a minute interval: 'every 180 min' / 'every 3h' / 'every 1d'."""
+    interval = int(interval_min or 0)
+    if interval and interval % (24 * 60) == 0:
+        return f"every {interval // (24 * 60)}d"
+    if interval and interval % 60 == 0:
+        return f"every {interval // 60}h"
+    return f"every {interval} min"
+
+
 def format_next_run(due_ts: float) -> str:
     """Human-friendly 'next run' for a schedule entry, e.g. 'in 35 min (14:20 IST)'."""
     try:
@@ -32,11 +42,7 @@ def format_settings(chat_id) -> str:
     alert = settings.get("price_alert_pct")
     watcher = settings.get("watcher") or {}
     owner = storage.is_owner(chat_id)
-    where = (
-        "watchlist.json (owner's list)"
-        if owner
-        else f"subscriptions.json (chat {chat_id})"
-    )
+    where = storage.list_location(chat_id)
     return "\n".join(
         [
             "<b>Your settings</b>",
@@ -81,11 +87,7 @@ def format_schedule(chat_id) -> str:
     for index, entry in enumerate(mine, start=1):
         interval = int(entry.get("interval_min") or 0)
         commands = entry.get("commands") or []
-        label = f"every {interval} min"
-        if interval and interval % (24 * 60) == 0:
-            label = f"every {interval // (24 * 60)}d"
-        elif interval and interval % 60 == 0:
-            label = f"every {interval // 60}h"
+        label = format_interval(interval)
         line = f"  {index}. {label}: {html.escape(', '.join(commands))}"
         if entry.get("run_at"):
             line += f" at {entry['run_at']} IST"

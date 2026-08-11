@@ -9,6 +9,7 @@ from .. import config, storage
 from ..core.dates import next_at_ist
 from ..formatting.schedule import format_schedule
 from ..telegram.markup import hide_keyboard_markup, quick_menu_markup
+from .helpers import run_command_sequence
 from .help_texts import QUICK_MENU_TEXT
 from .reply import reply
 
@@ -53,6 +54,7 @@ def run_schedule_now(chat_id) -> None:
     Loads the chat's schedule entries (including the owner's env defaults when
     the owner has no file entries) and fires each command now, in order. This
     is purely a manual trigger - it does not change the auto-schedule timing.
+    The intro names the commands AND the watchlist the results relate to.
     """
     mine = storage.load_schedule_for(chat_id)
     commands = []
@@ -66,24 +68,14 @@ def run_schedule_now(chat_id) -> None:
                   "Add one with <code>/schedule add 3h /scan500</code>, then "
                   "use <code>/schedule run</code> to fire it now.")
             return
-    reply(
+    run_command_sequence(
         chat_id,
-        "\u23f0 <b>Running your schedule now</b>\n"
-        + "\n".join(f"  \u2022 <code>{html.escape(command)}</code>" for command in commands)
-        + "\n\nReports are on their way - the bigger scans take a minute or two.",
+        commands,
+        intro="\u23f0 <b>Running your schedule now</b>\n"
+              "Reports are on their way - the bigger scans take a minute or two.",
+        done="\u2705 <b>Schedule run complete.</b>",
+        source_note=storage.list_location(chat_id),
     )
-    for command in commands:
-        try:
-            log.info("schednow: running %s (chat %s)", command, chat_id)
-            from .dispatch import handle_command  # late import: breaks the module cycle
-            handle_command(chat_id, command)
-        except Exception as error:
-            log.warning("schednow: command %s failed: %s", command, config.redact(error), exc_info=True)
-            try:
-                reply(chat_id, f"<code>{html.escape(command)}</code> failed: {html.escape(config.redact(str(error)))}")
-            except Exception:
-                pass
-    reply(chat_id, "\u2705 <b>Schedule run complete.</b>")
 
 
 def handle_sched(chat_id, parts) -> None:

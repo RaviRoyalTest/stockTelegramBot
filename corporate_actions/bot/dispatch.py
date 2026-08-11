@@ -18,6 +18,7 @@ from ..sources.types import INCREASE_TYPES
 from ..telegram.client import answer_callback_query
 from ..telegram.markup import quick_menu_markup
 from . import (
+    checklist_commands,
     corporate_action_commands,
     fundamentals_commands,
     harmonic_commands,
@@ -184,6 +185,10 @@ def handle_command(chat_id, text):
     if command in ("/stock", "/info", "/quote", "/stockanalysis", "/stock-analysis",
                "/analysis", "/fundamentalanalyze", "/fundamental-analysis"):
         fundamentals_commands.handle_single_stock_analysis(chat_id, parts)
+        return
+
+    if command in ("/checklist", "/investcheck", "/scorecard", "/qualitycheck", "/quality"):
+        checklist_commands.handle_checklist(chat_id, parts)
         return
 
     if len(parts) < 2:

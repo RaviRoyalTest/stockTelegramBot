@@ -18,11 +18,7 @@ def handle_status(chat_id) -> None:
     """Render the /status report: role, where your data lives, GitHub push."""
     gh_configured = github_push_configured()
     owner = storage.is_owner(chat_id)
-    location = (
-        "watchlist.json (the owner's list)"
-        if owner
-        else f"subscriptions.json (your chat {chat_id})"
-    )
+    location = storage.list_location(chat_id)
     if gh_configured:
         branch = _push_branch("")
         pending = pending_state_changes()

@@ -15,6 +15,17 @@ def is_owner(chat_id) -> bool:
     return str(chat_id) == str(config.TELEGRAM_CHAT_ID)
 
 
+def list_location(chat_id) -> str:
+    """Human label of where this chat's list is stored.
+
+    Used by every report footer and by the scheduled-report attribution so
+    the user always knows which list the results relate to.
+    """
+    if is_owner(chat_id):
+        return "watchlist.json (owner's list)"
+    return f"subscriptions.json (chat {chat_id})"
+
+
 def get_user_list(chat_id) -> list:
     if is_owner(chat_id):
         return load_watchlist()

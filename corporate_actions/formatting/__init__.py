@@ -13,7 +13,7 @@ from .actions import (
     status_tag,
 )
 from .news import format_news_item, format_news_list
-from .schedule import format_next_run, format_schedule, format_settings
+from .schedule import format_interval, format_next_run, format_schedule, format_settings
 from .stock import (
     _fundamentals_lines,
     _fund_report_lines,
@@ -36,6 +36,7 @@ __all__ = [
     "format_mover_alert",
     "format_news_item",
     "format_news_list",
+    "format_interval",
     "format_next_run",
     "format_schedule",
     "format_settings",

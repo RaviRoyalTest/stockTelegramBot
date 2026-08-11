@@ -21,6 +21,7 @@ from .users import (
     add_to_user_list,
     get_user_list,
     is_owner,
+    list_location,
     remove_from_user_list,
 )
 from .watchlist import (
@@ -41,6 +42,7 @@ __all__ = [
     "add_subscription",
     "remove_subscription",
     "is_owner",
+    "list_location",
     "get_user_list",
     "add_to_user_list",
     "remove_from_user_list",

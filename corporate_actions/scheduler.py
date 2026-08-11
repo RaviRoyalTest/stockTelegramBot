@@ -5,13 +5,19 @@ entries) on their own timer. The command runner is injected as a parameter
 (dependency inversion) so this module never imports run_bot - run_bot passes
 its handle_command in when it starts the loop. This also lets the loop be
 tested in isolation.
+
+Every scheduled run is attributed: the runner receives a source label that
+names the schedule entry, its cadence, the command and the watchlist the
+results relate to - so an automatic report is never anonymous.
 """
+import html
 import logging
 import re
 import threading
 import time
 
 from . import config, storage
+from .formatting.schedule import format_interval
 
 log = logging.getLogger(__name__)
 
@@ -51,6 +57,26 @@ def next_at_ist(hhmm: str) -> float | None:
     return candidate.timestamp()
 
 
+def schedule_source_label(entry: dict, chat, command: str) -> str:
+    """HTML banner naming the schedule entry that produced this report.
+
+    Sent before the scheduled command runs so the user always knows which
+    scheduled task (and which watchlist) the result belongs to: the entry's
+    cadence, the exact command and the chat's watchlist location.
+    """
+    when = format_interval(entry.get("interval_min") or config.SCHEDULED_REPORTS_INTERVAL_MIN)
+    if entry.get("run_at"):
+        when += f" at {entry['run_at']} IST"
+    origin = "env default" if entry.get("default") else "your /schedule entry"
+    where = storage.list_location(chat)
+    return (
+        f"\U0001F4C5 <b>Scheduled report</b> \u00b7 {origin} \u00b7 {when}\n"
+        f"Command: <code>{html.escape(command)}</code>\n"
+        f"Source list: <code>{html.escape(where)}</code> \u2014 the results "
+        "below come from this scheduled task."
+    )
+
+
 def schedule_entries_with_defaults(default_chat: str) -> list[dict]:
     """schedule.json entries plus the owner's env-default report.
 
@@ -71,6 +97,9 @@ def schedule_entries_with_defaults(default_chat: str) -> list[dict]:
                 "interval_min": config.SCHEDULED_REPORTS_INTERVAL_MIN,
                 "commands": commands,
                 "chat": default_chat,
+                # Marker so the label can say 'env defaults' instead of
+                # pretending this synthetic entry came from /schedule.
+                "default": True,
             }]
     return entries
 
@@ -163,7 +192,10 @@ def start_scheduled_reports(run_command) -> None:
                     for command in commands:
                         try:
                             log.info("scheduled report: running %s (chat %s)", command, chat)
-                            run_command(chat, command)
+                            run_command(
+                                chat, command,
+                                schedule_source_label(entry, chat, command),
+                            )
                         except Exception as error:  # one bad report must not stop the loop
                             log.warning(
                                 "scheduled report %s failed: %s",
