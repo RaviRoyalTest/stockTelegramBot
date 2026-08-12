@@ -7,7 +7,7 @@ get_quote` (or `from corporate_actions import sources`) exactly as before.
 """
 from .bse import get_bse_corporate_actions, get_bse_stock_list
 from .errors import SourceError
-from .fundamentals import FUND_MAX_ROWS, get_fundamentals
+from .fundamentals import FUND_MAX_ROWS, get_fundamentals, get_us_fundamentals
 from .news import get_stock_news
 from .nse import (
     get_nse_corporate_actions,
@@ -47,6 +47,7 @@ __all__ = [
     "get_sector_pe",
     "parse_screener_fundamentals",
     "get_fundamentals",
+    "get_us_fundamentals",
     "FUND_MAX_ROWS",
     "RIGHTS_OFFER_WINDOWS",
     "attach_rights_windows",

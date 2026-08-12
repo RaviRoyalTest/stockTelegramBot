@@ -95,6 +95,9 @@ ALIAS_TO_MAIN = {
     "/fundamental-analysis": "/fundamentalanalyze",
     "/fund": "/fundamentalreport",
     "/fundamentals": "/fundamentalreport",
+    "/usfund": "/usstock",
+    "/usquote": "/usstock",
+    "/us": "/usstock",
     "/investcheck": "/checklist",
     "/scorecard": "/checklist",
     "/qualitycheck": "/checklist",
@@ -141,6 +144,13 @@ COMMAND_USAGE = {
         "/fundamentalreport RELIANCE  \u2192 one stock\n"
         "/fundamentalreport mylist    \u2192 your whole watchlist\n"
         "/fundamentalreport 3-5       \u2192 watchlist stocks #3-#5"
+    ),
+    "/usstock": (
+        "<b>/usstock</b> - US stock details (price + deep fundamentals in USD)\n"
+        "/usstock AAPL  \u2192 Apple fundamentals (P/E, D/E, margins, analyst targets...)\n"
+        "/usstock MSFT  \u00b7  /usstock NVDA  \u00b7  /usstock BRK-B\n"
+        "Schedule it: <code>/schedule add 3h /usstock AAPL us</code> (US market hours only)\n"
+        "Aliases: /usfund, /usquote, /us"
     ),
     "/harmonicpatterns": (
         "<b>/harmonicpatterns</b> - harmonic pattern scanner\n"
@@ -366,6 +376,7 @@ def register_commands() -> bool:
         {"command": "news", "description": "Latest news for your watchlist stocks"},
         {"command": "fundamentalanalyze", "description": "Analysis card or watchlist range: /fundamentalanalyze mylist"},
         {"command": "fundamentalreport", "description": "Deep report or range: /fundamentalreport mylist"},
+        {"command": "usstock", "description": "US stock details: /usstock AAPL (USD fundamentals)"},
         {"command": "checklist", "description": "32-point investment scorecard: /checklist RELIANCE"},
         {"command": "harmonicpatterns", "description": "Harmonic pattern scan NIFTY 100/500: /harmonicpatterns all"},
         {"command": "scan500", "description": "NIFTY 500 CNC/MIS technical scanner"},

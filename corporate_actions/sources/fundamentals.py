@@ -78,8 +78,11 @@ def _fund_session():
         return _global_fund_sess, _global_fund_crumb
 
 
-def _quote_summary(symbol: str) -> dict | None:
-    """Yahoo quoteSummary result (summaryDetail/financialData/defaultKeyStatistics/assetProfile)."""
+def _quote_summary(symbol: str, suffix: str = ".NS") -> dict | None:
+    """Yahoo quoteSummary result (summaryDetail/financialData/defaultKeyStatistics/assetProfile).
+
+    `suffix` picks the exchange: '.NS' for NSE symbols, '' for US tickers.
+    """
     for attempt in range(2):  # second attempt after a 401 crumb refresh
         sess, crumb = _fund_session()
         if not crumb:
@@ -91,7 +94,7 @@ def _quote_summary(symbol: str) -> dict | None:
             "https://query2.finance.yahoo.com",
         ):
             _throttle_fund_req()
-            url = f"{host}/v10/finance/quoteSummary/{quote(symbol)}.NS"
+            url = f"{host}/v10/finance/quoteSummary/{quote(symbol)}{suffix}"
             try:
                 response = sess.get(
                     url,
@@ -144,15 +147,18 @@ def _calculate_rsi(closes: list, period: int = 14) -> float | None:
     return round(100.0 - (100.0 / (1.0 + relative_strength)), 1)
 
 
-def _chart_fundamentals(symbol: str) -> dict:
-    """Extract 52W high/low, PE, dividend yield and 14-day RSI from /v8/finance/chart (no crumb needed)."""
+def _chart_fundamentals(symbol: str, suffix: str = ".NS") -> dict:
+    """Extract 52W high/low, PE, dividend yield and 14-day RSI from /v8/finance/chart (no crumb needed).
+
+    `suffix` picks the exchange: '.NS' for NSE symbols, '' for US tickers.
+    """
     out = {}
     for host in (
         "https://query1.finance.yahoo.com",
         "https://query2.finance.yahoo.com",
     ):
         url = (
-            f"{host}/v8/finance/chart/{quote(symbol)}.NS"
+            f"{host}/v8/finance/chart/{quote(symbol)}{suffix}"
             "?range=1y&interval=1d&includePrePost=false"
         )
         try:
@@ -223,8 +229,12 @@ def _deep_completeness(out: dict) -> float:
     return have / len(_DEEP_FUND_KEYS)
 
 
-def _extract_quote_summary(payload: dict) -> dict:
-    """Pull price + deep-fundamentals fields out of a Yahoo quoteSummary result."""
+def _extract_quote_summary(payload: dict, currency: str = "inr") -> dict:
+    """Pull price + deep-fundamentals fields out of a Yahoo quoteSummary result.
+
+    `currency` picks the market-cap unit: 'inr' reports \u20b9 Crore (mcap_cr),
+    'usd' reports billions of dollars (mcap_usd) for US tickers.
+    """
     summary_detail = payload.get("summaryDetail") or {}
     financial_data = payload.get("financialData") or {}
     default_key_statistics = payload.get("defaultKeyStatistics") or {}
@@ -293,9 +303,12 @@ def _extract_quote_summary(payload: dict) -> dict:
         value = _raw(source_dict, source_key)
         if value is not None:
             extras[target_key] = value
-    market_cap = extras.get("mcap_cr")
+    market_cap = extras.pop("mcap_cr", None)
     if market_cap is not None:
-        extras["mcap_cr"] = round(market_cap / 1e7, 1)  # rupees -> Crore
+        if currency == "usd":
+            extras["mcap_usd"] = round(market_cap / 1e9, 2)  # dollars -> $B
+        else:
+            extras["mcap_cr"] = round(market_cap / 1e7, 1)  # rupees -> Crore
     if asset_profile.get("industry"):
         extras["industry"] = asset_profile["industry"]
     if asset_profile.get("fullTimeEmployees"):
@@ -388,4 +401,56 @@ def get_fundamentals(symbol: str, with_screener: bool = True) -> dict | None:
         "get_fundamentals: done %s -> %d field(s): %s",
         key, len(out), list(out.keys()) if out else [],
     )
+    return data
+
+
+def get_us_fundamentals(symbol: str) -> dict | None:
+    """Return fundamentals for a US ticker (no exchange suffix, USD), cached.
+
+    Uses the same Yahoo quoteSummary + chart sources as the Indian path but
+    without the '.NS' suffix, and skips the screener.in part (India-only).
+    Market cap comes back as mcap_usd (\u0024B); every other field matches the
+    Indian naming (pe, forward_pe, debt_to_equity, div_yield, margins, ...).
+    Returns None only when nothing at all was available.
+    """
+    key = symbol.strip().upper()
+    cache_key = ("us", key)
+    now = time.time()
+    cached = _fund_cache.get(cache_key)
+    if cached and now - cached["timestamp"] < cached["time_to_live"]:
+        log.info("get_us_fundamentals: cache hit for %s (%d fields)", key, len(cached["data"] or {}))
+        return cached["data"]
+    out = {}
+    log.info("get_us_fundamentals: fetching %s", key)
+    payload = _quote_summary(key, suffix="")
+    if payload:
+        out = _extract_quote_summary(payload, currency="usd")
+        # Yahoo reports ROE/ROCE as fractions (0.15 = 15%) while the Indian
+        # screener.in values are plain percents - normalise to percents here
+        # so the US report can render them like the Indian one (% sign).
+        financial_data = payload.get("financialData") or {}
+        for source_key, target_key in (
+            ("returnOnEquity", "roe"),
+            ("returnOnCapitalEmployed", "roce"),
+        ):
+            raw = financial_data.get(source_key) or {}
+            value = raw.get("raw") if isinstance(raw, dict) else raw
+            if value is not None:
+                out[target_key] = round(float(value) * 100, 1)
+        raw = financial_data.get("pegRatio") or {}
+        peg = raw.get("raw") if isinstance(raw, dict) else raw
+        if peg is not None:
+            out["peg"] = round(float(peg), 2)
+        log.info("get_us_fundamentals: quoteSummary -> %d fields for %s", len(out), key)
+    else:
+        log.info("get_us_fundamentals: quoteSummary unavailable for %s — trying chart fallback", key)
+    chart_data = _chart_fundamentals(key, suffix="")
+    if chart_data:
+        out.update({k: value for k, value in chart_data.items() if k not in out or out[k] is None})
+        log.info("get_us_fundamentals: chart data added for %s: %s", key, list(chart_data.keys()))
+    data = out or None
+    _fund_cache[cache_key] = {
+        "timestamp": now, "data": data, "time_to_live": _FUND_CACHE_SECONDS,
+    }
+    log.info("get_us_fundamentals: done %s -> %d field(s)", key, len(out))
     return data

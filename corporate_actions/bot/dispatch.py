@@ -27,6 +27,7 @@ from . import (
     schedule_commands,
     settings_commands,
     status as status_commands,
+    us_commands,
     watchlist_commands,
 )
 from .help_texts import ALL_COMMANDS_TEXT, CA_HELP
@@ -189,6 +190,10 @@ def handle_command(chat_id, text):
     if command in ("/stock", "/info", "/quote", "/stockanalysis", "/stock-analysis",
                "/analysis", "/fundamentalanalyze", "/fundamental-analysis"):
         fundamentals_commands.handle_single_stock_analysis(chat_id, parts)
+        return
+
+    if command in ("/us", "/usstock", "/usfund", "/usquote"):
+        us_commands.handle_us_stock(chat_id, parts)
         return
 
     if command in ("/checklist", "/investcheck", "/scorecard", "/qualitycheck", "/quality"):

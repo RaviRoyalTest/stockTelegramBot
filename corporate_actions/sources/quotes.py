@@ -40,7 +40,8 @@ def get_quote(exchange: str, symbol: str) -> dict | None:
         log.debug("quote negative-cache hit for %s:%s", exchange, symbol)
         return None
 
-    suffix = ".BO" if exchange == "BSE" else ".NS"
+    # NSE -> .NS, BSE -> .BO, US -> bare ticker (no Yahoo exchange suffix)
+    suffix = ".BO" if exchange == "BSE" else ("" if exchange == "US" else ".NS")
     hosts = [
         "https://query1.finance.yahoo.com",
         "https://query2.finance.yahoo.com",
