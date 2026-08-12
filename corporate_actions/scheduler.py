@@ -12,49 +12,23 @@ results relate to - so an automatic report is never anonymous.
 """
 import html
 import logging
-import re
 import threading
 import time
 
 from . import config, storage
+from .core.dates import next_at_in_tz
 from .formatting.schedule import format_interval
+from .market.hours import entry_in_window, entry_market, entry_paused, market_label
 
 log = logging.getLogger(__name__)
 
+MARKET_TZ = {"us": "America/New_York", "in": "Asia/Kolkata"}
 
-def next_at_ist(hhmm: str) -> float | None:
-    """Epoch seconds of the next occurrence of an "HH:MM" wall-clock time in IST.
 
-    Returns None when the string is not a valid HH:MM. Used by the schedule
-    so a report can be tied to an exact clock time (e.g. run at 09:15 IST)
-    instead of only an interval - and it lands on that minute regardless of
-    the host's timezone.
-    """
-    import datetime as _datetime
-
-    match = re.fullmatch(r"(\d{1,2}):(\d{2})", str(hhmm or "").strip())
-    if not match:
-        return None
-    hour, minute = int(match.group(1)), int(match.group(2))
-    if not (0 <= hour <= 23 and 0 <= minute <= 59):
-        return None
-    try:
-        from zoneinfo import ZoneInfo
-        timezone = ZoneInfo("Asia/Kolkata")
-    except Exception:
-        timezone = None
-    now_utc = _datetime.datetime.now(_datetime.timezone.utc)
-    if timezone is None:
-        now_local = _datetime.datetime.now()
-        candidate = now_local.replace(hour=hour, minute=minute, second=0, microsecond=0)
-        if candidate <= now_local:
-            candidate += _datetime.timedelta(days=1)
-        return candidate.timestamp()
-    now_ist = now_utc.astimezone(timezone)
-    candidate = now_ist.replace(hour=hour, minute=minute, second=0, microsecond=0)
-    if candidate <= now_ist:
-        candidate += _datetime.timedelta(days=1)
-    return candidate.timestamp()
+def _run_at_timezone(entry: dict) -> str:
+    """Wall-clock timezone of an entry's run_at: its market's, IST by default."""
+    market = entry_market(entry, default=config.SCHEDULED_REPORTS_MARKET)
+    return MARKET_TZ.get(market, "Asia/Kolkata")
 
 
 def schedule_source_label(entry: dict, chat, command: str) -> str:
@@ -62,11 +36,23 @@ def schedule_source_label(entry: dict, chat, command: str) -> str:
 
     Sent before the scheduled command runs so the user always knows which
     scheduled task (and which watchlist) the result belongs to: the entry's
-    cadence, the exact command and the chat's watchlist location.
+    cadence, its market-hours gate / run window, the exact command and the
+    chat's watchlist location.
     """
     when = format_interval(entry.get("interval_min") or config.SCHEDULED_REPORTS_INTERVAL_MIN)
     if entry.get("run_at"):
-        when += f" at {entry['run_at']} IST"
+        when += f" at {entry['run_at']} {_tz_tag(entry)}"
+    gate_bits = []
+    market = entry_market(entry, default=config.SCHEDULED_REPORTS_MARKET)
+    if entry.get("window_start") and entry.get("window_end"):
+        # An explicit run window overrides the market-hours gate.
+        gate_bits.append(
+            f"window {entry['window_start']}\u2013{entry['window_end']} ({_tz_tag(entry)})"
+        )
+    elif market != "any":
+        gate_bits.append(f"only during {market_label(market)} market hours")
+    if gate_bits:
+        when += " \u00b7 " + " \u00b7 ".join(gate_bits)
     origin = "env default" if entry.get("default") else "your /schedule entry"
     where = storage.list_location(chat)
     return (
@@ -75,6 +61,11 @@ def schedule_source_label(entry: dict, chat, command: str) -> str:
         f"Source list: <code>{html.escape(where)}</code> \u2014 the results "
         "below come from this scheduled task."
     )
+
+
+def _tz_tag(entry: dict) -> str:
+    tz_name = _run_at_timezone(entry)
+    return "IST" if tz_name == "Asia/Kolkata" else "ET"
 
 
 def schedule_entries_with_defaults(default_chat: str) -> list[dict]:
@@ -97,6 +88,7 @@ def schedule_entries_with_defaults(default_chat: str) -> list[dict]:
                 "interval_min": config.SCHEDULED_REPORTS_INTERVAL_MIN,
                 "commands": commands,
                 "chat": default_chat,
+                "market": config.SCHEDULED_REPORTS_MARKET,
                 # Marker so the label can say 'env defaults' instead of
                 # pretending this synthetic entry came from /schedule.
                 "default": True,
@@ -171,9 +163,11 @@ def start_scheduled_reports(run_command) -> None:
                     if not commands:
                         continue
                     key = (chat, tuple(commands))
+                    market = entry_market(entry, default=config.SCHEDULED_REPORTS_MARKET)
                     # Persisted next-due (schedule.json) wins so the cadence
                     # survives redeploys. For a clock-time entry (run_at) the
-                    # first due is the next occurrence of HH:MM in IST. Plain
+                    # first due is the next occurrence of HH:MM in the market's
+                    # wall clock (IST for India, ET for the US). Plain
                     # interval entries fall back to a short first-run delay.
                     persisted = storage.schedule_next_due_ts(entry)
                     due_ts = next_due.get(key)
@@ -181,13 +175,33 @@ def start_scheduled_reports(run_command) -> None:
                         if persisted is not None:
                             due_ts = persisted
                         elif entry.get("run_at"):
-                            due_ts = next_at_ist(entry["run_at"])
+                            due_ts = next_at_in_tz(entry["run_at"], MARKET_TZ.get(market, "Asia/Kolkata"))
                             if due_ts is None:
                                 due_ts = now + min(interval * 60, 60)
                         else:
                             due_ts = now + min(interval * 60, 60)
                         next_due[key] = due_ts
                     if now < due_ts:
+                        continue
+                    # Paused entries wait until the pause lapses (auto-resume),
+                    # without advancing the timer so the report still fires once
+                    # the pause ends.
+                    if entry_paused(entry, now):
+                        log.info(
+                            "scheduled report: %s paused until %s - skipping",
+                            key, (entry or {}).get("paused_until"),
+                        )
+                        continue
+                    # Market-hours / run-window gate: an automatic report only
+                    # fires while the entry's market is open (or inside its
+                    # explicit window). When the timer lands off-hours we wait,
+                    # so the report arrives at the next session instead of being
+                    # skipped entirely.
+                    if not entry_in_window(entry, default=market, now=now):
+                        log.info(
+                            "scheduled report: %s outside run window (market=%s) - waiting for next session",
+                            key, market,
+                        )
                         continue
                     for command in commands:
                         try:

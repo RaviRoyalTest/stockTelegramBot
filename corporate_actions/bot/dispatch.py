@@ -42,7 +42,7 @@ WRITE_COMMANDS = {
     "/filter", "/alertfilters", "/actionfilters", "/alert", "/pricealert",
     "/sched", "/schedule", "/watcher", "/bigmover", "/moverwatch",
     "/myfavourites", "/favorites", "/favourites", "/mypicks", "/dailybrief",
-    "/moversfund",
+    "/moversfund", "/market",
 }
 
 
@@ -155,6 +155,10 @@ def handle_command(chat_id, text):
 
     if command in ("/sched", "/schedule", "/schednow"):
         schedule_commands.handle_sched(chat_id, parts)
+        return
+
+    if command == "/market":
+        schedule_commands.handle_market(chat_id, parts)
         return
 
     if command == "/news":

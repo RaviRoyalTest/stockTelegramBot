@@ -25,6 +25,52 @@ def today_ist() -> date:
     return date.today()
 
 
+def _valid_hhmm(hhmm) -> tuple | None:
+    """(hour, minute) for a valid 'HH:MM' string, or None."""
+    match = re.fullmatch(r"(\d{1,2}):(\d{2})", str(hhmm or "").strip())
+    if not match:
+        return None
+    hour, minute = int(match.group(1)), int(match.group(2))
+    if not (0 <= hour <= 23 and 0 <= minute <= 59):
+        return None
+    return hour, minute
+
+
+def next_at_in_tz(hhmm: str, tz_name: str | None = "Asia/Kolkata") -> float | None:
+    """Epoch seconds of the next occurrence of an "HH:MM" wall-clock time in a tz.
+
+    Returns None when the string is not a valid HH:MM. Used by the schedule so
+    a report can be tied to an exact clock time (e.g. run at 09:15 IST) instead
+    of only an interval - and it lands on that minute regardless of the host's
+    timezone. `tz_name` picks the wall clock the HH:MM belongs to (IST for the
+    Indian market, America/New_York for the US market).
+    """
+    parsed = _valid_hhmm(hhmm)
+    if parsed is None:
+        return None
+    hour, minute = parsed
+    now_utc = _datetime.datetime.now(_datetime.timezone.utc)
+    timezone = None
+    try:
+        from zoneinfo import ZoneInfo
+
+        if tz_name:
+            timezone = ZoneInfo(tz_name)
+    except Exception:
+        timezone = None
+    if timezone is None:
+        now_local = _datetime.datetime.now()
+        candidate = now_local.replace(hour=hour, minute=minute, second=0, microsecond=0)
+        if candidate <= now_local:
+            candidate += _datetime.timedelta(days=1)
+        return candidate.timestamp()
+    now_tz = now_utc.astimezone(timezone)
+    candidate = now_tz.replace(hour=hour, minute=minute, second=0, microsecond=0)
+    if candidate <= now_tz:
+        candidate += _datetime.timedelta(days=1)
+    return candidate.timestamp()
+
+
 def next_at_ist(hhmm: str) -> float | None:
     """Epoch seconds of the next occurrence of an "HH:MM" wall-clock time in IST.
 
@@ -33,24 +79,7 @@ def next_at_ist(hhmm: str) -> float | None:
     of only an interval - and it lands on that minute regardless of the host's
     timezone.
     """
-    match = re.fullmatch(r"(\d{1,2}):(\d{2})", str(hhmm or "").strip())
-    if not match:
-        return None
-    hour, minute = int(match.group(1)), int(match.group(2))
-    if not (0 <= hour <= 23 and 0 <= minute <= 59):
-        return None
-    now_utc = _datetime.datetime.now(_datetime.timezone.utc)
-    if IST is None:
-        now_local = _datetime.datetime.now()
-        candidate = now_local.replace(hour=hour, minute=minute, second=0, microsecond=0)
-        if candidate <= now_local:
-            candidate += _datetime.timedelta(days=1)
-        return candidate.timestamp()
-    now_ist = now_utc.astimezone(IST)
-    candidate = now_ist.replace(hour=hour, minute=minute, second=0, microsecond=0)
-    if candidate <= now_ist:
-        candidate += _datetime.timedelta(days=1)
-    return candidate.timestamp()
+    return next_at_in_tz(hhmm, "Asia/Kolkata")
 
 
 def parse_iso_date(value) -> date | None:

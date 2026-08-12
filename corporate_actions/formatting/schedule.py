@@ -65,8 +65,14 @@ def format_schedule(chat_id) -> str:
 
     Every user only ever sees and manages their own entries - another
     person's reports never appear here and are never affected by this
-    chat's /schedule add/remove/clear.
+    chat's /schedule add/remove/clear. Each row shows the cadence, the
+    market-hours gate / run window and any active pause.
     """
+    from ..market.hours import entry_market, entry_paused, entry_paused_until, market_label
+
+    default_market = (storage.get_user_settings(chat_id) or {}).get(
+        "schedule_market", config.SCHEDULED_REPORTS_MARKET
+    )
     mine = storage.load_schedule_for(chat_id)
     if not mine:
         if storage.is_owner(chat_id):
@@ -75,6 +81,7 @@ def format_schedule(chat_id) -> str:
                 return "<b>Schedule:</b> no automated reports yet."
             return (
                 "<b>Schedule (env defaults - use /schedule to edit)</b>\n"
+                f"Gate: <b>{market_label(default_market)}</b>\n"
                 f"  1. every {config.SCHEDULED_REPORTS_INTERVAL_MIN} min: "
                 + html.escape(", ".join(commands))
                 + "\n\n<b>Tip:</b> add your own entry below to replace these defaults."
@@ -83,21 +90,38 @@ def format_schedule(chat_id) -> str:
             "<b>Schedule:</b> no automated reports yet for your chat.\n"
             "Add one with <code>/schedule add 3h /scan500</code>."
         )
-    lines = ["<b>Your schedule (schedule.json - pushed to GitHub)</b>"]
+    lines = [
+        "<b>Your schedule (schedule.json - pushed to GitHub)</b>",
+        f"Gate: <b>{market_label(default_market)}</b> (change with /market)",
+    ]
     for index, entry in enumerate(mine, start=1):
         interval = int(entry.get("interval_min") or 0)
         commands = entry.get("commands") or []
         label = format_interval(interval)
+        market = entry_market(entry, default=default_market)
+        tz_tag = "ET" if market == "us" else "IST"
         line = f"  {index}. {label}: {html.escape(', '.join(commands))}"
         if entry.get("run_at"):
-            line += f" at {entry['run_at']} IST"
+            line += f" at {entry['run_at']} {tz_tag}"
+        if entry.get("window_start") and entry.get("window_end"):
+            line += f" \u00b7 window {entry['window_start']}\u2013{entry['window_end']} {tz_tag}"
+        elif market != "any":
+            line += f" \u00b7 {market_label(market)}"
+        elif entry.get("market") == "any":
+            line += " \u00b7 any time"
+        if entry_paused(entry):
+            line += f" \u2014 \u23f8 <b>paused</b> (until {entry_paused_until(entry)})"
         due_time = storage.schedule_next_due_ts(entry)
         if due_time:
-            line += f"  — next run {format_next_run(due_time)}"
+            line += f"  \u2014 next run {format_next_run(due_time)}"
         lines.append(line)
     lines.append(
         "\nUsage: <code>/schedule add 3h /scan500</code> (interval: 180, 90m, 3h, 1d)"
     )
+    lines.append("Market gate: append <code>us</code>, <code>any</code> or "
+                 "<code>in from HH:MM to HH:MM</code> to /schedule add")
+    lines.append("<code>/schedule pause 1d|3d|1w|2w|1mo</code>  /  "
+                 "<code>/schedule resume</code>")
     lines.append("<code>/schedule remove 1</code>  /  <code>/schedule clear</code>")
     lines.append("<code>/schedule run</code>  /  <code>/schednow</code> — run them all now")
     return "\n".join(lines)

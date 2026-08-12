@@ -37,6 +37,13 @@ def load_schedule() -> list[dict]:
                 "next_due": item.get("next_due"),
                 # Optional wall-clock "HH:MM" (IST) - first run at that time.
                 "run_at": item.get("run_at"),
+                # Optional market-hours gate: 'in' / 'us' / 'any'.
+                "market": item.get("market"),
+                # Optional explicit run window "HH:MM" (in the market's tz).
+                "window_start": item.get("window_start"),
+                "window_end": item.get("window_end"),
+                # Pause support (ISO timestamp); the entry is skipped until then.
+                "paused_until": item.get("paused_until"),
             })
     return cleaned
 
@@ -63,13 +70,18 @@ def save_schedule(entries: list[dict]) -> None:
 
 
 def add_schedule_entry(
-    interval_min: int, commands: list[str], chat: str, run_at: str | None = None
+    interval_min: int, commands: list[str], chat: str, run_at: str | None = None,
+    market: str | None = None, window_start: str | None = None,
+    window_end: str | None = None,
 ) -> list[dict]:
     """Append a schedule entry, then return the new full schedule.
 
-    run_at is an optional "HH:MM" wall-clock time (IST). When set, the first
-    report fires at the next occurrence of that time and then repeats every
+    run_at is an optional "HH:MM" wall-clock time. When set, the first report
+    fires at the next occurrence of that time and then repeats every
     interval_min; without it the entry is plain interval-based (as before).
+    market is the optional market-hours gate ('in'/'us'/'any') and
+    window_start/window_end an optional explicit run window ("HH:MM") in the
+    market's timezone.
     """
     with _lock, _file_lock(config.SCHEDULE_FILE):
         current = read_json(config.SCHEDULE_FILE, [])
@@ -82,11 +94,19 @@ def add_schedule_entry(
         }
         if run_at:
             entry["run_at"] = run_at
+        if market:
+            entry["market"] = str(market).strip().lower()
+        if window_start:
+            entry["window_start"] = window_start
+        if window_end:
+            entry["window_end"] = window_end
         current.append(entry)
         write_json(config.SCHEDULE_FILE, current)
     log.info(
-        "schedule.json: added entry every %d min%s -> %s (chat %s)",
-        interval_min, f" at {run_at}" if run_at else "", ", ".join(commands), chat,
+        "schedule.json: added entry every %d min%s%s -> %s (chat %s)",
+        interval_min, f" at {run_at}" if run_at else "",
+        f" market={market}" if market else "",
+        ", ".join(commands), chat,
     )
     return current
 
@@ -186,3 +206,57 @@ def schedule_next_due_ts(entry: dict) -> float | None:
         return datetime.fromisoformat(str(raw)).timestamp()
     except (TypeError, ValueError):
         return None
+
+
+def pause_schedule(chat_id, until_ts: float) -> list[dict]:
+    """Pause EVERY schedule entry of one chat until an epoch timestamp.
+
+    The pause is persisted (ISO) on each of the chat's rows so it survives
+    redeploys; the scheduler skips those entries until the timestamp passes
+    (auto-resume). Other users' entries are untouched. Returns the new full
+    schedule.
+    """
+    with _lock, _file_lock(config.SCHEDULE_FILE):
+        current = read_json(config.SCHEDULE_FILE, [])
+        if not isinstance(current, list):
+            current = []
+        key = str(chat_id)
+        owner = str(config.TELEGRAM_CHAT_ID or "")
+        until_iso = datetime.fromtimestamp(until_ts).isoformat(timespec="seconds")
+        changed = 0
+        for entry in current:
+            if not isinstance(entry, dict):
+                continue
+            if (str(entry.get("chat") or "") == key
+                    or (not str(entry.get("chat") or "") and key == owner)):
+                entry["paused_until"] = until_iso
+                changed += 1
+        if changed:
+            write_json(config.SCHEDULE_FILE, current)
+    log.info("schedule.json: paused chat %s until %s (%d entry(s))", chat_id, until_iso, changed)
+    return current
+
+
+def resume_schedule(chat_id) -> list[dict]:
+    """Clear the pause on every schedule entry of one chat (resume now).
+
+    Returns the new full schedule.
+    """
+    with _lock, _file_lock(config.SCHEDULE_FILE):
+        current = read_json(config.SCHEDULE_FILE, [])
+        if not isinstance(current, list):
+            current = []
+        key = str(chat_id)
+        owner = str(config.TELEGRAM_CHAT_ID or "")
+        changed = 0
+        for entry in current:
+            if not isinstance(entry, dict):
+                continue
+            if (str(entry.get("chat") or "") == key
+                    or (not str(entry.get("chat") or "") and key == owner)):
+                if entry.pop("paused_until", None) is not None:
+                    changed += 1
+        if changed:
+            write_json(config.SCHEDULE_FILE, current)
+    log.info("schedule.json: resumed chat %s (%d entry(s))", chat_id, changed)
+    return current

@@ -9,7 +9,9 @@ from .schedule import (
     clear_schedule,
     load_schedule,
     load_schedule_for,
+    pause_schedule,
     remove_schedule_entry,
+    resume_schedule,
     save_schedule,
     schedule_next_due_ts,
     set_schedule_next_due,
@@ -59,4 +61,6 @@ __all__ = [
     "clear_schedule",
     "set_schedule_next_due",
     "schedule_next_due_ts",
+    "pause_schedule",
+    "resume_schedule",
 ]

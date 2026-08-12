@@ -80,6 +80,11 @@ SCHEDULED_COMMANDS = [
     ).split(",")
     if item.strip()
 ]
+# Default market-hours gate for scheduled reports: 'in' (India NSE/BSE
+# 09:15-15:30 IST), 'us' (NASDAQ/NYSE 09:30-16:00 ET) or 'any' (no gating).
+# Per-entry overrides can be set with /schedule add ... us|any. When a gate
+# is active an automatic report only fires while that market is open.
+SCHEDULED_REPORTS_MARKET = os.getenv("SCHEDULED_REPORTS_MARKET", "in").strip().lower()
 
 WATCHLIST_FILE = Path(os.getenv("WATCHLIST_FILE", str(BASE_DIR / "watchlist.json")))
 SUBSCRIPTIONS_FILE = Path(os.getenv("SUBSCRIPTIONS_FILE", str(BASE_DIR / "subscriptions.json")))

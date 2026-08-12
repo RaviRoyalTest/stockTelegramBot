@@ -230,7 +230,30 @@ def _stock_summary_lines(raw_symbol, quote, fund, include_tip=True, label="") ->
     lines.append("  \u00b7  ".join(valuation_parts))
     lines.append("")
 
-    # Section 3: Profitability & Returns
+    # Section 3: Balance sheet & earnings (D/E, liquidity, per-share, cash)
+    bs_parts = []
+    if fund.get("debt_to_equity") is not None:
+        bs_parts.append(f"D/E: <b>{_num_or_na(fund['debt_to_equity'], 2)}</b>")
+    if fund.get("current_ratio") is not None:
+        bs_parts.append(f"Current Ratio: <b>{_num_or_na(fund['current_ratio'], 2)}</b>")
+    if fund.get("book_value") is not None:
+        bs_parts.append(f"Book Value: <b>{_num_or_na(fund['book_value'], 2)}</b>")
+    if fund.get("trailing_eps") is not None:
+        bs_parts.append(f"EPS(TTM): <b>{_num_or_na(fund['trailing_eps'], 2)}</b>")
+    if fund.get("profit_margin") is not None:
+        bs_parts.append(f"Net Margin: <b>{_pct_str(fund['profit_margin'])}</b>")
+    if bs_parts or fund.get("total_cash") is not None or fund.get("total_debt") is not None:
+        lines.append("<b>\U0001F4C9 BALANCE SHEET & EARNINGS</b>")
+        if bs_parts:
+            lines.append("  \u00b7  ".join(bs_parts))
+        if fund.get("total_cash") is not None or fund.get("total_debt") is not None:
+            lines.append(
+                f"Cash: <b>{_cr_str(fund.get('total_cash'))}</b>  \u00b7  "
+                f"Debt: <b>{_cr_str(fund.get('total_debt'))}</b>"
+            )
+        lines.append("")
+
+    # Section 4: Profitability & Returns
     lines.append("<b>\U0001F3AF PROFITABILITY & RETURNS</b>")
     returns_parts = []
     if fund.get("roce") is not None:
@@ -243,7 +266,7 @@ def _stock_summary_lines(raw_symbol, quote, fund, include_tip=True, label="") ->
         lines.append("Full financial statement trends available on Screener.in")
     lines.append("")
 
-    # Section 4: Shareholding Pattern (QoQ Trend)
+    # Section 5: Shareholding Pattern (QoQ Trend)
     lines.append("<b>\U0001F4BC SHAREHOLDING PATTERN (QoQ TREND)</b>")
     if any(fund.get(key) for key in ("promoter_pct", "fii_pct", "dii_pct", "public_pct")):
         lines.extend(_holding_lines(
@@ -510,6 +533,8 @@ def _fund_report_lines(raw_symbol, quote, fund, include_tip=True, label="") -> l
         balance_sheet_parts.append(f"Current Ratio: <b>{_num_or_na(fund['current_ratio'], 2)}</b>")
     if fund.get("quick_ratio") is not None:
         balance_sheet_parts.append(f"Quick Ratio: <b>{_num_or_na(fund['quick_ratio'], 2)}</b>")
+    if fund.get("interest_coverage_ratio") is not None:
+        balance_sheet_parts.append(f"Int Coverage: <b>{_num_or_na(fund['interest_coverage_ratio'], 1)}x</b>")
     if (
         balance_sheet_parts
         or fund.get("total_cash") is not None
@@ -542,6 +567,8 @@ def _fund_report_lines(raw_symbol, quote, fund, include_tip=True, label="") -> l
             cf_bits.append(f"CFI {_cr_cr(cash_flow['cfi'])}")
         if cash_flow.get("cff") is not None:
             cf_bits.append(f"CFF {_cr_cr(cash_flow['cff'])}")
+        if cash_flow.get("net_cash_flow") is not None:
+            cf_bits.append(f"NCF {_cr_cr(cash_flow['net_cash_flow'])}")
         if cash_flow.get("free_cash_flow") is not None:
             cf_bits.append(f"FCF {_cr_cr(cash_flow['free_cash_flow'])}")
         if cf_bits:

@@ -12,7 +12,7 @@ from ..core.text import split_messages
 from ..formatting.schedule import format_schedule, format_settings
 from ..telegram.client import is_configured, set_my_commands
 from ..telegram.markup import quick_menu_markup
-from . import corporate_action_commands, scanner_commands, settings_commands, status as status_commands, watchlist_commands
+from . import corporate_action_commands, scanner_commands, schedule_commands, settings_commands, status as status_commands, watchlist_commands
 from .help_texts import CA_HELP
 from .reply import reply, reply_messages
 
@@ -53,12 +53,17 @@ def _schedule_status_text(chat_id) -> str:
     return format_schedule(chat_id)
 
 
+def _market_status_text(chat_id) -> str:
+    return schedule_commands.market_status_text(chat_id)
+
+
 COMMAND_STATUS = {
     "/watcher": _watcher_status_text,
     "/pricealert": _pricealert_status_text,
     "/alertfilters": _alertfilters_status_text,
     "/schedule": _schedule_status_text,
     "/moversfund": _moversfund_status_text,
+    "/market": _market_status_text,
 }
 
 
@@ -210,9 +215,22 @@ COMMAND_USAGE = {
         "<b>/schedule</b> - your automated reports (per user)\n"
         "/schedule add 3h /scan500          \u2192 every 3 hours\n"
         "/schedule add at 09:15 /toplosers 1h  \u2192 daily at 09:15 IST\n"
+        "/schedule add 3h /scan500 us       \u2192 US market hours only (NASDAQ/NYSE)\n"
+        "/schedule add 3h /scan500 any      \u2192 no gate - any time\n"
+        "/schedule add 3h /cmd in from 09:15 to 15:30  \u2192 explicit run window\n"
+        "/schedule pause 1d | 2d | 3d | 1w | 2w | 1mo  \u2192 pause YOUR schedule\n"
+        "/schedule resume                   \u2192 resume early\n"
+        "/schedule market in|us|any         \u2192 YOUR default market-hours gate\n"
         "/schedule run | /schednow          \u2192 run them all right now\n"
         "/schedule remove 1                 \u2192 remove YOUR entry #1\n"
         "/schedule clear                    \u2192 remove all of yours"
+    ),
+    "/market": (
+        "<b>/market</b> - market-hours gate for YOUR scheduled reports\n"
+        "/market in          \u2192 only Indian market hours (NSE/BSE 09:15\u201315:30 IST)\n"
+        "/market us          \u2192 only US market hours (NASDAQ/NYSE 09:30\u201316:00 ET)\n"
+        "/market any | off   \u2192 no gate - run any time\n"
+        "/market             \u2192 live status + your current gate"
     ),
     "/pricealert": (
         "<b>/pricealert</b> - daily price-move alerts\n"
@@ -357,7 +375,8 @@ def register_commands() -> bool:
         {"command": "alertfilters", "description": "Receive only chosen action types"},
         {"command": "pricealert", "description": "Alert on +/-PCT% daily price move"},
         {"command": "settings", "description": "Show your current settings"},
-        {"command": "schedule", "description": "Auto reports: /schedule add 3h /scan500"},
+        {"command": "schedule", "description": "Auto reports: /schedule add 3h /scan500, pause 1d, market us"},
+        {"command": "market", "description": "Market-hours gate for reports: /market us, in, any"},
         {"command": "status", "description": "Check persistence / GitHub push"},
         {"command": "checknow", "description": "Force a check and resend alerts"},
         {"command": "watcher", "description": "Big-move alerts: /watcher on, off, set 5, universe nifty500"},
