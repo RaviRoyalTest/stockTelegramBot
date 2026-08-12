@@ -98,23 +98,31 @@ def close_symbols(query: str, limit: int = 3) -> list[str]:
 
 
 def reply_suggestions(chat_id, query, command="add"):
-    """Reply with matching stocks from the NSE list when an exact symbol fails.
+    """Suggest matching NSE stocks when an exact symbol fails (ticker + name).
 
-    cmd is the command the user actually ran (add|stock|fund|harmonic) so the
-    suggested follow-up reuses it instead of always suggesting /add.
+    Shows up to 6 close matches as a pick list (symbol — full company name),
+    then a 'Try:' line reusing the command the user actually ran
+    (add|fundamentalanalyze|fundamentalreport|harmonic|checklist) so a tap
+    runs the right follow-up.
     """
     matches = search_stocks(query, limit=10)
     if not matches:
         log.info(
             "No stock matched '%s' for chat %s - nothing added", query, chat_id
         )
-        reply(chat_id, f"No stocks match '{query}'.")
+        reply(
+            chat_id,
+            f"No NSE stock matches '<code>{escape(query)}</code>' — check the "
+            "spelling or try a company name (e.g. <code>/fundamentalanalyze RELIANCE</code>).",
+        )
         return
-    lines = [f"'{escape(query)}' not found as an exact symbol. Did you mean (NSE):"]
-    for match in matches:
-        company = match["company"] or ""
-        if command == "add":
-            lines.append(f"  /addstock {match['symbol']} NSE  - {escape(company)}")
-        else:
-            lines.append(f"  /{command} {match['symbol']}  - {escape(company)}")
+    lines = [f"'{escape(query)}' isn't an exact NSE symbol. Did you mean one of these?"]
+    for match in matches[:6]:
+        company = escape(match.get("company") or "")
+        lines.append(f"• <code>{escape(match['symbol'])}</code> — {company} (NSE)")
+    lines.append("")
+    if command == "add":
+        lines.append(f"Try: <code>/addstock {escape(matches[0]['symbol'])} NSE</code>")
+    else:
+        lines.append(f"Try: <code>/{command} {escape(matches[0]['symbol'])}</code>")
     reply(chat_id, "\n".join(lines))

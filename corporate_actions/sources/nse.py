@@ -64,9 +64,68 @@ def get_nse_stock_list_cached() -> list[dict]:
     return _nse_list_cache
 
 
+def _fuzzy_stock_matches(stocks: list[dict], query: str, limit: int) -> list[dict]:
+    """Typo-tolerant close matches on symbol, then on company name (difflib).
+
+    Only reached when the substring search found nothing, so a misspelling
+    like 'tatamotrs' still yields TATAMOTORS instead of a dead-end reply.
+    """
+    from difflib import get_close_matches
+
+    by_symbol, by_name, symbols, names = {}, {}, [], []
+    for stock in stocks:
+        symbol = stock["symbol"].upper()
+        company = stock["company"].upper()
+        if symbol not in by_symbol:
+            by_symbol[symbol] = stock
+            symbols.append(symbol)
+        if company and company not in by_name:
+            by_name[company] = stock
+            names.append(company)
+    seen, out = set(), []
+    for candidate in get_close_matches(query, symbols, n=limit, cutoff=0.55):
+        stock = by_symbol[candidate]
+        if id(stock) not in seen:
+            seen.add(id(stock))
+            out.append(stock)
+    if len(out) < limit:
+        for candidate in get_close_matches(query, names, n=limit, cutoff=0.55):
+            stock = by_name[candidate]
+            if id(stock) not in seen:
+                seen.add(id(stock))
+                out.append(stock)
+    return out[:limit]
+
+
+def _match_rank(stock: dict, query: str) -> int:
+    """Relevance rank for substring matches (lower = more relevant).
+
+    Exact symbol, then symbol-prefix, then company-prefix, then plain
+    contains - so 'reliance' puts RELIANCE ahead of RCOM even though the NSE
+    list is alphabetical.
+    """
+    symbol = stock["symbol"].upper()
+    company = stock["company"].upper()
+    if symbol == query:
+        return 0
+    if symbol.startswith(query):
+        return 1
+    if company.startswith(query):
+        return 2
+    if query in symbol:
+        return 3
+    return 4  # query in company
+
+
 def search_stocks(query: str, limit: int = 10) -> list[dict]:
-    """Case-insensitive substring search of the NSE list by symbol or company name."""
-    query = (query or "").upper()
+    """Search the NSE list by symbol or company name (substring, then fuzzy).
+
+    First a case-insensitive substring match on symbol OR company name,
+    ranked most-relevant first ('reliance ind' -> RELIANCE); when that finds
+    nothing, a typo-tolerant fuzzy pass on symbol then company name
+    ('HDFCBNAK' -> HDFCBANK).
+    """
+    query = (query or "").upper().strip()
     try:
         stocks = get_nse_stock_list_cached()
     except SourceError as error:
@@ -76,7 +135,12 @@ def search_stocks(query: str, limit: int = 10) -> list[dict]:
         stock for stock in stocks
         if query in stock["symbol"].upper() or query in stock["company"].upper()
     ]
-    return matches[:limit]
+    if matches:
+        # rank by relevance, then shorter company name = the primary listing
+        # ('Reliance Industries' before 'Reliance Industrial Infrastructure').
+        matches.sort(key=lambda stock: (_match_rank(stock, query), len(stock["company"])))
+        return matches[:limit]
+    return _fuzzy_stock_matches(stocks, query, limit)
 
 
 def get_nse_corporate_actions(symbol: str | None = None) -> list[dict]:
