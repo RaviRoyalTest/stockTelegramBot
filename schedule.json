@@ -7,5 +7,14 @@
     "chat": "862087765",
     "next_due": "2026-08-12T10:55:25",
     "market": "in"
+  },
+  {
+    "interval_min": 1440,
+    "commands": [
+      "/corpactionsformylist"
+    ],
+    "chat": "862087765",
+    "run_at": "09:00",
+    "market": "in"
   }
 ]
