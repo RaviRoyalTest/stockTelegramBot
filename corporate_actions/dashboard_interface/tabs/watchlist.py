@@ -128,8 +128,13 @@ def render() -> None:
             if symbol:
                 quote = sources.get_quote(manual_exchange, symbol)
                 if quote is None:
-                    st.error(f"Symbol {symbol} not found.")
+                    # Mirror the bot's 'did you mean' flow: show close matches
+                    # (ticker + company name) to pick from instead of a dead end.
+                    st.session_state["wl_suggestions"] = sources.search_stocks(symbol, limit=6)
+                    st.session_state["wl_query"] = symbol
+                    st.session_state["wl_exchange"] = manual_exchange
                 else:
+                    st.session_state.pop("wl_suggestions", None)
                     company = quote.get("name", "")
                     storage.add_to_watchlist(
                         [{"symbol": symbol, "company": company, "exchange": manual_exchange}]
@@ -138,6 +143,33 @@ def render() -> None:
                     st.rerun()
             else:
                 st.error("Enter a symbol.")
+
+    # --- Suggestion picker for a manual symbol that didn't resolve ---
+    wl_suggestions = st.session_state.get("wl_suggestions")
+    if wl_suggestions is not None:
+        wl_query = st.session_state.get("wl_query", "")
+        wl_exchange = st.session_state.get("wl_exchange", "NSE")
+        if not wl_suggestions:
+            st.error(
+                f"Symbol {wl_query} not found on {wl_exchange}. Check the spelling "
+                "or try a company name (e.g. RELIANCE)."
+            )
+        else:
+            st.warning(f"{wl_query} not found on {wl_exchange}. Did you mean one of these?")
+            wl_pick = st.selectbox(
+                "Similar symbols",
+                wl_suggestions,
+                format_func=lambda match: f"{match['symbol']} — {match.get('company') or ''}",
+                key="wl_pick",
+            )
+            if st.button("➕ Add selected", width="stretch"):
+                storage.add_to_watchlist(
+                    [{"symbol": wl_pick["symbol"], "company": wl_pick.get("company", ""),
+                      "exchange": wl_exchange}]
+                )
+                st.session_state.pop("wl_suggestions", None)
+                st.success(f"Added {wl_pick['symbol']} ({wl_exchange}).")
+                st.rerun()
 
     # --- Current watchlist with prices
     current_watchlist = storage.load_watchlist()

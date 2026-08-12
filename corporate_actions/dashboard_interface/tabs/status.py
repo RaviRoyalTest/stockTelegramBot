@@ -2,14 +2,32 @@
 from __future__ import annotations
 
 import os
+import time
+from datetime import datetime
 
 import streamlit as st
 
 from ... import config, scheduler, storage
-from ...bot.schedule_parsing import parse_interval_min
+from ...bot.schedule_parsing import parse_interval_min, parse_pause_minutes
 from ...formatting.schedule import format_interval, format_next_run
 from ...market import market_tz_name, market_tz_tag
 from ...poller import poller
+
+_PAUSE_PRESETS = ["1d", "2d", "3d", "1w", "2w", "1mo", "12h", "45m"]
+
+
+def _pause_tag(entry: dict) -> str:
+    """' — ⏸ paused until 14 Aug 09:15' when the entry is paused, else ''."""
+    raw = entry.get("paused_until")
+    if not raw:
+        return ""
+    try:
+        until_dt = datetime.fromisoformat(str(raw))
+        if until_dt.timestamp() <= time.time():
+            return ""  # auto-resumed - pause already lapsed
+        return f" — ⏸ paused until {until_dt.strftime('%d %b %H:%M')}"
+    except (TypeError, ValueError):
+        return ""
 
 
 def render() -> None:
@@ -97,7 +115,8 @@ def render() -> None:
             at_time = f" at {entry['run_at']} {tz_tag}" if entry.get("run_at") else ""
             due_ts = storage.schedule_next_due_ts(entry)
             next_run = f" — next run {format_next_run(due_ts, tz_name, tz_tag)}" if due_ts else ""
-            st.markdown(f"**{index}.** {label}{at_time}: `{'`, `'.join(entry.get('commands') or [])}`{next_run}")
+            st.markdown(f"**{index}.** {label}{at_time}: `{'`, `'.join(entry.get('commands') or [])}`"
+                        f"{next_run}{_pause_tag(entry)}")
     else:
         commands = [command for command in config.SCHEDULED_COMMANDS if command.strip()]
         if commands:
@@ -145,6 +164,32 @@ def render() -> None:
                "`/schedule add at 09:15 /cmd` (daily at a clock time) for any command. "
                "Remove deletes the first entry (use /schedule in Telegram for full "
                "control).")
+
+    # --- Pause / resume (mirrors /schedule pause 1d..1mo in Telegram) ---
+    st.subheader("Pause / resume automated reports")
+    st.caption("Pause pauses YOUR whole schedule (every entry) until the chosen "
+               "duration lapses - it auto-resumes. Resume restarts early.")
+    pause_col_1, pause_col_2, pause_col_3 = st.columns([2, 1, 1])
+    with pause_col_1:
+        pause_duration = st.selectbox("Pause for", _PAUSE_PRESETS, key="sched_pause_dur")
+    with pause_col_2:
+        st.write("")
+        if st.button("⏸ Pause", width="stretch", key="sched_pause_btn"):
+            minutes = parse_pause_minutes(pause_duration)
+            if minutes is None:
+                st.error(f"Bad pause duration: {pause_duration}")
+            else:
+                until_ts = time.time() + minutes * 60
+                storage.pause_schedule(owner_key, until_ts)
+                st.success(f"Schedule paused for {pause_duration} - auto-resumes "
+                           f"{datetime.fromtimestamp(until_ts).strftime('%d %b %H:%M')}.")
+                st.rerun()
+    with pause_col_3:
+        st.write("")
+        if st.button("▶️ Resume", width="stretch", key="sched_resume_btn"):
+            storage.resume_schedule(owner_key)
+            st.success("Schedule resumed - reports run again now.")
+            st.rerun()
     st.divider()
     st.subheader("Configuration")
     cfg_cols = st.columns(3)

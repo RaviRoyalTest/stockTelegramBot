@@ -156,13 +156,13 @@ functionality in a browser — no Telegram needed for browsing:
 
 | Tab | What it does |
 | --- | ------------ |
-| 📌 **Watchlist** | Load NSE/BSE stock lists, multi-select stocks, add/remove symbols manually, view live prices, and a ⭐ **My Favourites** bundle (corporate actions for your list, top losers 1h + today, watchlist, deep fundamentals) |
+| 📌 **Watchlist** | Load NSE/BSE stock lists, multi-select stocks, add/remove symbols manually (unknown symbols show a "did you mean" pick-list of similar tickers), view live prices, and a ⭐ **My Favourites** bundle (corporate actions for your list, top losers 1h + today, watchlist, deep fundamentals) |
 | 📋 **Corporate Actions** | Query live NSE+BSE actions — ⭐ **My List** (upcoming + recently passed/in-progress for your watchlist, exactly like `/corpactionsformylist`), 📊 **Summary** (counts by exchange & type + next ex-dates, like `/corpactionssummary`), by ex-date window, action type, or symbol/keyword |
 | 📊 **Market Screens** | Run movers / gainers / losers screens over NIFTY 100/500 with any period (5m → 1y) |
-| 💹 **Stock Analysis** | Quick card **or** DEEP report (like `/fundamentalreport`) — for one symbol **or your whole watchlist** (like `mylist`): price, 52W signal, RSI, P/E, sector P/E, market cap, D/E, div yield, ROCE, ROE, QoQ shareholding, full fundamentals |
+| 💹 **Stock Analysis** | **India** (NSE/BSE) quick card **or** DEEP report (like `/fundamentalanalyze` / `/fundamentalreport`) — one symbol or your whole watchlist — **plus 🇺🇸 US stocks** (like `/usstock`): price, 52W signal, RSI, P/E, sector P/E, market cap, D/E, div yield, ROCE, ROE, QoQ shareholding, full fundamentals. Unknown symbols show a pick-list of similar tickers (ticker + full name) |
 | 📰 **News** | Latest headlines for your watchlist or a single symbol |
 | 🎛️ **Alert Settings** | Action-type filters + price-move threshold (same as `/alertfilters` and `/pricealert`) + full command reference |
-| 🖥️ **System** | Poller status, ⚡ force-check-now button (like `/checknow`), automated-report schedule management (like `/schedule`), config, subscribers, persistence / GitHub push status |
+| 🖥️ **System** | Poller status, ⚡ force-check-now button (like `/checknow`), automated-report schedule management with **pause / resume** (like `/schedule pause 1d..1mo`), config, subscribers, persistence / GitHub push status |
 
 ### Run on Render — just redeploy, nothing to change
 
