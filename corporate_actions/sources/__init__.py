@@ -10,6 +10,7 @@ from .bse import get_bse_corporate_actions, get_bse_stock_list
 from .errors import SourceError
 from .fundamentals import FUND_MAX_ROWS, get_fundamentals
 from .us_fundamentals import get_us_fundamentals
+from .us_search import search_us_tickers
 from .news import get_stock_news
 from .nse import (
     get_nse_corporate_actions,
@@ -50,6 +51,7 @@ __all__ = [
     "parse_screener_fundamentals",
     "get_fundamentals",
     "get_us_fundamentals",
+    "search_us_tickers",
     "FUND_MAX_ROWS",
     "RIGHTS_OFFER_WINDOWS",
     "attach_rights_windows",
