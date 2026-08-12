@@ -7,7 +7,8 @@ import streamlit as st
 
 from ... import config, scheduler, storage
 from ...bot.schedule_commands import parse_interval_min
-from ...formatting.schedule import format_next_run
+from ...formatting.schedule import format_interval, format_next_run
+from ...market import market_tz_name, market_tz_tag
 from ...poller import poller
 
 
@@ -85,16 +86,14 @@ def render() -> None:
             market = entry.get("market") or (storage.get_user_settings(owner_key) or {}).get(
                 "schedule_market", config.SCHEDULED_REPORTS_MARKET
             )
-            tz_tag = "ET" if market == "us" else "IST"
-            tz_name = "America/New_York" if market == "us" else "Asia/Kolkata"
+            tz_tag = market_tz_tag(market)
+            tz_name = market_tz_name(market)
+            # 'daily' for a clock-time entry on a 24h cadence (matches the
+            # /schedule Telegram listing via format_schedule).
             if entry.get("run_at") and interval and interval % (24 * 60) == 0:
                 label = "daily"
             else:
-                label = f"every {interval} min"
-                if interval and interval % (24 * 60) == 0:
-                    label = f"every {interval // (24 * 60)}d"
-                elif interval and interval % 60 == 0:
-                    label = f"every {interval // 60}h"
+                label = format_interval(interval)
             at_time = f" at {entry['run_at']} {tz_tag}" if entry.get("run_at") else ""
             due_ts = storage.schedule_next_due_ts(entry)
             next_run = f" — next run {format_next_run(due_ts, tz_name, tz_tag)}" if due_ts else ""
@@ -114,7 +113,7 @@ def render() -> None:
     ow_market = (storage.get_user_settings(owner_key) or {}).get(
         "schedule_market", config.SCHEDULED_REPORTS_MARKET
     )
-    ow_tz_tag = "ET" if ow_market == "us" else "IST"
+    ow_tz_tag = market_tz_tag(ow_market)
     with stats_col_2:
         new_at = st.text_input("At time (HH:MM, optional)", value="", key="sched_at",
                                placeholder=f"e.g. 09:15 {ow_tz_tag}")

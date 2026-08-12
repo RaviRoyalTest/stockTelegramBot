@@ -11,6 +11,8 @@ from .hours import (
     local_now,
     market_label,
     market_timezone,
+    market_tz_name,
+    market_tz_tag,
     next_open_after,
     normalise_market,
 )
@@ -24,6 +26,8 @@ __all__ = [
     "normalise_market",
     "market_label",
     "market_timezone",
+    "market_tz_name",
+    "market_tz_tag",
     "local_now",
     "is_between",
     "is_market_open",

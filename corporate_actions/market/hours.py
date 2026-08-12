@@ -63,6 +63,21 @@ def _tz_abbrev(tz_name: str) -> str:
     return tz_name
 
 
+def market_tz_name(market) -> str:
+    """IANA timezone a market's wall clock runs on.
+
+    'in' -> Asia/Kolkata, 'us' -> America/New_York; unknown/any gates fall
+    back to Asia/Kolkata so a run_at time always has a defined timezone.
+    """
+    info = MARKETS.get(normalise_market(market))
+    return info["tz"] if info else "Asia/Kolkata"
+
+
+def market_tz_tag(market) -> str:
+    """Short wall-clock label for a market: 'IST' (India) / 'ET' (US)."""
+    return "ET" if normalise_market(market) == "us" else "IST"
+
+
 def market_label(market) -> str:
     """Human label for a market gate, e.g. 'India (NSE/BSE) · 09:15–15:30 IST'."""
     key = normalise_market(market)

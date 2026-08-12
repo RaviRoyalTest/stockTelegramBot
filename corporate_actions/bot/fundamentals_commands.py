@@ -13,7 +13,7 @@ from time import monotonic
 
 from .. import storage
 from ..core.text import escape, split_messages
-from ..formatting.stock import _fund_report_lines, _stock_summary_lines
+from ..formatting.stock_india import _fund_report_lines, _stock_summary_lines
 from ..sources import get_fundamentals, get_quote
 from .helpers import MAX_FUND_BATCH, MAX_STOCK_BATCH, reply_suggestions
 from .reply import reply, reply_messages

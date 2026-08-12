@@ -12,7 +12,7 @@ from __future__ import annotations
 import logging
 
 from ..core.text import escape, split_messages
-from ..formatting.stock import _us_stock_lines
+from ..formatting.stock_us import _us_stock_lines
 from ..sources import get_quote, get_us_fundamentals
 from .reply import reply, reply_messages
 

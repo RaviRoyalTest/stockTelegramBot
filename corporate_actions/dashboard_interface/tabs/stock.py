@@ -4,7 +4,7 @@ from __future__ import annotations
 import streamlit as st
 
 from ... import sources, storage
-from ...formatting.stock import _fund_report_lines
+from ...formatting.stock_india import _fund_report_lines
 from ..helpers import fetch_fund_lines, tg_to_markdown
 from ..widgets import render_quick_card
 

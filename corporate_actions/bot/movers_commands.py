@@ -13,7 +13,8 @@ from time import monotonic
 
 from .. import storage
 from ..core.text import escape, split_messages
-from ..formatting.stock import _fundamentals_lines, _rsi_signal, _wk52_signal
+from ..formatting.stock_common import _rsi_signal, _wk52_signal
+from ..formatting.stock_india import _fundamentals_lines
 from ..market import MOVERS_PERIODS, fetch_period_change, period_label
 from ..sources import FUND_MAX_ROWS, get_fundamentals, get_index_universe
 from ..telegram.markup import fundamentals_button, symbol_buttons

@@ -14,13 +14,8 @@ from .actions import (
 )
 from .news import format_news_item, format_news_list
 from .schedule import format_interval, format_next_run, format_schedule, format_settings
-from .stock import (
-    _fundamentals_lines,
-    _fund_report_lines,
-    _rsi_signal,
-    _stock_summary_lines,
-    _wk52_signal,
-)
+from .stock_common import _rsi_signal, _wk52_signal
+from .stock_india import _fundamentals_lines, _fund_report_lines, _stock_summary_lines
 
 __all__ = [
     "action_status",

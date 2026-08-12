@@ -9,7 +9,7 @@ from datetime import datetime
 
 from .. import config, storage
 from ..formatting.schedule import format_schedule
-from ..market.hours import is_market_open, market_label
+from ..market.hours import is_market_open, market_label, market_tz_tag
 from ..telegram.markup import hide_keyboard_markup, quick_menu_markup
 from .helpers import run_command_sequence
 from .help_texts import QUICK_MENU_TEXT
@@ -17,7 +17,6 @@ from .reply import reply
 
 log = logging.getLogger(__name__)
 
-MARKET_TZ = {"us": "America/New_York", "in": "Asia/Kolkata"}
 MARKET_WORDS = ("in", "us", "any", "off")
 
 
@@ -83,7 +82,7 @@ def _valid_hhmm(hhmm) -> bool:
 
 def _run_at_tz_tag(market) -> str:
     """'IST' for the Indian market, 'ET' for the US market."""
-    return "ET" if market == "us" else "IST"
+    return market_tz_tag(market)
 
 
 def _parse_schedule_options(tokens: list[str]):

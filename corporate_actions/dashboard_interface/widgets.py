@@ -11,7 +11,7 @@ import streamlit as st
 from .. import config, sources
 from ..formatting import status_tag
 from ..formatting.actions import _TYPE_EMOJI
-from ..formatting.stock import _fund_report_lines
+from ..formatting.stock_india import _fund_report_lines
 from .helpers import fetch_analysis, format_change, format_price, tg_to_markdown
 
 

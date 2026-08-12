@@ -43,13 +43,15 @@ corporate_actions/
   core/                       pure primitives: dates.py, numbers.py, text.py
   sources/                    one module per data source (nse, bse, quotes,
                               news, universe, ohlc, screener, fundamentals,
-                              rights, types, http, errors) + package facade
+                              us_fundamentals, rights, types, http, errors)
+                              + package facade
   storage/                    one module per state file (watchlist,
                               subscriptions, settings, seen, schedule) over
                               json_file.py atomic base + package facade
   telegram/                   protocol layer: client.py (send/getUpdates),
                               markup.py (keyboard builders)
-  formatting/                 message renderers: actions, news, stock,
+  formatting/                 message renderers: actions, news, stock_common /
+                              stock_india / stock_us (split by market),
                               schedule + package facade
   market/                     movement-screen helpers shared by bot + dashboard
                               (periods.py, change.py)
@@ -63,7 +65,8 @@ corporate_actions/
                               runner.py (cron loop + CLI), and one module per
                               command family (corporate_action_commands, watchlist_commands,
                               settings_commands, schedule_commands, movers_commands,
-                              fundamentals_commands, harmonic_commands, scanner_commands, status)
+                              fundamentals_commands, us_commands, harmonic_commands,
+                              scanner_commands, status)
   dashboard_interface/               web dashboard: helpers.py (pure), widgets.py (st),
                               help_text.py, tabs/ (one module per tab), app.py
 ```

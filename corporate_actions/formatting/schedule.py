@@ -83,7 +83,14 @@ def format_schedule(chat_id) -> str:
     chat's /schedule add/remove/clear. Each row shows the cadence, the
     market-hours gate / run window and any active pause.
     """
-    from ..market.hours import entry_market, entry_paused, entry_paused_until, market_label
+    from ..market.hours import (
+        entry_market,
+        entry_paused,
+        entry_paused_until,
+        market_label,
+        market_tz_name,
+        market_tz_tag,
+    )
 
     default_market = (storage.get_user_settings(chat_id) or {}).get(
         "schedule_market", config.SCHEDULED_REPORTS_MARKET
@@ -113,8 +120,8 @@ def format_schedule(chat_id) -> str:
         interval = int(entry.get("interval_min") or 0)
         commands = entry.get("commands") or []
         market = entry_market(entry, default=default_market)
-        tz_tag = "ET" if market == "us" else "IST"
-        tz_name = "America/New_York" if market == "us" else "Asia/Kolkata"
+        tz_tag = market_tz_tag(market)
+        tz_name = market_tz_name(market)
         # A clock-time entry on a 24h cadence reads as 'daily at HH:MM', not
         # the confusing 'every 1d: /cmd at 09:15 IST'.
         if entry.get("run_at") and interval and interval % (24 * 60) == 0:

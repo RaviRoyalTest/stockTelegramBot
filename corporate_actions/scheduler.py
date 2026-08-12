@@ -18,17 +18,22 @@ import time
 from . import config, storage
 from .core.dates import next_at_in_tz, next_at_ist
 from .formatting.schedule import format_interval
-from .market.hours import entry_in_window, entry_market, entry_paused, market_label
+from .market.hours import (
+    entry_in_window,
+    entry_market,
+    entry_paused,
+    market_label,
+    market_tz_name,
+    market_tz_tag,
+)
 
 log = logging.getLogger(__name__)
-
-MARKET_TZ = {"us": "America/New_York", "in": "Asia/Kolkata"}
 
 
 def _run_at_timezone(entry: dict) -> str:
     """Wall-clock timezone of an entry's run_at: its market's, IST by default."""
     market = entry_market(entry, default=config.SCHEDULED_REPORTS_MARKET)
-    return MARKET_TZ.get(market, "Asia/Kolkata")
+    return market_tz_name(market)
 
 
 def schedule_source_label(entry: dict, chat, command: str) -> str:
@@ -64,8 +69,8 @@ def schedule_source_label(entry: dict, chat, command: str) -> str:
 
 
 def _tz_tag(entry: dict) -> str:
-    tz_name = _run_at_timezone(entry)
-    return "IST" if tz_name == "Asia/Kolkata" else "ET"
+    market = entry_market(entry, default=config.SCHEDULED_REPORTS_MARKET)
+    return market_tz_tag(market)
 
 
 def schedule_entries_with_defaults(default_chat: str) -> list[dict]:
@@ -175,7 +180,7 @@ def start_scheduled_reports(run_command) -> None:
                         if persisted is not None:
                             due_ts = persisted
                         elif entry.get("run_at"):
-                            due_ts = next_at_in_tz(entry["run_at"], MARKET_TZ.get(market, "Asia/Kolkata"))
+                            due_ts = next_at_in_tz(entry["run_at"], market_tz_name(market))
                             if due_ts is None:
                                 due_ts = now + min(interval * 60, 60)
                         else:
