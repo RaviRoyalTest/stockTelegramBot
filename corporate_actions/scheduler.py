@@ -16,7 +16,7 @@ import threading
 import time
 
 from . import config, storage
-from .core.dates import next_at_in_tz
+from .core.dates import next_at_in_tz, next_at_ist
 from .formatting.schedule import format_interval
 from .market.hours import entry_in_window, entry_market, entry_paused, market_label
 

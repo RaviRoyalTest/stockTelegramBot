@@ -17,11 +17,25 @@ def format_interval(interval_min: int) -> str:
     return f"every {interval} min"
 
 
-def format_next_run(due_ts: float) -> str:
-    """Human-friendly 'next run' for a schedule entry, e.g. 'in 35 min (14:20 IST)'."""
+def format_next_run(due_ts: float, tz_name: str | None = None, tz_tag: str = "") -> str:
+    """Human-friendly 'next run' for a schedule entry, e.g. 'in 35 min (14:20 IST)'.
+
+    The countdown is timezone-independent (epoch diff). The wall-clock shown
+    is rendered in the entry's market timezone when `tz_name` is given (IST
+    for India, America/New_York for the US) so the minute that fires matches
+    the timezone the entry actually runs on, never the host's local clock.
+    """
     try:
-        due_time = _datetime.datetime.fromtimestamp(due_ts)
         minutes = int((due_ts - _datetime.datetime.now().timestamp()) / 60)
+        if tz_name:
+            try:
+                from zoneinfo import ZoneInfo
+
+                due_time = _datetime.datetime.fromtimestamp(due_ts, ZoneInfo(tz_name))
+            except Exception:
+                due_time = _datetime.datetime.fromtimestamp(due_ts)
+        else:
+            due_time = _datetime.datetime.fromtimestamp(due_ts)
     except (TypeError, ValueError, OSError):
         return "soon"
     if minutes <= 0:
@@ -32,7 +46,8 @@ def format_next_run(due_ts: float) -> str:
         when = f"in {minutes // 60}h {minutes % 60:02d}m"
     else:
         when = f"in {minutes // (24 * 60)}d"
-    return f"{when} ({due_time.strftime('%H:%M')})"
+    tag = f" {tz_tag}" if tz_tag else ""
+    return f"{when} ({due_time.strftime('%H:%M')}{tag})"
 
 
 def format_settings(chat_id) -> str:
@@ -97,9 +112,15 @@ def format_schedule(chat_id) -> str:
     for index, entry in enumerate(mine, start=1):
         interval = int(entry.get("interval_min") or 0)
         commands = entry.get("commands") or []
-        label = format_interval(interval)
         market = entry_market(entry, default=default_market)
         tz_tag = "ET" if market == "us" else "IST"
+        tz_name = "America/New_York" if market == "us" else "Asia/Kolkata"
+        # A clock-time entry on a 24h cadence reads as 'daily at HH:MM', not
+        # the confusing 'every 1d: /cmd at 09:15 IST'.
+        if entry.get("run_at") and interval and interval % (24 * 60) == 0:
+            label = "daily"
+        else:
+            label = format_interval(interval)
         line = f"  {index}. {label}: {html.escape(', '.join(commands))}"
         if entry.get("run_at"):
             line += f" at {entry['run_at']} {tz_tag}"
@@ -113,7 +134,7 @@ def format_schedule(chat_id) -> str:
             line += f" \u2014 \u23f8 <b>paused</b> (until {entry_paused_until(entry)})"
         due_time = storage.schedule_next_due_ts(entry)
         if due_time:
-            line += f"  \u2014 next run {format_next_run(due_time)}"
+            line += f"  \u2014 next run {format_next_run(due_time, tz_name, tz_tag)}"
         lines.append(line)
     lines.append(
         "\nUsage: <code>/schedule add 3h /scan500</code> (interval: 180, 90m, 3h, 1d)"

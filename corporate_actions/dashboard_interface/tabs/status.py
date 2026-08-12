@@ -82,14 +82,22 @@ def render() -> None:
     if sched_entries:
         for index, entry in enumerate(sched_entries, start=1):
             interval = int(entry.get("interval_min") or 0)
-            label = f"every {interval} min"
-            if interval and interval % (24 * 60) == 0:
-                label = f"every {interval // (24 * 60)}d"
-            elif interval and interval % 60 == 0:
-                label = f"every {interval // 60}h"
-            at_time = f" at {entry['run_at']} IST" if entry.get("run_at") else ""
+            market = entry.get("market") or (storage.get_user_settings(owner_key) or {}).get(
+                "schedule_market", config.SCHEDULED_REPORTS_MARKET
+            )
+            tz_tag = "ET" if market == "us" else "IST"
+            tz_name = "America/New_York" if market == "us" else "Asia/Kolkata"
+            if entry.get("run_at") and interval and interval % (24 * 60) == 0:
+                label = "daily"
+            else:
+                label = f"every {interval} min"
+                if interval and interval % (24 * 60) == 0:
+                    label = f"every {interval // (24 * 60)}d"
+                elif interval and interval % 60 == 0:
+                    label = f"every {interval // 60}h"
+            at_time = f" at {entry['run_at']} {tz_tag}" if entry.get("run_at") else ""
             due_ts = storage.schedule_next_due_ts(entry)
-            next_run = f" — next run {format_next_run(due_ts)}" if due_ts else ""
+            next_run = f" — next run {format_next_run(due_ts, tz_name, tz_tag)}" if due_ts else ""
             st.markdown(f"**{index}.** {label}{at_time}: `{'`, `'.join(entry.get('commands') or [])}`{next_run}")
     else:
         commands = [command for command in config.SCHEDULED_COMMANDS if command.strip()]
@@ -103,21 +111,30 @@ def render() -> None:
     stats_col_1, stats_col_2, stats_col_3, stats_col_4 = st.columns([2, 1, 1, 1])
     with stats_col_1:
         new_interval = st.text_input("Interval (minutes / 3h / 1d)", value="3h", key="sched_interval")
+    ow_market = (storage.get_user_settings(owner_key) or {}).get(
+        "schedule_market", config.SCHEDULED_REPORTS_MARKET
+    )
+    ow_tz_tag = "ET" if ow_market == "us" else "IST"
     with stats_col_2:
         new_at = st.text_input("At time (HH:MM, optional)", value="", key="sched_at",
-                               placeholder="e.g. 09:15 IST")
+                               placeholder=f"e.g. 09:15 {ow_tz_tag}")
     with stats_col_3:
         st.write("")
         if st.button("➕ Add", width="stretch", key="sched_add_btn"):
             interval = parse_interval_min(new_interval.strip())
             at_time = new_at.strip() or None
             if at_time and scheduler.next_at_ist(at_time) is None:
-                st.error("Bad time. Use 24h format like 09:15 (IST).")
+                st.error(f"Bad time. Use 24h format like 09:15 ({ow_tz_tag}).")
             elif interval is None:
                 st.error("Bad interval. Use e.g. 180, 90m, 3h or 1d (min 15).")
             else:
-                storage.add_schedule_entry(interval, ["/scan500"], owner_key, run_at=at_time)
-                st.success(f"Added /scan500 every {interval} min" + (f" at {at_time} IST" if at_time else "") + ".")
+                storage.add_schedule_entry(
+                    interval, ["/scan500"], owner_key, run_at=at_time, market=ow_market
+                )
+                st.success(
+                    f"Added /scan500 every {interval} min"
+                    + (f" at {at_time} {ow_tz_tag}" if at_time else "") + "."
+                )
                 st.rerun()
     with stats_col_4:
         st.write("")
