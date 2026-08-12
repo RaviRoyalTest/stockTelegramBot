@@ -6,7 +6,7 @@ import os
 import streamlit as st
 
 from ... import config, scheduler, storage
-from ...bot.schedule_commands import parse_interval_min
+from ...bot.schedule_parsing import parse_interval_min
 from ...formatting.schedule import format_interval, format_next_run
 from ...market import market_tz_name, market_tz_tag
 from ...poller import poller

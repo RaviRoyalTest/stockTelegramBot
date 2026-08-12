@@ -1,12 +1,15 @@
 """Stock-analysis report renderers (package facade).
 
-The renderers were split by market so Indian and US output can never mix:
+The renderers are split by market and by report type so Indian and US output
+can never mix and each module stays small:
 
-  * stock_common.py - shared number/signal helpers (_wk52_signal, _rsi_signal,
-    _num_or_na, _pct_str, _growth_pct_str)
-  * stock_india.py  - Indian (NSE/BSE) renderers: quick card, DEEP report and
-    movers rows (INR, screener.in sections)
-  * stock_us.py     - US renderer (_us_stock_lines, USD)
+  * stock_common.py       - shared number/signal helpers (_wk52_signal,
+                            _rsi_signal, _num_or_na, _pct_str, _cr_str, ...)
+  * stock_india_card.py   - Indian quick card (_stock_summary_lines)
+  * stock_india_report.py - Indian DEEP report (_fund_report_lines)
+  * stock_india_movers.py - Indian movers rows (_fundamentals_lines)
+  * stock_india.py        - facade re-exporting the Indian API
+  * stock_us.py           - US renderer (_us_stock_lines, USD)
 
 This module re-exports everything so existing import sites keep working.
 """

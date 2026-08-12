@@ -42,17 +42,20 @@ corporate_actions/
   scheduler.py                scheduled-reports loop (per-user /schedule)
   core/                       pure primitives: dates.py, numbers.py, text.py
   sources/                    one module per data source (nse, bse, quotes,
-                              news, universe, ohlc, screener, fundamentals,
-                              us_fundamentals, rights, types, http, errors)
-                              + package facade
+                              news, universe, ohlc, screener (IO/pacing
+                              facade) + screener_parsing (pure HTML parsers),
+                              fundamentals, us_fundamentals, rights, types,
+                              http, errors) + package facade
   storage/                    one module per state file (watchlist,
                               subscriptions, settings, seen, schedule) over
                               json_file.py atomic base + package facade
   telegram/                   protocol layer: client.py (send/getUpdates),
                               markup.py (keyboard builders)
-  formatting/                 message renderers: actions, news, stock_common /
-                              stock_india / stock_us (split by market),
-                              schedule + package facade
+  formatting/                 message renderers: actions, news, schedule,
+                              stock_common (shared helpers) + stock_us +
+                              stock_india (facade) with stock_india_card /
+                              stock_india_report / stock_india_movers,
+                              package facade
   market/                     movement-screen helpers shared by bot + dashboard
                               (periods.py, change.py)
   poller/                     polling engine: engine.py (Poller), events.py,
@@ -64,7 +67,8 @@ corporate_actions/
                               registry.py (aliases + menu), reply.py, helpers.py,
                               runner.py (cron loop + CLI), and one module per
                               command family (corporate_action_commands, watchlist_commands,
-                              settings_commands, schedule_commands, movers_commands,
+                              settings_commands, schedule_commands (+ pure
+                              schedule_parsing), movers_commands,
                               fundamentals_commands, us_commands, harmonic_commands,
                               scanner_commands, status)
   dashboard_interface/               web dashboard: helpers.py (pure), widgets.py (st),

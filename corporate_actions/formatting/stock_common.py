@@ -1,9 +1,10 @@
-"""Shared stock-formatting helpers (no market-specific rendering).
+"""Shared stock-formatting helpers (market-neutral primitives).
 
-Pure formatting primitives used by BOTH the Indian renderers (stock_india.py)
+Pure formatting primitives used by BOTH the Indian renderers (stock_india_*)
 and the US renderer (stock_us.py): 52-week zone signal, RSI labels and the
-small number/percent formatters. Market-specific renderers live in their own
-modules so Indian and US output can never drift apart accidentally.
+small number/percent formatters, plus the INR _cr_str money helper used by the
+Indian card/report. Market-specific renderers live in their own modules so
+Indian and US output can never drift apart accidentally.
 """
 from __future__ import annotations
 
@@ -79,3 +80,13 @@ def _growth_pct_str(value) -> str:
         return formatted
     arrow = "\U0001F7E2\u25b2" if numeric_value >= 0 else "\U0001F534\u25bc"
     return f"{arrow} {formatted}"
+
+
+def _cr_str(value) -> str:
+    """INR money (raw rupees) -> '₹1,234.5Cr', or 'N/A' (used by Indian renderers)."""
+    if value is None:
+        return "N/A"
+    try:
+        return f"\u20b9{float(value) / 1e7:,.1f}Cr"
+    except (TypeError, ValueError):
+        return "N/A"

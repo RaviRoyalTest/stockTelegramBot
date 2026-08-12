@@ -3,7 +3,6 @@ from __future__ import annotations
 
 import html
 import logging
-import re
 import time
 from datetime import datetime
 
@@ -14,10 +13,15 @@ from ..telegram.markup import hide_keyboard_markup, quick_menu_markup
 from .helpers import run_command_sequence
 from .help_texts import QUICK_MENU_TEXT
 from .reply import reply
+from .schedule_parsing import (
+    MARKET_WORDS,
+    parse_interval_min,
+    parse_pause_minutes,
+    parse_schedule_options,
+    valid_hhmm,
+)
 
 log = logging.getLogger(__name__)
-
-MARKET_WORDS = ("in", "us", "any", "off")
 
 
 def handle_menu(chat_id, parts) -> None:
@@ -33,93 +37,9 @@ def handle_menu(chat_id, parts) -> None:
     reply(chat_id, QUICK_MENU_TEXT, reply_markup=quick_menu_markup())
 
 
-def parse_interval_min(raw: str) -> int | None:
-    """Parse an interval like '180', '3h', '90m', '1d' into minutes.
-
-    Returns None when the value is unparseable or below the 15-minute floor.
-    """
-    match = re.fullmatch(r"(\d+)\s*([mhd])?", str(raw or "").strip().lower())
-    if not match:
-        return None
-    minutes = int(match.group(1))
-    unit = match.group(2) or "m"
-    if unit == "h":
-        minutes *= 60
-    elif unit == "d":
-        minutes *= 24 * 60
-    if minutes < 15:
-        return None
-    return minutes
-
-
-def parse_pause_minutes(raw: str) -> int | None:
-    """Parse a pause duration like '12h', '1d', '3d', '1w', '2w', '1mo' into minutes."""
-    match = re.fullmatch(r"(\d+)\s*(m|h|d|w|mo)?", str(raw or "").strip().lower())
-    if not match:
-        return None
-    value = int(match.group(1))
-    unit = match.group(2) or "m"
-    if value <= 0:
-        return None
-    if unit == "h":
-        return value * 60
-    if unit == "d":
-        return value * 24 * 60
-    if unit == "w":
-        return value * 7 * 24 * 60
-    if unit == "mo":
-        return value * 30 * 24 * 60
-    return value
-
-
-def _valid_hhmm(hhmm) -> bool:
-    match = re.fullmatch(r"(\d{1,2}):(\d{2})", str(hhmm or "").strip())
-    if not match:
-        return False
-    hour, minute = int(match.group(1)), int(match.group(2))
-    return 0 <= hour <= 23 and 0 <= minute <= 59
-
-
 def _run_at_tz_tag(market) -> str:
     """'IST' for the Indian market, 'ET' for the US market."""
     return market_tz_tag(market)
-
-
-def _parse_schedule_options(tokens: list[str]):
-    """Strip trailing schedule options off a /schedule add command tail.
-
-    Recognises an optional market word ([in|us|any|off]) and an optional
-    explicit run window ([from HH:MM to HH:MM]) appended AFTER the command.
-    Returns (command_tokens, options_dict) with options keys market,
-    window_start, window_end. The market word must appear before the window.
-    """
-    rest = list(tokens)
-    options = {}
-    # window: ... from HH:MM to HH:MM (comes AFTER the market word)
-    if (
-        len(rest) >= 4
-        and _valid_hhmm(rest[-1])
-        and rest[-2].lower() == "to"
-        and _valid_hhmm(rest[-3])
-        and rest[-4].lower() == "from"
-    ):
-        options["window_end"] = rest[-1]
-        options["window_start"] = rest[-3]
-        rest = rest[:-4]
-    elif (
-        len(rest) >= 2
-        and _valid_hhmm(rest[-1])
-        and rest[-2].lower() == "to"
-    ):
-        # bare 'to HH:MM' without a start -> window from midnight
-        options["window_end"] = rest[-1]
-        options["window_start"] = "00:00"
-        rest = rest[:-2]
-    # market word (right after the command / before the window)
-    if rest and rest[-1].lower() in MARKET_WORDS:
-        options["market"] = "any" if rest[-1].lower() == "off" else rest[-1].lower()
-        rest = rest[:-1]
-    return rest, options
 
 
 def run_schedule_now(chat_id) -> None:
@@ -344,7 +264,7 @@ def handle_schedule_add(chat_id, parts) -> None:
             )
             return
         run_at = parts[3].strip()
-        if not _valid_hhmm(run_at):
+        if not valid_hhmm(run_at):
             reply(chat_id, "Bad time. Use 24h format like <code>09:15</code> or <code>18:30</code>.")
             return
         next_due_ts = parts[4] if len(parts) > 4 else ""
@@ -363,7 +283,7 @@ def handle_schedule_add(chat_id, parts) -> None:
             "<code>3h</code> or <code>1d</code> (min 15 minutes).",
         )
         return
-    command_tokens, options = _parse_schedule_options(list(parts[cmd_start:]))
+    command_tokens, options = parse_schedule_options(list(parts[cmd_start:]))
     command = " ".join(command_tokens).strip()
     if not command.startswith("/"):
         reply(chat_id, "The command must start with / (e.g. <code>/scan500</code>).")
