@@ -186,7 +186,7 @@ def handle_moversfund(chat_id, parts) -> None:
     """Set how movers reports show fundamentals (/moversfund)."""
     settings = storage.get_user_settings(chat_id)
     subcommand = parts[1].lower() if len(parts) > 1 else "status"
-    if subcommand in ("button", "on", "manual", "tap"):
+    if subcommand in ("button", "default", "reset", "on", "manual", "tap"):
         settings["movers_fund"] = "button"
         storage.save_user_settings(chat_id, settings)
         reply(chat_id, "\U0001F4CA <b>Movers fundamentals: button mode.</b>\n"
@@ -206,4 +206,5 @@ def handle_moversfund(chat_id, parts) -> None:
              if mode == "auto"
              else "reports end with a <b>Get Fundamentals</b> button")
     reply(chat_id, f"\U0001F4CA <b>Movers fundamentals</b>\nMode: {state}\n\n"
-          "Change it with <code>/moversfund button</code> or <code>/moversfund auto</code>.")
+          "Change it with <code>/moversfund button</code> (default) or "
+          "<code>/moversfund auto</code>.")

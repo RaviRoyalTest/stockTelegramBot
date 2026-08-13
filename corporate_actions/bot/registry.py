@@ -392,7 +392,7 @@ COMMAND_EXAMPLES = {
     "/pricealert": ["/pricealert 3", "/pricealert off"],
     "/alertfilters": ["/alertfilters dividend,bonus", "/alertfilters all"],
     "/watcher": ["/watcher on", "/watcher off", "/watcher set 5", "/watcher universe nifty500"],
-    "/moversfund": ["/moversfund button", "/moversfund auto"],
+    "/moversfund": ["/moversfund button", "/moversfund auto", "/moversfund default"],
     "/addstock": ["/addstock RELIANCE NSE", "/addstock PGINVIT"],
     "/removestock": ["/removestock TCS"],
 }
