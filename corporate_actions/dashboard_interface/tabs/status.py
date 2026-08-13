@@ -147,10 +147,10 @@ def render() -> None:
                 st.error("Bad interval. Use e.g. 180, 90m, 3h or 1d (min 15).")
             else:
                 storage.add_schedule_entry(
-                    interval, ["/scan500"], owner_key, run_at=at_time, market=ow_market
+                    interval, ["/toplosers 1h"], owner_key, run_at=at_time, market=ow_market
                 )
                 st.success(
-                    f"Added /scan500 every {interval} min"
+                    f"Added /toplosers 1h every {interval} min"
                     + (f" at {at_time} {ow_tz_tag}" if at_time else "") + "."
                 )
                 st.rerun()
@@ -160,7 +160,7 @@ def render() -> None:
             storage.remove_schedule_entry(owner_key, 0)
             st.success("Removed entry 1.")
             st.rerun()
-    st.caption("Add schedules `/scan500`; use Telegram `/schedule add 3h /scan500` or "
+    st.caption("Add schedules `/toplosers 1h`; use Telegram `/schedule add 3h /toplosers 1h` or "
                "`/schedule add at 09:15 /cmd` (daily at a clock time) for any command. "
                "Remove deletes the first entry (use /schedule in Telegram for full "
                "control).")
