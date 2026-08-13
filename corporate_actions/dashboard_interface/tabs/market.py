@@ -113,13 +113,13 @@ def render() -> None:
             screen_type, period_key, direction, universe, count, target_date, kind, \
                 threshold = meta
         universe_label = _UNIVERSE_LABEL(universe, "NIFTY 100")
+        screen_market = "us" if universe in ("nasdaq100", "sp500") else "in"
         if kind == "bigmovers":
-            big_market = "us" if universe in ("nasdaq100", "sp500") else "in"
-            if not market_active(big_market):
+            if not market_active(screen_market):
                 st.warning(
                     f"{universe_label} market is closed - the rows below are from "
                     f"the last session. Big-mover lists are most meaningful during "
-                    f"{market_label(big_market)} + 1 hour after close."
+                    f"{market_label(screen_market)} + 1 hour after close."
                 )
             window_text = f"today, ≥±{threshold:g}%"
         elif target_date:
@@ -128,6 +128,13 @@ def render() -> None:
             window_text = "today's gaps"
         else:
             window_text = period_label(*MOVERS_PERIODS.get(period_key, ("intraday", 60)))
+            if not market_active(screen_market):
+                st.warning(
+                    f"{universe_label} market is closed - the rows below are from "
+                    f"the last session. Live movers run during "
+                    f"{market_label(screen_market)} + 1h after close; pick a "
+                    f"DATE to see that day's historical movers instead."
+                )
         kind_text = f"{screen_type} ({'gap-downs' if direction == 'down' else 'gap-ups' if direction == 'up' else direction})" if screen_type == "Gaps" else screen_type
         st.subheader(f"{kind_text} — {window_text} · {universe_label} (top {count})")
         rows = st.session_state["screen_rows"]

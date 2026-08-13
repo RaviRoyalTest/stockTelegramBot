@@ -214,7 +214,9 @@ COMMAND_USAGE = {
         "<b>Universe</b>  n100/nifty100 \u00b7 n500/nifty500 \u00b7 nasdaq100/ndx/us "
         "(bare 100/500 picks the index here)\n"
         "Each row shows P/E, sector P/E, 52W range, div yield, holdings &amp; D/E "
-        "(via the Get Fundamentals button - change with /moversfund)."
+        "(via the Get Fundamentals button - change with /moversfund).\n"
+        "Market-hours gate: live screens run during trading hours + 1h after close "
+        "(IST for NIFTY, ET for US) - a DATE query works any time."
     ),
     "/topgainers": (
         "<b>/topgainers</b> - top rising stocks (default: today, NIFTY 500, top 30)\n"
@@ -231,7 +233,9 @@ COMMAND_USAGE = {
         "<b>Universe</b>  n100/nifty100 \u00b7 n500/nifty500 \u00b7 nasdaq100/ndx/us\n"
         "Note: for gainers a bare 100/500 is the top-N count (e.g. /topgainers 100 = "
         "top 100) - use nifty100/nifty500 to pick the index. "
-        "Each row also shows P/E, sector P/E, 52W range, div yield, holdings &amp; D/E."
+        "Each row also shows P/E, sector P/E, 52W range, div yield, holdings &amp; D/E.\n"
+        "Market-hours gate: live screens run during trading hours + 1h after close "
+        "(IST for NIFTY, ET for US) - a DATE query works any time."
     ),
     "/toplosers": (
         "<b>/toplosers</b> - top falling stocks (default: today, NIFTY 500, top 30)\n"
@@ -258,7 +262,9 @@ COMMAND_USAGE = {
         "Note: for losers a bare 100/500 is the top-N count (e.g. /toplosers 100 = "
         "top 100) - use nifty100/nifty500 to pick the index. "
         "Each row shows P/E, sector P/E, 52W range, div yield, holdings &amp; D/E "
-        "(via the Get Fundamentals button - change with /moversfund)."
+        "(via the Get Fundamentals button - change with /moversfund).\n"
+        "Market-hours gate: live screens run during trading hours + 1h after close "
+        "(IST for NIFTY, ET for US) - a DATE query works any time."
     ),
     "/checklist": (
         "<b>/checklist</b> - 32-point investment scorecard "

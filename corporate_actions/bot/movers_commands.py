@@ -218,6 +218,18 @@ def handle_market_screen(chat_id, parts, default_direction="all",
         f"on {format_date(target_date.isoformat())}" if target_date
         else period_label(*period)
     )
+
+    # Market-hours gate: live screens (no explicit DATE) only run while the
+    # universe's market is open, plus a 1-hour grace after the close, so a
+    # stale move from the last session is never served. Explicit historical
+    # dates (e.g. /toplosers 12-08-2026) are exempt and work any time.
+    if target_date is None:
+        market = "us" if is_us else "in"
+        if not market_active(market):
+            log.info("screen %s: skipped - %s market closed", parts[0], universe_label)
+            reply(chat_id, _market_closed_message(universe_label, market))
+            return
+
     started_at = monotonic()
     log.info(
         "screen %s: period=%s direction=%s count=%d universe=%s",
@@ -421,7 +433,7 @@ def send_screen_fundamentals(chat_id, rows, header, failed, symbols_total, scree
 
 
 def _market_closed_message(universe_label: str, market: str) -> str:
-    """Explain why /bigmovers is not running right now (market closed)."""
+    """Explain why a market screen is not running right now (market closed)."""
     try:
         next_ts = next_open_after(market)
         next_dt = _datetime.datetime.fromtimestamp(next_ts, market_timezone(market))
@@ -430,10 +442,11 @@ def _market_closed_message(universe_label: str, market: str) -> str:
         when = "the next session"
     return (
         f"\u23f0 <b>{universe_label} market is closed right now.</b>\n"
-        f"Big-mover lists only run during trading hours "
+        f"Market screens only run during trading hours "
         f"({market_label(market)}) plus up to 1 hour after close, so you "
         f"never get stale session moves.\n"
-        f"Next session opens <b>{when}</b> - try /bigmovers then."
+        f"Next session opens <b>{when}</b> - historical dates still work, "
+        f"e.g. /toplosers 12-08-2026."
     )
 
 
@@ -448,9 +461,8 @@ def handle_big_movers(chat_id, parts) -> None:
     directions) but returns the whole list in a single message like
     /toplosers, instead of one alert per stock per day.
 
-    Market-hours gated per universe: NIFTY universes run during IST hours,
-    S&P 500 / NASDAQ 100 during ET hours, each with a 1-hour grace after the
-    close - so a stale move from yesterday's session is never served.
+    Market-hours gated by handle_market_screen (IST for NIFTY, ET for
+    S&P 500 / NASDAQ 100, + 1h after close), same as the other movers.
     """
     threshold = 5.0
     universe = "nifty500"
@@ -471,17 +483,6 @@ def handle_big_movers(chat_id, parts) -> None:
                     threshold = value
             except ValueError:
                 pass
-    universe_label = {
-        "nifty500": "NIFTY 500",
-        "nifty100": "NIFTY 100",
-        "nasdaq100": "NASDAQ 100",
-        "sp500": "S&P 500",
-    }.get(universe, universe)
-    market = "us" if universe in ("sp500", "nasdaq100") else "in"
-    if not market_active(market):
-        log.info("bigmovers: skipped - %s market closed", universe_label)
-        reply(chat_id, _market_closed_message(universe_label, market))
-        return
     handle_market_screen(
         chat_id, parts,
         default_direction="all",
