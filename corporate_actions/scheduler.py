@@ -23,6 +23,7 @@ from .market.hours import (
     entry_market,
     entry_paused,
     market_label,
+    market_open_close,
     market_tz_name,
     market_tz_tag,
 )
@@ -165,17 +166,61 @@ def _next_clock_after(times: list[str], tz_name: str, after_ts: float) -> float 
     return min(candidates) if candidates else None
 
 
-def _entry_anchor_times(entry: dict, interval_min: int) -> list[str]:
-    """Daily clock-time anchors governing an entry's next due.
+def _hhmm_minutes(hhmm: str) -> int:
+    """'15:30' -> 930 (minutes since midnight)."""
+    hour, minute = (int(part) for part in str(hhmm).split(":"))
+    return hour * 60 + minute
 
-    An explicit run window wins (start -> interval ticks -> end); otherwise
-    run_at (possibly a comma-separated list). Empty for plain interval
-    entries, which keep the interval-only cadence.
+
+def _market_open_close(entry: dict) -> tuple | None:
+    """(open, close) "HH:MM" of the entry's market gate, or None for 'any'."""
+    market = entry_market(entry, default=config.SCHEDULED_REPORTS_MARKET)
+    if market == "any":
+        return None
+    return market_open_close(market)
+
+
+def _entry_anchor_times(entry: dict, interval_min: int) -> list[str]:
+    """Daily clock-time anchors governing an entry's firing sequence.
+
+    Explicit run window -> grid from window_start by interval, ending exactly
+    at window_end. Otherwise clock times (run_at, possibly a comma list) are
+    used; a market-gated entry additionally always fires at the session close
+    (15:30 IST / 16:00 ET) so the closing data is never lost. A plain interval
+    entry gated to a market gets a grid from market open by interval ending at
+    close - which also keeps the cadence EXACT (09:15, 10:15, ... instead of
+    drifting a minute per cycle). market=any keeps pure interval behaviour
+    with no close anchor.
     """
     windowed = _window_anchor_times(entry, interval_min)
     if windowed:
         return windowed
-    return _run_at_times(entry)
+    times = _run_at_times(entry)
+    oc = _market_open_close(entry)
+    close = oc[1] if oc else None
+    if times:
+        if len(times) > 1:
+            # Explicit multi-time list: append the session close once so the
+            # end-of-session report still fires when not already listed.
+            if close and close not in times:
+                return times + [close]
+            return times
+        run_at = times[0]
+        if close and _hhmm_minutes(run_at) <= _hhmm_minutes(close):
+            if interval_min % (24 * 60) == 0:
+                # Daily at HH:MM -> also fire at the session close.
+                return [run_at, close] if close != run_at else [run_at]
+            # 'at 09:15 3h' style: grid from run_at by interval to close.
+            return _window_anchor_times(
+                {"window_start": run_at, "window_end": close}, interval_min,
+            )
+        return times
+    if close:
+        # Plain interval entry gated to a market: grid from open to close.
+        return _window_anchor_times(
+            {"window_start": oc[0], "window_end": oc[1]}, interval_min,
+        )
+    return []
 
 
 def _first_due(entry: dict, market: str, interval_min: int, after_ts: float) -> float:
@@ -349,11 +394,15 @@ def start_scheduled_reports(run_command) -> None:
                     # time with a sub-daily interval keeps the interval cadence
                     # (e.g. 'at 09:15 3h' -> 09:15, 12:15, 15:15...).
                     after_ts = time.time()
-                    windowed = _window_anchor_times(entry, interval)
-                    times = _run_at_times(entry)
-                    if windowed or len(times) > 1 or (times and interval % (24 * 60) == 0):
+                    anchors = _entry_anchor_times(entry, interval)
+                    # Grid / multi-time / daily anchors chain along their clock
+                    # sequence (exactly 09:15, 10:15, ... ending at the session
+                    # close); a single clock time with a sub-daily interval
+                    # keeps the interval cadence (e.g. 'at 20:00 3h' -> 20:00,
+                    # 23:00...).
+                    if len(anchors) > 1 or (anchors and interval % (24 * 60) == 0):
                         next_due_ts = _next_clock_after(
-                            windowed or times, market_tz_name(market), after_ts,
+                            anchors, market_tz_name(market), after_ts,
                         )
                         if next_due_ts is None:
                             next_due_ts = after_ts + interval * 60

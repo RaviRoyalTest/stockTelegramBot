@@ -278,6 +278,7 @@ COMMAND_LEARN: dict = {
             "Intervals: 1h, 2h, 3h, 6h, 12h, 1d... and clock times with 'at HH:MM'.",
             "Several clock times work: 'at 09:15,15:30' = open + close reports every session.",
             "A run window (from 09:15 to 15:30) always fires at its start AND end, whatever the interval.",
+            "Market-gated entries fire EXACTLY on the hour (09:15, 10:15...) and once more at session close (15:30 IST / 16:00 ET) - closing data is never lost.",
             "Each user has their own schedule - yours never affects others.",
         ],
         "aliases": "/sched",
