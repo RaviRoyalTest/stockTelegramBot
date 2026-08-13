@@ -28,10 +28,12 @@ def _above_ema(ohlc, span: int) -> bool:
 def handle_scan500(chat_id, parts) -> None:
     """NIFTY 500 advanced multi-indicator CNC/MIS scanner (/scan500).
 
-    Runs the full indicator suite (EMAs, RSI, MACD, ADX, CMF, MFI, OBV,
-    Aroon, TTM squeeze, Donchian, weekly Supertrend, GMMA, anchored VWAP,
+    Runs the full indicator suite (EMAs, SMA golden cross, RSI, MACD,
+    Stochastic, Bollinger, CCI, ADX, Aroon, Parabolic SAR, CMF, MFI, OBV,
+    TTM squeeze, Donchian, weekly Supertrend, GMMA, anchored VWAP,
     Mansfield RS) over the NIFTY 500 universe, applies the strict rejection
-    rules, scores survivors out of 100 and reports regime + top picks.
+    rules, scores survivors out of 100 and reports regime + top picks,
+    ending with a full indicator card for each of the TOP 10.
     """
     started_at = monotonic()
     log.info("scan500: starting (chat %s)", chat_id)

@@ -314,8 +314,10 @@ DESCRIBE_AND_RUN = {
         lambda chat_id: watchlist_commands.send_watchlist_actions(chat_id),
     ),
     "/scan500": (
-        "\U0001F50D <b>/scan500</b> - full NIFTY 500 technical scanner (EMAs, RSI, "
-        "MACD, ADX, Supertrend, VWAP...). Takes ~1-2 min - starting it now.",
+        "\U0001F50D <b>/scan500</b> - full NIFTY 500 technical scanner: EMAs, SMA, "
+        "RSI, MACD, Stochastic, Bollinger, CCI, ADX, Aroon, PSAR, CMF, MFI, OBV, "
+        "Supertrend, GMMA, VWAP &amp; Mansfield RS, then a full indicator card for "
+        "each of the TOP 10. Takes ~1-2 min - starting it now.",
         lambda chat_id: scanner_commands.handle_scan500(chat_id, ["/scan500"]),
     ),
     "/checknow": (

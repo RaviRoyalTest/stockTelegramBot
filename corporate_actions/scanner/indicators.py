@@ -270,3 +270,73 @@ def daily_traded_value_crore(df):
         return round(value / 1e7, 2)  # 1 crore = 10^7
     except Exception:
         return None
+
+
+def stochastic(df, period=14, smooth_k=3, smooth_d=3):
+    """Stochastic oscillator %K / %D (0-100) as (last_k, last_d)."""
+    lowest = df["low"].rolling(period).min()
+    highest = df["high"].rolling(period).max()
+    raw_k = 100.0 * (df["close"] - lowest) / (highest - lowest).replace(0.0, 1e-9)
+    k = raw_k.rolling(smooth_k).mean()
+    d = k.rolling(smooth_d).mean()
+    return safe_last(k), safe_last(d)
+
+
+def bollinger_bands(df, period=20, num_std=2):
+    """Bollinger upper/mid/lower bands + %B position (0-100)."""
+    mid = df["close"].rolling(period).mean()
+    std = df["close"].rolling(period).std()
+    upper = mid + num_std * std
+    lower = mid - num_std * std
+    percent_b = 100.0 * (df["close"] - lower) / (upper - lower).replace(0.0, 1e-9)
+    return safe_last(upper), safe_last(mid), safe_last(lower), safe_last(percent_b)
+
+
+def cci(df, period=20):
+    """Commodity Channel Index (typical price vs mean deviation, /0.015)."""
+    typical = (df["high"] + df["low"] + df["close"]) / 3.0
+    mean = typical.rolling(period).mean()
+    mean_dev = typical.rolling(period).apply(
+        lambda values: float(np.abs(values - values.mean()).mean()), raw=True,
+    )
+    return safe_last((typical - mean) / mean_dev.replace(0.0, 1e-9) / 0.015)
+
+
+def psar_direction(df, step=0.02, max_step=0.2):
+    """Parabolic SAR trend: 'bull' when the SAR rides below price, 'bear' above."""
+    high, low = df["high"].values, df["low"].values
+    count = len(df)
+    if count < 3:
+        return None
+    bull = high[1] >= high[0]
+    extreme = high[0] if bull else low[0]
+    sar = low[0] if bull else high[0]
+    acceleration = step
+    for index in range(1, count):
+        if bull:
+            sar = sar + acceleration * (extreme - sar)
+            sar = min(sar, low[index - 1]) if index == 1 else min(sar, low[index - 1], low[index - 2])
+            if high[index] > extreme:
+                extreme = high[index]
+                acceleration = min(acceleration + step, max_step)
+            if low[index] < sar:
+                bull, sar, extreme, acceleration = False, extreme, low[index], step
+        else:
+            sar = sar + acceleration * (extreme - sar)
+            sar = max(sar, high[index - 1]) if index == 1 else max(sar, high[index - 1], high[index - 2])
+            if low[index] < extreme:
+                extreme = low[index]
+                acceleration = min(acceleration + step, max_step)
+            if high[index] > sar:
+                bull, sar, extreme, acceleration = True, extreme, high[index], step
+    return "bull" if bull else "bear"
+
+
+def volume_ratio(df, lookback=20):
+    """Latest bar volume vs the previous `lookback`-bar average (1.0 = average)."""
+    if len(df) < lookback + 1:
+        return None
+    average = float(df["volume"].tail(lookback).mean())
+    if average <= 0:
+        return None
+    return float(df["volume"].iloc[-1]) / average

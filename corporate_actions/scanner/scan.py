@@ -31,6 +31,7 @@ def scan_stock(ohlc, index_close=None) -> Optional[dict]:
         "symbol": ohlc["symbol"], "name": ohlc["name"], "price": price,
         "timeframe": ohlc.get("timeframe", "1d"),
     }
+    finding["change_pct"] = ((price / df["open"].iloc[-1]) - 1.0) * 100.0 if df["open"].iloc[-1] else None
 
     # Trend & structure
     ema20 = indicators.safe_last(indicators.ema(df["close"], 20))
@@ -41,6 +42,12 @@ def scan_stock(ohlc, index_close=None) -> Optional[dict]:
     finding["above_ema20"] = bool(price > ema20) if ema20 else None
     finding["above_ema50"] = bool(price > ema50) if ema50 else None
     finding["above_ema_200"] = bool(price > ema200) if ema200 else None
+
+    # Simple moving averages (golden / death cross for the detail cards)
+    finding["sma50"] = indicators.safe_last(df["close"].rolling(50).mean())
+    finding["sma200"] = indicators.safe_last(df["close"].rolling(200).mean())
+    if finding["sma50"] is not None and finding["sma200"] is not None:
+        finding["sma_golden"] = bool(finding["sma50"] > finding["sma200"])
 
     # Momentum
     finding["rsi14"] = indicators.safe_last(indicators.rsi(df["close"], 14))
@@ -76,6 +83,18 @@ def scan_stock(ohlc, index_close=None) -> Optional[dict]:
     aroon_up, aroon_down = indicators.aroon(df, 25)
     finding["aroon_up"], finding["aroon_down"] = indicators.safe_last(aroon_up), indicators.safe_last(aroon_down)
 
+    # Stochastic oscillator %K / %D
+    finding["stoch_k"], finding["stoch_d"] = indicators.stochastic(df)
+
+    # Bollinger bands: upper / mid / lower + %B position
+    finding["bb_upper"], finding["bb_mid"], finding["bb_lower"], finding["bb_percent_b"] = indicators.bollinger_bands(df)
+
+    # Commodity Channel Index
+    finding["cci20"] = indicators.cci(df)
+
+    # Parabolic SAR direction
+    finding["psar_dir"] = indicators.psar_direction(df)
+
     # Donchian 52-week channel
     finding["donchian_high"] = indicators.rolling_last(df["high"], 252, lambda value: float(value.max()))
     finding["donchian_low"] = indicators.rolling_last(df["low"], 252, lambda value: float(value.min()))
@@ -103,9 +122,10 @@ def scan_stock(ohlc, index_close=None) -> Optional[dict]:
     # Mansfield relative strength
     finding["mansfield_rs"] = indicators.mansfield_relative_strength(df["close"], index_close) if index_close is not None else None
 
-    # Liquidity (ADTV in ₹ crore)
+    # Liquidity (ADTV in ₹ crore) + volume ratio vs the 20-day average
     finding["average_daily_traded_value_crores"] = indicators.daily_traded_value_crore(df)
     finding["volume_20avg"] = float(df["volume"].tail(20).mean())
+    finding["volume_ratio"] = indicators.volume_ratio(df)
 
     # 52-week range position
     if finding["donchian_low"] and finding["donchian_high"] and finding["donchian_high"] > finding["donchian_low"]:
