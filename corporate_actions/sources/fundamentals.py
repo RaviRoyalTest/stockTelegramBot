@@ -18,6 +18,7 @@ from urllib.parse import quote
 import requests
 
 from .. import config
+from .analyst_forecast import fill_analyst_fallback
 from .http import _quote_session, _throttle_fund_req
 from .screener import get_competitors, get_sector_pe, parse_screener_fundamentals
 
@@ -597,6 +598,11 @@ def get_fundamentals(symbol: str, with_screener: bool = True) -> dict | None:
         if competitors:
             out["competitors"] = competitors
             log.info("get_fundamentals: %d competitors added for %s", len(competitors), key)
+
+    # Independent analyst-forecast fallback when Yahoo's quoteSummary is
+    # down/rate-limited: stockanalysis.com (S&P Global + TipRanks) so the
+    # forecast section never silently disappears for NSE symbols either.
+    fill_analyst_fallback(key, "NSE", out)
 
     data = out or None
     time_to_live = _FUND_CACHE_SECONDS
