@@ -58,19 +58,25 @@ def format_settings(chat_id) -> str:
     watcher = settings.get("watcher") or {}
     owner = storage.is_owner(chat_id)
     where = storage.list_location(chat_id)
+    ca_state = "off" if settings.get("ca_alerts", True) is False else (
+        "on" + (f" ({', '.join(filters)}) " if filters else " (all types)")
+    )
+    quiet = storage.is_quiet(chat_id)
+    quiet_state = "paused - all alerts muted" if quiet else "active"
     return "\n".join(
         [
             "<b>Your settings</b>",
             f"Chat id: {chat_id}",
             f"Role: {'owner' if owner else 'subscriber'}",
-            "Action filters: " + (", ".join(filters) if filters else "all types"),
+            "Corporate-action alerts: " + ca_state,
             "Price alert: " + ("off" if not alert else f"{float(alert):g}%"),
             "Watcher: " + ("off" if not watcher.get("enabled")
                            else f"on at {float(watcher.get('threshold') or 5):g}% "
                                 f"({(watcher.get('universe') or 'nifty100').upper()})"),
             "Movers fundamentals: " + ("auto" if settings.get("movers_fund") == "auto" else "button"),
+            "Quiet mode: " + quiet_state,
             f"Your list is saved in: {where}",
-            "Customize with /alertfilters, /pricealert, /watcher and /fundmode.",
+            "Customize with /corpactions on|off, /pricealert, /watcher, /fundmode and /quiet.",
         ]
     )
 

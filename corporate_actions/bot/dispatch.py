@@ -48,6 +48,7 @@ WRITE_COMMANDS = {
     "/sched", "/schedule", "/watcher", "/moverwatch",
     "/myfavourites", "/favorites", "/favourites", "/mypicks", "/dailybrief",
     "/fundmode", "/moversfund", "/market",
+    "/quiet", "/dnd", "/silence", "/pauseall",
 }
 
 
@@ -115,6 +116,10 @@ def handle_command(chat_id, text):
         settings_commands.handle_moversfund(chat_id, parts)
         return
 
+    if command in ("/quiet", "/dnd", "/silence", "/pauseall"):
+        settings_commands.handle_quiet(chat_id, parts)
+        return
+
     if command == "/status":
         status_commands.handle_status(chat_id)
         return
@@ -123,6 +128,10 @@ def handle_command(chat_id, text):
                "/actions", "/shareholder", "/increase"):
         if command in ("/shareholder", "/increase"):
             descriptor = {"mode": "types", "types": list(INCREASE_TYPES)}
+        elif len(parts) > 1 and parts[1].lower() in ("on", "off", "enable", "disable", "start", "stop", "silence", "status"):
+            # /corpactions on|off - the corporate-action alert switch.
+            settings_commands.handle_corpaction_alerts(chat_id, parts)
+            return
         elif len(parts) > 1:
             descriptor = corporate_action_commands.parse_ca_arg(parts[1])
         else:

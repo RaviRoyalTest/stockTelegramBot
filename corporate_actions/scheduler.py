@@ -352,6 +352,15 @@ def start_scheduled_reports(run_command) -> None:
                             key, (entry or {}).get("paused_until"),
                         )
                         continue
+                    # /quiet master pause: hold the due without advancing the
+                    # timer, so the report fires once quiet mode ends (same
+                    # semantics as an entry pause - nothing is lost).
+                    if storage.is_quiet(chat):
+                        log.info(
+                            "scheduled report: %s skipped - chat is in quiet mode",
+                            key,
+                        )
+                        continue
                     # Market-hours / run-window gate: an automatic report only
                     # fires while the entry's market is open (or inside its
                     # explicit window, or briefly after an anchor - see

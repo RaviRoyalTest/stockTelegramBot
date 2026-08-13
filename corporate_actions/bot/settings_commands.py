@@ -7,6 +7,9 @@ from __future__ import annotations
 
 import html
 import logging
+import re
+import time
+from datetime import datetime
 
 from .. import config, storage
 from ..sources.types import ACTION_TYPES
@@ -32,20 +35,53 @@ def watcher_universe(raw) -> str | None:
 
 
 def handle_alertfilters(chat_id, parts) -> None:
-    """Set the chat's action-type filters (/filter, /alertfilters)."""
+    """Set the chat's action-type filters (/filter, /alertfilters).
+
+    off/none now genuinely SILENCE corporate-action alerts (ca_alerts=False);
+    all resets to every type; a type list keeps only those types.
+    """
     settings = storage.get_user_settings(chat_id)
     current = settings.get("action_filters") or []
+    ca_on = bool(settings.get("ca_alerts", True))
     if len(parts) < 2:
+        state = "ON" if ca_on else "OFF"
         reply(
             chat_id,
-            "Current filters: <b>" + html.escape(", ".join(current) if current else "all types") + "</b>"
-            + "\nUsage: <code>/filter dividend,bonus</code> or <code>/filter all</code>",
+            "Corporate-action alerts: <b>" + state + "</b>"
+            + (" (types: <b>" + html.escape(", ".join(current) if current else "all") + "</b>)")
+            + "\nUsage: <code>/filter dividend,bonus</code> \u00b7 <code>/filter all</code> \u00b7 "
+            "<code>/filter off</code> (silence all corporate-action alerts)",
         )
         return
     raw = parts[1].lower()
+    if raw in ("off", "none", "-", "false"):
+        settings["ca_alerts"] = False
+        storage.save_user_settings(chat_id, settings)
+        reply(
+            chat_id,
+            "\U0001F515 <b>Corporate-action alerts OFF.</b>\n"
+            "No more automatic dividend / bonus / split / rights / buyback "
+            "or ex-date reminders. Your saved type filters are kept - "
+            "<code>/filter on</code> or <code>/filter all</code> turns them back on.\n"
+            "On-demand queries like <code>/corpactions</code> still work anytime.",
+        )
+        return
+    if raw in ("on", "enable", "true"):
+        settings["ca_alerts"] = True
+        settings["action_filters"] = settings.get("action_filters") or []
+        storage.save_user_settings(chat_id, settings)
+        reply(
+            chat_id,
+            "\U0001F4E8 <b>Corporate-action alerts ON.</b>\n"
+            + ("Types: <b>" + html.escape(", ".join(settings["action_filters"])) + "</b>"
+               if settings["action_filters"]
+               else "Receiving all action types again."),
+        )
+        return
     invalid = []
-    if raw in ("all", "off", "none", "-"):
+    if raw == "all":
         chosen = []
+        settings["ca_alerts"] = True
     else:
         chosen = []
         for token in raw.split(","):
@@ -54,6 +90,7 @@ def handle_alertfilters(chat_id, parts) -> None:
                 chosen.append(token)
             elif token:
                 invalid.append(token)
+        settings["ca_alerts"] = True
     settings["action_filters"] = chosen
     storage.save_user_settings(chat_id, settings)
     log.info(
@@ -67,27 +104,78 @@ def handle_alertfilters(chat_id, parts) -> None:
     reply(chat_id, message)
 
 
+def handle_corpaction_alerts(chat_id, parts) -> None:
+    """/corpactions on|off - turn corporate-action pushes on/off."""
+    settings = storage.get_user_settings(chat_id)
+    subcommand = parts[1].lower() if len(parts) > 1 else "status"
+    if subcommand in ("off", "disable", "stop", "silence"):
+        settings["ca_alerts"] = False
+        storage.save_user_settings(chat_id, settings)
+        reply(
+            chat_id,
+            "\U0001F515 <b>Corporate-action alerts OFF.</b>\n"
+            "You'll stop getting automatic dividend / bonus / split / rights / "
+            "buyback and ex-date reminders.\n"
+            "<code>/corpactions on</code> re-enables them anytime.\n"
+            "On-demand queries still work: <code>/corpactions</code>, "
+            "<code>/corpactionsformylist</code>.",
+        )
+        return
+    if subcommand in ("on", "enable", "start"):
+        settings["ca_alerts"] = True
+        storage.save_user_settings(chat_id, settings)
+        reply(
+            chat_id,
+            "\U0001F4E8 <b>Corporate-action alerts ON.</b>\n"
+            "Automatic dividend / bonus / split / rights / buyback and "
+            "ex-date reminders are active again.",
+        )
+        return
+    state = "ON" if settings.get("ca_alerts", True) else "OFF"
+    reply(
+        chat_id,
+        "Corporate-action alerts: <b>" + state + "</b>\n"
+        "<code>/corpactions on</code> \u00b7 <code>/corpactions off</code>",
+    )
+
+
 def handle_pricealert(chat_id, parts) -> None:
-    """Set the chat's daily price-move threshold (/alert, /pricealert)."""
+    """Set the chat's daily price-move threshold (/alert, /pricealert).
+
+    off remembers the last threshold so /pricealert on restores it.
+    """
     settings = storage.get_user_settings(chat_id)
     current = settings.get("price_alert_pct")
+    last = settings.get("last_price_alert_pct")
     if len(parts) < 2:
         if current:
-            reply(chat_id, f"Current price-alert threshold: <b>{current:g}%</b>")
+            reply(chat_id, f"Price alerts: <b>ON at {current:g}%</b>\nUsage: <code>/alert 3</code> (percent move) or <code>/alert off</code>")
+        elif last:
+            reply(chat_id, f"Price alerts: <b>OFF</b> (last was {last:g}%)\nUsage: <code>/alert 3</code> to set, <code>/alert on</code> to re-enable {last:g}%")
         else:
             reply(chat_id, "Price alerts are off.\nUsage: <code>/alert 3</code> (percent move) or <code>/alert off</code>")
         return
     raw = parts[1].lower()
+    if raw in ("on", "enable", "start"):
+        if last:
+            settings["price_alert_pct"] = last
+            storage.save_user_settings(chat_id, settings)
+            reply(chat_id, f"Price alerts back <b>ON at {last:g}%</b>.")
+        else:
+            reply(chat_id, "No previous threshold to restore - set one first: <code>/alert 3</code>")
+        return
     if raw in ("off", "none", "0", "0%"):
         value = None
     else:
         try:
             value = abs(float(raw.strip().rstrip("%")))
         except ValueError:
-            reply(chat_id, "Usage: <code>/alert 3</code> (e.g. 3%) or <code>/alert off</code>")
+            reply(chat_id, "Usage: <code>/alert 3</code> (e.g. 3%), <code>/alert on</code> or <code>/alert off</code>")
             return
         if value == 0:
             value = None
+    if value is not None:
+        settings["last_price_alert_pct"] = value
     settings["price_alert_pct"] = value
     storage.save_user_settings(chat_id, settings)
     log.info(
@@ -208,3 +296,116 @@ def handle_moversfund(chat_id, parts) -> None:
     reply(chat_id, f"\U0001F4CA <b>Movers fundamentals</b>\nMode: {state}\n\n"
           "Change it with <code>/fundmode button</code> (default) or "
           "<code>/fundmode auto</code>.")
+
+
+def _parse_quiet_duration(raw) -> int | None:
+    """Minutes for '90', '1h30m', '2h', '45m', '1d' (None when unparseable)."""
+    if raw is None:
+        return None
+    if str(raw).isdigit():
+        minutes = int(raw)
+        return minutes if minutes > 0 else None
+    match = re.fullmatch(r"(\d+d)?(\d+h)?(\d+m)?", str(raw).lower())
+    if not match or not any(match.groups()):
+        return None
+    days, hours, minutes = (int(g[:-1]) if g else 0 for g in match.groups())
+    total = days * 1440 + hours * 60 + minutes
+    return total if total > 0 else None
+
+
+def _quiet_duration_label(minutes: int) -> str:
+    """'90' -> '1h 30m', '120' -> '2h', '45' -> '45 min'."""
+    minutes = int(minutes)
+    if minutes % (24 * 60) == 0:
+        return f"{minutes // (24 * 60)} day(s)"
+    if minutes % 60 == 0:
+        return f"{minutes // 60}h"
+    if minutes > 60:
+        return f"{minutes // 60}h {minutes % 60:02d}m"
+    return f"{minutes} min"
+
+
+def _clock_ist(epoch: float) -> str:
+    """HH:MM wall clock in IST for an epoch (host-local fallback)."""
+    try:
+        from zoneinfo import ZoneInfo
+
+        return datetime.fromtimestamp(epoch, ZoneInfo("Asia/Kolkata")).strftime("%H:%M")
+    except Exception:
+        return datetime.fromtimestamp(epoch).strftime("%H:%M")
+
+
+def handle_quiet(chat_id, parts) -> None:
+    """Pause ALL outgoing pushes temporarily (/quiet) - the master switch.
+
+    on = pause until /quiet off; a duration (/quiet 2h, /quiet 30m, /quiet 90)
+    = auto-resume; off = resume now. Command replies are never affected - only
+    background pushes: corporate actions, ex-date reminders, price alerts,
+    the watcher and scheduled reports.
+    """
+    settings = storage.get_user_settings(chat_id)
+    subcommand = parts[1].lower() if len(parts) > 1 else "status"
+    if subcommand in ("off", "resume", "stop", "end", "unpause"):
+        settings["quiet"] = False
+        settings.pop("quiet_until", None)
+        storage.save_user_settings(chat_id, settings)
+        reply(
+            chat_id,
+            "\U0001F514 <b>Quiet mode OFF.</b>\n"
+            "All alerts and scheduled reports are active again.",
+        )
+        return
+    if subcommand in ("on", "start", "pause", "mute", "yes", "true"):
+        settings["quiet"] = True
+        settings["quiet_until"] = None
+        storage.save_user_settings(chat_id, settings)
+        reply(
+            chat_id,
+            "\U0001F515 <b>Quiet mode ON.</b>\n"
+            "All automatic messages are paused until you send "
+            "<code>/quiet off</code>.\n"
+            "Your commands still work - only background alerts pause.",
+        )
+        return
+    minutes = _parse_quiet_duration(subcommand)
+    if minutes is not None:
+        now = time.time()
+        until = now + minutes * 60
+        settings["quiet"] = True
+        settings["quiet_until"] = until
+        storage.save_user_settings(chat_id, settings)
+        reply(
+            chat_id,
+            "\U0001F515 <b>Quiet mode ON</b> for "
+            + _quiet_duration_label(minutes) + ".\n"
+            "All alerts resume automatically at <b>" + _clock_ist(until)
+            + " IST</b>.\n"
+            "Cancel early with <code>/quiet off</code>.",
+        )
+        return
+    if storage.is_quiet(chat_id):
+        until = storage.quiet_until_ts(chat_id)
+        if until is None:
+            reply(
+                chat_id,
+                "\U0001F515 <b>Quiet mode ON</b> - all alerts paused until "
+                "you send <code>/quiet off</code>.",
+            )
+        else:
+            mins = max(1, int((until - time.time()) / 60))
+            reply(
+                chat_id,
+                "\U0001F515 <b>Quiet mode ON</b> - resumes in "
+                + _quiet_duration_label(mins) + " (<b>" + _clock_ist(until)
+                + " IST</b>).\n"
+                "Cancel early: <code>/quiet off</code>.",
+            )
+        return
+    reply(
+        chat_id,
+        "\U0001F514 <b>Quiet mode OFF</b> - all alerts active.\n\n"
+        "Usage:\n"
+        "<code>/quiet on</code>   \u2192 pause everything until <code>/quiet off</code>\n"
+        "<code>/quiet 2h</code>   \u2192 pause for 2 hours (30m, 90, 1d also work)\n"
+        "<code>/quiet off</code>  \u2192 resume now",
+    )

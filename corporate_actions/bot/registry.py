@@ -45,8 +45,36 @@ def _moversfund_status_text(chat_id) -> str:
 
 
 def _alertfilters_status_text(chat_id) -> str:
-    filters = (storage.get_user_settings(chat_id) or {}).get("action_filters") or []
-    return "Action filters: <b>" + (", ".join(filters) if filters else "all types") + "</b>"
+    settings = storage.get_user_settings(chat_id) or {}
+    filters = settings.get("action_filters") or []
+    ca_on = settings.get("ca_alerts", True)
+    return (
+        "Corporate-action alerts: <b>" + ("ON" if ca_on else "OFF") + "</b>\n"
+        "Types: <b>" + (", ".join(filters) if filters else "all types") + "</b>"
+    )
+
+
+def _ca_status_text(chat_id) -> str:
+    ca_on = (storage.get_user_settings(chat_id) or {}).get("ca_alerts", True)
+    return "Corporate-action alerts: <b>" + ("ON" if ca_on else "OFF") + "</b>"
+
+
+def _quiet_status_text(chat_id) -> str:
+    if storage.is_quiet(chat_id):
+        until = storage.quiet_until_ts(chat_id)
+        if until is None:
+            return "Quiet mode: <b>ON</b> - all alerts paused until <code>/quiet off</code>"
+        import time
+        from datetime import datetime
+
+        try:
+            from zoneinfo import ZoneInfo
+
+            clock = datetime.fromtimestamp(until, ZoneInfo("Asia/Kolkata")).strftime("%H:%M")
+        except Exception:
+            clock = datetime.fromtimestamp(until).strftime("%H:%M")
+        return f"Quiet mode: <b>ON</b> - resumes {clock} IST (<code>/quiet off</code> to cancel)"
+    return "Quiet mode: <b>OFF</b> - all alerts active"
 
 
 def _schedule_status_text(chat_id) -> str:
@@ -61,10 +89,12 @@ COMMAND_STATUS = {
     "/watcher": _watcher_status_text,
     "/pricealert": _pricealert_status_text,
     "/alertfilters": _alertfilters_status_text,
+    "/corpactions": _ca_status_text,
     "/schedule": _schedule_status_text,
     "/fundmode": _moversfund_status_text,
     "/moversfund": _moversfund_status_text,
     "/market": _market_status_text,
+    "/quiet": _quiet_status_text,
 }
 
 
@@ -132,6 +162,9 @@ ALIAS_TO_MAIN = {
     "/moversfund": "/fundmode",
     "/moverlist": "/moversover",
     "/watcherlist": "/moversover",
+    "/dnd": "/quiet",
+    "/silence": "/quiet",
+    "/pauseall": "/quiet",
 }
 
 
@@ -337,12 +370,26 @@ COMMAND_USAGE = {
         "<b>/pricealert</b> - daily price-move alerts\n"
         "/pricealert 3   \u2192 alert when a stock moves \u00b13% in a day\n"
         "/pricealert off \u2192 disable price alerts\n"
+        "/pricealert on  \u2192 re-enable the last threshold\n"
         "/pricealert     \u2192 show current threshold"
     ),
     "/alertfilters": (
-        "<b>/alertfilters</b> - receive only the action types you choose\n"
+        "<b>/alertfilters</b> - corporate-action alert switch + type filter\n"
+        "/alertfilters off           \u2192 SILENCE all corporate-action alerts\n"
         "/alertfilters dividend,bonus \u2192 only those types\n"
-        "/alertfilters all            \u2192 reset to all types"
+        "/alertfilters all           \u2192 all types back on\n"
+        "/alertfilters on            \u2192 re-enable with your saved types\n"
+        "Alias: /corpactions on|off"
+    ),
+    "/quiet": (
+        "<b>/quiet</b> - master pause: mute ALL automatic messages\n"
+        "/quiet on    \u2192 pause everything (CA alerts, reminders, price\n"
+        "              alerts, watcher, scheduled reports) until /quiet off\n"
+        "/quiet 2h    \u2192 pause for 2 hours (30m, 90, 1d also work)\n"
+        "/quiet off   \u2192 resume now\n"
+        "/quiet       \u2192 show status\n"
+        "Your commands still work - only background pushes pause.\n"
+        "Aliases: /dnd, /silence, /pauseall"
     ),
     "/watcher": (
         "Usage:\n"
@@ -395,8 +442,10 @@ COMMAND_EXAMPLES = {
     "/learn": ["/learn", "/learn stocks", "/learn schedule"],
     "/schedule": ["/schedule", "/schedule add 3h /toplosers 1h", "/schedule run", "/schedule pause 1d"],
     "/market": ["/market", "/market in", "/market us", "/market any"],
-    "/pricealert": ["/pricealert 3", "/pricealert off"],
-    "/alertfilters": ["/alertfilters dividend,bonus", "/alertfilters all"],
+    "/pricealert": ["/pricealert 3", "/pricealert off", "/pricealert on"],
+    "/alertfilters": ["/alertfilters dividend,bonus", "/alertfilters all", "/alertfilters off"],
+    "/corpactions": ["/corpactions on", "/corpactions off"],
+    "/quiet": ["/quiet on", "/quiet 2h", "/quiet off"],
     "/watcher": ["/watcher on", "/watcher off", "/watcher set 5", "/watcher universe nifty500"],
     "/fundmode": ["/fundmode button", "/fundmode auto", "/fundmode default"],
     "/addstock": ["/addstock RELIANCE NSE", "/addstock PGINVIT"],
@@ -556,8 +605,9 @@ def register_commands() -> bool:
         {"command": "topgainers", "description": "Top rising stocks with fundamentals"},
         {"command": "toplosers", "description": "Top falling stocks with fundamentals"},
         {"command": "gappers", "description": "Overnight gaps (prev close vs today's open): /gappers down, /gappers GODREJCP"},
-        {"command": "alertfilters", "description": "Receive only chosen action types"},
+        {"command": "alertfilters", "description": "Corporate-action alerts on/off + type filters"},
         {"command": "pricealert", "description": "Alert on +/-PCT% daily price move"},
+        {"command": "quiet", "description": "Pause ALL alerts: /quiet on, 2h, off"},
         {"command": "settings", "description": "Show your current settings"},
         {"command": "schedule", "description": "Auto reports: /schedule add 3h /scan500, pause 1d, market us"},
         {"command": "market", "description": "Market-hours gate for reports: /market us, in, any"},

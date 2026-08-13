@@ -143,6 +143,9 @@ class Poller:
             return 0
         quotes = watcher_module.fetch_quotes(unique_pairs)
         for chat_id, symbol, quote, change in watcher_module.pending_alerts(targets, quotes, self._seen, today):
+            if storage.is_quiet(chat_id):
+                log.debug("watcher alert skipped for %s - chat is in quiet mode", chat_id)
+                continue
             try:
                 send_message(
                     format_mover_alert(symbol, quote, change),
@@ -288,9 +291,16 @@ class Poller:
 
         for chat_id, watchlist in targets:
             filters = self._filters_for(chat_id)
+            # Per-chat push gates: /corpactions off (or /alertfilters off)
+            # silences corporate-action pushes; /quiet pauses EVERYTHING
+            # temporarily. On-demand queries are unaffected - this only gates
+            # the automatic sends.
+            ca_on = storage.ca_alerts_enabled(chat_id)
+            quiet = storage.is_quiet(chat_id)
             log.info(
-                "poll cycle: processing chat %s watchlist (%d stock(s), filters=%s)",
+                "poll cycle: processing chat %s watchlist (%d stock(s), filters=%s, ca=%s, quiet=%s)",
                 chat_id, len(watchlist), ", ".join(filters) if filters else "all types",
+                ca_on, quiet,
             )
 
             # -------------------------------------------------- action alerts
@@ -323,30 +333,31 @@ class Poller:
             if str(chat_id) == owner:
                 self._set("last_results", matching)
 
-            for action in matching:
-                base = event_key(action)
-                key = f"{chat_id}|{base}"
-                already = key in self._seen or (str(chat_id) == owner and base in self._seen)
-                action["new"] = not already
-                if already and not force:
-                    continue
-                quote = get_quote(action["exchange"], action["symbol"])
-                if quote:
-                    action["quote"] = quote
-                try:
-                    send_message(
-                        format_corporate_action(action), chat_id=chat_id
-                    )
-                    self._seen.add(key)
-                    if str(chat_id) == owner:
-                        self._seen.add(base)
-                    sent += 1
-                except NotifierError as error:
-                    errors.append(f"Telegram: {error}")
-                    break  # token misconfiguration - stop hammering the API
+            if ca_on and not quiet:
+                for action in matching:
+                    base = event_key(action)
+                    key = f"{chat_id}|{base}"
+                    already = key in self._seen or (str(chat_id) == owner and base in self._seen)
+                    action["new"] = not already
+                    if already and not force:
+                        continue
+                    quote = get_quote(action["exchange"], action["symbol"])
+                    if quote:
+                        action["quote"] = quote
+                    try:
+                        send_message(
+                            format_corporate_action(action), chat_id=chat_id
+                        )
+                        self._seen.add(key)
+                        if str(chat_id) == owner:
+                            self._seen.add(base)
+                        sent += 1
+                    except NotifierError as error:
+                        errors.append(f"Telegram: {error}")
+                        break  # token misconfiguration - stop hammering the API
 
             # --------------------------------------------- ex-date reminders
-            if config.REMINDER_DAYS > 0:
+            if config.REMINDER_DAYS > 0 and ca_on and not quiet:
                 for action in matching:
                     if not within_reminder_window(action.get("ex_date"), today):
                         continue
@@ -371,7 +382,7 @@ class Poller:
                 threshold = float(storage.get_user_settings(chat_id).get("price_alert_pct") or 0.0)
             except (TypeError, ValueError):
                 threshold = 0.0
-            if threshold > 0:
+            if threshold > 0 and not quiet:
                 log.info(
                     "poll cycle: price alerts active for chat %s at +/-%.2f%%",
                     chat_id, threshold,

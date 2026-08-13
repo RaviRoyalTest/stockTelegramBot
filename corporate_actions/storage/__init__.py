@@ -18,9 +18,12 @@ from .schedule import (
 )
 from .seen import load_seen, save_seen
 from .settings import (
+    ca_alerts_enabled,
     get_recent_commands,
     get_user_settings,
+    is_quiet,
     load_settings,
+    quiet_until_ts,
     record_recent_command,
     save_user_settings,
 )
@@ -57,6 +60,9 @@ __all__ = [
     "load_settings",
     "get_user_settings",
     "save_user_settings",
+    "ca_alerts_enabled",
+    "is_quiet",
+    "quiet_until_ts",
     "record_recent_command",
     "get_recent_commands",
     "load_seen",

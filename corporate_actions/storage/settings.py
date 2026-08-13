@@ -6,6 +6,7 @@ here so they survive restarts and GitHub Actions re-runs.
 from __future__ import annotations
 
 import logging
+import time
 
 from .. import config
 from .json_file import _file_lock, _lock, read_json, write_json
@@ -62,3 +63,40 @@ def get_recent_commands(chat_id, limit: int = RECENT_COMMANDS_LIMIT) -> list[str
     """The last commands a chat ran, most recent first (empty when none)."""
     settings = load_settings().get(str(chat_id)) or {}
     return (settings.get("recent_commands") or [])[:limit]
+
+
+def ca_alerts_enabled(chat_id) -> bool:
+    """Whether the chat wants corporate-action + ex-date reminder pushes.
+
+    Controlled by /alertfilters off|on and /corpactions off|on. On-demand
+    queries (/corpactions, /corpactionsformylist) always work - this only
+    gates the automatic pushes.
+    """
+    settings = get_user_settings(chat_id)
+    return bool(settings.get("ca_alerts", True))
+
+
+def quiet_until_ts(chat_id) -> float | None:
+    """Epoch seconds until which all alerts are paused (None = not paused)."""
+    raw = get_user_settings(chat_id).get("quiet_until")
+    try:
+        return float(raw)
+    except (TypeError, ValueError):
+        return None
+
+
+def is_quiet(chat_id, now: float | None = None) -> bool:
+    """True when the chat has paused ALL outgoing pushes (/quiet).
+
+    `quiet` flag = the pause is active; `quiet_until` None means "until told
+    otherwise", a timestamp means it auto-resumes then. Command replies are
+    never affected - only background pushes (CA alerts, reminders, price
+    alerts, watcher, scheduled reports).
+    """
+    settings = get_user_settings(chat_id)
+    if not settings.get("quiet"):
+        return False
+    until = quiet_until_ts(chat_id)
+    if until is None:
+        return True
+    return until > (now if now is not None else time.time())
