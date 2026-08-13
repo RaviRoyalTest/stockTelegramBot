@@ -14,7 +14,8 @@ from time import monotonic
 from .. import storage
 from ..core.text import escape, split_messages
 from ..formatting.stock_india import _fund_report_lines, _stock_summary_lines
-from ..sources import get_fundamentals, get_quote
+from ..formatting.stock_us import _us_stock_lines
+from ..sources import get_fundamentals, get_quote, get_us_fundamentals
 from .helpers import MAX_FUND_BATCH, MAX_STOCK_BATCH, reply_suggestions
 from .reply import reply, reply_messages
 
@@ -74,13 +75,23 @@ def handle_single_stock_analysis(chat_id, parts) -> None:
     log.info("handle_single_stock: fetching full details for %s for chat %s", raw_symbol, chat_id)
 
     quote = get_quote("NSE", raw_symbol) or get_quote("BSE", raw_symbol) or {}
-    fund = get_fundamentals(raw_symbol, with_screener=True) or {}
+    is_us = False
+    if quote.get("price") is None:
+        us_quote = get_quote("US", raw_symbol) or {}
+        if us_quote.get("price") is not None or us_quote.get("name"):
+            quote = us_quote
+            is_us = True
+    fund = (get_us_fundamentals(raw_symbol) if is_us
+            else get_fundamentals(raw_symbol, with_screener=True)) or {}
 
     if quote.get("price") is None and not fund:
         reply_suggestions(chat_id, raw_symbol, "fundamentalanalyze")
         return
 
-    lines = _stock_summary_lines(raw_symbol, quote, fund, include_tip=True)
+    if is_us:
+        lines = _us_stock_lines(raw_symbol, quote, fund, include_tip=True)
+    else:
+        lines = _stock_summary_lines(raw_symbol, quote, fund, include_tip=True)
     reply_messages(chat_id, ["\n".join(lines)])
     log.info("handle_single_stock: completed for %s in %.1fs", raw_symbol, monotonic() - started_at)
 
@@ -92,6 +103,13 @@ def stock_next_markup(deep: bool, start: int) -> dict:
             [{"text": "Next \u25b6", "callback_data": f"stknext:{1 if deep else 0}:{start}"}],
         ]
     }
+
+
+def _batch_fund(item: dict) -> dict:
+    """Fetch fundamentals for one watchlist item, honouring its exchange."""
+    if item.get("exchange", "").upper() == "US":
+        return get_us_fundamentals(item["symbol"]) or {}
+    return get_fundamentals(item["symbol"], with_screener=True) or {}
 
 
 def build_stock_batch(chat_id, command: str, range, deep: bool) -> tuple[list[str], int | None]:
@@ -121,13 +139,15 @@ def build_stock_batch(chat_id, command: str, range, deep: bool) -> tuple[list[st
 
     with ThreadPoolExecutor(max_workers=max(1, min(8, len(work)))) as executor:
         quotes = list(executor.map(lambda item: get_quote(item["exchange"], item["symbol"]) or {}, work))
-        funds = list(executor.map(lambda item: get_fundamentals(item["symbol"], with_screener=True) or {}, work))
+        funds = list(executor.map(lambda item: _batch_fund(item), work))
 
     body = []
     for positive_flow, (item, quote, fund) in enumerate(zip(work, quotes, funds), start=start):
         symbol = item["symbol"]
         label = f"<b>#{positive_flow}</b>"
-        if deep:
+        if item.get("exchange", "").upper() == "US":
+            lines = _us_stock_lines(symbol, quote, fund, include_tip=False, label=label)
+        elif deep:
             lines = _fund_report_lines(symbol, quote, fund, include_tip=False, label=label)
         else:
             lines = _stock_summary_lines(symbol, quote, fund, include_tip=False, label=label)
@@ -190,12 +210,22 @@ def handle_fund_analysis(chat_id, parts) -> None:
     log.info("handle_fund: deep fundamentals for %s (chat %s)", raw_symbol, chat_id)
 
     quote = get_quote("NSE", raw_symbol) or get_quote("BSE", raw_symbol) or {}
-    fund = get_fundamentals(raw_symbol, with_screener=True) or {}
+    is_us = False
+    if quote.get("price") is None:
+        us_quote = get_quote("US", raw_symbol) or {}
+        if us_quote.get("price") is not None or us_quote.get("name"):
+            quote = us_quote
+            is_us = True
+    fund = (get_us_fundamentals(raw_symbol) if is_us
+            else get_fundamentals(raw_symbol, with_screener=True)) or {}
 
     if quote.get("price") is None and not fund:
         reply_suggestions(chat_id, raw_symbol, "fundamentalreport")
         return
 
-    lines = _fund_report_lines(raw_symbol, quote, fund, include_tip=True)
+    if is_us:
+        lines = _us_stock_lines(raw_symbol, quote, fund, include_tip=True)
+    else:
+        lines = _fund_report_lines(raw_symbol, quote, fund, include_tip=True)
     reply_messages(chat_id, split_messages(lines))
     log.info("handle_fund: completed for %s in %.1fs", raw_symbol, monotonic() - started_at)

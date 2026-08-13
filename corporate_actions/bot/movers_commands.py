@@ -39,8 +39,8 @@ def parse_screen_parts(parts, default_period, default_direction,
       periods   5m 15m 30m 1h 2h 4h today 2d 3d 5d 1w 2w 1mo 3mo 6mo 1y
       direction gainers/losers/all
       count     any number 1-100
-      universe  n100/nifty100, n500/nifty500 or nasdaq100/ndx/us keyword,
-                or a second number
+      universe  n100/nifty100, n500/nifty500, nasdaq100/ndx/us or
+                sp500/s&p500/spx keyword, or a second number
 
     A bare `100`/`500` means the index universe for /movers (which shows all
     stocks anyway) but a *count* for /gainers and /losers, so `/losers 1mo
@@ -75,6 +75,9 @@ def parse_screen_parts(parts, default_period, default_direction,
         elif normalized_token in ("nasdaq100", "nasdaq-100", "nasdaq", "ndx", "us100",
                    "nasdaq-100", "us", "america", "american"):
             universe = "nasdaq100"
+        elif normalized_token in ("sp500", "s&p500", "s&p-500", "snp500", "spx",
+                   "us500", "s&p 500", "sp-500"):
+            universe = "sp500"
         else:
             try:
                 count = max(1, min(100, int(normalized_token)))
@@ -98,7 +101,7 @@ def _move_icon(change: float) -> str:
     return "\U0001F7E1\u25bc"
 
 
-def format_price_movers_report(rows: list, header: str) -> str:
+def format_price_movers_report(rows: list, header: str, is_us: bool = False) -> str:
     """Format the fast initial price-only movers report (Phase 1)."""
     from ..core.numbers import format_money
 
@@ -109,7 +112,7 @@ def format_price_movers_report(rows: list, header: str) -> str:
         sign = "+" if change >= 0 else ""
         lines.append(
             f"{index}. {_move_icon(change)} <b>{escape(symbol)}</b>  "
-            f"{format_money(price)}  <b>{sign}{change:.2f}%</b>"
+            f"{format_money(price, 'USD' if is_us else 'INR')}  <b>{sign}{change:.2f}%</b>"
         )
     lines.append("")
     lines.append(
@@ -155,12 +158,13 @@ def handle_market_screen(chat_id, parts, default_direction="all",
     period, direction, count, universe = parse_screen_parts(
         parts, default_period, default_direction, default_count,
         default_universe)
-    is_us = universe == "nasdaq100"
+    is_us = universe in ("nasdaq100", "sp500")
     exchange = "US" if is_us else "NSE"
 
     universe_label = {
         "nifty500": "NIFTY 500",
         "nasdaq100": "NASDAQ 100",
+        "sp500": "S&P 500",
     }.get(universe, "NIFTY 100")
     period_label_text = period_label(*period)
     started_at = monotonic()
@@ -251,7 +255,7 @@ def handle_market_screen(chat_id, parts, default_direction="all",
     # Phase 1 - the initial report: movers and their current price only, so
     # the user gets actionable numbers now instead of waiting for the slower
     # fundamentals enrichment.
-    phase1_lines = format_price_movers_report(rows, header)
+    phase1_lines = format_price_movers_report(rows, header, is_us=is_us)
     if failed:
         phase1_lines += f"\n({failed} of {len(symbols)} stocks could not be loaded)"
     fund_mode = (storage.get_user_settings(chat_id) or {}).get("movers_fund", "button")

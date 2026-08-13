@@ -45,11 +45,32 @@ _NASDAQ100_FALLBACK = [
     "TXN", "VRTX", "WBD", "WDAY", "WDC", "WMT", "XEL",
 ]
 
+# S&P 500 constituents from the public GitHub dataset CSV (kept fresh by its
+# maintainers). A static fallback list is embedded so the S&P 500 screens still
+# work when the CSV host is unreachable.
+_SP500_URL = (
+    "https://raw.githubusercontent.com/datasets/"
+    "s-and-p-500-companies/master/data/constituents.csv"
+)
+_SP500_FALLBACK = [
+    "AAPL", "MSFT", "NVDA", "AMZN", "GOOGL", "GOOG", "META", "BRK-B", "AVGO",
+    "JPM", "LLY", "TSLA", "V", "UNH", "XOM", "MA", "PG", "JNJ", "COST", "WMT",
+    "HD", "ORCL", "NFLX", "MRK", "CVX", "ABBV", "BAC", "CRM", "KO", "PEP",
+    "ADBE", "AMD", "TMO", "LIN", "ACN", "MCD", "PM", "ABT", "CSCO", "QCOM",
+    "TXN", "CMCSA", "NEE", "DHR", "AMGN", "GE", "CAT", "ISRG", "VZ", "INTU",
+    "IBM", "PFE", "RTX", "DIS", "UBER", "BKNG", "AMAT", "NOW", "SPGI", "GS",
+    "AXP", "HON", "MDT", "MS", "BLK", "LOW", "T", "SYK", "TJX", "NKE", "SAP",
+    "DE", "UNP", "BA", "SCHW", "COP", "ADI", "GILD", "LMT", "ADP", "BX",
+    "FI", "CB", "MMC", "TMUS", "ELV", "CI", "REGN", "TT", "MO", "PLD", "SO",
+    "DUK", "APD", "VRTX", "MCO", "ZTS", "CL", "ITW", "WM", "AON", "EQIX",
+]
+
 # universe key -> (exchange for Yahoo, is_us flag)
 _UNIVERSE_EXCHANGE = {
     "nifty100": "NSE",
     "nifty500": "NSE",
     "nasdaq100": "US",
+    "sp500": "US",
 }
 
 
@@ -80,6 +101,36 @@ def _fetch_nasdaq100() -> list[str]:
     return list(_NASDAQ100_FALLBACK)
 
 
+def _fetch_sp500() -> list[str]:
+    """S&P 500 symbols from the public GitHub constituents CSV, fallback list.
+
+    The CSV uses Yahoo's data-source ticker convention for share classes
+    (BRK.B) while Yahoo's quote/chart endpoints expect a hyphen (BRK-B), so
+    symbols are normalised before returning.
+    """
+    def _normalize(symbol: str) -> str:
+        return symbol.strip().replace(".", "-")
+
+    try:
+        response = _quote_session().get(_SP500_URL, timeout=config.HTTP_TIMEOUT)
+        response.raise_for_status()
+        text = response.text
+        if text.startswith("\ufeff"):
+            text = text[1:]
+        symbols = [
+            _normalize(row.get("Symbol") or row.get("symbol") or "")
+            for row in csv.DictReader(io.StringIO(text))
+            if (row.get("Symbol") or row.get("symbol") or "").strip()
+        ]
+        symbols = list(dict.fromkeys(symbols))  # dedupe, keep order
+        if symbols:
+            return symbols
+        log.info("S&P 500 CSV returned no rows - using fallback list")
+    except Exception as error:
+        log.warning("S&P 500 CSV unavailable (%s) - using fallback list", error)
+    return [_normalize(symbol) for symbol in _SP500_FALLBACK]
+
+
 def universe_exchange(index: str) -> str:
     """Yahoo exchange code for a universe key: 'NSE' or 'US'."""
     return _UNIVERSE_EXCHANGE.get((index or "").lower(), "NSE")
@@ -99,6 +150,17 @@ def get_index_universe(index: str = "nifty100") -> list[str]:
         symbols = _fetch_nasdaq100()
         if symbols:
             _universe_cache["nasdaq100"] = {"timestamp": now, "data": symbols}
+        return symbols
+    if key in ("sp500", "s&p500", "s&p-500", "spx", "us500", "snp500"):
+        key = "sp500"
+        now = time.time()
+        cached = _universe_cache.get("sp500")
+        if cached and now - cached["timestamp"] < _UNIVERSE_CACHE_SECONDS:
+            log.debug("sp500 universe cache hit (%d symbols)", len(cached["data"]))
+            return cached["data"]
+        symbols = _fetch_sp500()
+        if symbols:
+            _universe_cache["sp500"] = {"timestamp": now, "data": symbols}
         return symbols
     url = _INDEX_CSV["nifty500"] if key in ("all", "500", "nifty500") else _INDEX_CSV["nifty100"]
     now = time.time()

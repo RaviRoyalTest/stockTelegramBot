@@ -20,6 +20,7 @@ from ..sources import (
     get_quote,
     get_stock_news,
     search_stocks,
+    search_us_tickers,
 )
 from ..telegram.client import NotifierError, send_message
 from ..telegram.markup import symbol_buttons
@@ -121,7 +122,7 @@ def handle_add_remove(chat_id, parts, command) -> None:
     else:
         symbol = raw_symbol
         exchange = (parts[2].upper().strip() if len(parts) > 2 else "NSE")
-        exchange = exchange if exchange in ("NSE", "BSE") else "NSE"
+        exchange = exchange if exchange in ("NSE", "BSE", "US") else "NSE"
 
     if command in ("/add", "/addstock"):
         quote = get_quote(exchange, symbol)
@@ -152,6 +153,16 @@ def handle_add_remove(chat_id, parts, command) -> None:
                 if exact is not None:
                     symbol = exact["symbol"]
                     company = exact.get("company", "")
+                    validated = True
+            except Exception:
+                pass
+        elif not validated and exchange == "US":
+            try:
+                us_matches = search_us_tickers(symbol, limit=1)
+                if us_matches:
+                    exact = us_matches[0]
+                    symbol = exact.get("symbol", symbol)
+                    company = exact.get("name") or exact.get("company", "")
                     validated = True
             except Exception:
                 pass

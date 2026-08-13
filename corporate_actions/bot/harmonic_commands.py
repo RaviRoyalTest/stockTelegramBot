@@ -9,7 +9,7 @@ from time import monotonic
 from .. import storage
 from ..core.text import split_messages
 from ..harmonic import SCAN_MAX_ROWS, SCAN_PRIORITY, analyze, format_report, format_scan_row
-from ..sources import get_index_universe
+from ..sources import get_index_universe, get_quote
 from .helpers import reply_suggestions
 from .reply import reply, reply_messages
 
@@ -18,7 +18,7 @@ log = logging.getLogger(__name__)
 HARMONIC_TIMEFRAMES = ("5m", "15m", "30m", "1h", "4h", "1d", "1w")
 
 # Universe keywords for the bulk screener. "all"/bare defaults to NIFTY 100,
-# "500" switches to NIFTY 500 (mirrors the movers 100|500 index selector).
+# "500" switches to NIFTY 500, "sp500"/"us500" switches to S&P 500.
 HARMONIC_SCAN_UNIVERSES = {
     "all": "nifty100",
     "100": "nifty100",
@@ -27,6 +27,12 @@ HARMONIC_SCAN_UNIVERSES = {
     "500": "nifty500",
     "nifty500": "nifty500",
     "nifty-500": "nifty500",
+    "sp500": "sp500",
+    "spx": "sp500",
+    "s&p500": "sp500",
+    "s&p-500": "sp500",
+    "us500": "sp500",
+    "snp500": "sp500",
 }
 
 
@@ -39,6 +45,7 @@ def handle_harmonic(chat_id, parts) -> None:
       /harmonic all      -> NIFTY 100, daily
       /harmonic 500      -> NIFTY 500, daily
       /harmonic 500 1w   -> NIFTY 500, weekly chart
+      /harmonic sp500    -> S&P 500, daily
     Single-stock detail (full report with PRZ, entry, SL & targets):
       /harmonic SYMBOL [TIMEFRAME]   e.g. /harmonic RELIANCE, /harmonic TATATECH 1h
       /harmonic 3                    -> full report for watchlist #3
@@ -91,7 +98,16 @@ def handle_harmonic(chat_id, parts) -> None:
         item = items[count - 1]
         symbol, exchange = item["symbol"], item["exchange"]
     else:
-        symbol, exchange = raw, "NSE"
+        symbol = raw
+        exchange = "NSE"
+        try:
+            quote = get_quote("NSE", symbol)
+            if not quote or quote.get("price") is None:
+                us_quote = get_quote("US", symbol) or {}
+                if us_quote.get("price") is not None or us_quote.get("name"):
+                    exchange = "US"
+        except Exception:
+            pass
 
     started_at = monotonic()
     log.info("handle_harmonic: scanning %s on %s (chat %s)", symbol, timeframe, chat_id)
@@ -113,11 +129,16 @@ def handle_harmonic(chat_id, parts) -> None:
 def handle_harmonic_scan(chat_id, universe, timeframe) -> None:
     """Bulk /harmonic screener over an index universe (compact report).
 
-    Scans every symbol in NIFTY 100 / NIFTY 500 for a harmonic formation and
-    replies with one compact line per stock that has one, sorted most
-    actionable first. Full detail for any stock is one /harmonic SYMBOL away.
+    Scans every symbol in NIFTY 100 / NIFTY 500 / S&P 500 for a harmonic
+    formation and replies with one compact line per stock that has one, sorted
+    most actionable first. Full detail for any stock is one /harmonic SYMBOL
+    away.
     """
-    universe_label = "NIFTY 500" if universe == "nifty500" else "NIFTY 100"
+    universe_label = {
+        "nifty500": "NIFTY 500",
+        "sp500": "S&P 500",
+    }.get(universe, "NIFTY 100")
+    exchange = "US" if universe == "sp500" else "NSE"
     started_at = monotonic()
     log.info(
         "harmonic scan: universe=%s timeframe=%s (chat %s)",
@@ -138,7 +159,7 @@ def handle_harmonic_scan(chat_id, universe, timeframe) -> None:
 
     def _scan(symbol):
         try:
-            return symbol, analyze("NSE", symbol, timeframe, light=True)
+            return symbol, analyze(exchange, symbol, timeframe, light=True)
         except Exception as error:  # one bad symbol must not kill the scan
             log.info("harmonic scan: failed for %s: %s", symbol, error)
             return symbol, None

@@ -24,6 +24,7 @@ from .rights import RIGHTS_OFFER_WINDOWS, attach_rights_windows
 from .screener import get_sector_pe, parse_screener_fundamentals
 from .types import ACTION_TYPES, INCREASE_TYPES, TYPE_LABELS, action_type, pick
 from .universe import get_daily_change, get_index_universe, get_intraday_change, universe_exchange
+from .us_corporate_actions import get_us_corporate_actions
 
 __all__ = [
     "SourceError",
@@ -39,6 +40,7 @@ __all__ = [
     "get_nse_corporate_actions",
     "get_bse_stock_list",
     "get_bse_corporate_actions",
+    "get_us_corporate_actions",
     "get_stock_news",
     "get_index_universe",
     "get_intraday_change",

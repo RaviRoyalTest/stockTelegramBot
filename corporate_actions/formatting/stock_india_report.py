@@ -362,7 +362,7 @@ def _fund_report_lines(raw_symbol, quote, fund, include_tip=True, label="") -> l
                 bits.append(f"ROCE {peer['roce']:.1f}%")
             lines.append(
                 f"  \u2022 <b>{escape(peer['name'])}</b>"
-                + (f" \u2014 {'  \u00b7  '.join(bits)}" if bits else "")
+                + (" \u2014 " + "  \u00b7  ".join(bits) if bits else "")
             )
         lines.append("")
 

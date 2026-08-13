@@ -272,6 +272,16 @@ def daily_traded_value_crore(df):
         return None
 
 
+def daily_traded_value_musd(df):
+    """Average daily traded value in millions of USD over the last 20 sessions."""
+    try:
+        last20 = df.tail(20)
+        value = (last20["close"] * last20["volume"]).mean()
+        return round(value / 1e6, 2)  # 1 million = 10^6
+    except Exception:
+        return None
+
+
 def stochastic(df, period=14, smooth_k=3, smooth_d=3):
     """Stochastic oscillator %K / %D (0-100) as (last_k, last_d)."""
     lowest = df["low"].rolling(period).min()

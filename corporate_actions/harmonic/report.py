@@ -18,9 +18,19 @@ SCAN_PRIORITY = {
 SCAN_MAX_ROWS = 25
 
 
+def _currency_for(exchange: str) -> str:
+    return "USD" if exchange.upper() == "US" else "INR"
+
+
 def format_report(result) -> list[str]:
     """Render the harmonic analysis as HTML lines for Telegram."""
-    symbol = f"{result['symbol']}.NS" if result["exchange"] == "NSE" else f"{result['symbol']}.BO"
+    exchange = result["exchange"].upper()
+    currency = _currency_for(exchange)
+    symbol = (
+        f"{result['symbol']}"
+        if exchange == "US"
+        else f"{result['symbol']}.NS" if exchange == "NSE" else f"{result['symbol']}.BO"
+    )
     lines = []
     lines.append(
         f"\U0001F3C6 <b>HARMONIC PATTERN SCAN</b>\n"
@@ -28,7 +38,7 @@ def format_report(result) -> list[str]:
     )
     lines.append(f"\U0001F5D3 Timeframe: <b>{result['timeframe'].upper()}</b>  \u00b7  {result['bars']} bars  \u00b7  RSI {result['rsi']:g}" if result["rsi"] is not None else
                  f"\U0001F5D3 Timeframe: <b>{result['timeframe'].upper()}</b>  \u00b7  {result['bars']} bars")
-    lines.append(f"Last Price: <b>{format_money(result['price'])}</b>")
+    lines.append(f"Last Price: <b>{format_money(result['price'], currency)}</b>")
     lines.append("")
 
     # 4. Pattern
@@ -46,12 +56,12 @@ def format_report(result) -> list[str]:
         for label in ("X", "A", "B", "C"):
             value = points.get(label)
             if value is not None:
-                lines.append(f"  {label}: {format_money(value)}")
+                lines.append(f"  {label}: {format_money(value, currency)}")
         d_price = points.get("D")
         if d_price is not None:
-            lines.append(f"  D: <b>{format_money(d_price)}</b> (completion)")
+            lines.append(f"  D: <b>{format_money(d_price, currency)}</b> (completion)")
         else:
-            lines.append(f"  D: <b>{format_money(result['d_completion_price'])}</b> (projected)")
+            lines.append(f"  D: <b>{format_money(result['d_completion_price'], currency)}</b> (projected)")
     lines.append("")
 
     # 6. Fibonacci ratios
@@ -76,9 +86,9 @@ def format_report(result) -> list[str]:
     potential_reversal_zone = result.get("potential_reversal_zone")
     if potential_reversal_zone:
         lines.append("<b>\U0001F6E1 PRZ (Potential Reversal Zone)</b>")
-        lines.append(f"  Upper: <b>{format_money(potential_reversal_zone['upper'])}</b>")
-        lines.append(f"  Lower: <b>{format_money(potential_reversal_zone['lower'])}</b>")
-        lines.append(f"  Midpoint: <b>{format_money(potential_reversal_zone['mid'])}</b>")
+        lines.append(f"  Upper: <b>{format_money(potential_reversal_zone['upper'], currency)}</b>")
+        lines.append(f"  Lower: <b>{format_money(potential_reversal_zone['lower'], currency)}</b>")
+        lines.append(f"  Midpoint: <b>{format_money(potential_reversal_zone['mid'], currency)}</b>")
         distance = potential_reversal_zone["distance"]
         tag = "inside PRZ" if potential_reversal_zone["lower"] <= result["price"] <= potential_reversal_zone["upper"] else \
             ("above PRZ" if distance > 0 else "below PRZ")
@@ -108,14 +118,14 @@ def format_report(result) -> list[str]:
         if stale:
             lines.append("  <i>Setup already played out \u2014 levels shown for reference only.</i>")
         lines.append(f"  Direction: <b>{direction_label}</b>")
-        lines.append(f"  Entry (on confirmation): <b>{format_money(plan['entry'])}</b>")
-        lines.append(f"  Stop Loss: <b>{format_money(plan['stop_loss'])}</b>")
+        lines.append(f"  Entry (on confirmation): <b>{format_money(plan['entry'], currency)}</b>")
+        lines.append(f"  Stop Loss: <b>{format_money(plan['stop_loss'], currency)}</b>")
         lines.append("  Targets:")
         targets = plan["targets"]
         reward_risk = plan["reward_risk"]
         for name, key in (("T1", "target_1"), ("T2", "target_2"), ("T3", "target_3")):
             reward_risk_string = f"  (R:R ≈ {reward_risk[key]:.1f}:1)" if key in reward_risk and reward_risk[key] else ""
-            lines.append(f"    {name}: <b>{format_money(targets[key])}</b>{reward_risk_string}")
+            lines.append(f"    {name}: <b>{format_money(targets[key], currency)}</b>{reward_risk_string}")
         lines.append("  <i>Do NOT enter just because price touches the PRZ \u2014 wait for a "
                      "rejection/reversal candle, a break of the confirmation level, or volume.")
     elif plan and direction:
@@ -170,9 +180,10 @@ def format_scan_row(result) -> str:
         change = _format_change(change_pct)
     pattern = escape(result.get("pattern") or "?")
     status = escape(result.get("status") or "")
+    currency = _currency_for(result.get("exchange") or "NSE")
     line = (
         f"{arrow} <b>{escape(result['symbol'])}</b> "
-        f"{format_money(result['price'])}{change} \u2014 <b>{pattern}</b> "
+        f"{format_money(result['price'], currency)}{change} \u2014 <b>{pattern}</b> "
         f"({result.get('direction') or '?'}) \u2014 {status} \u00b7 {result.get('signal') or 'NO TRADE'}"
     )
 
@@ -180,11 +191,11 @@ def format_scan_row(result) -> str:
     potential_reversal_zone = result.get("potential_reversal_zone")
     if potential_reversal_zone and potential_reversal_zone.get("lower") is not None and potential_reversal_zone.get("upper") is not None:
         extra.append(
-            f"PRZ {format_money(potential_reversal_zone['lower'])}\u2013"
-            f"{format_money(potential_reversal_zone['upper'])}"
+            f"PRZ {format_money(potential_reversal_zone['lower'], currency)}\u2013"
+            f"{format_money(potential_reversal_zone['upper'], currency)}"
         )
     if result.get("d_completion_price"):
-        extra.append(f"D {format_money(result['d_completion_price'])}")
+        extra.append(f"D {format_money(result['d_completion_price'], currency)}")
     if potential_reversal_zone and potential_reversal_zone.get("distance") is not None and result.get("price"):
         away = abs(potential_reversal_zone["distance"]) / result["price"] * 100
         if potential_reversal_zone["lower"] <= result["price"] <= potential_reversal_zone["upper"]:

@@ -93,7 +93,7 @@ def _tech_indicator_lines(fund: dict, price=None) -> list[str]:
         macd_text = "  \u00b7  ".join(macd_bits)
         if line is not None and signal is not None:
             bull = line >= signal
-            macd_text += f"  \u2014  {'\U0001F7E2 Bullish crossover' if bull else '\U0001F534 Bearish crossover'}"
+            macd_text += "  \u2014  " + ("\U0001F7E2 Bullish crossover" if bull else "\U0001F534 Bearish crossover")
         out.append("\U0001F52C MACD(12,26,9): " + macd_text)
     sma_50, sma_200 = fund.get("sma_50"), fund.get("sma_200")
     if sma_50 is not None or sma_200 is not None:

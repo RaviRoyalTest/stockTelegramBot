@@ -13,11 +13,24 @@ RULE_LINES = [
     "Weekly Supertrend RED or price below 200 SMA",
     "Delivery % < 40 (intraday churning)",
     "Chaikin Money Flow (CMF 20) < 0.00",
-    "Mansfield Relative Strength (MRS) < 0.00 vs NIFTY 500",
+    "Mansfield Relative Strength (MRS) < 0.00 vs the index",
     "R:R to Target 2 < 1:2.0 or Stop Loss > 8%",
     "Major unhedged binary event / governance risk",
-    "Avg daily traded value < \u20b910 crore or wide spread",
+    "Avg daily traded value < liquidity floor or wide spread",
 ]
+
+_CURRENCY = {"INR": "\u20b9", "USD": "$"}
+
+
+def _currency_symbol(finding: dict) -> str:
+    return _CURRENCY.get((finding.get("currency") or "INR").upper(), "\u20b9")
+
+
+def _display_symbol(finding: dict) -> str:
+    symbol = finding.get("symbol")
+    if (finding.get("currency") or "INR").upper() == "USD":
+        return symbol
+    return f"{symbol}.NS"
 
 
 def _score_badges(finding: dict) -> str:
@@ -36,13 +49,14 @@ def _score_badges(finding: dict) -> str:
 
 def _entry_sl_targets(finding: dict) -> list[str]:
     entry = finding["entry"]
+    sym = _currency_symbol(finding)
     return [
-        f"ENTRY <b>\u20b9{entry:,.2f}</b>  \u00b7  "
-        f"SL <b>\u20b9{finding['stop_loss']:,.2f}</b>  "
+        f"ENTRY <b>{sym}{entry:,.2f}</b>  \u00b7  "
+        f"SL <b>{sym}{finding['stop_loss']:,.2f}</b>  "
         f"(<b>{finding['stop_loss_percent']:.1f}%</b> risk)",
-        f"TARGETS <b>\u20b9{finding['target_1']:,.2f}</b> / "
-        f"<b>\u20b9{finding['target_2']:,.2f}</b> / "
-        f"<b>\u20b9{finding['target_3']:,.2f}</b>  \u00b7  "
+        f"TARGETS <b>{sym}{finding['target_1']:,.2f}</b> / "
+        f"<b>{sym}{finding['target_2']:,.2f}</b> / "
+        f"<b>{sym}{finding['target_3']:,.2f}</b>  \u00b7  "
         f"R:R \u2248 <b>1:{finding['reward_risk_target_2']:.1f}</b> to T2",
     ]
 
@@ -50,10 +64,11 @@ def _entry_sl_targets(finding: dict) -> list[str]:
 def _top_pick_lines(top_fields: dict, score: float) -> list[str]:
     """Render the #1 setup as a clean entry/SL/targets card."""
     lines = []
+    sym = _currency_symbol(top_fields)
     name = top_fields.get("name") or top_fields.get("symbol")
-    lines.append(f"\U0001F3C6 <b>{name}</b> ({top_fields['symbol']}.NS)  \u00b7  "
+    lines.append(f"\U0001F3C6 <b>{name}</b> ({_display_symbol(top_fields)})  \u00b7  "
                  f"Score <b>{score:.0f}/100</b>  \u00b7  "
-                 f"Price <b>\u20b9{top_fields['price']:,.2f}</b>")
+                 f"Price <b>{sym}{top_fields['price']:,.2f}</b>")
     lines.append(_score_badges(top_fields))
     lines.extend(_entry_sl_targets(top_fields))
     return lines
@@ -76,13 +91,14 @@ def _detail_card_lines(finding: dict, score: float, breakdown: dict | None = Non
     for TREND & STRUCTURE, MOMENTUM, VOLUME & FLOW and TRADE PLAN.
     """
     symbol = finding["symbol"]
+    sym = _currency_symbol(finding)
     name = escape(finding.get("name") or symbol)
     price = finding["price"]
     lines = []
 
     # Header: name, symbol, score, price + today's move
-    lines.append(f"\U0001F4B0 <b>{name}</b> (<code>{symbol}</code>)")
-    header_bits = [f"Score <b>{score:.0f}/100</b>", f"Price <b>\u20b9{price:,.2f}</b>"]
+    lines.append(f"\U0001F4B0 <b>{name}</b> (<code>{_display_symbol(finding)}</code>)")
+    header_bits = [f"Score <b>{score:.0f}/100</b>", f"Price <b>{sym}{price:,.2f}</b>"]
     if finding.get("change_pct") is not None:
         change = finding["change_pct"]
         arrow = "\u25b2" if change >= 0 else "\u25bc"
@@ -101,7 +117,7 @@ def _detail_card_lines(finding: dict, score: float, breakdown: dict | None = Non
     for span, key in ((20, "ema20"), (50, "ema50"), (100, "ema100"), (200, "ema200")):
         value = finding.get(key)
         if value is not None:
-            ema_bits.append(f"EMA{span} \u20b9{value:,.2f}")
+            ema_bits.append(f"EMA{span} {sym}{value:,.2f}")
     if ema_bits:
         lines.append("  \u2022 " + "  \u00b7  ".join(ema_bits))
     position_bits = []
@@ -114,7 +130,7 @@ def _detail_card_lines(finding: dict, score: float, breakdown: dict | None = Non
         golden = finding.get("sma_golden")
         cross = "Golden cross (bullish)" if golden else "Death cross (bearish)"
         lines.append(
-            f"  \u2022 SMA50 \u20b9{finding['sma50']:,.2f}  \u00b7  SMA200 \u20b9{finding['sma200']:,.2f}  "
+            f"  \u2022 SMA50 {sym}{finding['sma50']:,.2f}  \u00b7  SMA200 {sym}{finding['sma200']:,.2f}  "
             f"\u2014  {_up_down(golden)} {cross}"
         )
     if finding.get("weekly_supertrend"):
@@ -126,14 +142,14 @@ def _detail_card_lines(finding: dict, score: float, breakdown: dict | None = Non
         lines.append(f"  \u2022 Guppy GMMA: {_up_down(finding['gmma_bull'])} {label}")
     if finding.get("donchian_high") is not None and finding.get("donchian_low") is not None:
         lines.append(
-            f"  \u2022 Donchian 52W: High \u20b9{finding['donchian_high']:,.2f}  \u00b7  "
-            f"Low \u20b9{finding['donchian_low']:,.2f}"
+            f"  \u2022 Donchian 52W: High {sym}{finding['donchian_high']:,.2f}  \u00b7  "
+            f"Low {sym}{finding['donchian_low']:,.2f}"
         )
         if finding.get("percent_52w_range") is not None:
             lines.append(f"  \u2022 52W range position: {finding['percent_52w_range']:.0f}%")
     if finding.get("avwap") is not None:
         label = "Price above" if finding.get("above_avwap") else "Price below"
-        lines.append(f"  \u2022 Anchored VWAP \u20b9{finding['avwap']:,.2f} \u2014 {_up_down(finding.get('above_avwap'))} {label}")
+        lines.append(f"  \u2022 Anchored VWAP {sym}{finding['avwap']:,.2f} \u2014 {_up_down(finding.get('above_avwap'))} {label}")
     if finding.get("psar_dir"):
         bull = finding["psar_dir"] == "bull"
         label = "Bullish (SAR below price)" if bull else "Bearish (SAR above price)"
@@ -173,8 +189,8 @@ def _detail_card_lines(finding: dict, score: float, breakdown: dict | None = Non
         lines.append(stoch_text)
     if finding.get("bb_upper") is not None and finding.get("bb_lower") is not None:
         bb_text = (
-            f"  \u2022 Bollinger: U \u20b9{finding['bb_upper']:,.2f} \u00b7 "
-            f"M \u20b9{finding['bb_mid']:,.2f} \u00b7 L \u20b9{finding['bb_lower']:,.2f}"
+            f"  \u2022 Bollinger: U {sym}{finding['bb_upper']:,.2f} \u00b7 "
+            f"M {sym}{finding['bb_mid']:,.2f} \u00b7 L {sym}{finding['bb_lower']:,.2f}"
         )
         if finding.get("bb_percent_b") is not None:
             bb_text += f" \u00b7 %B {finding['bb_percent_b']:.0f}"
@@ -200,8 +216,12 @@ def _detail_card_lines(finding: dict, score: float, breakdown: dict | None = Non
         ratio = finding["volume_ratio"]
         note = "above average" if ratio >= 1.2 else ("below average" if ratio <= 0.8 else "average")
         lines.append(f"  \u2022 Volume ratio: {ratio:.2f}x vs 20d avg ({note})")
-    if finding.get("average_daily_traded_value_crores") is not None:
-        lines.append(f"  \u2022 ADTV: \u20b9{finding['average_daily_traded_value_crores']:.0f} Cr")
+    adtv_inr = finding.get("average_daily_traded_value_crores")
+    adtv_usd = finding.get("average_daily_traded_value_musd")
+    if adtv_inr is not None:
+        lines.append(f"  \u2022 ADTV: \u20b9{adtv_inr:.0f} Cr")
+    elif adtv_usd is not None:
+        lines.append(f"  \u2022 ADTV: ${adtv_usd:.0f}M")
     if finding.get("delivery_estimate") is not None:
         lines.append(f"  \u2022 Delivery (est.): {finding['delivery_estimate']:.0f}%")
 
@@ -209,7 +229,7 @@ def _detail_card_lines(finding: dict, score: float, breakdown: dict | None = Non
     lines.append("<b>\U0001F4C9 TRADE PLAN</b>")
     lines.extend(_entry_sl_targets(finding))
     if finding.get("atr14") is not None:
-        atr_text = f"  \u2022 ATR(14): \u20b9{finding['atr14']:,.2f}"
+        atr_text = f"  \u2022 ATR(14): {sym}{finding['atr14']:,.2f}"
         if finding.get("atr_percent") is not None:
             atr_text += f" ({finding['atr_percent']:.1f}% of price)"
         lines.append(atr_text)
@@ -220,8 +240,11 @@ def _detail_card_lines(finding: dict, score: float, breakdown: dict | None = Non
 def format_report(session: dict) -> list[str]:
     """Render the full scanner report as HTML lines for Telegram."""
     regime = session["regime"]
+    universe_label = session.get("universe_label", "NIFTY 500")
+    currency = session.get("currency", "INR")
+    sym = _CURRENCY.get(currency, "\u20b9")
     lines = []
-    lines.append("\U0001F4CA <b>NIFTY 500 \u2014 ADVANCED SCANNER</b>")
+    lines.append(f"\U0001F4CA <b>{universe_label} \u2014 ADVANCED SCANNER</b>")
     lines.append("")
 
     # 1. Market regime & breadth (concise)
@@ -292,7 +315,7 @@ def format_report(session: dict) -> list[str]:
         lines.append("")
 
     number_scanned = session.get("scanned", 0)
-    lines.append(f"\U0001F4A1 <i>Scanned {number_scanned} NIFTY 500 stocks. Data: Yahoo Finance "
+    lines.append(f"\U0001F4A1 <i>Scanned {number_scanned} {universe_label} stocks. Data: Yahoo Finance "
                  "daily candles. Delivery % is estimated from money-flow. "
                  "Not investment advice.</i>")
     return lines

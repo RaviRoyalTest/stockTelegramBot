@@ -10,9 +10,12 @@ from . import indicators as indicators
 MIN_BARS = 220               # need ~1 year of dailies for 200 EMA + 52w channel
 
 
-def scan_stock(ohlc, index_close=None) -> Optional[dict]:
+def scan_stock(ohlc, index_close=None, currency: str = "INR") -> Optional[dict]:
     """Compute the full technical field set for one symbol.
 
+    `currency` ('INR' or 'USD') decides the liquidity units: the average daily
+    traded value is reported in ₹ crore (INR) or millions of USD (USD), so the
+    same scanner can screen NIFTY 500 and S&P 500 stocks.
     Returns a dict with every indicator used by the score/reject/report
     pipeline, or None when there is not enough data.
     """
@@ -122,8 +125,14 @@ def scan_stock(ohlc, index_close=None) -> Optional[dict]:
     # Mansfield relative strength
     finding["mansfield_rs"] = indicators.mansfield_relative_strength(df["close"], index_close) if index_close is not None else None
 
-    # Liquidity (ADTV in ₹ crore) + volume ratio vs the 20-day average
-    finding["average_daily_traded_value_crores"] = indicators.daily_traded_value_crore(df)
+    # Liquidity (ADTV in ₹ crore for INR / $ millions for USD) + volume ratio
+    finding["currency"] = (currency or "INR").upper()
+    if finding["currency"] == "USD":
+        finding["average_daily_traded_value_musd"] = indicators.daily_traded_value_musd(df)
+        finding["adtv"] = finding["average_daily_traded_value_musd"]
+    else:
+        finding["average_daily_traded_value_crores"] = indicators.daily_traded_value_crore(df)
+        finding["adtv"] = finding["average_daily_traded_value_crores"]
     finding["volume_20avg"] = float(df["volume"].tail(20).mean())
     finding["volume_ratio"] = indicators.volume_ratio(df)
 

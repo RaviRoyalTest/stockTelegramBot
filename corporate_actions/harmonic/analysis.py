@@ -1,6 +1,7 @@
 """Harmonic pattern analysis: fetch OHLC, detect patterns, build the result dict."""
 from __future__ import annotations
 
+from ..core.numbers import format_money
 from ..sources import _HIGHER_TIMEFRAME_LADDER, get_ohlc
 from .patterns import (
     PATTERNS,
@@ -201,11 +202,12 @@ def analyze(exchange: str, symbol: str, timeframe: str = "1d", percent: float | 
                 else:
                     notes.append("Volume in line with the 20-bar average")
         # nearest pivots as support / resistance
+        currency = "USD" if ohlc.get("exchange", "").upper() == "US" else "INR"
         highs_near = [pivot[1] for pivot in pivots if pivot[2] and pivot[1] > price]
         lows_near = [pivot[1] for pivot in pivots if not pivot[2] and pivot[1] < price]
         if highs_near:
-            notes.append(f"Resistance near: ₹{min(highs_near):,.2f}")
+            notes.append(f"Resistance near: {format_money(min(highs_near), currency)}")
         if lows_near:
-            notes.append(f"Support near: ₹{max(lows_near):,.2f}")
+            notes.append(f"Support near: {format_money(max(lows_near), currency)}")
         result["notes"] = notes
     return result

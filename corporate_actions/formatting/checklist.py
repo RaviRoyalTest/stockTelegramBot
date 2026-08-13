@@ -45,6 +45,21 @@ def _cr(value) -> str:
         return "N/A"
 
 
+def _money(value, currency: str = "INR") -> str:
+    """Currency-aware money string: ₹ crore for INR, compact $ for USD."""
+    if currency == "USD":
+        try:
+            magnitude = abs(float(value))
+            if magnitude >= 1e9:
+                return f"${float(value) / 1e9:,.2f}B"
+            if magnitude >= 1e6:
+                return f"${float(value) / 1e6:,.1f}M"
+            return f"${float(value):,.0f}"
+        except (TypeError, ValueError):
+            return "N/A"
+    return _cr(value)
+
+
 # --------------------------------------------------------------------------
 # Item evaluators. Each returns (status, value_text) where status is one of
 # PASS / FAIL / NO_DATA and value_text shows the measured numbers so the user
@@ -150,7 +165,7 @@ def _free_cashflow(fund):
     if value is None:
         return NO_DATA, "no FCF data"
     status = PASS if float(value) > 0 else FAIL
-    return status, f"FCF {_cr(value)}"
+    return status, f"FCF {_money(value, fund.get('_currency', 'INR'))}"
 
 
 def _interest_coverage(fund):
@@ -187,11 +202,19 @@ def _peg(fund, threshold: float = 1.5):
 
 
 def _price_to_fcf(fund, threshold: float = 20.0):
-    mcap = fund.get("mcap_cr")
-    fcf = fund.get("free_cashflow")
-    if mcap is None or fcf is None or float(fcf) <= 0:
-        return NO_DATA, "needs market cap + positive FCF"
-    ratio = float(mcap) * 1e7 / float(fcf)
+    currency = fund.get("_currency", "INR")
+    if currency == "USD":
+        mcap = fund.get("mcap_usd")
+        fcf = fund.get("free_cashflow")
+        if mcap is None or fcf is None or float(fcf) <= 0:
+            return NO_DATA, "needs market cap + positive FCF"
+        ratio = float(mcap) * 1e9 / float(fcf)
+    else:
+        mcap = fund.get("mcap_cr")
+        fcf = fund.get("free_cashflow")
+        if mcap is None or fcf is None or float(fcf) <= 0:
+            return NO_DATA, "needs market cap + positive FCF"
+        ratio = float(mcap) * 1e7 / float(fcf)
     status = PASS if ratio < threshold else FAIL
     return status, f"P/FCF {_num(ratio, 1)}"
 
@@ -314,9 +337,11 @@ def _section_block(title: str, total: int, rows, passed: int, checked: int) -> l
     return lines
 
 
-def format_checklist(raw_symbol: str, quote: dict, fund: dict | None) -> list[str]:
+def format_checklist(raw_symbol: str, quote: dict, fund: dict | None,
+                     currency: str = "INR") -> list[str]:
     """Build the full checklist report lines for one symbol (Telegram HTML)."""
-    fund = fund or {}
+    fund = dict(fund or {})
+    fund["_currency"] = "USD" if (currency or "INR").upper() == "USD" else "INR"
     price = quote.get("price")
     company_name = quote.get("name") or raw_symbol
 
@@ -334,7 +359,7 @@ def format_checklist(raw_symbol: str, quote: dict, fund: dict | None) -> list[st
     if fund.get("sector"):
         lines.append(f"Sector: <i>{escape(fund['sector'])}</i>")
     if price is not None:
-        lines.append(f"Current Price: <b>{format_money(price)}</b>")
+        lines.append(f"Current Price: <b>{format_money(price, fund['_currency'])}</b>")
     lines.append("")
 
     lines.extend(_section_block(

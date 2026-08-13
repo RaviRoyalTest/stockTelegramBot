@@ -5,7 +5,11 @@ import logging
 from concurrent.futures import ThreadPoolExecutor, as_completed
 
 from .. import config
-from ..sources import get_bse_corporate_actions, get_nse_corporate_actions
+from ..sources import (
+    get_bse_corporate_actions,
+    get_nse_corporate_actions,
+    get_us_corporate_actions,
+)
 from ..sources.errors import SourceError
 
 log = logging.getLogger(__name__)
@@ -70,6 +74,10 @@ def fetch_matching(watchlist: list[dict]) -> list[dict]:
         watch_item["symbol"] for watch_item in watchlist
         if watch_item.get("exchange", "").upper() == "BSE"
     ]
+    us_symbols = [
+        watch_item["symbol"] for watch_item in watchlist
+        if watch_item.get("exchange", "").upper() == "US"
+    ]
 
     all_actions: list[dict] = []
 
@@ -83,6 +91,22 @@ def fetch_matching(watchlist: list[dict]) -> list[dict]:
 
         with ThreadPoolExecutor(max_workers=10) as executor:
             futures = {executor.submit(_fetch_nse, symbol): symbol for symbol in nse_symbols}
+            for future in as_completed(futures):
+                try:
+                    all_actions.extend(future.result())
+                except Exception:
+                    pass
+
+    # Query US per-symbol (parallel) - dividends/splits from Yahoo events
+    if us_symbols:
+        def _fetch_us(symbol):
+            try:
+                return get_us_corporate_actions(symbol)
+            except Exception:
+                return []
+
+        with ThreadPoolExecutor(max_workers=10) as executor:
+            futures = {executor.submit(_fetch_us, symbol): symbol for symbol in us_symbols}
             for future in as_completed(futures):
                 try:
                     all_actions.extend(future.result())

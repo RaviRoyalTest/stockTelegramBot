@@ -11,6 +11,27 @@ from .reply import reply, reply_messages
 
 log = logging.getLogger(__name__)
 
+_UNIVERSE_SPECS = {
+    "nifty500": {
+        "label": "NIFTY 500",
+        "currency": "INR",
+        "index": "^NSEI",
+        "benchmark_label": "NIFTY 50",
+        "vix": "^INDIAVIX",
+        "vix_label": "India VIX",
+        "exchange": "NSE",
+    },
+    "sp500": {
+        "label": "S&P 500",
+        "currency": "USD",
+        "index": "^GSPC",
+        "benchmark_label": "S&P 500",
+        "vix": "^VIX",
+        "vix_label": "VIX",
+        "exchange": "US",
+    },
+}
+
 
 def _above_ema(ohlc, span: int) -> bool:
     """Quick price-vs-EMA check for breadth (no pandas dependency here)."""
@@ -35,11 +56,13 @@ def handle_scan500(chat_id, parts) -> None:
     rules, scores survivors out of 100 and reports regime + top picks,
     ending with a full indicator card for each of the TOP 10.
     """
+    universe = "sp500" if "sp500" in " ".join(parts).lower() else "nifty500"
+    spec = _UNIVERSE_SPECS[universe]
     started_at = monotonic()
-    log.info("scan500: starting (chat %s)", chat_id)
+    log.info("scan500: starting %s (chat %s)", universe, chat_id)
     reply(
         chat_id,
-        "Scanning NIFTY 500 (daily candles, ~500 stocks)... "
+        f"Scanning {spec['label']} (daily candles, ~{universe == 'sp500' and 500 or 500} stocks)... "
         "this can take a minute or two.",
     )
     try:
@@ -51,21 +74,21 @@ def handle_scan500(chat_id, parts) -> None:
 
     from ..sources import get_index_universe
 
-    symbols = get_index_universe("nifty500")
+    symbols = get_index_universe(universe)
     if not symbols:
-        log.warning("scan500: no symbols loaded")
-        reply(chat_id, "Could not load the NIFTY 500 universe right now. Try again in a minute.")
+        log.warning("scan500: no symbols loaded for %s", universe)
+        reply(chat_id, f"Could not load the {spec['label']} universe right now. Try again in a minute.")
         return
 
     # Market regime inputs
-    index_50 = get_index_ohlc("^NSEI", "2y", "1d")
-    vix = get_index_ohlc("^INDIAVIX", "6mo", "1d")
-    index_500 = get_index_ohlc("^CRSLDX", "2y", "1d") or index_50
+    index_50 = get_index_ohlc(spec["index"], "2y", "1d")
+    vix = get_index_ohlc(spec["vix"], "6mo", "1d")
+    index_500 = get_index_ohlc("^CRSLDX" if universe == "nifty500" else spec["index"], "2y", "1d") or index_50
     benchmark_close = (index_500 or {}).get("close")
 
     def _fetch(symbol):
         try:
-            return symbol, get_ohlc("NSE", symbol, "1d")
+            return symbol, get_ohlc(spec["exchange"], symbol, "1d")
         except Exception:
             return symbol, None
 
@@ -86,7 +109,7 @@ def handle_scan500(chat_id, parts) -> None:
     rejected = []
     for symbol, ohlc in ohlc_by_symbol.items():
         try:
-            finding = scanner.scan_stock(ohlc, index_close=benchmark_close)
+            finding = scanner.scan_stock(ohlc, index_close=benchmark_close, currency=spec["currency"])
             if finding is None:
                 continue
             finding = scanner.build_plan(finding)
@@ -115,7 +138,9 @@ def handle_scan500(chat_id, parts) -> None:
         "advance": float(advance_count), "decline": float(decline_count),
         "vix": vix_last_close,
     }
-    regime = scanner.market_regime(index_50, breadth)
+    regime = scanner.market_regime(
+        index_50, breadth, benchmark_label=spec["benchmark_label"], vix_label=spec["vix_label"]
+    )
 
     # Approve by score threshold
     rows.sort(key=lambda row: row["score"], reverse=True)
@@ -126,6 +151,8 @@ def handle_scan500(chat_id, parts) -> None:
         "rejected": rejected,
         "approved": approved,
         "scanned": total or len(symbols),
+        "universe_label": spec["label"],
+        "currency": spec["currency"],
     })
     reply_messages(chat_id, split_messages(lines))
     log.info("scan500: done in %.1fs (%d approved, %d rejected, %d scanned)",
