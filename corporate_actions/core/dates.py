@@ -123,6 +123,131 @@ def parse_nse_date(value: str) -> str:
     return value
 
 
+_MONTHS = {
+    "jan": 1, "feb": 2, "mar": 3, "apr": 4, "may": 5, "jun": 6,
+    "jul": 7, "aug": 8, "sep": 9, "oct": 10, "nov": 11, "dec": 12,
+}
+
+
+def month_number(value) -> int | None:
+    """Month number (1-12) for a month name/abbreviation, or None."""
+    name = str(value or "").strip().lower()[:3]
+    return _MONTHS.get(name)
+
+
+def parse_date_token(value) -> date | None:
+    """Parse a flexible user date token into a date, or None.
+
+    Accepts ISO (2026-08-12), day-first (12-08-2026, 12/08/2026, 12.08.2026),
+    8-digit (12082026) and month-name forms (12 Aug 2026, 12-Aug-2026,
+    12aug2026, 12aug, aug12, 12 Aug). The year may be 2 or 4 digits; a
+    missing year defaults to the current year. A bare number is never a
+    date, and invalid dates (e.g. 31 Feb) return None.
+    """
+    raw = str(value or "").strip()
+    if not raw:
+        return None
+    lowered = raw.lower()
+    now = date.today()
+
+    def _build(day: int, month: int, year: int | None) -> date | None:
+        try:
+            return date(year if year else now.year, month, day)
+        except ValueError:
+            return None
+
+    # ISO / year-first: 2026-08-12, 2026-8-12
+    match = re.fullmatch(r"(\d{4})[\-/.](\d{1,2})[\-/.](\d{1,2})", raw)
+    if match:
+        return _build(int(match.group(3)), int(match.group(2)), int(match.group(1)))
+    # Day-first numeric: 12-08-2026, 12/08/2026, 12.08.2026, 12-08-26
+    match = re.fullmatch(r"(\d{1,2})[\-/.](\d{1,2})[\-/.](\d{2,4})", raw)
+    if match:
+        year = int(match.group(3))
+        if year < 100:
+            year += 2000
+        return _build(int(match.group(1)), int(match.group(2)), year)
+    # 8-digit: 12082026 (tried as yyyymmdd then ddmmyyyy)
+    if re.fullmatch(r"\d{8}", raw):
+        first = _build(int(raw[6:8]), int(raw[4:6]), int(raw[0:4]))
+        if first is not None:
+            return first
+        return _build(int(raw[0:2]), int(raw[2:4]), int(raw[4:8]))
+    # A bare short number (12, 500) is a count, never a date.
+    if raw.isdigit():
+        return None
+    # Day + month name: 12 Aug 2026, 12-Aug-26, 12aug2026, 12aug
+    match = re.fullmatch(r"(\d{1,2})[\s\-_.]?([a-z]{3,9})(?:[\s\-_.]?(\d{2,4}))?", lowered)
+    if match:
+        month = month_number(match.group(2))
+        year = int(match.group(3)) + 2000 if match.group(3) and len(match.group(3)) == 2 \
+            else (int(match.group(3)) if match.group(3) else None)
+        if month:
+            return _build(int(match.group(1)), month, year)
+    # Month name + day: aug 12, Aug-12-2026, aug12
+    match = re.fullmatch(r"([a-z]{3,9})[\s\-_.]?(\d{1,2})(?:[\s\-_.]?(\d{2,4}))?", lowered)
+    if match:
+        month = month_number(match.group(1))
+        year = int(match.group(3)) + 2000 if match.group(3) and len(match.group(3)) == 2 \
+            else (int(match.group(3)) if match.group(3) else None)
+        if month:
+            return _build(int(match.group(2)), month, year)
+    return None
+
+
+def date_from_parts(tokens, index: int) -> tuple:
+    """Build a date from command tokens starting at `index` -> (date, consumed).
+
+    Handles a single token (12-08-2026, 12aug, aug12, 2026-08-12) and the
+    split forms (12 Aug, Aug 12, 12 Aug 2026, Aug 12 2026). Returns
+    (None, 0) when the tokens are not a date.
+    """
+    if index >= len(tokens):
+        return None, 0
+    parsed = parse_date_token(tokens[index])
+    if parsed is not None:
+        return parsed, 1
+
+    def _build(day: int, month: int, year_token: str | None) -> tuple:
+        year = None
+        consumed = 2
+        if year_token and str(year_token).isdigit() and len(str(year_token)) in (2, 4):
+            year = int(year_token) + (2000 if len(str(year_token)) == 2 else 0)
+            consumed = 3
+        try:
+            return date(year or date.today().year, month, day), consumed
+        except ValueError:
+            return None, 0
+
+    # day + month name, optional year: "12 Aug", "12 Aug 2026"
+    if (str(tokens[index]).isdigit() and 1 <= int(tokens[index]) <= 31
+            and index + 1 < len(tokens)):
+        month = month_number(tokens[index + 1])
+        if month:
+            year_token = tokens[index + 2] if index + 2 < len(tokens) else None
+            return _build(int(tokens[index]), month, year_token)
+    # month name + day, optional year: "Aug 12", "Aug 12 2026"
+    month = month_number(tokens[index])
+    if month and index + 1 < len(tokens) \
+            and str(tokens[index + 1]).isdigit() and 1 <= int(tokens[index + 1]) <= 31:
+        year_token = tokens[index + 2] if index + 2 < len(tokens) else None
+        return _build(int(tokens[index + 1]), month, year_token)
+    return None, 0
+
+
+def sessions_back_estimate(target: date, today: date | None = None) -> int:
+    """Rough trading-session count between today and a past date (+ buffer).
+
+    Used to size history fetches for date-based screens - an exact count is
+    not needed, only enough to cover the target date. Never returns 0.
+    """
+    today = today or date.today()
+    days = (today - target).days
+    if days <= 0:
+        return 1
+    return max(1, int(days * 5 / 7) + 4)
+
+
 def format_date(value) -> str:
     """Pretty-print an ISO date as '07-Aug-2026' (raw string if unparsable)."""
     date_string = str(value or "")

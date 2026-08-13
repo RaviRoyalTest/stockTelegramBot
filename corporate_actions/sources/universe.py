@@ -16,6 +16,7 @@ import time
 from datetime import datetime, timezone
 
 from .. import config
+from ..core.dates import sessions_back_estimate
 from .http import _quote_session, _throttle_chart_req
 
 log = logging.getLogger(__name__)
@@ -419,8 +420,12 @@ def get_gap_history(exchange: str, symbol: str, days: int = 7) -> list[dict]:
         range_ = "5d"
     elif days <= 14:
         range_ = "1mo"
-    else:
+    elif days <= 90:
         range_ = "3mo"
+    elif days <= 180:
+        range_ = "6mo"
+    else:
+        range_ = "1y"
     suffix = "" if exchange.upper() == "US" else (".BO" if exchange.upper() == "BSE" else ".NS")
     url = (
         f"https://query1.finance.yahoo.com/v8/finance/chart/{symbol}{suffix}"
@@ -490,3 +495,152 @@ def get_window_gap_change(exchange: str, symbol: str, sessions: int) -> dict | N
         "move_from_open_pct": today.get("move_from_open_pct"),
         "name": today.get("name") or base_row.get("name") or "",
     }
+
+
+def _history_row_for_date(exchange: str, symbol: str, target_date) -> dict | None:
+    """Gap-history row (newest-first list) for one specific session date."""
+    iso = target_date.isoformat()
+    days = sessions_back_estimate(target_date) + 2
+    for row in get_gap_history(exchange, symbol, days=days):
+        if row.get("date") == iso:
+            return row
+    return None
+
+
+def get_gap_change_on_date(exchange: str, symbol: str, target_date) -> dict | None:
+    """The overnight gap that opened ON a specific date (its open vs prev close).
+
+    Same shape as get_gap_change ({'price', 'prev_close', 'open', 'gap_pct',
+    'move_from_open_pct', 'name', 'date'}) where 'price' is that session's
+    close. None when the date is too far back or the data is unavailable.
+    """
+    row = _history_row_for_date(exchange, symbol, target_date)
+    if not row:
+        return None
+    return {
+        "price": row.get("close"),
+        "open": row.get("open"),
+        "prev_close": row.get("prev_close"),
+        "gap_pct": row.get("gap_pct"),
+        "move_from_open_pct": row.get("move_from_open_pct"),
+        "name": row.get("name"),
+        "date": row.get("date"),
+    }
+
+
+def get_window_gap_range(exchange: str, symbol: str, start_date, end_date) -> dict | None:
+    """Cumulative gap over a date PERIOD: open on `end_date` vs the close of
+    the session immediately before `start_date`.
+
+    e.g. /gappers 08-08-2026 12-08-2026 -> how each stock gapped from the
+    close before 08 Aug to the open on 12 Aug. Same shape as
+    get_gap_change, with 'date' = the end date. None when either endpoint
+    falls outside the available history.
+    """
+    if end_date < start_date:
+        start_date, end_date = end_date, start_date
+    days = sessions_back_estimate(start_date) + 2
+    history = get_gap_history(exchange, symbol, days=days)
+    if not history:
+        return None
+    start_iso, end_iso = start_date.isoformat(), end_date.isoformat()
+    start_index = next(
+        (i for i, row in enumerate(history) if row.get("date") == start_iso), None
+    )
+    end_index = next(
+        (i for i, row in enumerate(history) if row.get("date") == end_iso), None
+    )
+    if start_index is None or end_index is None:
+        return None
+    base_index = start_index + 1  # the session chronologically before the start
+    if base_index >= len(history):
+        return None
+    base_close = history[base_index]["close"]
+    end_row = history[end_index]
+    if not end_row.get("open") or not base_close:
+        return None
+    return {
+        "price": end_row.get("close"),
+        "open": end_row["open"],
+        "prev_close": base_close,
+        "gap_pct": (end_row["open"] / base_close - 1.0) * 100.0,
+        "move_from_open_pct": end_row.get("move_from_open_pct"),
+        "name": end_row.get("name") or "",
+        "date": end_row.get("date"),
+    }
+
+
+_daily_date_cache: dict = {}
+_DAILY_DATE_CACHE_SECONDS = 300  # seconds - historical closes do not change
+
+
+def get_daily_change_on_date(exchange: str, symbol: str, target_date) -> dict | None:
+    """The FULL-DAY move of ONE specific date (its close vs its prev close).
+
+    Drives the historical movers screens, e.g. /toplosers 12-08-2026 = the
+    top losers ON 12 Aug. Returns {'price' (that date's close), 'change_pct'
+    (the day's move), 'change_pct_today' (same - no "today" context),
+    'prev_close', 'date', 'name'} or None.
+    """
+    iso = target_date.isoformat()
+    key = (exchange.upper(), symbol.upper(), iso)
+    now = time.time()
+    cached = _daily_date_cache.get(key)
+    if cached and now - cached["timestamp"] < _DAILY_DATE_CACHE_SECONDS:
+        return cached["data"]
+    days = sessions_back_estimate(target_date) + 1
+    if days <= 1:
+        range_ = "1d"
+    elif days <= 5:
+        range_ = "5d"
+    elif days <= 30:
+        range_ = "1mo"
+    elif days <= 90:
+        range_ = "3mo"
+    elif days <= 180:
+        range_ = "6mo"
+    else:
+        range_ = "1y"
+    suffix = "" if exchange.upper() == "US" else (".BO" if exchange.upper() == "BSE" else ".NS")
+    url = (
+        f"https://query1.finance.yahoo.com/v8/finance/chart/{symbol}{suffix}"
+        f"?range={range_}&interval=1d"
+    )
+    data = None
+    try:
+        _throttle_chart_req()
+        response = _quote_session().get(url, timeout=config.HTTP_TIMEOUT)
+        response.raise_for_status()
+        result = response.json()["chart"]["result"][0]
+        meta = result.get("meta") or {}
+        timestamps = result.get("timestamp") or []
+        quotes = (result.get("indicators") or {}).get("quote") or [{}]
+        quote = quotes[0] or {}
+        closes = quote.get("close") or []
+        name = meta.get("longName") or meta.get("shortName") or ""
+        # Match by UTC calendar date (daily bars are timestamped 03:45 UTC).
+        matched_close = None
+        matched_prev = None
+        for index in range(len(timestamps)):
+            bar_date = datetime.fromtimestamp(timestamps[index], tz=timezone.utc).date()
+            if bar_date.isoformat() == iso:
+                matched_close = closes[index] if index < len(closes) else None
+                matched_prev = (
+                    closes[index - 1]
+                    if index >= 1 and index - 1 < len(closes)
+                    else (meta.get("chartPreviousClose") or meta.get("previousClose"))
+                )
+                break
+        if matched_close and matched_prev:
+            data = {
+                "price": matched_close,
+                "change_pct": (matched_close / matched_prev - 1.0) * 100.0,
+                "change_pct_today": None,
+                "prev_close": matched_prev,
+                "date": iso,
+                "name": name,
+            }
+    except Exception as error:
+        log.info("daily change on date failed for %s:%s - %s", exchange, symbol, error)
+    _daily_date_cache[key] = {"timestamp": now, "data": data}
+    return data

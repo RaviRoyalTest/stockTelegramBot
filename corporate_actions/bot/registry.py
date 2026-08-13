@@ -175,6 +175,10 @@ COMMAND_USAGE = {
         "/gappers              \u2192 top 15 gapping stocks today, NIFTY 500\n"
         "/gappers 2d | 3d      \u2192 the gaps that opened 2 / 3 sessions ago\n"
         "/gappers window 3d    \u2192 today's OPEN vs the close 3 sessions ago\n"
+        "/gappers 12-08-2026   \u2192 the gaps that opened ON that date\n"
+        "                       (12 Aug \u00b7 12aug \u00b7 2026-08-12 \u00b7 Aug 12 all work)\n"
+        "/gappers 08-08-2026 12-08-2026  \u2192 cumulative gap over a period:\n"
+        "                       open on the end date vs the close before the start\n"
         "/gappers down         \u2192 gap-DOWNs only \u00b7 /gappers up \u2192 gap-UPs only\n"
         "/gappers 20 nifty100  \u2192 top 20, NIFTY 100 \u00b7 /gappers sp500 \u2192 S&P 500\n"
         "/gappers GODREJCP     \u2192 that stock's recent gap history (close \u2192 next open)"
@@ -188,8 +192,9 @@ COMMAND_USAGE = {
         "<code>/topmovers today 25</code>    \u2192 today\u2019s top 25 movers\n"
         "<code>/topmovers 1w 500</code>      \u2192 weekly movers, NIFTY 500\n"
         "<code>/topmovers 1mo nifty100</code> \u2192 monthly movers, NIFTY 100\n"
-        "<code>/topmovers today nasdaq100</code> \u2192 today\u2019s NASDAQ 100 movers\n\n"
-        "<b>Periods</b>  5m 15m 30m 1h 2h 4h today 1d 2d 5d 1w 2w 1mo 3mo 6mo 1y\n"
+        "<code>/topmovers today nasdaq100</code> \u2192 today\u2019s NASDAQ 100 movers\n"
+        "<code>/topmovers 12-08-2026</code>  \u2192 that day\u2019s historical movers (any date)\n\n"
+        "<b>Periods</b>  5m 15m 30m 1h 2h 4h today 1d 2d 5d 1w 2w 1mo 3mo 6mo 1y  or a date (12-08-2026, 12 Aug)\n"
         "<b>Universe</b>  n100/nifty100 \u00b7 n500/nifty500 \u00b7 nasdaq100/ndx/us "
         "(bare 100/500 picks the index here)\n"
         "Each row shows P/E, sector P/E, 52W range, div yield, holdings &amp; D/E "
@@ -204,8 +209,9 @@ COMMAND_USAGE = {
         "<code>/topgainers 1h 10</code>    \u2192 top 10 gainers last hour\n"
         "<code>/topgainers 100</code>      \u2192 top 100 gainers today\n"
         "<code>/topgainers 1mo 20 500</code> \u2192 top 20 monthly gainers, NIFTY 500\n"
-        "<code>/topgainers today nasdaq100</code> \u2192 today\u2019s NASDAQ 100 gainers\n\n"
-        "<b>Periods</b>  5m 15m 30m 1h 2h 4h today 1d 2d 5d 1w 2w 1mo 3mo 6mo 1y\n"
+        "<code>/topgainers today nasdaq100</code> \u2192 today\u2019s NASDAQ 100 gainers\n"
+        "<code>/topgainers 12-08-2026</code>  \u2192 that day\u2019s historical gainers (any date)\n\n"
+        "<b>Periods</b>  5m 15m 30m 1h 2h 4h today 1d 2d 5d 1w 2w 1mo 3mo 6mo 1y  or a date (12-08-2026, 12 Aug)\n"
         "<b>Universe</b>  n100/nifty100 \u00b7 n500/nifty500 \u00b7 nasdaq100/ndx/us\n"
         "Note: for gainers a bare 100/500 is the top-N count (e.g. /topgainers 100 = "
         "top 100) - use nifty100/nifty500 to pick the index. "
@@ -220,7 +226,8 @@ COMMAND_USAGE = {
         "<code>/toplosers 1h 10</code>        \u2192 top 10 losers last hour\n"
         "<code>/toplosers 100</code>          \u2192 top 100 losers today\n"
         "<code>/toplosers 1w nifty100</code>  \u2192 weekly losers, NIFTY 100\n"
-        "<code>/toplosers today nasdaq100</code> \u2192 today\u2019s NASDAQ 100 losers\n\n"
+        "<code>/toplosers today nasdaq100</code> \u2192 today\u2019s NASDAQ 100 losers\n"
+        "<code>/toplosers 12-08-2026</code>  \u2192 that day\u2019s historical losers (any date)\n\n"
         "<b>More periods</b>\n"
         "<code>/toplosers 30m</code>          \u2192 last 30 minutes\n"
         "<code>/toplosers 2d</code>           \u2192 last 2 days\n"
@@ -230,7 +237,7 @@ COMMAND_USAGE = {
         "<code>/toplosers nifty500</code>     \u2192 whole NIFTY 500\n"
         "<code>/toplosers 20 500</code>       \u2192 top 20 losers, NIFTY 500\n"
         "<code>/toplosers 1h 5 nifty100</code> \u2192 top 5 losers last hour, NIFTY 100\n\n"
-        "<b>Periods</b>  5m 15m 30m 1h 2h 4h today 1d 2d 5d 1w 2w 1mo 3mo 6mo 1y\n"
+        "<b>Periods</b>  5m 15m 30m 1h 2h 4h today 1d 2d 5d 1w 2w 1mo 3mo 6mo 1y  or a date (12-08-2026, 12 Aug)\n"
         "<b>Universe</b>  n100/nifty100 \u00b7 n500/nifty500 \u00b7 nasdaq100/ndx/us\n"
         "Note: for losers a bare 100/500 is the top-N count (e.g. /toplosers 100 = "
         "top 100) - use nifty100/nifty500 to pick the index. "
@@ -341,10 +348,10 @@ COMMAND_EXAMPLES = {
     "/fundamentalreport": ["/fundamentalreport RELIANCE", "/fundamentalreport mylist", "/fundamentalreport 3-5"],
     "/usstock": ["/usstock AAPL", "/usstock MSFT", "/usstock NVDA"],
     "/harmonicpatterns": ["/harmonicpatterns", "/harmonicpatterns 500", "/harmonicpatterns RELIANCE"],
-    "/topmovers": ["/topmovers", "/topmovers 1h 10", "/topmovers today 25", "/topmovers 1w 500"],
-    "/topgainers": ["/topgainers", "/topgainers 1h 10", "/topgainers 100"],
-    "/toplosers": ["/toplosers", "/toplosers 1h 10", "/toplosers 2d", "/toplosers 100"],
-    "/gappers": ["/gappers", "/gappers 2d", "/gappers 3d", "/gappers window 3d", "/gappers down", "/gappers GODREJCP"],
+    "/topmovers": ["/topmovers", "/topmovers 1h 10", "/topmovers today 25", "/topmovers 1w 500", "/topmovers 12-08-2026"],
+    "/topgainers": ["/topgainers", "/topgainers 1h 10", "/topgainers 100", "/topgainers 12-08-2026"],
+    "/toplosers": ["/toplosers", "/toplosers 1h 10", "/toplosers 2d", "/toplosers 100", "/toplosers 12-08-2026"],
+    "/gappers": ["/gappers", "/gappers 2d", "/gappers 3d", "/gappers window 3d", "/gappers 12-08-2026", "/gappers down", "/gappers GODREJCP"],
     "/checklist": ["/checklist RELIANCE", "/checklist mylist"],
     "/indicator": ["/indicator RELIANCE RSI", "/indicator AAPL MACD", "/indicator RELIANCE"],
     "/forecast": ["/forecast RELIANCE", "/forecast AAPL", "/forecast GODREJCP"],

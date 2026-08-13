@@ -9,6 +9,10 @@ Modes (universe scan, top N by gap size):
   /gappers 2d | 3d       -> the gaps that opened 2 / 3 sessions ago
   /gappers window 3d     -> today's OPEN vs the close 3 sessions ago
                             (multi-session gap window)
+  /gappers 12-08-2026    -> the gaps that opened ON that date (also 12 Aug,
+                            12aug, 2026-08-12, Aug 12)
+  /gappers 08-08-2026 12-08-2026  -> cumulative gap over a period: open on the
+                            end date vs the close before the start date
   Combine with direction (up / down), universe (nifty100 / nifty500 /
   sp500) and count: e.g. /gappers 2d down 10 nifty100, /gappers window 3d sp500.
 
@@ -22,14 +26,17 @@ import logging
 from concurrent.futures import ThreadPoolExecutor, as_completed
 
 from .. import config
+from ..core.dates import date_from_parts, format_date
 from ..core.numbers import format_money
 from ..core.text import escape, split_messages
 from ..sources import (
     get_gap_change,
+    get_gap_change_on_date,
     get_gap_history,
     get_index_universe,
     get_quote,
     get_window_gap_change,
+    get_window_gap_range,
 )
 from ..telegram.markup import inline_command_buttons
 from .reply import reply, reply_messages
@@ -88,15 +95,25 @@ def _usd(universe: str) -> bool:
 
 
 def _parse_parts(parts) -> tuple:
-    """Parse /gappers args -> (mode, offset, sessions, direction, count, universe)."""
-    mode = "today"  # today | offset | window
+    """Parse /gappers args -> (mode, offset, sessions, direction, count,
+    universe, dates) where dates = [start, end] (1 or 2 entries) or []."""
+    mode = "today"  # today | offset | window | date | range
     offset = 0      # offset mode: session index (0 = today)
     sessions = 0    # window mode: sessions back for the base close
     direction = "all"
     count = _DEFAULT_COUNT
     universe = _DEFAULT_UNIVERSE
-    for token in parts[1:]:
-        low = token.lower()
+    dates = []
+    tokens = parts[1:]
+    index = 0
+    while index < len(tokens):
+        parsed, consumed = date_from_parts(tokens, index)
+        if parsed is not None:
+            if len(dates) < 2:
+                dates.append(parsed)
+            index += consumed
+            continue
+        low = tokens[index].lower()
         if low in ("window", "from", "win", "gapwindow"):
             mode = "window"
         elif low in _DAYS_TOKENS:
@@ -112,14 +129,23 @@ def _parse_parts(parts) -> tuple:
             universe = _UNIVERSE_TOKENS[low]
         elif low.isdigit():
             count = max(1, min(100, int(low)))
+        index += 1
+    if len(dates) == 2:
+        mode = "range"
+    elif dates:
+        mode = "date"
     if mode == "window" and sessions <= 0:
         sessions = _DEFAULT_WINDOW_SESSIONS
-    return mode, offset, sessions, direction, count, universe
+    return mode, offset, sessions, direction, count, universe, dates
 
 
 def handle_gappers(chat_id, parts) -> None:
-    """Route /gappers: a symbol gets its gap history, anything else scans."""
+    """Route /gappers: a date scans the universe, a symbol gets gap history."""
     if len(parts) >= 2:
+        parsed, _ = date_from_parts(parts, 1)
+        if parsed is not None:
+            handle_universe_scan(chat_id, parts)
+            return
         token = parts[1].lower().strip().removesuffix(".ns").removesuffix(".bo")
         if token not in _SCAN_TOKENS and not token.isdigit():
             handle_symbol_gap(chat_id, token)
@@ -128,9 +154,13 @@ def handle_gappers(chat_id, parts) -> None:
 
 
 def _fetch_gap_row(exchange: str, symbol: str, mode: str,
-                   offset: int, sessions: int) -> dict | None:
+                   offset: int, sessions: int, dates: list) -> dict | None:
     """Uniform gap row per mode (same keys as get_gap_change)."""
     try:
+        if mode == "date":
+            return get_gap_change_on_date(exchange, symbol, dates[0])
+        if mode == "range":
+            return get_window_gap_range(exchange, symbol, dates[0], dates[1])
         if mode == "offset":
             history = get_gap_history(exchange, symbol, days=offset + 1)
             if len(history) <= offset:
@@ -152,13 +182,20 @@ def _fetch_gap_row(exchange: str, symbol: str, mode: str,
 
 
 def handle_universe_scan(chat_id, parts) -> None:
-    """Scan an index universe for gaps (today / N sessions ago / window)."""
-    mode, offset, sessions, direction, count, universe = _parse_parts(parts)
+    """Scan an index universe for gaps (today / N ago / window / date / period)."""
+    mode, offset, sessions, direction, count, universe, dates = _parse_parts(parts)
     is_us = _usd(universe)
     exchange = "US" if is_us else "NSE"
     label = _UNIVERSE_LABEL.get(universe, "NIFTY 500")
     direction_text = {"gainers": "gap-up", "losers": "gap-down"}.get(direction, "gap-up AND gap-down")
-    if mode == "offset":
+    if mode == "date":
+        date_text = format_date(dates[0].isoformat())
+        ack = f"Scanning {label} for the gaps that opened on {date_text} ({direction_text})..."
+    elif mode == "range":
+        start_text = format_date(dates[0].isoformat())
+        end_text = format_date(dates[1].isoformat())
+        ack = f"Scanning {label}: open on {end_text} vs the close before {start_text} ({direction_text})..."
+    elif mode == "offset":
         ack = f"Scanning {label} for the gaps that opened {offset} session(s) ago ({direction_text})..."
     elif mode == "window":
         ack = f"Scanning {label}: today's open vs the close {sessions} session(s) ago ({direction_text})..."
@@ -173,7 +210,7 @@ def handle_universe_scan(chat_id, parts) -> None:
     log.info("gappers: %s mode over %s (%d symbols, %s)", mode, label, len(symbols), direction)
 
     def _fetch(symbol):
-        return symbol, _fetch_gap_row(exchange, symbol, mode, offset, sessions)
+        return symbol, _fetch_gap_row(exchange, symbol, mode, offset, sessions, dates)
 
     rows = []
     with ThreadPoolExecutor(max_workers=20) as executor:
@@ -198,14 +235,30 @@ def handle_universe_scan(chat_id, parts) -> None:
 
     shown = rows[:count]
     if not shown:
-        reply(
-            chat_id,
-            f"No gap data for {label} right now (market may be closed or Yahoo unavailable).",
-        )
+        if mode == "date":
+            hint = f" (the date {date_text} may be too far back or a non-trading day)"
+        elif mode == "range":
+            hint = f" (the period {start_text} \u2192 {end_text} may be too far back or contain no trading days)"
+        else:
+            hint = " (market may be closed or Yahoo unavailable)"
+        reply(chat_id, f"No gap data for {label} right now{hint}.")
         return
 
     currency = "USD" if is_us else "INR"
-    if mode == "offset":
+    if mode == "date":
+        date_text = format_date(dates[0].isoformat())
+        lines = [
+            f"<b>OVERNIGHT GAP SCAN - {label}</b> \u00b7 {date_text}",
+            f"The gaps at the open on {date_text} (that day's prev close \u2192 its open), then how it closed.",
+        ]
+    elif mode == "range":
+        start_text = format_date(dates[0].isoformat())
+        end_text = format_date(dates[1].isoformat())
+        lines = [
+            f"<b>GAP PERIOD - {label}</b> \u00b7 {start_text} \u2192 {end_text}",
+            f"Open on {end_text} vs the close before {start_text} (cumulative gap over the period).",
+        ]
+    elif mode == "offset":
         lines = [
             f"<b>OVERNIGHT GAP SCAN - {label}</b> \u00b7 {offset} session(s) ago",
             f"The gaps at the open {offset} session(s) ago (that session's prev close \u2192 its open).",
@@ -226,11 +279,14 @@ def handle_universe_scan(chat_id, parts) -> None:
         prev = format_money(data["prev_close"], currency)
         open_price = format_money(data["open"], currency)
         now_price = format_money(data["price"], currency)
+        historical = mode in ("date", "range", "offset")
         if mode == "window":
             context = f"(close {sessions} session(s) ago {prev} \u2192 today's open {open_price})"
+        elif mode == "range":
+            context = f"(close before {start_text}: {prev} \u2192 open on {end_text}: {open_price})"
         else:
             context = f"({prev} \u2192 {open_price})"
-        if mode == "offset":
+        if historical:
             move_str = f" \u00b7 closed {now_price} ({move:+.1f}% from open)" if move is not None else ""
         else:
             move_str = f" \u00b7 now {now_price} ({move:+.1f}% from open)" if move is not None else ""

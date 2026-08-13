@@ -12,6 +12,7 @@ from concurrent.futures import ThreadPoolExecutor, as_completed
 from time import monotonic
 
 from .. import storage
+from ..core.dates import date_from_parts, format_date
 from ..core.text import escape, split_messages
 from ..formatting.stock_common import _rsi_signal, _wk52_signal
 from ..formatting.stock_india import _fundamentals_lines
@@ -19,6 +20,7 @@ from ..formatting.stock_us import _us_movers_lines
 from ..market import MOVERS_PERIODS, fetch_period_change, period_label
 from ..sources import (
     FUND_MAX_ROWS,
+    get_daily_change_on_date,
     get_fundamentals,
     get_index_universe,
     get_us_fundamentals,
@@ -45,12 +47,25 @@ def parse_screen_parts(parts, default_period, default_direction,
     A bare `100`/`500` means the index universe for /movers (which shows all
     stocks anyway) but a *count* for /gainers and /losers, so `/losers 1mo
     100` means "top 100 losers" while `/movers 500` means "NIFTY 500".
+
+    A DATE token (12-08-2026, 12 Aug, 12aug, 2026-08-12...) switches the
+    screen to that day's HISTORICAL movers (close vs previous close on that
+    date) instead of the current window - e.g. /toplosers 12-08-2026.
     """
     period, direction, count, universe = (
         default_period, default_direction, default_count, default_universe)
     explicit_count = False
-    for token in parts[1:]:
-        normalized_token = token.lower()
+    target_date = None
+    tokens = parts[1:]
+    index = 0
+    while index < len(tokens):
+        parsed, consumed = date_from_parts(tokens, index)
+        if parsed is not None:
+            if target_date is None:
+                target_date = parsed
+            index += consumed
+            continue
+        normalized_token = tokens[index].lower()
         if normalized_token in MOVERS_PERIODS:
             period = MOVERS_PERIODS[normalized_token]
         elif normalized_token in ("gainers", "gainer", "positive", "up"):
@@ -84,7 +99,8 @@ def parse_screen_parts(parts, default_period, default_direction,
                 explicit_count = True
             except ValueError:
                 pass
-    return period, direction, count, universe
+        index += 1
+    return period, direction, count, universe, target_date
 
 
 def _move_icon(change: float) -> str:
@@ -178,7 +194,7 @@ def handle_market_screen(chat_id, parts, default_direction="all",
                          default_period=("intraday", 60), default_count=15,
                          default_universe="nifty100") -> None:
     """Screen an index universe by price movement over a time window."""
-    period, direction, count, universe = parse_screen_parts(
+    period, direction, count, universe, target_date = parse_screen_parts(
         parts, default_period, default_direction, default_count,
         default_universe)
     is_us = universe in ("nasdaq100", "sp500")
@@ -189,7 +205,10 @@ def handle_market_screen(chat_id, parts, default_direction="all",
         "nasdaq100": "NASDAQ 100",
         "sp500": "S&P 500",
     }.get(universe, "NIFTY 100")
-    period_label_text = period_label(*period)
+    period_label_text = (
+        f"on {format_date(target_date.isoformat())}" if target_date
+        else period_label(*period)
+    )
     started_at = monotonic()
     log.info(
         "screen %s: period=%s direction=%s count=%d universe=%s",
@@ -200,7 +219,7 @@ def handle_market_screen(chat_id, parts, default_direction="all",
     # the universe + quotes are fetched (NIFTY 500 can take a minute or two).
     reply(
         chat_id,
-        f"Scanning {universe_label} over {period_label_text} for {direction}... "
+        f"Scanning {universe_label} {period_label_text} for {direction}... "
         "This can take a minute or two.",
     )
     log.info("screen %s: sent initial acknowledgment", parts[0])
@@ -216,6 +235,8 @@ def handle_market_screen(chat_id, parts, default_direction="all",
     )
 
     def _fetch(symbol):
+        if target_date:
+            return symbol, get_daily_change_on_date(exchange, symbol, target_date)
         return symbol, fetch_period_change(symbol, period, exchange=exchange)
 
     fetched = []

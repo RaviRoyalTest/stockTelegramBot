@@ -25,11 +25,14 @@ from .screener import get_sector_pe, parse_screener_fundamentals
 from .types import ACTION_TYPES, INCREASE_TYPES, TYPE_LABELS, action_type, pick
 from .universe import (
     get_daily_change,
+    get_daily_change_on_date,
     get_gap_change,
+    get_gap_change_on_date,
     get_gap_history,
     get_index_universe,
     get_intraday_change,
     get_window_gap_change,
+    get_window_gap_range,
     universe_exchange,
 )
 from .us_corporate_actions import get_us_corporate_actions
@@ -53,9 +56,12 @@ __all__ = [
     "get_index_universe",
     "get_intraday_change",
     "get_daily_change",
+    "get_daily_change_on_date",
     "get_gap_change",
+    "get_gap_change_on_date",
     "get_gap_history",
     "get_window_gap_change",
+    "get_window_gap_range",
     "universe_exchange",
     "get_ohlc",
     "get_index_ohlc",
