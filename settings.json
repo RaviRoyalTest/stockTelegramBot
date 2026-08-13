@@ -7,9 +7,12 @@
       "universe": "nifty500"
     },
     "recent_commands": [
+      "/moversfund auto",
+      "/moversfund",
       "/schedule",
       "/forecast GODREJCP"
-    ]
+    ],
+    "movers_fund": "auto"
   },
   "@StockVigilBot": {
     "action_filters": [],
