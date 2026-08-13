@@ -66,6 +66,43 @@ def symbol_fund_button(symbol: str, key: str, source: str, show_label: bool = Tr
         request_analysis(symbol, source)
 
 
+def _pick_label(match: dict) -> str:
+    """'TICKER — Full Name (EXCHANGE)' label for suggestion dropdowns."""
+    name = match.get("name") or match.get("company") or ""
+    exchange = match.get("exchange") or ""
+    tag = f" ({exchange})" if exchange else ""
+    return f"{match.get('symbol', '')} — {name}{tag}"
+
+
+def symbol_picker(market: str, label: str, key: str, placeholder: str,
+                  default_to_first: bool = True) -> str:
+    """Type-to-search symbol input with a live suggestion dropdown.
+
+    market is 'in' (NSE/BSE) or 'us' (NASDAQ/NYSE). As the user types, the
+    closest tickers (symbol + full name + exchange) appear below the box and
+    they can pick one. Returns the picked suggestion's symbol, or the raw
+    typed text when there are no matches / nothing was picked (so free-text
+    and keyword inputs keep working). default_to_first=False prepends a
+    'use as typed' option so the top suggestion never silently replaces a
+    partial query (used for company-keyword search).
+    """
+    query = st.text_input(label, key=f"{key}_q", placeholder=placeholder).strip().upper()
+    if len(query) < 2:
+        return query
+    matches = (
+        sources.search_us_tickers(query, limit=8) if market == "us"
+        else sources.search_stocks(query, limit=8)
+    )
+    if not matches:
+        return query
+    if default_to_first:
+        pick = st.selectbox("Suggestions", matches, format_func=_pick_label, key=f"{key}_pick")
+        return pick["symbol"]
+    options = [{"symbol": query, "name": f"Use '{query}' as typed", "exchange": ""}] + matches
+    pick = st.selectbox("Suggestions", options, format_func=_pick_label, key=f"{key}_pick")
+    return pick["symbol"]
+
+
 def action_meta_caption(action: dict) -> str:
     """One-line caption for a corporate-action card: announcement date,
     face value, ISIN, plus Book Closure and the rights Offer Window when
@@ -168,6 +205,25 @@ def render_quick_card(quote: dict, fund: dict, symbol: str) -> None:
         else:
             rsi_text = f"🟡 RSI {rsi_value}"
         st.metric("RSI (14)", rsi_text)
+
+    # MACD (12, 26, 9)
+    if (fund.get("macd_line") is not None or fund.get("macd_signal") is not None
+            or fund.get("macd_hist") is not None):
+        macd_col_1, macd_col_2, macd_col_3 = st.columns(3)
+        macd_col_1.metric("MACD", f"{fund['macd_line']:.2f}" if fund.get("macd_line") is not None else "-")
+        macd_col_2.metric("Signal", f"{fund['macd_signal']:.2f}" if fund.get("macd_signal") is not None else "-")
+        macd_col_3.metric("Histogram", f"{fund['macd_hist']:.2f}" if fund.get("macd_hist") is not None else "-")
+        if fund.get("macd_line") is not None and fund.get("macd_signal") is not None:
+            if fund["macd_line"] >= fund["macd_signal"]:
+                st.caption("🟢 MACD above signal line — bullish crossover")
+            else:
+                st.caption("🔴 MACD below signal line — bearish crossover")
+
+    # Simple moving averages
+    if fund.get("sma_50") is not None or fund.get("sma_200") is not None:
+        sma_col_1, sma_col_2 = st.columns(2)
+        sma_col_1.metric("SMA 50", format_price(fund["sma_50"]) if fund.get("sma_50") is not None else "-")
+        sma_col_2.metric("SMA 200", format_price(fund["sma_200"]) if fund.get("sma_200") is not None else "-")
 
     # Fundamentals grid
     st.subheader("Valuation & Ratios")

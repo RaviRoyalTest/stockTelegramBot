@@ -28,6 +28,7 @@ from ..widgets import (
     render_ca_card,
     render_linked_analysis,
     symbol_fund_button,
+    symbol_picker,
 )
 
 
@@ -119,7 +120,12 @@ def render() -> None:
     st.subheader("Add / Remove symbols")
     column_1, column_2, column_3 = st.columns([2, 1, 1])
     with column_1:
-        manual_symbol = st.text_input("Symbol not in the list (e.g. RELIANCE, PGINVIT)", key="manual_symbol")
+        manual_symbol = symbol_picker(
+            "in",
+            "Symbol not in the list (e.g. RELIANCE, PGINVIT)",
+            "manual_symbol",
+            "Type to search NSE/BSE...",
+        )
     with column_2:
         manual_exchange = st.selectbox("Exchange", ["NSE", "BSE"], key="manual_exchange")
     with column_3:

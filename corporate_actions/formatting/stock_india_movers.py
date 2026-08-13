@@ -8,7 +8,7 @@ from __future__ import annotations
 
 from ..core.numbers import format_money
 from ..core.text import escape
-from .stock_common import _rsi_signal, _wk52_signal
+from .stock_common import _macd_tag, _rsi_signal, _wk52_signal
 
 
 def _fundamentals_lines(fund: dict | None, price=None) -> list[str]:
@@ -22,6 +22,7 @@ def _fundamentals_lines(fund: dict | None, price=None) -> list[str]:
 
     sig_emoji, range_tag = _wk52_signal(price, fund)
     rsi_tag = _rsi_signal(fund.get("rsi"))
+    macd_tag = _macd_tag(fund)
 
     lines = []
 
@@ -31,6 +32,8 @@ def _fundamentals_lines(fund: dict | None, price=None) -> list[str]:
         l1_parts.append(range_tag)
     if rsi_tag:
         l1_parts.append(rsi_tag)
+    if macd_tag:
+        l1_parts.append(macd_tag)
     if l1_parts:
         lines.append("  \u2022  ".join(l1_parts))
 

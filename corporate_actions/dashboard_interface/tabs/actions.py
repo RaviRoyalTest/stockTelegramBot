@@ -21,6 +21,7 @@ from ..widgets import (
     render_ca_card,
     render_linked_analysis,
     symbol_fund_button,
+    symbol_picker,
 )
 
 
@@ -53,9 +54,15 @@ def render() -> None:
         if types:
             descriptor = {"mode": "types", "types": types}
     else:
-        term = st.text_input("Symbol or keyword (e.g. RELIANCE, TATA)", key="ca_term")
+        term = symbol_picker(
+            "in",
+            "Symbol or keyword (e.g. RELIANCE, TATA)",
+            "ca_term",
+            "Type to search NSE/BSE...",
+            default_to_first=False,
+        )
         if term:
-            descriptor = {"mode": "term", "term": term.strip()}
+            descriptor = {"mode": "term", "term": term}
 
     if st.button("🔍 Run query", width="stretch", disabled=descriptor is None):
         mode = descriptor["mode"]

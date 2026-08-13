@@ -15,7 +15,7 @@ from ... import sources, storage
 from ...formatting.stock_india import _fund_report_lines
 from ...formatting.stock_us import _us_stock_lines
 from ..helpers import fetch_fund_lines, tg_to_markdown
-from ..widgets import render_quick_card
+from ..widgets import render_quick_card, symbol_picker
 
 _INDIA = "🇮🇳 India (NSE/BSE)"
 _US = "🇺🇸 US (NASDAQ/NYSE)"
@@ -75,9 +75,12 @@ def render() -> None:
     deep = stock_deep.startswith("Deep")
 
     placeholder = "AAPL, MSFT, BRK-B..." if is_us else "TATATECH, RELIANCE, INFY"
-    symbol = st.text_input(
-        f"Symbol (e.g. {placeholder})", key="stock_sym",
-    ).strip().upper()
+    symbol = symbol_picker(
+        "us" if is_us else "in",
+        f"Symbol (e.g. {placeholder})",
+        "stock_sym",
+        placeholder,
+    )
     if st.button(
         "🔍 Analyze", width="stretch",
         disabled=(stock_scope == "Single symbol" and not symbol),

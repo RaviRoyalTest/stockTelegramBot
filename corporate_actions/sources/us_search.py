@@ -8,6 +8,7 @@ dead-end error. Never raises - returns [] on any failure.
 from __future__ import annotations
 
 import logging
+import time
 from urllib.parse import quote
 
 from .. import config
@@ -77,15 +78,27 @@ def _parse_quotes(payload: dict, limit: int = 6) -> list[dict]:
     return out
 
 
+_search_cache: dict = {}
+_SEARCH_CACHE_SECONDS = 60  # the dashboard typeahead re-queries per keystroke
+
+
 def search_us_tickers(query: str, limit: int = 6) -> list[dict]:
     """Best-effort Yahoo ticker search: symbol + full name + exchange.
 
+    Results are cached briefly (keyed by query + limit) so the dashboard's
+    type-to-search box re-typing the same prefix doesn't hammer Yahoo.
     Returns [] when the query is empty, Yahoo has no equity matches, or the
     endpoint fails (tries query1 then query2). Never raises.
     """
     query = (query or "").strip()
     if not query:
         return []
+    cache_key = (query.upper(), limit)
+    now = time.time()
+    cached = _search_cache.get(cache_key)
+    if cached and now - cached["ts"] < _SEARCH_CACHE_SECONDS:
+        return cached["data"]
+    matches: list[dict] = []
     for host in _SEARCH_HOSTS:
         url = (
             f"{host}/v1/finance/search"
@@ -96,8 +109,9 @@ def search_us_tickers(query: str, limit: int = 6) -> list[dict]:
             response.raise_for_status()
             matches = _parse_quotes(response.json(), limit=limit)
             if matches:
-                return matches
+                break
         except Exception as error:
             log.info("US ticker search failed on %s for %r - %s", host, query, error)
             continue
-    return []
+    _search_cache[cache_key] = {"ts": now, "data": matches}
+    return matches

@@ -11,9 +11,11 @@ from ..core.numbers import format_money
 from ..core.text import escape
 from .stock_common import (
     _growth_pct_str,
+    _macd_tag,
     _num_or_na,
     _pct_str,
     _rsi_signal,
+    _tech_indicator_lines,
     _wk52_signal,
 )
 
@@ -69,6 +71,7 @@ def _us_movers_lines(fund: dict | None, price=None) -> list[str]:
 
     sig_emoji, range_tag = _wk52_signal(price, fund)
     rsi_tag = _rsi_signal(fund.get("rsi"))
+    macd_tag = _macd_tag(fund)
     lines = []
 
     # Line 1: Signals & Technicals
@@ -77,6 +80,8 @@ def _us_movers_lines(fund: dict | None, price=None) -> list[str]:
         l1_parts.append(range_tag)
     if rsi_tag:
         l1_parts.append(rsi_tag)
+    if macd_tag:
+        l1_parts.append(macd_tag)
     if l1_parts:
         lines.append("  \u2022  ".join(l1_parts))
 
@@ -141,12 +146,10 @@ def _us_stock_lines(raw_symbol, quote, fund, include_tip=True, label="") -> list
     lines.append("")
 
     # PRICE & MOVEMENT
-    technical_bits = [
-        signal for signal in (_wk52_signal(price, fund)[1], _rsi_signal(fund.get("rsi"))) if signal
-    ]
+    range_tag = _wk52_signal(price, fund)[1]
     if price is not None or (
         fund.get("wk52_high") is not None and fund.get("wk52_low") is not None
-    ) or technical_bits:
+    ) or range_tag:
         lines.append("<b>\U0001F4B0 PRICE & MOVEMENT</b>")
         price_line = _us_price_move_line(quote)
         if price_line:
@@ -166,8 +169,14 @@ def _us_stock_lines(raw_symbol, quote, fund, include_tip=True, label="") -> list
                     )
                 except (ValueError, TypeError, ZeroDivisionError):
                     pass
-        if technical_bits:
-            lines.append("\u26a1 Technicals: " + "  \u2022  ".join(technical_bits))
+        if range_tag:
+            lines.append("\u26a1 Technicals: " + range_tag)
+        lines.append("")
+
+    # TECHNICAL INDICATORS: RSI(14), MACD(12,26,9), SMA 50/200
+    tech_lines = _tech_indicator_lines(fund, price)
+    if tech_lines:
+        lines.extend(tech_lines)
         lines.append("")
 
     # VALUATION

@@ -147,6 +147,44 @@ def _calculate_rsi(closes: list, period: int = 14) -> float | None:
     return round(100.0 - (100.0 / (1.0 + relative_strength)), 1)
 
 
+def _ema(values: list, span: int) -> list:
+    """Exponential moving average (plain Python, matches pandas ewm adjust=False)."""
+    alpha = 2.0 / (span + 1)
+    out = []
+    previous = None
+    for value in values:
+        if previous is None:
+            previous = value
+        else:
+            previous = alpha * value + (1.0 - alpha) * previous
+        out.append(previous)
+    return out
+
+
+def _calculate_macd(closes: list, fast: int = 12, slow: int = 26, signal: int = 9):
+    """MACD line / signal line / histogram from daily closes (rounds to 4dp)."""
+    prices = [close for close in closes if close is not None]
+    if len(prices) < slow + signal:
+        return None, None, None
+    ema_fast = _ema(prices, fast)
+    ema_slow = _ema(prices, slow)
+    line = [fast_value - slow_value for fast_value, slow_value in zip(ema_fast, ema_slow)]
+    signal_line = _ema(line, signal)
+    return round(line[-1], 4), round(signal_line[-1], 4), round(line[-1] - signal_line[-1], 4)
+
+
+def _calculate_sma(closes: list, windows: tuple = (50, 200)) -> tuple:
+    """Simple moving averages over the trailing windows of closes (None when short)."""
+    prices = [close for close in closes if close is not None]
+    out = []
+    for window in windows:
+        if len(prices) < window:
+            out.append(None)
+        else:
+            out.append(round(sum(prices[-window:]) / window, 2))
+    return tuple(out)
+
+
 def _chart_fundamentals(symbol: str, suffix: str = ".NS") -> dict:
     """Extract 52W high/low, PE, dividend yield and 14-day RSI from /v8/finance/chart (no crumb needed).
 
@@ -187,17 +225,31 @@ def _chart_fundamentals(symbol: str, suffix: str = ".NS") -> dict:
             if dividend_yield:
                 out["div_yield"] = round(dividend_yield * 100, 2)
 
-            # Calculate 14-day RSI from daily closing prices
+            # Technical indicators from daily closes: RSI(14), MACD(12,26,9)
+            # and SMA 50/200 - shared by the Indian and US fundamental paths.
             indicators = (result[0].get("indicators") or {}).get("quote") or [{}]
             closes = (indicators[0] or {}).get("close") or []
             if closes:
                 rsi_val = _calculate_rsi(closes)
                 if rsi_val is not None:
                     out["rsi"] = rsi_val
+                macd_line, macd_signal, macd_hist = _calculate_macd(closes)
+                if macd_line is not None:
+                    out["macd_line"] = macd_line
+                if macd_signal is not None:
+                    out["macd_signal"] = macd_signal
+                if macd_hist is not None:
+                    out["macd_hist"] = macd_hist
+                sma_50, sma_200 = _calculate_sma(closes)
+                if sma_50 is not None:
+                    out["sma_50"] = sma_50
+                if sma_200 is not None:
+                    out["sma_200"] = sma_200
 
             log.info(
-                "_chart_fundamentals: %s -> 52W %.2f-%.2f PE=%s RSI=%s from %s",
-                symbol, low or 0, high or 0, pe_ratio, out.get("rsi"), host,
+                "_chart_fundamentals: %s -> 52W %.2f-%.2f PE=%s RSI=%s MACD=%s SMA50=%s SMA200=%s from %s",
+                symbol, low or 0, high or 0, pe_ratio, out.get("rsi"),
+                out.get("macd_line"), out.get("sma_50"), out.get("sma_200"), host,
             )
             break
         except Exception as error:

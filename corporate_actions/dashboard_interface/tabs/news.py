@@ -6,6 +6,7 @@ import streamlit as st
 from ... import sources, storage
 from ...core.dates import format_timestamp
 from ..helpers import md_escape
+from ..widgets import symbol_picker
 
 
 def render() -> None:
@@ -14,7 +15,12 @@ def render() -> None:
 
     column_1, column_2 = st.columns([2, 1])
     with column_1:
-        news_target = st.text_input("Symbol (leave empty for whole watchlist)", key="news_target").strip().upper()
+        news_target = symbol_picker(
+            "in",
+            "Symbol (leave empty for whole watchlist)",
+            "news_target",
+            "Type to search NSE/BSE...",
+        )
     with column_2:
         news_count = st.slider("Headlines per stock", 1, 5, 3, key="news_count")
 

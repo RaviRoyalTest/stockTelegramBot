@@ -11,6 +11,7 @@ from ..core.numbers import format_money
 from ..core.text import escape
 from .stock_common import (
     _cr_str,
+    _macd_tag,
     _num_or_na,
     _pct_str,
     _rsi_signal,
@@ -65,9 +66,11 @@ def _stock_summary_lines(raw_symbol, quote, fund, include_tip=True, label="") ->
     # Section 1: Price & Today's Movement
     sig_emoji, range_tag = _wk52_signal(price, fund)
     rsi_tag = _rsi_signal(fund.get("rsi"))
+    macd_tag = _macd_tag(fund)
+    technical_bits = [signal for signal in (range_tag, rsi_tag, macd_tag) if signal]
     if price is not None or (
         fund.get("wk52_high") is not None and fund.get("wk52_low") is not None
-    ) or range_tag or rsi_tag:
+    ) or technical_bits:
         lines.append("<b>\U0001F4B0 PRICE & MOVEMENT</b>")
         price_line = _price_move_line(quote)
         if price_line:
@@ -84,8 +87,7 @@ def _stock_summary_lines(raw_symbol, quote, fund, include_tip=True, label="") ->
                 except (ValueError, TypeError, ZeroDivisionError):
                     pass
 
-        if range_tag or rsi_tag:
-            technical_bits = [signal for signal in (range_tag, rsi_tag) if signal]
+        if technical_bits:
             lines.append(f"\u26a1 Technicals: {'  •  '.join(technical_bits)}")
         lines.append("")
 

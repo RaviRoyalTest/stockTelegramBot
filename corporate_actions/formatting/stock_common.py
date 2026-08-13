@@ -53,6 +53,73 @@ def _rsi_signal(rsi: float | None) -> str:
     return f"\U0001F7E1 RSI {rsi:g}"
 
 
+def _macd_tag(fund: dict) -> str:
+    """Compact MACD status for quick cards / movers rows, e.g. '\U0001F7E2 MACD 1.24 (Bullish)'."""
+    line, signal = fund.get("macd_line"), fund.get("macd_signal")
+    if line is None or signal is None:
+        return ""
+    bull = line >= signal
+    icon = "\U0001F7E2" if bull else "\U0001F534"
+    return f"{icon} MACD {_num_or_na(line, 2)} ({'Bullish' if bull else 'Bearish'})"
+
+
+def _tech_indicator_lines(fund: dict, price=None) -> list[str]:
+    """\U0001F4C8 RSI / MACD / SMA detail lines shared by the IN + US deep reports.
+
+    Renders the full technical section: RSI(14) with its zone signal, the
+    MACD(12,26,9) line/signal/histogram plus crossover direction, and the
+    50d/200d simple moving averages with price position vs each.
+    """
+    rsi_tag = _rsi_signal(fund.get("rsi"))
+    line, signal, hist = fund.get("macd_line"), fund.get("macd_signal"), fund.get("macd_hist")
+    macd_bits = []
+    if line is not None:
+        macd_bits.append(f"MACD <b>{_num_or_na(line, 2)}</b>")
+    if signal is not None:
+        macd_bits.append(f"Signal <b>{_num_or_na(signal, 2)}</b>")
+    if hist is not None:
+        macd_bits.append(f"Hist <b>{_num_or_na(hist, 2)}</b>")
+    out = []
+    if not (rsi_tag or macd_bits):
+        return out
+    out.append("<b>\U0001F4C8 TECHNICAL INDICATORS</b>")
+    if rsi_tag:
+        out.append(f"\u26a1 RSI(14): {rsi_tag}")
+    if macd_bits:
+        macd_text = "  \u00b7  ".join(macd_bits)
+        if line is not None and signal is not None:
+            bull = line >= signal
+            macd_text += f"  \u2014  {'\U0001F7E2 Bullish crossover' if bull else '\U0001F534 Bearish crossover'}"
+        out.append("\U0001F52C MACD(12,26,9): " + macd_text)
+    sma_50, sma_200 = fund.get("sma_50"), fund.get("sma_200")
+    if sma_50 is not None or sma_200 is not None:
+        sma_parts = []
+        if sma_50 is not None:
+            sma_parts.append(f"50d {_num_or_na(sma_50, 1)}")
+        if sma_200 is not None:
+            sma_parts.append(f"200d {_num_or_na(sma_200, 1)}")
+        sma_text = "\U0001F4C9 SMA: " + "  \u00b7  ".join(sma_parts)
+        if price is not None:
+            try:
+                price_float = float(price)
+                marks = []
+                if sma_50 is not None:
+                    marks.append(("50d", price_float >= float(sma_50)))
+                if sma_200 is not None:
+                    marks.append(("200d", price_float >= float(sma_200)))
+                if marks:
+                    above = sum(1 for _, is_above in marks if is_above)
+                    icon = "\U0001F7E2" if above == len(marks) else ("\U0001F534" if above == 0 else "\U0001F7E1")
+                    positions = " & ".join(
+                        f"{name} {'above' if is_above else 'below'}" for name, is_above in marks
+                    )
+                    sma_text += f"  \u2014  {icon} Price {positions}"
+            except (TypeError, ValueError):
+                pass
+        out.append(sma_text)
+    return out
+
+
 def _num_or_na(value, decimals: int) -> str:
     try:
         formatted = f"{float(value):.{decimals}f}"

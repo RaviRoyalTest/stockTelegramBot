@@ -17,7 +17,7 @@ from .stock_common import (
     _growth_pct_str,
     _num_or_na,
     _pct_str,
-    _rsi_signal,
+    _tech_indicator_lines,
     _wk52_signal,
 )
 from .stock_india_card import _holding_lines, _price_move_line
@@ -145,10 +145,10 @@ def _fund_report_lines(raw_symbol, quote, fund, include_tip=True, label="") -> l
     lines.append("")
 
     # Section 1: Price & movement
-    technical_bits = [signal for signal in (_wk52_signal(price, fund)[1], _rsi_signal(fund.get("rsi"))) if signal]
+    range_tag = _wk52_signal(price, fund)[1]
     if price is not None or (
         fund.get("wk52_high") is not None and fund.get("wk52_low") is not None
-    ) or technical_bits:
+    ) or range_tag:
         lines.append("<b>\U0001F4B0 PRICE & MOVEMENT</b>")
         price_line = _price_move_line(quote)
         if price_line:
@@ -157,8 +157,14 @@ def _fund_report_lines(raw_symbol, quote, fund, include_tip=True, label="") -> l
             lines.append(
                 f"\U0001F4C8 52w Range: {format_money(fund['wk52_low'])} \u2013 {format_money(fund['wk52_high'])}"
             )
-        if technical_bits:
-            lines.append(f"\u26a1 Technicals: {'  •  '.join(technical_bits)}")
+        if range_tag:
+            lines.append(f"\u26a1 Technicals: {range_tag}")
+        lines.append("")
+
+    # Technical indicators: RSI(14), MACD(12,26,9), SMA 50/200
+    tech_lines = _tech_indicator_lines(fund, price)
+    if tech_lines:
+        lines.extend(tech_lines)
         lines.append("")
 
     # Section 2: Valuation
