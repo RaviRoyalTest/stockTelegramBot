@@ -208,6 +208,7 @@ COMMAND_LEARN: dict = {
         "syntax": "/bigmovers [%] [nifty100 | nifty500 | sp500 | nasdaq100]",
         "examples": ["/bigmovers  \u2192 every stock up/down \u2265 5% today, NIFTY 500", "/bigmovers 8 sp500  \u2192 S&P 500 stocks beyond \u00b18%"],
         "output": "Every stock whose session move (price vs previous close) crosses your % threshold, ranked by |move| - like the /watcher alerts but all in one report.",
+        "tips": ["Market-hours gated: runs during trading hours + 1h after close (IST for NIFTY, ET for US) so stale moves are never shown."],
         "aliases": "/moverlist, /watcherlist",
     },
     "/topgainers": {

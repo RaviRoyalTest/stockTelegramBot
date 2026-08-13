@@ -168,6 +168,32 @@ def is_market_open(market, now=None) -> bool:
     return is_between(info["open"], info["close"], key, now)
 
 
+def market_active(market, grace_minutes: int = 60, now=None) -> bool:
+    """True while the market is open OR within `grace_minutes` of close.
+
+    Live session-move screens (/bigmovers) and the sudden-move watcher stay
+    meaningful shortly after the bell - the final moves are still fresh - so
+    gating on this keeps them useful right after hours without firing around
+    the clock. Weekends are always closed (no grace window).
+    """
+    key = normalise_market(market)
+    if key == "any":
+        return True
+    info = MARKETS.get(key)
+    if not info:
+        return True
+    if is_market_open(key, now):
+        return True
+    local = local_now(key, now)
+    if local.weekday() >= 5:  # Sat / Sun - no grace after the Friday close
+        return False
+    close_minutes = _hhmm_minutes(info["close"])
+    current_minutes = local.hour * 60 + local.minute
+    if close_minutes is None:
+        return False
+    return close_minutes <= current_minutes < close_minutes + max(0, int(grace_minutes))
+
+
 def next_open_after(market, after_ts=None) -> float:
     """Epoch seconds when the market next opens (used for pause resume labels)."""
     info = MARKETS.get(normalise_market(market))

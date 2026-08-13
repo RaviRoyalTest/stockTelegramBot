@@ -19,6 +19,7 @@ from datetime import datetime
 
 from .. import config, storage
 from ..core.dates import today_ist
+from ..market.hours import market_active
 from ..formatting import (
     format_corporate_action,
     format_mover_alert,
@@ -123,7 +124,15 @@ class Poller:
 
         Alerts are de-duplicated per chat per day (seen key `mwatch|...`), so
         a stock that keeps falling alerts once, not every cycle.
+
+        Market-hours gated: the watcher's universes are India-only, so the
+        whole cycle is skipped outside the IST session (plus a 1-hour grace
+        after the close). Otherwise a stale move from yesterday's session
+        would re-alert after midnight when the daily dedup key resets.
         """
+        if not market_active("in"):
+            log.debug("watcher cycle skipped - India market closed")
+            return 0
         targets = watcher_module.watcher_targets()
         if not targets:
             return 0

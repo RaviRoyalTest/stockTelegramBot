@@ -7,6 +7,7 @@ and finally an updated full report with fundamentals.
 """
 from __future__ import annotations
 
+import datetime as _datetime
 import logging
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from time import monotonic
@@ -18,6 +19,7 @@ from ..formatting.stock_common import _rsi_signal, _wk52_signal
 from ..formatting.stock_india import _fundamentals_lines
 from ..formatting.stock_us import _us_movers_lines
 from ..market import MOVERS_PERIODS, fetch_period_change, period_label
+from ..market.hours import market_active, market_label, market_timezone, next_open_after
 from ..sources import (
     FUND_MAX_ROWS,
     get_daily_change_on_date,
@@ -418,6 +420,23 @@ def send_screen_fundamentals(chat_id, rows, header, failed, symbols_total, scree
     )
 
 
+def _market_closed_message(universe_label: str, market: str) -> str:
+    """Explain why /bigmovers is not running right now (market closed)."""
+    try:
+        next_ts = next_open_after(market)
+        next_dt = _datetime.datetime.fromtimestamp(next_ts, market_timezone(market))
+        when = next_dt.strftime("%a %d-%b %H:%M") + (" ET" if market == "us" else " IST")
+    except Exception:
+        when = "the next session"
+    return (
+        f"\u23f0 <b>{universe_label} market is closed right now.</b>\n"
+        f"Big-mover lists only run during trading hours "
+        f"({market_label(market)}) plus up to 1 hour after close, so you "
+        f"never get stale session moves.\n"
+        f"Next session opens <b>{when}</b> - try /bigmovers then."
+    )
+
+
 def handle_big_movers(chat_id, parts) -> None:
     """ALL stocks beyond a % session-move threshold, one full report.
 
@@ -428,6 +447,10 @@ def handle_big_movers(chat_id, parts) -> None:
     Same threshold idea as /watcher (session move vs previous close, both
     directions) but returns the whole list in a single message like
     /toplosers, instead of one alert per stock per day.
+
+    Market-hours gated per universe: NIFTY universes run during IST hours,
+    S&P 500 / NASDAQ 100 during ET hours, each with a 1-hour grace after the
+    close - so a stale move from yesterday's session is never served.
     """
     threshold = 5.0
     universe = "nifty500"
@@ -448,6 +471,17 @@ def handle_big_movers(chat_id, parts) -> None:
                     threshold = value
             except ValueError:
                 pass
+    universe_label = {
+        "nifty500": "NIFTY 500",
+        "nifty100": "NIFTY 100",
+        "nasdaq100": "NASDAQ 100",
+        "sp500": "S&P 500",
+    }.get(universe, universe)
+    market = "us" if universe in ("sp500", "nasdaq100") else "in"
+    if not market_active(market):
+        log.info("bigmovers: skipped - %s market closed", universe_label)
+        reply(chat_id, _market_closed_message(universe_label, market))
+        return
     handle_market_screen(
         chat_id, parts,
         default_direction="all",

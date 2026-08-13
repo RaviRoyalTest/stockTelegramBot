@@ -195,7 +195,9 @@ COMMAND_USAGE = {
         "<code>/bigmovers 3 nifty100</code> \u2192 NIFTY 100\n"
         "<code>/bigmovers 8 sp500</code>   \u2192 S&P 500\n"
         "<code>/bigmovers 5 nasdaq100</code> \u2192 NASDAQ 100\n\n"
-        "Move = current price vs previous close (both directions, ranked by |move|)."
+        "Move = current price vs previous close (both directions, ranked by |move|).\n"
+        "Runs only during market hours + 1h after close: IST for NIFTY, ET for "
+        "S&P 500 / NASDAQ 100 - so you never get stale session moves."
     ),
     "/topmovers": (
         "<b>/topmovers</b> - top gainers AND losers (default: last 1h, NIFTY 100)\n"
