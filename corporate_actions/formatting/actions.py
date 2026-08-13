@@ -367,6 +367,10 @@ def format_next_report(
     but-undated - is shown as a detail block (symbol + company, subject,
     current price with direction arrow, ex/record dates), the same layout
     as the push alerts, so the whole report reads clearly with dates.
+
+    Callers must pre-filter ``recent`` with ``action_is_completed`` so only
+    still-in-progress actions (rights subscription open, dividend payment
+    pending) appear - fully settled actions are dropped.
     """
     sections = []
     if upcoming:

@@ -8,7 +8,12 @@ from concurrent.futures import ThreadPoolExecutor
 from .. import config, storage
 from ..formatting import format_news_list, format_next_report
 from ..github import github_push_configured
-from ..poller.events import parse_ex_date, recently_passed, within_reminder_window
+from ..poller.events import (
+    action_is_completed,
+    parse_ex_date,
+    recently_passed,
+    within_reminder_window,
+)
 from ..poller.fetchers import fetch_matching
 from ..sources import (
     get_bse_stock_list,
@@ -79,7 +84,10 @@ def send_watchlist_actions(chat_id) -> None:
         action for action in matching if within_reminder_window(action.get("ex_date"))
     ]
     recent = [
-        action for action in matching if recently_passed(action.get("ex_date"))
+        action
+        for action in matching
+        if recently_passed(action.get("ex_date"))
+        and not action_is_completed(action)
     ]
     pending = [
         action for action in matching if not parse_ex_date(action.get("ex_date"))

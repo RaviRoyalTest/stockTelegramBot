@@ -107,12 +107,13 @@ def fetch_quotes_for(items: list[dict]) -> dict:
 def run_screen(period_key: str, direction: str, universe: str, count: int) -> list[dict]:
     """Run a market screen and return formatted rows (symbol, change, price, name)."""
     period = MOVERS_PERIODS.get(period_key, ("intraday", 60))
+    exchange = sources.universe_exchange(universe)
     symbols = sources.get_index_universe(universe)
     if not symbols:
         return []
 
     def _fetch(symbol):
-        return symbol, fetch_period_change(symbol, period)
+        return symbol, fetch_period_change(symbol, period, exchange=exchange)
 
     fetched = []
     with ThreadPoolExecutor(max_workers=25) as executor:
@@ -185,8 +186,22 @@ def tg_to_markdown(text: str) -> str:
 
 
 def fetch_analysis(symbol: str) -> dict | None:
-    """Fetch quote + deep fundamentals for a symbol (cross-link button)."""
+    """Fetch quote + deep fundamentals for a symbol (cross-link button).
+
+    Tries NSE/BSE first (Indian screens), then US when the symbol only
+    resolves on NASDAQ/NYSE so the market-screen cross-links keep working
+    for the NASDAQ 100 universe.
+    """
     quote = sources.get_quote("NSE", symbol) or sources.get_quote("BSE", symbol) or {}
+    if (quote.get("price") is None):
+        us_quote = sources.get_quote("US", symbol)
+        if us_quote and us_quote.get("price") is not None:
+            return {
+                "quote": us_quote,
+                "fund": sources.get_us_fundamentals(symbol) or {},
+                "sym": symbol,
+                "us": True,
+            }
     fund = sources.get_fundamentals(symbol, with_screener=True) or {}
     if not quote and not fund:
         return None

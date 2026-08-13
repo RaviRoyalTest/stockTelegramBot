@@ -303,7 +303,7 @@ def handle_callback_query(callback) -> None:
         movers_commands.send_screen_fundamentals(
             chat_id,
             context["rows"], context["header"], context["failed"], context["symbols"],
-            "mfund", monotonic(),
+            "mfund", monotonic(), is_us=bool(context.get("us")),
         )
         return
 

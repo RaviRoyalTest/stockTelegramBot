@@ -1,13 +1,16 @@
 """Index constituent universes + per-symbol movement over a time window.
 
 Intraday movement screen. Universe = NSE index constituents from the public
-NSE archives CSV (NIFTY 100 by default, NIFTY 500 opt-in). Per-symbol movement
-comes from Yahoo 5-minute bars over the trailing window.
+NSE archives CSV (NIFTY 100 by default, NIFTY 500 opt-in) or NASDAQ 100
+constituents from the public NASDAQ API (with a static offline fallback).
+Per-symbol movement comes from Yahoo bars over the trailing window - US
+tickers use a bare Yahoo symbol (no exchange suffix), Indian ones .NS.
 """
 from __future__ import annotations
 
 import csv
 import io
+import json
 import logging
 import time
 
@@ -24,10 +27,79 @@ _INDEX_CSV = {
     "nifty500": "https://archives.nseindia.com/content/indices/ind_nifty500list.csv",
 }
 
+# NASDAQ 100 constituents from the public NASDAQ API. The endpoint needs
+# browser-like headers (it 403s a plain requests UA). A static fallback list
+# is embedded so the movers screens still work when the API is unreachable.
+_NASDAQ100_URL = "https://api.nasdaq.com/api/quote/list-type/nasdaq100"
+_NASDAQ100_FALLBACK = [
+    "AAPL", "ABNB", "ADBE", "ADI", "ADP", "ADSK", "AEP", "ALAB", "ALNY", "AMAT",
+    "AMD", "AMGN", "AMZN", "APP", "ARM", "ASML", "AVGO", "AXON", "BKR", "BKNG",
+    "CCEP", "CDNS", "CEG", "CMCSA", "COST", "CPRT", "CRWD", "CRWV", "CSCO",
+    "CSX", "CTAS", "DASH", "DDOG", "DXCM", "EXC", "FANG", "FAST", "FER", "FTNT",
+    "GEHC", "GILD", "GOOG", "GOOGL", "HON", "HONA", "IDXX", "INTC", "INTU",
+    "ISRG", "KDP", "KHC", "KLAC", "LIN", "LITE", "LRCX", "MAR", "MCHP", "MDLZ",
+    "MELI", "META", "MNST", "MPWR", "MRVL", "MSFT", "MSTR", "MU", "NBIS",
+    "NFLX", "NVDA", "NXPI", "ODFL", "ORLY", "PANW", "PAYX", "PCAR", "PDD",
+    "PEP", "PLTR", "PYPL", "QCOM", "REGN", "RKLB", "ROP", "ROST", "SBUX",
+    "SHOP", "SNDK", "SNPS", "SPCX", "STX", "TER", "TMUS", "TRI", "TSLA", "TTWO",
+    "TXN", "VRTX", "WBD", "WDAY", "WDC", "WMT", "XEL",
+]
+
+# universe key -> (exchange for Yahoo, is_us flag)
+_UNIVERSE_EXCHANGE = {
+    "nifty100": "NSE",
+    "nifty500": "NSE",
+    "nasdaq100": "US",
+}
+
+
+def _fetch_nasdaq100() -> list[str]:
+    """NASDAQ 100 symbols from the NASDAQ API, static list on failure."""
+    try:
+        response = _quote_session().get(
+            _NASDAQ100_URL, timeout=config.HTTP_TIMEOUT,
+            headers={
+                "User-Agent": config.USER_AGENT,
+                "Accept": "application/json, text/plain, */*",
+                "Accept-Language": "en-US,en;q=0.9",
+            },
+        )
+        response.raise_for_status()
+        payload = response.json()
+        rows = (payload.get("data") or {}).get("data") or {}
+        symbols = [
+            (row.get("symbol") or "").strip()
+            for row in rows.get("rows") or []
+            if (row.get("symbol") or "").strip()
+        ]
+        if symbols:
+            return symbols
+        log.info("NASDAQ 100 API returned no rows - using fallback list")
+    except Exception as error:
+        log.warning("NASDAQ 100 API unavailable (%s) - using fallback list", error)
+    return list(_NASDAQ100_FALLBACK)
+
+
+def universe_exchange(index: str) -> str:
+    """Yahoo exchange code for a universe key: 'NSE' or 'US'."""
+    return _UNIVERSE_EXCHANGE.get((index or "").lower(), "NSE")
+
 
 def get_index_universe(index: str = "nifty100") -> list[str]:
-    """Return symbols for an NSE index, cached 24h. Empty list on failure."""
+    """Return symbols for an index universe, cached 24h. Empty list on failure."""
     key = (index or "nifty100").lower()
+    if key in ("nasdaq", "nasdaq100", "ndx", "us100", "nasdaq-100"):
+        key = "nasdaq100"
+    if key == "nasdaq100":
+        now = time.time()
+        cached = _universe_cache.get("nasdaq100")
+        if cached and now - cached["timestamp"] < _UNIVERSE_CACHE_SECONDS:
+            log.debug("nasdaq100 universe cache hit (%d symbols)", len(cached["data"]))
+            return cached["data"]
+        symbols = _fetch_nasdaq100()
+        if symbols:
+            _universe_cache["nasdaq100"] = {"timestamp": now, "data": symbols}
+        return symbols
     url = _INDEX_CSV["nifty500"] if key in ("all", "500", "nifty500") else _INDEX_CSV["nifty100"]
     now = time.time()
     cached = _universe_cache.get(url)
@@ -73,7 +145,7 @@ def get_intraday_change(exchange: str, symbol: str, period_minutes: int) -> dict
     if cached and now - cached["timestamp"] < _INTRADAY_CACHE_SECONDS:
         log.debug("intraday cache hit for %s:%s", exchange, symbol)
         return cached["data"]
-    suffix = ".BO" if exchange.upper() == "BSE" else ".NS"
+    suffix = "" if exchange.upper() == "US" else (".BO" if exchange.upper() == "BSE" else ".NS")
     url = (
         f"https://query1.finance.yahoo.com/v8/finance/chart/{symbol}{suffix}"
         "?range=1d&interval=5m"
@@ -158,7 +230,7 @@ def get_daily_change(exchange: str, symbol: str, days: int) -> dict | None:
         range = "6mo"
     else:
         range = "1y"
-    suffix = ".BO" if exchange.upper() == "BSE" else ".NS"
+    suffix = "" if exchange.upper() == "US" else (".BO" if exchange.upper() == "BSE" else ".NS")
     url = (
         f"https://query1.finance.yahoo.com/v8/finance/chart/{symbol}{suffix}"
         f"?range={range}&interval=1d"

@@ -9,6 +9,7 @@ from ... import config, sources, storage
 from ...bot.helpers import attach_quotes
 from ...formatting import format_next_report
 from ...poller import (
+    action_is_completed,
     fetch_all_actions,
     fetch_matching,
     parse_ex_date,
@@ -75,7 +76,8 @@ def render() -> None:
                         st.session_state["ca_fetched"] = False
                     else:
                         upcoming = [action for action in matching if within_reminder_window(action.get("ex_date"))]
-                        recent = [action for action in matching if recently_passed(action.get("ex_date"))]
+                        recent = [action for action in matching if recently_passed(action.get("ex_date"))
+                                  and not action_is_completed(action)]
                         pending = [action for action in matching if not parse_ex_date(action.get("ex_date"))]
                         for group in (upcoming, recent, pending):
                             attach_quotes(group)

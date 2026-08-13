@@ -2,6 +2,7 @@
 from .engine import Poller, poller
 from .events import (
     RECENT_PASSED_DAYS,
+    action_is_completed,
     event_key,
     parse_ex_date,
     recently_passed,
@@ -16,6 +17,7 @@ __all__ = [
     "parse_ex_date",
     "within_reminder_window",
     "recently_passed",
+    "action_is_completed",
     "RECENT_PASSED_DAYS",
     "FETCHERS",
     "active_fetchers",

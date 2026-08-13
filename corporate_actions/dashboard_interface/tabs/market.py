@@ -24,7 +24,7 @@ def render() -> None:
             key="screen_period",
         )
     with column_3:
-        universe = st.selectbox("Universe", ["nifty100", "nifty500"], key="screen_universe")
+        universe = st.selectbox("Universe", ["nifty100", "nifty500", "nasdaq100"], key="screen_universe")
     with column_4:
         count = st.slider("Top N", 5, 50, 15, key="screen_count")
 
@@ -38,16 +38,19 @@ def render() -> None:
     if st.session_state.get("screen_rows"):
         screen_type, period_key, universe, count = st.session_state["screen_meta"]
         period_label_text = period_label(*MOVERS_PERIODS.get(period_key, ("intraday", 60)))
-        universe_label = "NIFTY 500" if universe == "nifty500" else "NIFTY 100"
+        universe_label = {
+            "nifty500": "NIFTY 500", "nasdaq100": "NASDAQ 100",
+        }.get(universe, "NIFTY 100")
         st.subheader(f"{screen_type} — {period_label_text} · {universe_label} (top {count})")
         rows = st.session_state["screen_rows"]
         st.caption("Tap a column header to sort the table.  Values are colour-coded: green = up · red = down")
+        price_format = "$%.2f" if universe == "nasdaq100" else "₹%.2f"
         st.dataframe(
             style_table(rows),
             width="stretch",
             hide_index=True,
             column_config={
-                "Price": st.column_config.NumberColumn("Price", format="₹%.2f"),
+                "Price": st.column_config.NumberColumn("Price", format=price_format),
                 "Change %": st.column_config.NumberColumn("Change %", format="%+.2f%%"),
             },
         )

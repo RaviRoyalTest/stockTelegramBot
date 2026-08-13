@@ -15,8 +15,15 @@ from .. import storage
 from ..core.text import escape, split_messages
 from ..formatting.stock_common import _rsi_signal, _wk52_signal
 from ..formatting.stock_india import _fundamentals_lines
+from ..formatting.stock_us import _us_movers_lines
 from ..market import MOVERS_PERIODS, fetch_period_change, period_label
-from ..sources import FUND_MAX_ROWS, get_fundamentals, get_index_universe
+from ..sources import (
+    FUND_MAX_ROWS,
+    get_fundamentals,
+    get_index_universe,
+    get_us_fundamentals,
+    universe_exchange,
+)
 from ..telegram.markup import fundamentals_button, symbol_buttons
 from .reply import reply, reply_messages
 
@@ -32,7 +39,8 @@ def parse_screen_parts(parts, default_period, default_direction,
       periods   5m 15m 30m 1h 2h 4h today 2d 3d 5d 1w 2w 1mo 3mo 6mo 1y
       direction gainers/losers/all
       count     any number 1-100
-      universe  n100/nifty100 or n500/nifty500 keyword, or a second number
+      universe  n100/nifty100, n500/nifty500 or nasdaq100/ndx/us keyword,
+                or a second number
 
     A bare `100`/`500` means the index universe for /movers (which shows all
     stocks anyway) but a *count* for /gainers and /losers, so `/losers 1mo
@@ -64,6 +72,9 @@ def parse_screen_parts(parts, default_period, default_direction,
                 explicit_count = True
             else:
                 universe = "nifty500"
+        elif normalized_token in ("nasdaq100", "nasdaq-100", "nasdaq", "ndx", "us100",
+                   "nasdaq-100", "us", "america", "american"):
+            universe = "nasdaq100"
         else:
             try:
                 count = max(1, min(100, int(normalized_token)))
@@ -109,7 +120,8 @@ def format_price_movers_report(rows: list, header: str) -> str:
     return "\n".join(lines)
 
 
-def format_enriched_movers_report(rows: list, header: str, fund_by_symbol: dict) -> str:
+def format_enriched_movers_report(rows: list, header: str, fund_by_symbol: dict,
+                                  is_us: bool = False) -> str:
     """Format the full enriched fundamentals movers report with spacious card layout."""
     from ..core.numbers import format_money
 
@@ -124,9 +136,9 @@ def format_enriched_movers_report(rows: list, header: str, fund_by_symbol: dict)
         sig_prefix = f" {sig_emoji}" if sig_emoji else ""
         enriched_lines.append(
             f"{index}. {_move_icon(change)}{sig_prefix} <b>{escape(symbol)}</b>  "
-            f"{format_money(price)}  <b>{change_str}</b>"
+            f"{format_money(price, 'USD' if is_us else 'INR')}  <b>{change_str}</b>"
         )
-        fund_lines = _fundamentals_lines(fund, price)
+        fund_lines = _us_movers_lines(fund, price) if is_us else _fundamentals_lines(fund, price)
         for fund_line in fund_lines:
             enriched_lines.append("   " + fund_line)
         enriched_lines.append("")
@@ -143,8 +155,13 @@ def handle_market_screen(chat_id, parts, default_direction="all",
     period, direction, count, universe = parse_screen_parts(
         parts, default_period, default_direction, default_count,
         default_universe)
+    is_us = universe == "nasdaq100"
+    exchange = "US" if is_us else "NSE"
 
-    universe_label = "NIFTY 500" if universe == "nifty500" else "NIFTY 100"
+    universe_label = {
+        "nifty500": "NIFTY 500",
+        "nasdaq100": "NASDAQ 100",
+    }.get(universe, "NIFTY 100")
     period_label_text = period_label(*period)
     started_at = monotonic()
     log.info(
@@ -172,7 +189,7 @@ def handle_market_screen(chat_id, parts, default_direction="all",
     )
 
     def _fetch(symbol):
-        return symbol, fetch_period_change(symbol, period)
+        return symbol, fetch_period_change(symbol, period, exchange=exchange)
 
     fetched = []
     with ThreadPoolExecutor(max_workers=25) as executor:
@@ -246,6 +263,7 @@ def handle_market_screen(chat_id, parts, default_direction="all",
             "header": header,
             "failed": failed,
             "symbols": len(symbols),
+            "us": is_us,
         }
         phase1_markup = fundamentals_button()
     reply_messages(chat_id, split_messages(phase1_lines.split("\n")), reply_markup=phase1_markup)
@@ -256,21 +274,24 @@ def handle_market_screen(chat_id, parts, default_direction="all",
     if fund_mode == "button":
         return
 
-    send_screen_fundamentals(chat_id, rows, header, failed, len(symbols), parts[0], started_at)
+    send_screen_fundamentals(chat_id, rows, header, failed, len(symbols), parts[0], started_at, is_us=is_us)
 
 
-def send_screen_fundamentals(chat_id, rows, header, failed, symbols_total, screen_cmd, started_at) -> None:
+def send_screen_fundamentals(chat_id, rows, header, failed, symbols_total, screen_cmd, started_at, is_us=False) -> None:
     """Fetch fundamentals and send the enriched movers report.
 
     Used by the "Get Fundamentals" button (button mode) and as Phase 2 of a
     normal screen run (auto mode). Rows come from the live screen context so
-    the button always enriches the exact report the user just saw.
+    the button always enriches the exact report the user just saw. For US
+    screens (NASDAQ 100) the US fundamentals + USD formatter are used.
     """
     # Phase 2 - fetch fundamentals (Screener + Yahoo Finance) and send the
     # enriched report. To protect against screener.in's aggressive rate
     # limiting, the slow screener.in part is only fetched for the first
     # FUND_MAX_ROWS rows; the rest get the fast Yahoo-only fundamentals.
     def _fund_fetch(symbol, with_screener):
+        if is_us:
+            return symbol, get_us_fundamentals(symbol)
         return symbol, get_fundamentals(symbol, with_screener=with_screener)
 
     t_fund = monotonic()
@@ -306,7 +327,7 @@ def send_screen_fundamentals(chat_id, rows, header, failed, symbols_total, scree
         screen_cmd, len(tasks), monotonic() - t_fund,
     )
 
-    enriched_report = format_enriched_movers_report(rows, header, fund_by_symbol)
+    enriched_report = format_enriched_movers_report(rows, header, fund_by_symbol, is_us=is_us)
     if len(rows) > FUND_MAX_ROWS:
         enriched_report += (
             f"\n(fundamentals detail shown for the first "

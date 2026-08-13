@@ -7,6 +7,7 @@ from ... import config, sources, storage
 from ...bot.helpers import attach_quotes
 from ...formatting import format_next_report
 from ...poller import (
+    action_is_completed,
     fetch_matching,
     parse_ex_date,
     recently_passed,
@@ -251,7 +252,8 @@ def render() -> None:
                 matching = fetch_matching(watch)
                 favourite["corp_groups"] = {
                     "upcoming": [action for action in matching if within_reminder_window(action.get("ex_date"))],
-                    "recent": [action for action in matching if recently_passed(action.get("ex_date"))],
+                    "recent": [action for action in matching if recently_passed(action.get("ex_date"))
+                               and not action_is_completed(action)],
                     "pending": [action for action in matching if not parse_ex_date(action.get("ex_date"))],
                 }
                 favourite["corp"] = format_next_report(

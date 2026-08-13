@@ -38,10 +38,13 @@ def render_linked_analysis(source: str) -> None:
     # Rendered as plain widgets (no expander) so this works both at tab level
     # and inside the favourites' expanders - Streamlit forbids nested expanders.
     st.markdown(f"### 💹 {symbol} — Deep fundamentals")
+    if result.get("us"):
+        from ..formatting.stock_us import _us_stock_lines
+        lines = _us_stock_lines(symbol, result["quote"], result["fund"], include_tip=False)
+    else:
+        lines = _fund_report_lines(symbol, result["quote"], result["fund"], include_tip=False)
     st.markdown(
-        tg_to_markdown("\n".join(
-            _fund_report_lines(symbol, result["quote"], result["fund"], include_tip=False)
-        )),
+        tg_to_markdown("\n".join(lines)),
         unsafe_allow_html=True,
     )
 

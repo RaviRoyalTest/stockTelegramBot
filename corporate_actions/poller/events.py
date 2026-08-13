@@ -68,3 +68,39 @@ def recently_passed(
     if days <= 0:
         return False
     return today - timedelta(days=days) <= parsed < today
+
+
+def action_is_completed(action: dict, today: date | None = None) -> bool:
+    """True when a corporate action is fully settled (nothing pending).
+
+    The /corpactionsformylist "recently passed" group is meant to surface
+    actions that are still in progress - a rights subscription window that
+    is open, a dividend whose payment is still due. Once the underlying
+    event has fully settled (offer closed, payment window passed, shares
+    re-denominated) the action is *completed* and is hidden from the report.
+    """
+    today = today or today_ist()
+    from ..sources.types import action_type
+
+    type_name = action_type(action.get("subject"))
+    ex_date = parse_ex_date(action.get("ex_date"))
+    if ex_date is None or ex_date >= today:
+        return False  # pending / upcoming - never "completed"
+
+    if type_name == "rights":
+        end_date = parse_ex_date(action.get("rights_end"))
+        if end_date is not None:
+            return today > end_date  # offer window closed
+        return False  # window unknown - keep surfacing it
+    if type_name == "dividend":
+        record_date = parse_ex_date(action.get("record_date"))
+        if record_date is not None:
+            return today > record_date + timedelta(days=30)  # payment window passed
+        return False  # payment still pending
+    if type_name == "bonus":
+        return False  # credit is ~2 weeks out; keep it visible
+    if type_name == "buyback":
+        return False  # offer still open
+    if type_name == "split":
+        return True  # re-denominated at ex-date - settled
+    return False  # generic: keep it visible rather than silently drop it

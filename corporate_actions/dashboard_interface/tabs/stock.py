@@ -98,7 +98,7 @@ def render() -> None:
                     st.session_state.pop("stock_result", None)
                     st.session_state["stock_suggestions"] = _suggestions_for(symbol, market)
                     st.session_state["stock_query"] = symbol
-                    st.session_state["stock_market"] = market
+                    st.session_state["stock_query_market"] = market
                 else:
                     st.session_state["stock_result"] = {
                         "quote": quote, "fund": fund, "sym": symbol,
@@ -110,7 +110,7 @@ def render() -> None:
     suggestions = st.session_state.get("stock_suggestions")
     if suggestions is not None:
         query = st.session_state.get("stock_query", "")
-        market_label = "US" if st.session_state.get("stock_market") == _US else "NSE/BSE"
+        market_label = "US" if st.session_state.get("stock_query_market") == _US else "NSE/BSE"
         if not suggestions:
             tip = ("Check the spelling, e.g. AAPL, BRK-B, BF.B." if is_us
                    else "Check the spelling or try a company name, e.g. RELIANCE.")
