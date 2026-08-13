@@ -17,7 +17,13 @@ from .schedule import (
     set_schedule_next_due,
 )
 from .seen import load_seen, save_seen
-from .settings import get_user_settings, load_settings, save_user_settings
+from .settings import (
+    get_recent_commands,
+    get_user_settings,
+    load_settings,
+    record_recent_command,
+    save_user_settings,
+)
 from .subscriptions import add_subscription, load_subscriptions, remove_subscription
 from .users import (
     add_to_user_list,
@@ -51,6 +57,8 @@ __all__ = [
     "load_settings",
     "get_user_settings",
     "save_user_settings",
+    "record_recent_command",
+    "get_recent_commands",
     "load_seen",
     "save_seen",
     "load_schedule",

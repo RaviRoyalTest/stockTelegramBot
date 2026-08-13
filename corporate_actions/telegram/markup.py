@@ -22,6 +22,23 @@ def inline_command_buttons(commands: list[str], per_row: int = 2) -> dict:
     return {"inline_keyboard": rows}
 
 
+def recent_buttons(recent: list[str], per_row: int = 2) -> list:
+    """Inline-button rows for a chat's recently used commands.
+
+    Labels carry a \u21ba (repeat) prefix so they read as "run again", while
+    the callback_data stays the plain command text (cmd:<command>). These
+    are appended below a command's example buttons so the user can re-run
+    what they actually use most, with one tap.
+    """
+    rows = []
+    for row_start in range(0, len(recent), per_row):
+        rows.append([
+            {"text": f"\u21ba {command}", "callback_data": f"cmd:{command}"}
+            for command in recent[row_start:row_start + per_row]
+        ])
+    return rows
+
+
 def quick_menu_markup() -> dict:
     """Persistent one-tap reply keyboard of the main commands.
 

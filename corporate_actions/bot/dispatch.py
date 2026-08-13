@@ -59,6 +59,11 @@ def handle_command(chat_id, text):
     command = parts[0].lower().split("@")[0]
     log.info("command from chat %s: %s", chat_id, text)
 
+    # Remember what this chat runs so /help and bare-command hints can offer
+    # one-tap re-runs of its recent commands (pure navigation excluded).
+    if command not in ("/start", "/help", "/"):
+        storage.record_recent_command(chat_id, text)
+
     if command in ("/start", "/help", "/"):
         send_help(chat_id)
         return

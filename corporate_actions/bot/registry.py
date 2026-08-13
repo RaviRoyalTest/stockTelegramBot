@@ -11,7 +11,7 @@ from .. import storage
 from ..core.text import split_messages
 from ..formatting.schedule import format_schedule, format_settings
 from ..telegram.client import is_configured, set_my_commands
-from ..telegram.markup import inline_command_buttons, quick_menu_markup
+from ..telegram.markup import inline_command_buttons, quick_menu_markup, recent_buttons
 from . import corporate_action_commands, scanner_commands, schedule_commands, settings_commands, status as status_commands, watchlist_commands
 from .help_texts import CA_HELP
 from .reply import reply, reply_messages
@@ -355,8 +355,8 @@ COMMAND_EXAMPLES = {
     "/checklist": ["/checklist RELIANCE", "/checklist mylist"],
     "/indicator": ["/indicator RELIANCE RSI", "/indicator AAPL MACD", "/indicator RELIANCE"],
     "/forecast": ["/forecast RELIANCE", "/forecast AAPL", "/forecast GODREJCP"],
-    "/learn": ["/learn", "/learn stocks", "/learn schedule", "/learn /scan500"],
-    "/schedule": ["/schedule", "/schedule add 3h /scan500", "/schedule run", "/schedule pause 1d"],
+    "/learn": ["/learn", "/learn stocks", "/learn schedule"],
+    "/schedule": ["/schedule", "/schedule add 3h /toplosers 1h", "/schedule run", "/schedule pause 1d"],
     "/market": ["/market", "/market in", "/market us", "/market any"],
     "/pricealert": ["/pricealert 3", "/pricealert off"],
     "/alertfilters": ["/alertfilters dividend,bonus", "/alertfilters all"],
@@ -432,9 +432,19 @@ def _bare_command_usage(chat_id, command) -> bool:
         status_fn = COMMAND_STATUS.get(command)
         status = status_fn(chat_id) if status_fn else ""
         examples = COMMAND_EXAMPLES.get(command)
+        recent = storage.get_recent_commands(chat_id)
         # One-tap buttons: tap to RUN the command (callback-based, works on
-        # mobile and desktop).
-        reply_markup = inline_command_buttons(examples) if examples else None
+        # mobile and desktop). The chat's recent commands are appended so the
+        # user can re-run what they actually use with one tap.
+        reply_markup = None
+        if examples or recent:
+            rows = list(
+                (inline_command_buttons(examples).get("inline_keyboard") or [])
+                if examples else []
+            )
+            if recent:
+                rows.extend(recent_buttons(recent))
+            reply_markup = {"inline_keyboard": rows}
         reply(
             chat_id,
             (status + "\n\n" if status else "") + usage,
@@ -470,8 +480,12 @@ def send_help(chat_id):
 
     markup = quick_menu_markup()
     grid = inline_command_buttons(_primary_examples(), per_row=2)
-    if grid:
-        markup["inline_keyboard"] = grid["inline_keyboard"]
+    rows = list((grid.get("inline_keyboard") or []) if grid else [])
+    recent = storage.get_recent_commands(chat_id)
+    if recent:
+        rows.extend(recent_buttons(recent))
+    if rows:
+        markup["inline_keyboard"] = rows
     reply_messages(
         chat_id,
         split_messages(HELP_TEXT.split("\n")),
