@@ -14,9 +14,11 @@ from ..core.numbers import format_money
 from ..core.text import escape
 from .stock_common import (
     _cr_str,
+    _executive_lines,
     _growth_pct_str,
     _num_or_na,
     _pct_str,
+    _ratings_text,
     _tech_indicator_lines,
     _wk52_signal,
 )
@@ -321,9 +323,12 @@ def _fund_report_lines(raw_symbol, quote, fund, include_tip=True, label="") -> l
         lines.extend(quarter_lines)
         lines.append("")
 
-    # Section 9: Analyst view
-    if fund.get("num_analysts") or fund.get("target_mean"):
-        lines.append("<b>\U0001F52D ANALYST VIEW</b>")
+    # Section 9: Analyst view & forecast (consensus, ratings, target)
+    if fund.get("num_analysts") or fund.get("target_mean") or fund.get("rec_mean") or fund.get("rec_trend"):
+        lines.append("<b>\U0001F52D ANALYST VIEW & FORECAST</b>")
+        ratings = _ratings_text(fund)
+        if ratings:
+            lines.append(ratings)
         if fund.get("target_mean") is not None:
             target_mean = float(fund["target_mean"])
             upside_text = ""
@@ -333,7 +338,7 @@ def _fund_report_lines(raw_symbol, quote, fund, include_tip=True, label="") -> l
                     upside_text = f"  (<b>+{percent:.0f}%</b> upside)"
                 elif percent < 0:
                     upside_text = f"  (<b>{percent:.0f}%</b> downside)"
-            lines.append(f"Target (Mean): <b>{format_money(target_mean)}</b>{upside_text}")
+            lines.append(f"Forecast Target (Mean): <b>{format_money(target_mean)}</b>{upside_text}")
         target_range_parts = []
         if fund.get("target_high") is not None:
             target_range_parts.append(f"High {format_money(fund['target_high'])}")
@@ -343,6 +348,33 @@ def _fund_report_lines(raw_symbol, quote, fund, include_tip=True, label="") -> l
             lines.append("  " + "  \u00b7  ".join(target_range_parts))
         if fund.get("num_analysts"):
             lines.append(f"Analysts Covering: <b>{fund['num_analysts']}</b>")
+        lines.append("")
+
+    # Top executives (Yahoo companyOfficers)
+    exec_lines = _executive_lines(fund)
+    if exec_lines:
+        lines.extend(exec_lines)
+        lines.append("")
+
+    # Top competitors (screener.in peers by market cap)
+    competitors = fund.get("competitors") or []
+    if competitors:
+        lines.append("<b>\U0001F3E2 TOP COMPETITORS</b>")
+        lines.append(f"Peers by market cap \u2014 {len(competitors)} compared:")
+        for peer in competitors[:6]:
+            bits = []
+            if peer.get("price") is not None:
+                bits.append(f"CMP \u20b9{peer['price']:,.1f}")
+            if peer.get("market_cap") is not None:
+                bits.append(f"MCap \u20b9{peer['market_cap']:,.0f}Cr")
+            if peer.get("pe") is not None:
+                bits.append(f"P/E {peer['pe']:.1f}")
+            if peer.get("roce") is not None:
+                bits.append(f"ROCE {peer['roce']:.1f}%")
+            lines.append(
+                f"  \u2022 <b>{escape(peer['name'])}</b>"
+                + (f" \u2014 {'  \u00b7  '.join(bits)}" if bits else "")
+            )
         lines.append("")
 
     # Section 10: Shareholding QoQ trend

@@ -1,12 +1,15 @@
 """Shared stock-formatting helpers (market-neutral primitives).
 
 Pure formatting primitives used by BOTH the Indian renderers (stock_india_*)
-and the US renderer (stock_us.py): 52-week zone signal, RSI labels and the
-small number/percent formatters, plus the INR _cr_str money helper used by the
-Indian card/report. Market-specific renderers live in their own modules so
-Indian and US output can never drift apart accidentally.
+and the US renderer (stock_us.py): 52-week zone signal, RSI labels, the
+small number/percent formatters, the INR _cr_str money helper, and the
+analyst/executive helpers (_rec_label, _ratings_text, _executive_lines,
+_top_officer). Market-specific renderers live in their own modules so Indian
+and US output can never drift apart accidentally.
 """
 from __future__ import annotations
+
+from ..core.text import escape
 
 
 def _wk52_signal(price, fund: dict | None) -> tuple:
@@ -157,3 +160,67 @@ def _cr_str(value) -> str:
         return f"\u20b9{float(value) / 1e7:,.1f}Cr"
     except (TypeError, ValueError):
         return "N/A"
+
+
+def _rec_label(mean) -> str | None:
+    """Yahoo recommendation mean (1=Strong Buy ... 5=Strong Sell) -> a label."""
+    if mean is None:
+        return None
+    try:
+        value = float(mean)
+    except (TypeError, ValueError):
+        return None
+    if value <= 1.5:
+        return "Strong Buy"
+    if value <= 2.5:
+        return "Buy"
+    if value <= 3.5:
+        return "Hold"
+    if value <= 4.5:
+        return "Sell"
+    return "Strong Sell"
+
+
+def _ratings_text(fund: dict) -> str:
+    """Analyst consensus + rating breakdown, e.g. 'Consensus: Buy (2.13/5) · Strong Buy 6 · Buy 21 · ...'."""
+    parts = []
+    if fund.get("rec_mean") is not None:
+        label = _rec_label(fund["rec_mean"])
+        parts.append(f"Consensus: <b>{label}</b> ({fund['rec_mean']:.2f}/5)")
+    trend = fund.get("rec_trend") or {}
+    counts = []
+    for key, label in (
+        ("strong_buy", "Strong Buy"), ("buy", "Buy"), ("hold", "Hold"),
+        ("sell", "Sell"), ("strong_sell", "Strong Sell"),
+    ):
+        value = trend.get(key)
+        if value:
+            counts.append(f"{label} {value}")
+    if counts:
+        parts.append("  \u00b7  ".join(counts))
+    return "  \u00b7  ".join(parts)
+
+
+def _executive_lines(fund: dict, limit: int = 5) -> list[str]:
+    """Top-executives section lines (Yahoo companyOfficers), or [] when none."""
+    officers = fund.get("officers") or []
+    if not officers:
+        return []
+    lines = ["<b>\U0001F464 TOP EXECUTIVES</b>"]
+    for officer in officers[:limit]:
+        name = (officer.get("name") or "").strip()
+        title = (officer.get("title") or "").strip()
+        if name:
+            lines.append(f"  \u2022 <b>{escape(name)}</b> \u2014 {escape(title or 'Director')}")
+    return lines
+
+
+def _top_officer(fund: dict):
+    """(name, title) of the most senior executive for the quick card, or None."""
+    officers = fund.get("officers") or []
+    if not officers:
+        return None
+    name = (officers[0].get("name") or "").strip()
+    if not name:
+        return None
+    return name, (officers[0].get("title") or "Director").strip()

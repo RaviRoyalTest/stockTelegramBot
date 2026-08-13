@@ -11,6 +11,7 @@ import streamlit as st
 from .. import config, sources
 from ..formatting import status_tag
 from ..formatting.actions import _TYPE_EMOJI
+from ..formatting.stock_common import _rec_label
 from ..formatting.stock_india import _fund_report_lines
 from .helpers import fetch_analysis, format_change, format_price, tg_to_markdown
 
@@ -224,6 +225,32 @@ def render_quick_card(quote: dict, fund: dict, symbol: str) -> None:
         sma_col_1, sma_col_2 = st.columns(2)
         sma_col_1.metric("SMA 50", format_price(fund["sma_50"]) if fund.get("sma_50") is not None else "-")
         sma_col_2.metric("SMA 200", format_price(fund["sma_200"]) if fund.get("sma_200") is not None else "-")
+
+    # Analyst forecast, top executive & competitors (the forecast value)
+    forecast_parts = []
+    if fund.get("rec_mean") is not None:
+        label = _rec_label(fund["rec_mean"])
+        forecast_parts.append(f"Consensus {label} ({fund['rec_mean']:.1f}/5)")
+    if fund.get("target_mean") is not None:
+        target = float(fund["target_mean"])
+        forecast_parts.append(f"Target \u20b9{target:,.0f}")
+        if price is not None:
+            try:
+                upside = (target - float(price)) / float(price) * 100.0
+                forecast_parts.append(f"{upside:+.0f}% vs price")
+            except (TypeError, ValueError):
+                pass
+    if fund.get("officers"):
+        first = fund["officers"][0]
+        if first.get("name"):
+            st.caption(f"\U0001F464 {first['name']} \u2014 {first.get('title') or 'Director'}")
+    if forecast_parts:
+        st.caption("\U0001F52D " + " \u00b7 ".join(forecast_parts))
+    peers = fund.get("competitors") or []
+    if peers:
+        st.caption("\U0001F3E2 Top competitors: " + " \u00b7 ".join(
+            peer["name"] for peer in peers[:4] if peer.get("name")
+        ))
 
     # Fundamentals grid
     st.subheader("Valuation & Ratios")

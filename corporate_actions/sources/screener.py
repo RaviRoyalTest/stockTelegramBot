@@ -18,7 +18,12 @@ import time
 from urllib.parse import quote
 
 from .http import _session
-from .screener_parsing import parse_page, parse_sector_pe_table
+from .screener_parsing import (
+    parse_company_id,
+    parse_competitors,
+    parse_page,
+    parse_sector_pe_table,
+)
 
 log = logging.getLogger(__name__)
 
@@ -90,6 +95,37 @@ def get_sector_pe(slug: str) -> float | None:
         "time_to_live": _SECTOR_PE_CACHE_SECONDS if sector_pe else _SECTOR_PE_RETRY_CACHE_SECONDS,
     }
     return sector_pe
+
+
+_competitors_cache: dict = {}
+_COMPETITORS_CACHE_SECONDS = 86400  # 24 hours - peer sets change slowly
+
+
+def get_competitors(symbol: str, limit: int = 8) -> list[dict]:
+    """Top peers by market cap from screener.in (Indian stocks only).
+
+    Two paced fetches: the company page (to find the numeric company id),
+    then the /api/company/{id}/peers/ table parsed by
+    screener_parsing.parse_competitors. Cached 24h. Returns [] on any
+    failure or when the symbol is not on screener.in.
+    """
+    symbol = (symbol or "").strip().upper()
+    if not symbol:
+        return []
+    now = time.time()
+    cached = _competitors_cache.get(symbol)
+    if cached and now - cached["timestamp"] < _COMPETITORS_CACHE_SECONDS:
+        return cached["data"]
+    peers: list[dict] = []
+    company_page = _screener_get(f"https://www.screener.in/company/{quote(symbol)}/")
+    if company_page:
+        company_id = parse_company_id(company_page)
+        if company_id:
+            peers_page = _screener_get(f"https://www.screener.in/api/company/{company_id}/peers/")
+            if peers_page:
+                peers = parse_competitors(peers_page)
+    _competitors_cache[symbol] = {"timestamp": now, "data": peers}
+    return peers[:limit]
 
 
 def parse_screener_fundamentals(symbol: str) -> dict | None:

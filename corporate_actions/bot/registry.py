@@ -106,6 +106,8 @@ ALIAS_TO_MAIN = {
     "/ind": "/indicator",
     "/tech": "/indicator",
     "/technical": "/indicator",
+    "/analyst": "/forecast",
+    "/forecastanalysis": "/forecast",
     "/movers": "/topmovers",
     "/marketmovers": "/topmovers",
     "/gainers": "/topgainers",
@@ -237,6 +239,13 @@ COMMAND_USAGE = {
         "psar \u00b7 supertrend \u00b7 ema/sma \u00b7 gmma \u00b7 vwap \u00b7 atr \u00b7 donchian \u00b7\n"
         "squeeze \u00b7 cmf \u00b7 mfi \u00b7 obv\n"
         "Aliases: /ind, /tech, /technical"
+    ),
+    "/forecast": (
+        "<b>/forecast</b> - the forecast value for a stock\n"
+        "/forecast RELIANCE  \u2192 analyst consensus &amp; rating breakdown, target\n"
+        "                     price + upside, top executives &amp; competitors\n"
+        "/forecast AAPL      \u2192 US stocks work too (auto-detected)\n"
+        "Aliases: /analyst, /forecastanalysis"
     ),
     "/schedule": (
         "<b>/schedule</b> - your automated reports (per user)\n"
@@ -399,6 +408,7 @@ def register_commands() -> bool:
         {"command": "checklist", "description": "32-point investment scorecard: /checklist RELIANCE"},
         {"command": "harmonicpatterns", "description": "Harmonic pattern scan NIFTY 100/500: /harmonicpatterns all"},
         {"command": "indicator", "description": "One-indicator deep-dive: /indicator RELIANCE RSI (US works too)"},
+        {"command": "forecast", "description": "Analyst forecast + executives + competitors: /forecast RELIANCE"},
         {"command": "scan500", "description": "NIFTY 500 CNC/MIS technical scanner"},
         {"command": "topmovers", "description": "Top gainers AND losers with fundamentals"},
         {"command": "topgainers", "description": "Top rising stocks with fundamentals"},

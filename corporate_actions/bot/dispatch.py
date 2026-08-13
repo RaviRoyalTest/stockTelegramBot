@@ -20,6 +20,7 @@ from ..telegram.markup import quick_menu_markup
 from . import (
     checklist_commands,
     corporate_action_commands,
+    forecast_commands,
     fundamentals_commands,
     harmonic_commands,
     indicator_commands,
@@ -190,6 +191,10 @@ def handle_command(chat_id, text):
 
     if command in ("/ind", "/indicator", "/tech", "/technical"):
         indicator_commands.handle_indicator(chat_id, parts)
+        return
+
+    if command in ("/analyst", "/forecast", "/forecastanalysis"):
+        forecast_commands.handle_forecast(chat_id, parts)
         return
 
     if command in ("/stock", "/info", "/quote", "/stockanalysis", "/stock-analysis",

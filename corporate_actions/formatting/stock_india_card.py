@@ -14,7 +14,9 @@ from .stock_common import (
     _macd_tag,
     _num_or_na,
     _pct_str,
+    _rec_label,
     _rsi_signal,
+    _top_officer,
     _wk52_signal,
 )
 
@@ -149,6 +151,37 @@ def _stock_summary_lines(raw_symbol, quote, fund, include_tip=True, label="") ->
     else:
         lines.append("Full financial statement trends available on Screener.in")
     lines.append("")
+
+    # Analyst forecast (consensus + target + upside) - the forecast value
+    forecast_parts = []
+    if fund.get("rec_mean") is not None:
+        label = _rec_label(fund["rec_mean"])
+        forecast_parts.append(f"Consensus: <b>{label}</b> ({fund['rec_mean']:.1f}/5)")
+    if fund.get("target_mean") is not None:
+        target = float(fund["target_mean"])
+        forecast_parts.append(f"Target \u20b9{target:,.0f}")
+        if price:
+            try:
+                upside = (target - float(price)) / float(price) * 100.0
+                forecast_parts.append(f"{upside:+.0f}% vs price")
+            except (TypeError, ValueError):
+                pass
+    if forecast_parts:
+        lines.append("<b>\U0001F52D ANALYST FORECAST</b>")
+        lines.append("  \u00b7  ".join(forecast_parts))
+        lines.append("")
+
+    # Top management + top competitors (one-liners)
+    officer = _top_officer(fund)
+    if officer:
+        lines.append(f"\U0001F464 <b>{escape(officer[0])}</b> \u2014 {escape(officer[1])}")
+    peers = fund.get("competitors") or []
+    if peers:
+        names = "  \u00b7  ".join(escape(peer["name"]) for peer in peers[:4] if peer.get("name"))
+        if names:
+            lines.append(f"\U0001F3E2 Top competitors: {names}")
+    if officer or (peers and any(peer.get("name") for peer in peers[:4])):
+        lines.append("")
 
     # Section 5: Shareholding Pattern (QoQ Trend)
     lines.append("<b>\U0001F4BC SHAREHOLDING PATTERN (QoQ TREND)</b>")

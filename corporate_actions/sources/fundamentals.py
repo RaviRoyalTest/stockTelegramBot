@@ -8,6 +8,7 @@ Two public sources, both cached 24h (fundamentals change slowly):
 from __future__ import annotations
 
 import logging
+import re
 import threading
 import time
 from urllib.parse import quote
@@ -16,7 +17,7 @@ import requests
 
 from .. import config
 from .http import _quote_session, _throttle_fund_req
-from .screener import get_sector_pe, parse_screener_fundamentals
+from .screener import get_competitors, get_sector_pe, parse_screener_fundamentals
 
 log = logging.getLogger(__name__)
 
@@ -99,7 +100,7 @@ def _quote_summary(symbol: str, suffix: str = ".NS") -> dict | None:
                 response = sess.get(
                     url,
                     params={
-                        "modules": "summaryDetail,financialData,defaultKeyStatistics,assetProfile",
+                        "modules": "summaryDetail,financialData,defaultKeyStatistics,assetProfile,recommendationTrend",
                         "crumb": crumb,
                     },
                     timeout=config.HTTP_TIMEOUT,
@@ -366,6 +367,39 @@ def _extract_quote_summary(payload: dict, currency: str = "inr") -> dict:
     if asset_profile.get("fullTimeEmployees"):
         extras["employees"] = asset_profile["fullTimeEmployees"]
     out.update(extras)
+
+    # Top executives (assetProfile.companyOfficers) - shared by IN + US paths.
+    officers = (asset_profile.get("companyOfficers") or [])[:6]
+    if officers:
+
+        def _clean(value: str) -> str:
+            return re.sub(r"\s+", " ", (value or "").strip())
+
+        out["officers"] = [
+            {"name": _clean(officer.get("name")),
+             "title": _clean(officer.get("title"))}
+            for officer in officers
+            if _clean(officer.get("name"))
+        ]
+
+    # Analyst rating breakdown (recommendationTrend, latest period).
+    trend = ((payload.get("recommendationTrend") or {}).get("trend") or [])
+    if trend:
+        latest = trend[0] or {}
+        rec_trend = {}
+        for source_key, target_key in (
+            ("strongBuy", "strong_buy"), ("buy", "buy"), ("hold", "hold"),
+            ("sell", "sell"), ("strongSell", "strong_sell"),
+        ):
+            value = latest.get(source_key)
+            if isinstance(value, int):
+                rec_trend[target_key] = value
+        if rec_trend:
+            out["rec_trend"] = rec_trend
+    rec_mean = _raw(financial_data, "recommendationMean")
+    if rec_mean is not None:
+        out["rec_mean"] = round(float(rec_mean), 2)
+
     return out
 
 
@@ -438,6 +472,10 @@ def get_fundamentals(symbol: str, with_screener: bool = True) -> dict | None:
             log.info("get_fundamentals: screener added %s for %s", list(screener_result.keys()), key)
         else:
             log.info("get_fundamentals: screener empty for %s", key)
+        competitors = get_competitors(key)
+        if competitors:
+            out["competitors"] = competitors
+            log.info("get_fundamentals: %d competitors added for %s", len(competitors), key)
 
     data = out or None
     time_to_live = _FUND_CACHE_SECONDS

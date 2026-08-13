@@ -107,6 +107,72 @@ def _pick(latest: dict, prefix: str) -> float | None:
     return None
 
 
+def parse_company_id(page: str) -> str | None:
+    """Numeric screener.in company id from a company page ('/api/company/2726/add/')."""
+    match = re.search(r"/api/company/(\d+)/", page)
+    return match.group(1) if match else None
+
+
+def parse_competitors(page: str) -> list[dict]:
+    """Peer-comparison rows from the /api/company/{id}/peers/ table.
+
+    Returns [{'name', 'price', 'pe', 'market_cap', 'div_yield', 'roce', ...}]
+    sorted by market cap (desc); money values in screener.in units (\u20b9 Cr).
+    Pure - the caller (screener.py) owns the paced fetch + cache.
+    """
+    table = re.search(r"<table[^>]*>(.*?)</table>", page, re.S)
+    if not table:
+        return []
+    table_html = table.group(1)
+    headers = [
+        re.sub(r"<[^>]+>|\s+", " ", html.unescape(cell)).strip()
+        for cell in re.findall(r"<th[^>]*>(.*?)</th>", table_html, re.S)
+    ]
+
+    def _normalise(header: str) -> str:
+        header = header.lower()
+        if "cmp" in header:
+            return "price"
+        if "mar cap" in header or "market cap" in header:
+            return "market_cap"
+        if header.replace(" ", "") in ("p/e", "pe"):
+            return "pe"
+        if "div yld" in header:
+            return "div_yield"
+        if "roce" in header:
+            return "roce"
+        if "np qtr" in header:
+            return "net_profit_qtr"
+        if "qtr profit var" in header:
+            return "profit_qtr_growth"
+        if "sales qtr" in header:
+            return "sales_qtr"
+        if "qtr sales var" in header:
+            return "sales_qtr_growth"
+        return ""
+
+    columns = {
+        index: key for index, key in enumerate(_normalise(header) for header in headers)
+        if key and key not in ("name", "s_no")
+    }
+    out = []
+    for row in re.findall(r"<tr[^>]*>(.*?)</tr>", table_html, re.S):
+        cells = [
+            re.sub(r"<[^>]+>|\s+", " ", html.unescape(cell)).strip()
+            for cell in re.findall(r"<t[dh][^>]*>(.*?)</t[dh]>", row, re.S)
+        ]
+        name = cells[1] if len(cells) > 1 else ""
+        if not name or name.lower() in ("name", "s.no"):
+            continue
+        item: dict = {"name": name}
+        for index, key in columns.items():
+            if index < len(cells) and cells[index]:
+                item[key] = _to_number(cells[index])
+        out.append(item)
+    out.sort(key=lambda item: item.get("market_cap") or 0.0, reverse=True)
+    return out
+
+
 def parse_sector_pe_table(page: str) -> float | None:
     """Average P/E of a screener.in sector page, from its constituent list."""
     table = re.search(r"<table[^>]*>(.*?)</table>", page, re.S)
