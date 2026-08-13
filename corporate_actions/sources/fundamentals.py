@@ -7,7 +7,9 @@ Two public sources, both cached 24h (fundamentals change slowly):
 """
 from __future__ import annotations
 
+import json
 import logging
+import os
 import re
 import threading
 import time
@@ -29,7 +31,17 @@ FUND_MAX_ROWS = 40  # rows enriched with the slow screener.in part per command
 # fields). Old entries (e.g. fetched before the analyst-forecast extraction
 # existed) are then treated as stale and refetched instead of serving a
 # forecast-less report for up to 24h.
-_FUND_CACHE_SCHEMA = 2
+_FUND_CACHE_SCHEMA = 3
+
+# Disk-persisted session + cache (gitignored .cache/ dir). The always-on bot
+# restarts often (Render sleep/wake), and every restart used to throw away
+# the Yahoo cookie/crumb and the in-memory fundamentals cache - so the next
+# movers screen re-fetched 40+ quoteSummary calls with a fresh consent dance
+# and got rate-limited (429), which is why /forecast kept losing the analyst
+# section on the deployed bot. Persisting both makes restarts cheap.
+_CACHE_DIR = config.BASE_DIR / ".cache"
+_SESSION_FILE = _CACHE_DIR / "yahoo_session.json"
+_FUND_CACHE_FILE = _CACHE_DIR / "fund_cache.json"
 
 _fund_lock = threading.Lock()
 _global_fund_sess = None
@@ -51,6 +63,82 @@ def _invalidate_crumb():
     _global_fund_crumb_ts = 0.0
 
 
+def _atomic_write(path, text: str) -> None:
+    """Write a file atomically (tmp + os.replace) so concurrent readers of
+    the persisted cache never see a half-written file."""
+    tmp = path.with_suffix(path.suffix + ".tmp")
+    tmp.write_text(text)
+    os.replace(tmp, path)
+
+
+def _persist_session(sess, crumb: str) -> None:
+    """Save the Yahoo cookie jar + crumb so a restart reuses them instead of
+    re-doing the consent/crumb dance (a fresh dance after every restart is
+    exactly what gets the deployed bot rate-limited)."""
+    try:
+        _CACHE_DIR.mkdir(parents=True, exist_ok=True)
+        cookies = requests.utils.dict_from_cookiejar(sess.cookies)
+        _atomic_write(_SESSION_FILE, json.dumps({
+            "cookies": cookies, "crumb": crumb or "", "saved_at": time.time(),
+        }))
+    except Exception as error:
+        log.info("could not persist yahoo session: %s", error)
+
+
+def _restore_session(sess) -> str:
+    """Reload a previously saved cookie jar + crumb. Returns the crumb or ''."""
+    try:
+        if _SESSION_FILE.exists():
+            payload = json.loads(_SESSION_FILE.read_text())
+            cookies = payload.get("cookies") or {}
+            if cookies:
+                requests.utils.add_dict_to_cookiejar(sess.cookies, cookies)
+            return (payload.get("crumb") or "").strip()
+    except Exception as error:
+        log.info("could not restore yahoo session: %s", error)
+    return ""
+
+
+def _persist_fund_cache() -> None:
+    """Best-effort disk copy of the in-memory fundamentals cache.
+
+    Without this, every restart re-fetches every symbol, and the movers
+    enrichment (40+ quoteSummary calls per screen) after a fresh consent
+    dance is what trips Yahoo's rate limiter - the reason /forecast kept
+    losing its analyst section on the deployed bot.
+    """
+    try:
+        _CACHE_DIR.mkdir(parents=True, exist_ok=True)
+        entries = [
+            [list(key), entry]
+            for key, entry in _fund_cache.items()
+            if entry.get("data")
+        ]
+        _atomic_write(_FUND_CACHE_FILE, json.dumps(
+            {"schema": _FUND_CACHE_SCHEMA, "entries": entries}, allow_nan=False,
+        ))
+    except Exception as error:
+        log.info("could not persist fund cache: %s", error)
+
+
+def _load_fund_cache() -> None:
+    """Reload the persisted fundamentals cache (same schema only)."""
+    try:
+        if _FUND_CACHE_FILE.exists():
+            payload = json.loads(_FUND_CACHE_FILE.read_text())
+            if payload.get("schema") != _FUND_CACHE_SCHEMA:
+                return
+            loaded = 0
+            for key_list, entry in (payload.get("entries") or []):
+                if not key_list or not entry:
+                    continue
+                _fund_cache[tuple(key_list)] = entry
+                loaded += 1
+            log.info("fund cache restored from disk: %d entries", loaded)
+    except Exception as error:
+        log.info("could not load fund cache: %s", error)
+
+
 def _fund_session():
     """A thread-safe global Yahoo session with cached crumb (prevents HTTP 429)."""
     global _global_fund_sess, _global_fund_crumb, _global_fund_crumb_ts
@@ -59,11 +147,17 @@ def _fund_session():
         if _global_fund_sess is None:
             _global_fund_sess = requests.Session()
             _global_fund_sess.headers.update({"User-Agent": config.USER_AGENT})
-            try:
-                response = _global_fund_sess.get("https://fc.yahoo.com", timeout=config.HTTP_TIMEOUT)
-                log.info("fund_session: cookie consent ping -> status %s", response.status_code)
-            except Exception as error:
-                log.info("fund_session: cookie consent ping failed: %s", error)
+            restored = _restore_session(_global_fund_sess)
+            if restored:
+                _global_fund_crumb = restored
+                _global_fund_crumb_ts = now
+                log.info("fund_session: restored cookie session + crumb from disk")
+            else:
+                try:
+                    response = _global_fund_sess.get("https://fc.yahoo.com", timeout=config.HTTP_TIMEOUT)
+                    log.info("fund_session: cookie consent ping -> status %s", response.status_code)
+                except Exception as error:
+                    log.info("fund_session: cookie consent ping failed: %s", error)
 
         if not _global_fund_crumb or now - _global_fund_crumb_ts > _CRUMB_CACHE_SECONDS:
             for crumb_host in (
@@ -80,6 +174,7 @@ def _fund_session():
                     log.info("fund_session: crumb from %s -> status %s", crumb_host, response.status_code)
                 except Exception as error:
                     log.info("fund_session: crumb request to %s failed: %s", crumb_host, error)
+            _persist_session(_global_fund_sess, _global_fund_crumb)
 
         return _global_fund_sess, _global_fund_crumb
 
@@ -516,8 +611,15 @@ def get_fundamentals(symbol: str, with_screener: bool = True) -> dict | None:
         "timestamp": now, "data": data, "time_to_live": time_to_live,
         "schema": _FUND_CACHE_SCHEMA,
     }
+    _persist_fund_cache()
     log.info(
         "get_fundamentals: done %s -> %d field(s): %s",
         key, len(out), list(out.keys()) if out else [],
     )
     return data
+
+
+# Restore the disk-persisted fundamentals cache at import time so a restart
+# reuses cached Yahoo data instead of re-fetching everything (which is what
+# trips Yahoo's rate limiter on the always-on bot).
+_load_fund_cache()

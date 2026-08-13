@@ -11,11 +11,13 @@ from __future__ import annotations
 import logging
 import time
 
+from .analyst_forecast import fill_analyst_fallback
 from .fundamentals import (
     _FUND_CACHE_SECONDS,
     _chart_fundamentals,
     _extract_quote_summary,
     _fund_cache,
+    _persist_fund_cache,
     _quote_summary,
 )
 
@@ -66,9 +68,14 @@ def get_us_fundamentals(symbol: str) -> dict | None:
     if chart_data:
         out.update({k: value for k, value in chart_data.items() if k not in out or out[k] is None})
         log.info("get_us_fundamentals: chart data added for %s: %s", key, list(chart_data.keys()))
+    # Independent analyst-forecast fallback when Yahoo's quoteSummary is
+    # down/rate-limited: stockanalysis.com (S&P Global + TipRanks) so the
+    # forecast section never silently disappears for US tickers.
+    fill_analyst_fallback(key, "US", out)
     data = out or None
     _fund_cache[cache_key] = {
         "timestamp": now, "data": data, "time_to_live": _FUND_CACHE_SECONDS,
     }
+    _persist_fund_cache()
     log.info("get_us_fundamentals: done %s -> %d field(s)", key, len(out))
     return data

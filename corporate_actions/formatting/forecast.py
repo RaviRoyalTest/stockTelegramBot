@@ -53,14 +53,17 @@ def build_forecast_lines(raw_symbol: str, quote: dict, fund: dict,
             lines.append(f"Analysts covering: <b>{fund['num_analysts']}</b>")
         lines.extend(_target_range_lines(fund, currency, price=price))
         lines.extend(_rec_history_lines(fund))
+        if fund.get("analyst_source"):
+            lines.append(f"Source: <i>{escape(str(fund['analyst_source']))}</i>")
         lines.append("")
     else:
-        # Never silently show competitors-only: Yahoo was rate-limited or
+        # Never silently show competitors-only: every forecast source was
         # unavailable, so say so instead of looking like the forecast is gone.
         lines.append("<b>\U0001F52D ANALYST ANALYSIS & FORECAST</b>")
         lines.append(
             "\U0001F4E1 <i>Analyst price forecast is temporarily unavailable from "
-            "Yahoo (rate-limited). Try again in a few minutes, or use "
+            "all sources right now (Yahoo rate-limited, independent sources "
+            "unreachable). Try again in a few minutes, or use "
             "/fundamentalreport for the deep report.</i>"
         )
         lines.append("")
