@@ -7,11 +7,11 @@ from __future__ import annotations
 
 import logging
 
-from .. import storage
+from .. import config, storage
 from ..core.text import split_messages
 from ..formatting.schedule import format_schedule, format_settings
 from ..telegram.client import is_configured, set_my_commands
-from ..telegram.markup import example_markup, quick_menu_markup
+from ..telegram.markup import inline_command_buttons, quick_menu_markup
 from . import corporate_action_commands, scanner_commands, schedule_commands, settings_commands, status as status_commands, watchlist_commands
 from .help_texts import CA_HELP
 from .reply import reply, reply_messages
@@ -425,10 +425,12 @@ def _bare_command_usage(chat_id, command) -> bool:
         status_fn = COMMAND_STATUS.get(command)
         status = status_fn(chat_id) if status_fn else ""
         examples = COMMAND_EXAMPLES.get(command)
+        # Blue one-tap buttons: tap to copy the command into the input box.
+        reply_markup = inline_command_buttons(examples, config.BOT_USERNAME) if examples else None
         reply(
             chat_id,
             (status + "\n\n" if status else "") + usage,
-            reply_markup=example_markup(examples) if examples else None,
+            reply_markup=reply_markup,
         )
         return True
     described = DESCRIBE_AND_RUN.get(command)
@@ -439,14 +441,33 @@ def _bare_command_usage(chat_id, command) -> bool:
     return False
 
 
+def _primary_examples() -> list[str]:
+    """One representative example per command, in help order (for /help)."""
+    primaries = []
+    for command in COMMAND_USAGE:
+        examples = COMMAND_EXAMPLES.get(command)
+        if examples:
+            primaries.append(examples[0])
+    return primaries
+
+
 def send_help(chat_id):
-    """Send the styled HTML help message (/help, /start, unknown commands)."""
+    """Send the styled HTML help message (/help, /start, unknown commands).
+
+    Rides along a blue grid of one-tap command buttons (one example per
+    command) plus the persistent quick-menu reply keyboard, so every
+    command in the help is copyable in a single tap.
+    """
     from .help_texts import HELP_TEXT
 
+    markup = quick_menu_markup()
+    grid = inline_command_buttons(_primary_examples(), config.BOT_USERNAME, per_row=2)
+    if grid:
+        markup["inline_keyboard"] = grid["inline_keyboard"]
     reply_messages(
         chat_id,
         split_messages(HELP_TEXT.split("\n")),
-        reply_markup=quick_menu_markup(),
+        reply_markup=markup,
     )
 
 

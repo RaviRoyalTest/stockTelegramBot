@@ -17,6 +17,10 @@ BASE_DIR = Path(__file__).resolve().parent.parent
 
 TELEGRAM_BOT_TOKEN = os.getenv("TELEGRAM_BOT_TOKEN", "").strip()
 TELEGRAM_CHAT_ID = os.getenv("TELEGRAM_CHAT_ID", "").strip()
+# Bot username (without the @) used to build blue one-tap command buttons
+# (https://t.me/<username>?text=/cmd ...) that pre-fill a command into the
+# user's input box. Override with BOT_USERNAME; defaults to the bot's name.
+BOT_USERNAME = os.getenv("BOT_USERNAME", "StockVigilBot").strip().lstrip("@")
 
 
 def _env_int(name: str, default: int, floor: int | None = None) -> int:
