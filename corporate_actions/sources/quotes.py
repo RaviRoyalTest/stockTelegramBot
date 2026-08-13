@@ -5,7 +5,7 @@ import logging
 import time
 
 from .. import config
-from .http import _quote_session
+from .http import _quote_session, _throttle_chart_req
 
 log = logging.getLogger(__name__)
 
@@ -47,6 +47,7 @@ def get_quote(exchange: str, symbol: str) -> dict | None:
         "https://query2.finance.yahoo.com",
     ]
     meta = None
+    _throttle_chart_req()
     for host in hosts:
         url = (
             f"{host}/v8/finance/chart/{symbol}{suffix}"

@@ -22,6 +22,7 @@ from . import (
     corporate_action_commands,
     forecast_commands,
     fundamentals_commands,
+    gappers_commands,
     harmonic_commands,
     indicator_commands,
     learn_commands,
@@ -171,6 +172,10 @@ def handle_command(chat_id, text):
 
     if command in ("/movers", "/topmovers", "/marketmovers"):
         movers_commands.handle_movers(chat_id, parts)
+        return
+
+    if command in ("/gap", "/gappers"):
+        gappers_commands.handle_gappers(chat_id, parts)
         return
 
     if command in ("/gainers", "/topgainers", "/losers", "/toplosers"):

@@ -114,6 +114,8 @@ ALIAS_TO_MAIN = {
     "/howto": "/learn",
     "/movers": "/topmovers",
     "/marketmovers": "/topmovers",
+    "/gap": "/gappers",
+    "/gaps": "/gappers",
     "/gainers": "/topgainers",
     "/losers": "/toplosers",
     "/favorites": "/myfavourites",
@@ -167,6 +169,13 @@ COMMAND_USAGE = {
         "/harmonicpatterns 500 1w    \u2192 NIFTY 500, weekly\n"
         "/harmonicpatterns RELIANCE  \u2192 full report (PRZ, entry, SL)\n"
         "Timeframes: 5m 15m 30m 1h 4h 1d 1w  (alias /harmonic)"
+    ),
+    "/gappers": (
+        "<b>/gappers</b> - overnight gap scanner: prev close \u2192 today's open\n"
+        "/gappers              \u2192 top 15 gapping stocks, NIFTY 500\n"
+        "/gappers down         \u2192 gap-DOWNs only \u00b7 /gappers up \u2192 gap-UPs only\n"
+        "/gappers 20 nifty100  \u2192 top 20, NIFTY 100 \u00b7 /gappers sp500 \u2192 S&P 500\n"
+        "/gappers GODREJCP     \u2192 that stock's recent gap history (close \u2192 next open)"
     ),
     "/topmovers": (
         "<b>/topmovers</b> - top gainers AND losers (default: last 1h, NIFTY 100)\n"
@@ -426,6 +435,7 @@ def register_commands() -> bool:
         {"command": "topmovers", "description": "Top gainers AND losers with fundamentals"},
         {"command": "topgainers", "description": "Top rising stocks with fundamentals"},
         {"command": "toplosers", "description": "Top falling stocks with fundamentals"},
+        {"command": "gappers", "description": "Overnight gaps (prev close vs today's open): /gappers down, /gappers GODREJCP"},
         {"command": "alertfilters", "description": "Receive only chosen action types"},
         {"command": "pricealert", "description": "Alert on +/-PCT% daily price move"},
         {"command": "settings", "description": "Show your current settings"},

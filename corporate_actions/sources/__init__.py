@@ -23,7 +23,14 @@ from .quotes import get_quote
 from .rights import RIGHTS_OFFER_WINDOWS, attach_rights_windows
 from .screener import get_sector_pe, parse_screener_fundamentals
 from .types import ACTION_TYPES, INCREASE_TYPES, TYPE_LABELS, action_type, pick
-from .universe import get_daily_change, get_index_universe, get_intraday_change, universe_exchange
+from .universe import (
+    get_daily_change,
+    get_gap_change,
+    get_gap_history,
+    get_index_universe,
+    get_intraday_change,
+    universe_exchange,
+)
 from .us_corporate_actions import get_us_corporate_actions
 
 __all__ = [
@@ -45,6 +52,8 @@ __all__ = [
     "get_index_universe",
     "get_intraday_change",
     "get_daily_change",
+    "get_gap_change",
+    "get_gap_history",
     "universe_exchange",
     "get_ohlc",
     "get_index_ohlc",

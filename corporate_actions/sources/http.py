@@ -41,11 +41,41 @@ def _throttle_fund_req():
     yield on the movers reports. A tiny global inter-request gap plus the
     existing per-thread sessions keeps bulk fundamentals well under the
     limit even when the movers enrichment fans out across 10 threads.
+
+    `time.time()` must be read INSIDE the lock: reading it before waiting
+    makes queued threads over-sleep by their lock-wait time, and with many
+    threads that compounds exponentially (each queued thread sleeps roughly
+    double the previous), turning a 5-second scan into a multi-minute stall.
     """
     global _last_fund_req
-    now = time.time()
     with _fund_req_lock:
+        now = time.time()
         wait = _last_fund_req + _FUND_REQ_INTERVAL - now
         if wait > 0:
             time.sleep(wait)
         _last_fund_req = time.time()
+
+
+_chart_req_lock = threading.Lock()
+_last_chart_req = 0.0
+_CHART_REQ_INTERVAL = 0.05  # seconds between Yahoo chart requests
+
+
+def _throttle_chart_req():
+    """Enforce a minimum gap between Yahoo /v8/finance/chart requests.
+
+    The always-on sudden-move watcher scans up to 500 symbols every 3 minutes
+    and the movers screens fan out across ~25 threads. With no gap, one IP
+    can trip Yahoo's rate limiter - and once the IP is throttled, the
+    quoteSummary endpoint (analyst forecasts for /forecast, deep
+    fundamentals for /fundamentalreport) starts returning 429 too, which
+    makes reports silently lose whole sections. A tiny global inter-request
+    gap keeps the watcher/movers under the limit.
+    """
+    global _last_chart_req
+    with _chart_req_lock:
+        now = time.time()
+        wait = _last_chart_req + _CHART_REQ_INTERVAL - now
+        if wait > 0:
+            time.sleep(wait)
+        _last_chart_req = time.time()

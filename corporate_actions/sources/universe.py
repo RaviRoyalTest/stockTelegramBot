@@ -13,9 +13,10 @@ import io
 import json
 import logging
 import time
+from datetime import datetime, timezone
 
 from .. import config
-from .http import _quote_session
+from .http import _quote_session, _throttle_chart_req
 
 log = logging.getLogger(__name__)
 
@@ -214,6 +215,7 @@ def get_intraday_change(exchange: str, symbol: str, period_minutes: int) -> dict
     )
     data = None
     try:
+        _throttle_chart_req()
         response = _quote_session().get(url, timeout=config.HTTP_TIMEOUT)
         response.raise_for_status()
         result = response.json()["chart"]["result"][0]
@@ -299,6 +301,7 @@ def get_daily_change(exchange: str, symbol: str, days: int) -> dict | None:
     )
     data = None
     try:
+        _throttle_chart_req()
         response = _quote_session().get(url, timeout=config.HTTP_TIMEOUT)
         response.raise_for_status()
         result = response.json()["chart"]["result"][0]
@@ -338,3 +341,122 @@ def get_daily_change(exchange: str, symbol: str, days: int) -> dict | None:
     _daily_cache[key] = {"timestamp": now, "data": data}
     log.debug("daily change fetched for %s:%s (%d days)", exchange, symbol, days)
     return data
+
+
+_gap_cache: dict = {}
+_GAP_CACHE_SECONDS = 60  # seconds - intraday gaps change while the market is open
+
+
+def get_gap_change(exchange: str, symbol: str) -> dict | None:
+    """Today's overnight gap for one symbol (prev close -> today's open).
+
+    Returns {'price', 'prev_close', 'open', 'gap_pct', 'move_from_open_pct',
+    'name'} where gap_pct is the %-move from the previous close to today's
+    open (the overnight gap) and move_from_open_pct is how far the current
+    price has moved since the open. None when the data is unavailable.
+    """
+    key = (exchange.upper(), symbol.upper())
+    now = time.time()
+    cached = _gap_cache.get(key)
+    if cached and now - cached["timestamp"] < _GAP_CACHE_SECONDS:
+        log.debug("gap cache hit for %s:%s", exchange, symbol)
+        return cached["data"]
+    suffix = "" if exchange.upper() == "US" else (".BO" if exchange.upper() == "BSE" else ".NS")
+    url = (
+        f"https://query1.finance.yahoo.com/v8/finance/chart/{symbol}{suffix}"
+        "?range=1d&interval=1d"
+    )
+    data = None
+    try:
+        _throttle_chart_req()
+        response = _quote_session().get(url, timeout=config.HTTP_TIMEOUT)
+        response.raise_for_status()
+        result = response.json()["chart"]["result"][0]
+        meta = result.get("meta") or {}
+        prev_close = meta.get("chartPreviousClose") or meta.get("previousClose")
+        price = meta.get("regularMarketPrice")
+        quotes = (result.get("indicators") or {}).get("quote") or [{}]
+        opens = (quotes[0] or {}).get("open") or []
+        today_open = next((value for value in reversed(opens) if value is not None), None)
+        name = meta.get("longName") or meta.get("shortName") or ""
+        if price is not None and today_open is not None and prev_close:
+            data = {
+                "price": price,
+                "prev_close": prev_close,
+                "open": today_open,
+                "gap_pct": (today_open / prev_close - 1.0) * 100.0,
+                "move_from_open_pct": (price / today_open - 1.0) * 100.0,
+                "name": name,
+            }
+    except Exception as error:
+        log.info("gap change failed for %s:%s - %s", exchange, symbol, error)
+    _gap_cache[key] = {"timestamp": now, "data": data}
+    log.debug("gap fetched for %s:%s (%s)", exchange, symbol, "ok" if data else "no data")
+    return data
+
+
+_gap_history_cache: dict = {}
+_GAP_HISTORY_CACHE_SECONDS = 300  # seconds
+
+
+def get_gap_history(exchange: str, symbol: str, days: int = 7) -> list[dict]:
+    """Per-day overnight-gap history for one symbol, newest first.
+
+    Each row: {'date', 'open', 'prev_close', 'gap_pct', 'close',
+    'move_from_open_pct'}. The gap is the %-move from each session's previous
+    close to its own open. Empty list when the data is unavailable.
+    """
+    key = (exchange.upper(), symbol.upper(), int(days))
+    now = time.time()
+    cached = _gap_history_cache.get(key)
+    if cached and now - cached["timestamp"] < _GAP_HISTORY_CACHE_SECONDS:
+        log.debug("gap history cache hit for %s:%s", exchange, symbol)
+        return cached["data"]
+    if days <= 5:
+        range_ = "5d"
+    elif days <= 14:
+        range_ = "1mo"
+    else:
+        range_ = "3mo"
+    suffix = "" if exchange.upper() == "US" else (".BO" if exchange.upper() == "BSE" else ".NS")
+    url = (
+        f"https://query1.finance.yahoo.com/v8/finance/chart/{symbol}{suffix}"
+        f"?range={range_}&interval=1d"
+    )
+    rows = []
+    try:
+        _throttle_chart_req()
+        response = _quote_session().get(url, timeout=config.HTTP_TIMEOUT)
+        response.raise_for_status()
+        result = response.json()["chart"]["result"][0]
+        meta = result.get("meta") or {}
+        timestamps = result.get("timestamp") or []
+        quotes = (result.get("indicators") or {}).get("quote") or [{}]
+        quote = quotes[0] or {}
+        opens = quote.get("open") or []
+        closes = quote.get("close") or []
+        prev = meta.get("chartPreviousClose") or meta.get("previousClose")
+        name = meta.get("longName") or meta.get("shortName") or ""
+        for index in range(len(timestamps)):
+            open_price = opens[index] if index < len(opens) else None
+            close_price = closes[index] if index < len(closes) else None
+            if open_price is None or close_price is None:
+                continue
+            base = prev
+            prev = close_price  # next session compares against this close
+            if base:
+                rows.append({
+                    "date": datetime.fromtimestamp(timestamps[index], tz=timezone.utc).date().isoformat(),
+                    "open": open_price,
+                    "prev_close": base,
+                    "gap_pct": (open_price / base - 1.0) * 100.0,
+                    "close": close_price,
+                    "move_from_open_pct": (close_price / open_price - 1.0) * 100.0,
+                    "name": name,
+                })
+    except Exception as error:
+        log.info("gap history failed for %s:%s - %s", exchange, symbol, error)
+    rows.reverse()  # newest session first
+    _gap_history_cache[key] = {"timestamp": now, "data": rows}
+    log.debug("gap history fetched for %s:%s (%d rows)", exchange, symbol, len(rows))
+    return rows

@@ -8,7 +8,7 @@ import logging
 import time
 
 from .. import config
-from .http import _quote_session
+from .http import _quote_session, _throttle_chart_req
 
 log = logging.getLogger(__name__)
 
@@ -100,6 +100,7 @@ def get_ohlc(exchange: str, symbol: str, timeframe: str = "1d") -> dict | None:
     )
     data = None
     try:
+        _throttle_chart_req()
         response = _quote_session().get(url, timeout=config.HTTP_TIMEOUT)
         response.raise_for_status()
         result = response.json()["chart"]["result"][0]
@@ -140,6 +141,7 @@ def get_index_ohlc(index_symbol: str, range_: str = "6mo",
     )
     data = None
     try:
+        _throttle_chart_req()
         response = _quote_session().get(url, timeout=config.HTTP_TIMEOUT)
         response.raise_for_status()
         result = response.json()["chart"]["result"][0]
