@@ -7,6 +7,8 @@
       "universe": "nifty500"
     },
     "recent_commands": [
+      "/fundmode button",
+      "/fundmode",
       "/gappers today",
       "/corpactionsformylist",
       "/toplosers 1h",
@@ -16,7 +18,7 @@
       "/moversfund",
       "/forecast GODREJCP"
     ],
-    "movers_fund": "auto"
+    "movers_fund": "button"
   },
   "@StockVigilBot": {
     "action_filters": [],
