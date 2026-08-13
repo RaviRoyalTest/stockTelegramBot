@@ -184,12 +184,13 @@ def _entry_anchor_times(entry: dict, interval_min: int) -> list[str]:
     """Daily clock-time anchors governing an entry's firing sequence.
 
     Explicit run window -> grid from window_start by interval, ending exactly
-    at window_end. Otherwise clock times (run_at, possibly a comma list) are
-    used; a market-gated entry additionally always fires at the session close
-    (15:30 IST / 16:00 ET) so the closing data is never lost. A plain interval
-    entry gated to a market gets a grid from market open by interval ending at
-    close - which also keeps the cadence EXACT (09:15, 10:15, ... instead of
-    drifting a minute per cycle). market=any keeps pure interval behaviour
+    at window_end. Explicit clock times (run_at, possibly a comma list) fire
+    EXACTLY at the listed times - the user chose them, so no close is added
+    (a daily 09:15 /gappers report stays a 09:15 report). Interval entries
+    ("every N") gated to a market get a grid from market open by interval
+    ending at close - which keeps the cadence EXACT (09:15, 10:15, ...) and
+    fires once more at the session close (15:30 IST / 16:00 ET) so the
+    closing data is never lost. market=any keeps pure interval behaviour
     with no close anchor.
     """
     windowed = _window_anchor_times(entry, interval_min)
@@ -200,20 +201,17 @@ def _entry_anchor_times(entry: dict, interval_min: int) -> list[str]:
     close = oc[1] if oc else None
     if times:
         if len(times) > 1:
-            # Explicit multi-time list: append the session close once so the
-            # end-of-session report still fires when not already listed.
-            if close and close not in times:
-                return times + [close]
+            # Explicit multi-time list: fire at the listed times only.
             return times
         run_at = times[0]
-        if close and _hhmm_minutes(run_at) <= _hhmm_minutes(close):
-            if interval_min % (24 * 60) == 0:
-                # Daily at HH:MM -> also fire at the session close.
-                return [run_at, close] if close != run_at else [run_at]
-            # 'at 09:15 3h' style: grid from run_at by interval to close.
+        if close and interval_min % (24 * 60) != 0 \
+                and _hhmm_minutes(run_at) <= _hhmm_minutes(close):
+            # 'at 09:15 3h' style: every <interval> from run_at, ending at
+            # the session close.
             return _window_anchor_times(
                 {"window_start": run_at, "window_end": close}, interval_min,
             )
+        # Daily at HH:MM -> exactly that time (no auto close run).
         return times
     if close:
         # Plain interval entry gated to a market: grid from open to close.
