@@ -203,6 +203,13 @@ COMMAND_LEARN: dict = {
         "tips": ["Periods: 5m 15m 30m 1h 2h 4h today 1d 2d 5d 1w 2w 1mo 3mo 6mo 1y."],
         "aliases": "/movers, /marketmovers",
     },
+    "/bigmovers": {
+        "what": "ALL stocks beyond a % session move in ONE list - the watcher threshold as a full report.",
+        "syntax": "/bigmovers [%] [nifty100 | nifty500 | sp500 | nasdaq100]",
+        "examples": ["/bigmovers  \u2192 every stock up/down \u2265 5% today, NIFTY 500", "/bigmovers 8 sp500  \u2192 S&P 500 stocks beyond \u00b18%"],
+        "output": "Every stock whose session move (price vs previous close) crosses your % threshold, ranked by |move| - like the /watcher alerts but all in one report.",
+        "aliases": "/moverlist, /watcherlist",
+    },
     "/topgainers": {
         "what": "Top rising stocks.",
         "syntax": "/topgainers [period] [N] [100 | 500 | nasdaq100]",

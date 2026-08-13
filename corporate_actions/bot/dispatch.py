@@ -179,6 +179,10 @@ def handle_command(chat_id, text):
         movers_commands.handle_movers(chat_id, parts)
         return
 
+    if command in ("/bigmovers", "/moverlist", "/watcherlist"):
+        movers_commands.handle_big_movers(chat_id, parts)
+        return
+
     if command in ("/gap", "/gappers"):
         gappers_commands.handle_gappers(chat_id, parts)
         return

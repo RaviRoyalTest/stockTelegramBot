@@ -192,8 +192,15 @@ _LAST_SCREEN: dict[int, dict] = {}
 
 def handle_market_screen(chat_id, parts, default_direction="all",
                          default_period=("intraday", 60), default_count=15,
-                         default_universe="nifty100") -> None:
-    """Screen an index universe by price movement over a time window."""
+                         default_universe="nifty100",
+                         min_abs: float | None = None) -> None:
+    """Screen an index universe by price movement over a time window.
+
+    `min_abs` (percent) turns the screen into a big-movers list: only stocks
+    with |session move| >= min_abs, both directions, ranked by |move| - the
+    /watcher threshold idea, but as ONE full report instead of per-stock
+    alerts.
+    """
     period, direction, count, universe, target_date = parse_screen_parts(
         parts, default_period, default_direction, default_count,
         default_universe)
@@ -217,11 +224,18 @@ def handle_market_screen(chat_id, parts, default_direction="all",
 
     # Phase 0 - acknowledge immediately so the user never waits blind while
     # the universe + quotes are fetched (NIFTY 500 can take a minute or two).
-    reply(
-        chat_id,
-        f"Scanning {universe_label} {period_label_text} for {direction}... "
-        "This can take a minute or two.",
-    )
+    if min_abs:
+        ack = (
+            f"Scanning {universe_label} today for stocks moving "
+            f">= \u00b1{min_abs:g}% (session vs prev close)... "
+            "This can take a minute or two."
+        )
+    else:
+        ack = (
+            f"Scanning {universe_label} {period_label_text} for {direction}... "
+            "This can take a minute or two."
+        )
+    reply(chat_id, ack)
     log.info("screen %s: sent initial acknowledgment", parts[0])
 
     symbols = get_index_universe(universe)
@@ -266,7 +280,11 @@ def handle_market_screen(chat_id, parts, default_direction="all",
     )
 
     rows = [(symbol, data) for symbol, data in fetched if data and data.get("change_pct") is not None]
-    if direction == "gainers":
+    if min_abs:
+        rows = [row for row in rows if abs(row[1]["change_pct"]) >= min_abs]
+        rows.sort(key=lambda row: abs(row[1]["change_pct"]), reverse=True)
+        title = f"<b>Big Movers today (\u2265\u00b1{min_abs:g}%)</b>"
+    elif direction == "gainers":
         rows = [row for row in rows if row[1]["change_pct"] > 0]
         rows.sort(key=lambda row: row[1]["change_pct"], reverse=True)  # highest first
         title = f"<b>Top Gainers - {period_label_text}</b>"
@@ -294,7 +312,10 @@ def handle_market_screen(chat_id, parts, default_direction="all",
         reply(chat_id, f"No movement data found for {period_label_text} ({universe_label}).")
         return
 
-    header = f"{title} · {universe_label} (Top {len(rows)})"
+    if min_abs:
+        header = f"{title} · {universe_label} ({len(rows)} big mover{'s' if len(rows) != 1 else ''})"
+    else:
+        header = f"{title} · {universe_label} (Top {len(rows)})"
 
     # Phase 1 - the initial report: movers and their current price only, so
     # the user gets actionable numbers now instead of waiting for the slower
@@ -394,6 +415,46 @@ def send_screen_fundamentals(chat_id, rows, header, failed, symbols_total, scree
         "screen %s: final report sent (%d rows) in %.1fs (total %.1fs), "
         "quote failures=%d",
         screen_cmd, len(rows), monotonic() - t_fund, monotonic() - started_at, failed,
+    )
+
+
+def handle_big_movers(chat_id, parts) -> None:
+    """ALL stocks beyond a % session-move threshold, one full report.
+
+    /bigmovers            \u2192 every NIFTY 500 stock up/down >= 5% today
+    /bigmovers 8          \u2192 >= 8% session move
+    /bigmovers 5 nifty100 \u2192 NIFTY 100 \u00b7 /bigmovers 8 sp500 \u2192 S&P 500
+
+    Same threshold idea as /watcher (session move vs previous close, both
+    directions) but returns the whole list in a single message like
+    /toplosers, instead of one alert per stock per day.
+    """
+    threshold = 5.0
+    universe = "nifty500"
+    for token in parts[1:]:
+        normalized = (token or "").lower().strip().rstrip("%")
+        if normalized in ("100", "n100", "nifty100", "nifty-100", "nifty 100"):
+            universe = "nifty100"
+        elif normalized in ("500", "n500", "nifty500", "nifty-500", "nifty 500"):
+            universe = "nifty500"
+        elif normalized in ("sp500", "s&p500", "s&p-500", "snp500", "spx", "us500"):
+            universe = "sp500"
+        elif normalized in ("nasdaq100", "nasdaq", "ndx", "us100", "us"):
+            universe = "nasdaq100"
+        else:
+            try:
+                value = abs(float(normalized))
+                if value > 0:
+                    threshold = value
+            except ValueError:
+                pass
+    handle_market_screen(
+        chat_id, parts,
+        default_direction="all",
+        default_period=("days", 1),
+        default_count=None,
+        default_universe=universe,
+        min_abs=threshold,
     )
 
 

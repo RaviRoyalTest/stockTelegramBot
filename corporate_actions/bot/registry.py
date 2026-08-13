@@ -127,6 +127,8 @@ ALIAS_TO_MAIN = {
     "/buttons": "/menu",
     "/bigmover": "/watcher",
     "/moverwatch": "/watcher",
+    "/moverlist": "/bigmovers",
+    "/watcherlist": "/bigmovers",
 }
 
 
@@ -182,6 +184,18 @@ COMMAND_USAGE = {
         "                       open on the end date vs the close before the start\n"
         "/gappers 20 nifty100  \u2192 top 20, NIFTY 100 \u00b7 /gappers sp500 \u2192 S&P 500\n"
         "/gappers GODREJCP     \u2192 that stock's recent gap history (close \u2192 next open)"
+    ),
+    "/bigmovers": (
+        "<b>/bigmovers</b> - ALL stocks beyond a % session move, one full list\n"
+        "Same threshold idea as /watcher, but a single report like /toplosers\n"
+        "instead of one alert per stock.\n\n"
+        "<b>Quick picks</b>\n"
+        "<code>/bigmovers</code>           \u2192 every stock up/down \u2265 5% today, NIFTY 500\n"
+        "<code>/bigmovers 8</code>         \u2192 \u2265 8% session move\n"
+        "<code>/bigmovers 3 nifty100</code> \u2192 NIFTY 100\n"
+        "<code>/bigmovers 8 sp500</code>   \u2192 S&P 500\n"
+        "<code>/bigmovers 5 nasdaq100</code> \u2192 NASDAQ 100\n\n"
+        "Move = current price vs previous close (both directions, ranked by |move|)."
     ),
     "/topmovers": (
         "<b>/topmovers</b> - top gainers AND losers (default: last 1h, NIFTY 100)\n"
@@ -349,6 +363,7 @@ COMMAND_EXAMPLES = {
     "/usstock": ["/usstock AAPL", "/usstock MSFT", "/usstock NVDA"],
     "/harmonicpatterns": ["/harmonicpatterns", "/harmonicpatterns 500", "/harmonicpatterns RELIANCE"],
     "/topmovers": ["/topmovers", "/topmovers 1h 10", "/topmovers today 25", "/topmovers 1w 500", "/topmovers 12-08-2026"],
+    "/bigmovers": ["/bigmovers", "/bigmovers 8", "/bigmovers 3 nifty100", "/bigmovers 8 sp500"],
     "/topgainers": ["/topgainers", "/topgainers 1h 10", "/topgainers 100", "/topgainers 12-08-2026"],
     "/toplosers": ["/toplosers", "/toplosers 1h 10", "/toplosers 2d", "/toplosers 100", "/toplosers 12-08-2026"],
     "/gappers": ["/gappers", "/gappers 1d", "/gappers 2d", "/gappers window 3d", "/gappers 12-08-2026", "/gappers up", "/gappers all", "/gappers GODREJCP"],
