@@ -299,8 +299,9 @@ def handle_moversfund(chat_id, parts) -> None:
     mode = settings.get("movers_fund", "button")
     state = ("fundamentals sent automatically with every report"
              if mode == "auto"
-             else "reports end with a <b>Get Fundamentals</b> button")
-    reply(chat_id, f"\U0001F4CA <b>Movers fundamentals</b>\nMode: {state}\n\n"
+             else "reports end with a <b>Get Fundamentals</b> button (default)")
+    reply(chat_id, f"\U0001F4CA <b>Movers fundamentals</b>\n"
+          f"Current mode: <b>{mode}</b> \u2014 {state}\n\n"
           "Change it with <code>/fundmode button</code> (default) or "
           "<code>/fundmode auto</code>.")
 

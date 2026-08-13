@@ -32,8 +32,14 @@ def _watcher_status_text(chat_id) -> str:
 
 
 def _pricealert_status_text(chat_id) -> str:
-    alert = (storage.get_user_settings(chat_id) or {}).get("price_alert_pct")
-    return "Price alerts: <b>" + ("off" if not alert else f"{float(alert):g}%") + "</b>"
+    settings = storage.get_user_settings(chat_id) or {}
+    alert = settings.get("price_alert_pct")
+    if alert:
+        return f"Price alerts: <b>ON at {float(alert):g}%</b>"
+    last = settings.get("last_price_alert_pct")
+    if last:
+        return f"Price alerts: <b>OFF</b> (last was {float(last):g}%)"
+    return "Price alerts: <b>OFF</b>"
 
 
 def _moversfund_status_text(chat_id) -> str:
@@ -41,8 +47,11 @@ def _moversfund_status_text(chat_id) -> str:
     if mode == "auto":
         state = "fundamentals sent automatically with every report"
     else:
-        state = "price report ends with a <b>Get Fundamentals</b> button"
-    return f"\U0001F4CA <b>Movers fundamentals</b>\nMode: {state}"
+        state = "price report ends with a <b>Get Fundamentals</b> button (default)"
+    return (
+        f"\U0001F4CA <b>Movers fundamentals</b>\n"
+        f"Current mode: <b>{mode}</b> \u2014 {state}"
+    )
 
 
 def _alertfilters_status_text(chat_id) -> str:
