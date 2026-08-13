@@ -14,7 +14,7 @@ from .stock_common import (
     _macd_tag,
     _num_or_na,
     _pct_str,
-    _rec_label,
+    _consensus_label,
     _rsi_signal,
     _top_officer,
     _wk52_signal,
@@ -155,7 +155,7 @@ def _stock_summary_lines(raw_symbol, quote, fund, include_tip=True, label="") ->
     # Analyst forecast (consensus + target + upside) - the forecast value
     forecast_parts = []
     if fund.get("rec_mean") is not None:
-        label = _rec_label(fund["rec_mean"])
+        label = _consensus_label(fund)
         forecast_parts.append(f"Consensus: <b>{label}</b> ({fund['rec_mean']:.1f}/5)")
     if fund.get("target_mean") is not None:
         target = float(fund["target_mean"])

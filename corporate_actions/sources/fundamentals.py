@@ -25,6 +25,11 @@ _fund_cache: dict = {}
 _FUND_CACHE_SECONDS = 86400  # 24 hours
 _FUND_RETRY_CACHE_SECONDS = 1800  # 30 min when the screener.in part is still missing
 FUND_MAX_ROWS = 40  # rows enriched with the slow screener.in part per command
+# Bump this whenever the SHAPE of the cached data changes (new extracted
+# fields). Old entries (e.g. fetched before the analyst-forecast extraction
+# existed) are then treated as stale and refetched instead of serving a
+# forecast-less report for up to 24h.
+_FUND_CACHE_SCHEMA = 2
 
 _fund_lock = threading.Lock()
 _global_fund_sess = None
@@ -100,7 +105,7 @@ def _quote_summary(symbol: str, suffix: str = ".NS") -> dict | None:
                 response = sess.get(
                     url,
                     params={
-                        "modules": "summaryDetail,financialData,defaultKeyStatistics,assetProfile,recommendationTrend",
+                        "modules": "summaryDetail,financialData,defaultKeyStatistics,assetProfile,recommendationTrend,upgradesDowngrades",
                         "crumb": crumb,
                     },
                     timeout=config.HTTP_TIMEOUT,
@@ -382,23 +387,41 @@ def _extract_quote_summary(payload: dict, currency: str = "inr") -> dict:
             if _clean(officer.get("name"))
         ]
 
-    # Analyst rating breakdown (recommendationTrend, latest period).
+    # Analyst rating breakdown (recommendationTrend). The trend array holds
+    # one row per period (0m, -1m, -2m, -3m) - we keep the LATEST in
+    # rec_trend and the WHOLE history (newest first) in rec_history so no
+    # single analyst rating is left out of the forecast.
+    _RATING_KEYS = (
+        ("strongBuy", "strong_buy"), ("buy", "buy"), ("hold", "hold"),
+        ("sell", "sell"), ("strongSell", "strong_sell"),
+    )
     trend = ((payload.get("recommendationTrend") or {}).get("trend") or [])
     if trend:
+        def _buckets(row: dict) -> dict:
+            buckets = {}
+            for source_key, target_key in _RATING_KEYS:
+                value = row.get(source_key)
+                if isinstance(value, int):
+                    buckets[target_key] = value
+            return buckets
+
         latest = trend[0] or {}
-        rec_trend = {}
-        for source_key, target_key in (
-            ("strongBuy", "strong_buy"), ("buy", "buy"), ("hold", "hold"),
-            ("sell", "sell"), ("strongSell", "strong_sell"),
-        ):
-            value = latest.get(source_key)
-            if isinstance(value, int):
-                rec_trend[target_key] = value
+        rec_trend = _buckets(latest)
         if rec_trend:
             out["rec_trend"] = rec_trend
+        history = []
+        for row in trend[:4]:
+            buckets = _buckets(row or {})
+            if buckets:
+                history.append({"period": (row or {}).get("period", ""), **buckets})
+        if history:
+            out["rec_history"] = history
     rec_mean = _raw(financial_data, "recommendationMean")
     if rec_mean is not None:
         out["rec_mean"] = round(float(rec_mean), 2)
+    rec_key = (financial_data.get("recommendationKey") or "").strip()
+    if rec_key:
+        out["rec_key"] = rec_key
 
     return out
 
@@ -423,9 +446,12 @@ def get_fundamentals(symbol: str, with_screener: bool = True) -> dict | None:
     cache_key = (key, bool(with_screener))
     now = time.time()
     cached = _fund_cache.get(cache_key)
-    if cached and now - cached["timestamp"] < cached["time_to_live"]:
+    if cached and cached.get("schema") == _FUND_CACHE_SCHEMA \
+            and now - cached["timestamp"] < cached["time_to_live"]:
         log.info("get_fundamentals: cache hit for %s (screener=%s, %d fields)", key, bool(with_screener), len(cached["data"] or {}))
         return cached["data"]
+    if cached and cached.get("schema") != _FUND_CACHE_SCHEMA:
+        log.info("get_fundamentals: schema v%s != v%s for %s - refetching", cached.get("schema"), _FUND_CACHE_SCHEMA, key)
     out = {}
     log.info("get_fundamentals: fetching %s (with_screener=%s)", key, with_screener)
 
@@ -486,7 +512,10 @@ def get_fundamentals(symbol: str, with_screener: bool = True) -> dict | None:
     deep_ok = _deep_completeness(out) >= 0.5
     if (with_screener and not (out.get("promoter_pct") or out.get("sector_pe"))) or not deep_ok:
         time_to_live = _FUND_RETRY_CACHE_SECONDS  # retry the missing part sooner
-    _fund_cache[cache_key] = {"timestamp": now, "data": data, "time_to_live": time_to_live}
+    _fund_cache[cache_key] = {
+        "timestamp": now, "data": data, "time_to_live": time_to_live,
+        "schema": _FUND_CACHE_SCHEMA,
+    }
     log.info(
         "get_fundamentals: done %s -> %d field(s): %s",
         key, len(out), list(out.keys()) if out else [],

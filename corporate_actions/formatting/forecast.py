@@ -10,7 +10,12 @@ from __future__ import annotations
 
 from ..core.numbers import format_money
 from ..core.text import escape
-from .stock_common import _executive_lines, _ratings_text
+from .stock_common import (
+    _executive_lines,
+    _ratings_text,
+    _rec_history_lines,
+    _target_range_lines,
+)
 
 
 def build_forecast_lines(raw_symbol: str, quote: dict, fund: dict,
@@ -46,25 +51,8 @@ def build_forecast_lines(raw_symbol: str, quote: dict, fund: dict,
             lines.append(ratings)
         if fund.get("num_analysts"):
             lines.append(f"Analysts covering: <b>{fund['num_analysts']}</b>")
-        if fund.get("target_mean") is not None:
-            target = float(fund["target_mean"])
-            upside = ""
-            if price:
-                percent = (target - float(price)) / float(price) * 100.0
-                if percent > 0:
-                    upside = f"  (<b>+{percent:.0f}%</b> upside)"
-                elif percent < 0:
-                    upside = f"  (<b>{percent:.0f}%</b> downside)"
-            lines.append(
-                f"Forecast target (mean): <b>{format_money(target, currency)}</b>{upside}"
-            )
-        target_range = []
-        if fund.get("target_high") is not None:
-            target_range.append(f"High {format_money(fund['target_high'], currency)}")
-        if fund.get("target_low") is not None:
-            target_range.append(f"Low {format_money(fund['target_low'], currency)}")
-        if target_range:
-            lines.append("  " + "  \u00b7  ".join(target_range))
+        lines.extend(_target_range_lines(fund, currency, price=price))
+        lines.extend(_rec_history_lines(fund))
         lines.append("")
 
     # --- Top executives ---

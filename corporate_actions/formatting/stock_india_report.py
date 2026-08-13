@@ -19,6 +19,8 @@ from .stock_common import (
     _num_or_na,
     _pct_str,
     _ratings_text,
+    _rec_history_lines,
+    _target_range_lines,
     _tech_indicator_lines,
     _wk52_signal,
 )
@@ -323,31 +325,18 @@ def _fund_report_lines(raw_symbol, quote, fund, include_tip=True, label="") -> l
         lines.extend(quarter_lines)
         lines.append("")
 
-    # Section 9: Analyst view & forecast (consensus, ratings, target)
+    # Section 9: Analyst view & forecast (consensus, ratings, targets, trend)
     if fund.get("num_analysts") or fund.get("target_mean") or fund.get("rec_mean") or fund.get("rec_trend"):
         lines.append("<b>\U0001F52D ANALYST VIEW & FORECAST</b>")
         ratings = _ratings_text(fund)
         if ratings:
             lines.append(ratings)
-        if fund.get("target_mean") is not None:
-            target_mean = float(fund["target_mean"])
-            upside_text = ""
-            if price:
-                percent = (target_mean - float(price)) / float(price) * 100
-                if percent > 0:
-                    upside_text = f"  (<b>+{percent:.0f}%</b> upside)"
-                elif percent < 0:
-                    upside_text = f"  (<b>{percent:.0f}%</b> downside)"
-            lines.append(f"Forecast Target (Mean): <b>{format_money(target_mean)}</b>{upside_text}")
-        target_range_parts = []
-        if fund.get("target_high") is not None:
-            target_range_parts.append(f"High {format_money(fund['target_high'])}")
-        if fund.get("target_low") is not None:
-            target_range_parts.append(f"Low {format_money(fund['target_low'])}")
-        if target_range_parts:
-            lines.append("  " + "  \u00b7  ".join(target_range_parts))
         if fund.get("num_analysts"):
             lines.append(f"Analysts Covering: <b>{fund['num_analysts']}</b>")
+        if fund.get("price") is None:
+            fund["price"] = price
+        lines.extend(_target_range_lines(fund))
+        lines.extend(_rec_history_lines(fund))
         lines.append("")
 
     # Top executives (Yahoo companyOfficers)

@@ -11,7 +11,7 @@ import streamlit as st
 from .. import config, sources
 from ..formatting import status_tag
 from ..formatting.actions import _TYPE_EMOJI
-from ..formatting.stock_common import _rec_label
+from ..formatting.stock_common import _consensus_label
 from ..formatting.stock_india import _fund_report_lines
 from .helpers import fetch_analysis, format_change, format_price, tg_to_markdown
 
@@ -229,7 +229,7 @@ def render_quick_card(quote: dict, fund: dict, symbol: str) -> None:
     # Analyst forecast, top executive & competitors (the forecast value)
     forecast_parts = []
     if fund.get("rec_mean") is not None:
-        label = _rec_label(fund["rec_mean"])
+        label = _consensus_label(fund)
         forecast_parts.append(f"Consensus {label} ({fund['rec_mean']:.1f}/5)")
     if fund.get("target_mean") is not None:
         target = float(fund["target_mean"])

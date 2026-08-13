@@ -9,6 +9,7 @@ and US output can never drift apart accidentally.
 """
 from __future__ import annotations
 
+from ..core.numbers import format_money
 from ..core.text import escape
 
 
@@ -181,24 +182,97 @@ def _rec_label(mean) -> str | None:
     return "Strong Sell"
 
 
+_RATING_LABELS = (
+    ("strong_buy", "Strong Buy"), ("buy", "Buy"), ("hold", "Hold"),
+    ("sell", "Sell"), ("strong_sell", "Strong Sell"),
+)
+
+
+def _consensus_label(fund: dict) -> str | None:
+    """Consensus label: Yahoo's own recommendationKey wins, else derive from the mean."""
+    rec_key = (fund.get("rec_key") or "").strip().replace("_", " ").title()
+    if rec_key in ("Strong Buy", "Buy", "Hold", "Sell", "Strong Sell"):
+        return rec_key
+    return _rec_label(fund.get("rec_mean"))
+
+
 def _ratings_text(fund: dict) -> str:
-    """Analyst consensus + rating breakdown, e.g. 'Consensus: Buy (2.13/5) · Strong Buy 6 · Buy 21 · ...'."""
+    """Analyst consensus + full rating breakdown (ALL five buckets, even 0)."""
     parts = []
     if fund.get("rec_mean") is not None:
-        label = _rec_label(fund["rec_mean"])
+        label = _consensus_label(fund)
         parts.append(f"Consensus: <b>{label}</b> ({fund['rec_mean']:.2f}/5)")
     trend = fund.get("rec_trend") or {}
-    counts = []
-    for key, label in (
-        ("strong_buy", "Strong Buy"), ("buy", "Buy"), ("hold", "Hold"),
-        ("sell", "Sell"), ("strong_sell", "Strong Sell"),
-    ):
-        value = trend.get(key)
-        if value:
-            counts.append(f"{label} {value}")
-    if counts:
+    counts = [f"{label} {trend.get(key, 0)}" for key, label in _RATING_LABELS]
+    if any(trend.values()):
         parts.append("  \u00b7  ".join(counts))
     return "  \u00b7  ".join(parts)
+
+
+def _rec_history_lines(fund: dict) -> list[str]:
+    """Rating-breakdown history across the last 4 periods (now, 1m, 2m, 3m ago).
+
+    Shows EVERY period Yahoo reports so no analyst rating is left out, with a
+    \u25b2/\u25bc arrow vs the previous period for the at-a-glance trend.
+    """
+    history = fund.get("rec_history") or []
+    if len(history) < 2:
+        return []
+    lines = ["\U0001F4C5 <b>Rating trend (last 4 periods)</b>"]
+    labels = dict(_RATING_LABELS)
+    for index, row in enumerate(history):
+        period = (row.get("period") or "").strip()
+        if period in ("", "0m", "0"):
+            when = "Now"
+        else:
+            when = f"{period.lstrip('-').rstrip('m')}m ago"
+        buckets = "  \u00b7  ".join(
+            f"{labels[key]} {row.get(key, 0)}" for key, _ in _RATING_LABELS
+        )
+        arrow = ""
+        if index > 0:
+            previous = history[index - 1]
+            diff = sum(row.get(key, 0) for key, _ in _RATING_LABELS) - \
+                   sum(previous.get(key, 0) for key, _ in _RATING_LABELS)
+            if diff > 0:
+                arrow = "  \U0001F7E2\u25b2"
+            elif diff < 0:
+                arrow = "  \U0001F534\u25bc"
+        lines.append(f"  \u2022 {when}: {buckets}{arrow}")
+    return lines
+
+
+def _target_range_lines(fund: dict, currency: str = "INR", price=None) -> list[str]:
+    """12-month target lines: mean with upside, plus high / median / low.
+
+    `price` may come from the live quote (the fundamentals dict does not
+    always carry it) - used only for the upside/downside percent.
+    """
+    lines = []
+    if fund.get("target_mean") is not None:
+        target_mean = float(fund["target_mean"])
+        if price is None:
+            price = fund.get("price")
+        upside = ""
+        if price:
+            percent = (target_mean - float(price)) / float(price) * 100.0
+            if percent > 0:
+                upside = f"  (<b>+{percent:.0f}%</b> upside)"
+            elif percent < 0:
+                upside = f"  (<b>{percent:.0f}%</b> downside)"
+        lines.append(
+            f"Forecast target (mean): <b>{format_money(target_mean, currency)}</b>{upside}"
+        )
+    target_range = []
+    if fund.get("target_high") is not None:
+        target_range.append(f"High {format_money(fund['target_high'], currency)}")
+    if fund.get("target_median") is not None:
+        target_range.append(f"Median {format_money(fund['target_median'], currency)}")
+    if fund.get("target_low") is not None:
+        target_range.append(f"Low {format_money(fund['target_low'], currency)}")
+    if target_range:
+        lines.append("  " + "  \u00b7  ".join(target_range))
+    return lines
 
 
 def _executive_lines(fund: dict, limit: int = 5) -> list[str]:
