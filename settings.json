@@ -7,6 +7,7 @@
       "universe": "nifty500"
     },
     "recent_commands": [
+      "/indicator RELIANCE",
       "/fundmode button",
       "/fundmode",
       "/gappers today",
@@ -15,8 +16,7 @@
       "/schedule run",
       "/schedule",
       "/moversfund auto",
-      "/moversfund",
-      "/forecast GODREJCP"
+      "/moversfund"
     ],
     "movers_fund": "button"
   },
