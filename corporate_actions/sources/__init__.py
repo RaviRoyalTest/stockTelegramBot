@@ -29,6 +29,7 @@ from .universe import (
     get_gap_history,
     get_index_universe,
     get_intraday_change,
+    get_window_gap_change,
     universe_exchange,
 )
 from .us_corporate_actions import get_us_corporate_actions
@@ -54,6 +55,7 @@ __all__ = [
     "get_daily_change",
     "get_gap_change",
     "get_gap_history",
+    "get_window_gap_change",
     "universe_exchange",
     "get_ohlc",
     "get_index_ohlc",

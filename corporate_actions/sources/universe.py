@@ -463,3 +463,30 @@ def get_gap_history(exchange: str, symbol: str, days: int = 7) -> list[dict]:
     _gap_history_cache[key] = {"timestamp": now, "data": rows}
     log.debug("gap history fetched for %s:%s (%d rows)", exchange, symbol, len(rows))
     return rows
+
+
+def get_window_gap_change(exchange: str, symbol: str, sessions: int) -> dict | None:
+    """Multi-session gap window: today's open vs the close N sessions ago.
+
+    Returns the same shape as get_gap_change ({'price', 'open', 'prev_close',
+    'gap_pct', 'move_from_open_pct', 'name'}) where 'prev_close' is the close
+    `sessions` trading sessions back and gap_pct = today's open / that close
+    - 1. None when there is not enough history.
+    """
+    sessions = max(1, int(sessions))
+    history = get_gap_history(exchange, symbol, days=sessions + 1)
+    if len(history) <= sessions:
+        return None
+    today = history[0]
+    base_row = history[sessions]
+    base_close = base_row["close"]
+    if not today.get("open") or not base_close:
+        return None
+    return {
+        "price": today.get("close"),
+        "open": today["open"],
+        "prev_close": base_close,
+        "gap_pct": (today["open"] / base_close - 1.0) * 100.0,
+        "move_from_open_pct": today.get("move_from_open_pct"),
+        "name": today.get("name") or base_row.get("name") or "",
+    }

@@ -171,8 +171,10 @@ COMMAND_USAGE = {
         "Timeframes: 5m 15m 30m 1h 4h 1d 1w  (alias /harmonic)"
     ),
     "/gappers": (
-        "<b>/gappers</b> - overnight gap scanner: prev close \u2192 today's open\n"
-        "/gappers              \u2192 top 15 gapping stocks, NIFTY 500\n"
+        "<b>/gappers</b> - overnight gap scanner: prev close \u2192 open gaps\n"
+        "/gappers              \u2192 top 15 gapping stocks today, NIFTY 500\n"
+        "/gappers 2d | 3d      \u2192 the gaps that opened 2 / 3 sessions ago\n"
+        "/gappers window 3d    \u2192 today's OPEN vs the close 3 sessions ago\n"
         "/gappers down         \u2192 gap-DOWNs only \u00b7 /gappers up \u2192 gap-UPs only\n"
         "/gappers 20 nifty100  \u2192 top 20, NIFTY 100 \u00b7 /gappers sp500 \u2192 S&P 500\n"
         "/gappers GODREJCP     \u2192 that stock's recent gap history (close \u2192 next open)"
