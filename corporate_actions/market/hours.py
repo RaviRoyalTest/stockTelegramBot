@@ -183,7 +183,7 @@ def is_market_open(market, now=None) -> bool:
 def market_active(market, grace_minutes: int = 60, now=None) -> bool:
     """True while the market is open OR within `grace_minutes` of close.
 
-    Live session-move screens (/bigmovers) and the sudden-move watcher stay
+    Live session-move screens (/moversover) and the sudden-move watcher stay
     meaningful shortly after the bell - the final moves are still fresh - so
     gating on this keeps them useful right after hours without firing around
     the clock. Weekends are always closed (no grace window).

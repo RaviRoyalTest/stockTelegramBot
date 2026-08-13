@@ -179,7 +179,7 @@ def handle_command(chat_id, text):
         movers_commands.handle_movers(chat_id, parts)
         return
 
-    if command in ("/bigmovers", "/bigmover", "/moverlist", "/watcherlist"):
+    if command in ("/moversover", "/bigmovers", "/bigmover", "/moverlist", "/watcherlist"):
         movers_commands.handle_big_movers(chat_id, parts)
         return
 

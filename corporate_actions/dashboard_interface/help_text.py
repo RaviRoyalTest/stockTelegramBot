@@ -42,7 +42,7 @@ HELP_TEXT = (
     "  Universe: n100/nifty100 = NIFTY 100 · n500/nifty500 = NIFTY 500 · sp500 = S&P 500\n"
     "  Tip: for `/topgainers` & `/toplosers` a bare 100/500 means the top-N count (e.g. `/topgainers 100` = top 100) — use `nifty100`/`nifty500` for the index. For `/topmovers` a bare 100/500 picks the index.\n"
     "- `/gappers [1d|2d|3d|window Nd|DATE|DATE DATE] [up|down|all] [N] [100|500|sp500]` — overnight gap scanner (prev close → open), default = gap-DOWNs only. `/gappers 1d`/`2d`/`3d` = gaps N sessions ago; `/gappers window 3d` = today's open vs the close 3 sessions ago; `/gappers 12-08-2026` = gaps that opened on that date; `/gappers 08-08-2026 12-08-2026` = cumulative gap over a period; `/gappers GODREJCP` = a stock's gap history.\n"
-    "- `/bigmovers [%] [100|500|sp500]` — EVERY stock beyond a % session move in one list (like the watcher, but a full report). `/bigmovers` = ≥5% today, NIFTY 500; `/bigmovers 8 sp500` = S&P 500. Runs only during market hours + 1h after close (IST for NIFTY, ET for US).\n\n"
+    "- `/moversover [%] [100|500|sp500]` — EVERY stock that moved over a % today in one list (like the watcher, but a full report; alias /bigmovers). `/moversover` = ≥5% today, NIFTY 500; `/moversover 8 sp500` = S&P 500. Runs only during market hours + 1h after close (IST for NIFTY, ET for US).\n\n"
     "**Alerts & Personalisation**\n"
     "- `/alertfilters TYPE,TYPE` — receive only the action types you choose (`all` resets)\n"
     "- `/pricealert PCT` — alert when a stock moves ±PCT% in a day (`off` disables)\n"

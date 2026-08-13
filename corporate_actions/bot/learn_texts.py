@@ -203,13 +203,13 @@ COMMAND_LEARN: dict = {
         "tips": ["Periods: 5m 15m 30m 1h 2h 4h today 1d 2d 5d 1w 2w 1mo 3mo 6mo 1y.", "Market-hours gated: live screens run during trading hours + 1h after close (IST for NIFTY, ET for US); a DATE query like /topmovers 12-08-2026 works any time."],
         "aliases": "/movers, /marketmovers",
     },
-    "/bigmovers": {
-        "what": "ALL stocks beyond a % session move in ONE list - the watcher threshold as a full report.",
-        "syntax": "/bigmovers [%] [nifty100 | nifty500 | sp500 | nasdaq100]",
-        "examples": ["/bigmovers  \u2192 every stock up/down \u2265 5% today, NIFTY 500", "/bigmovers 8 sp500  \u2192 S&P 500 stocks beyond \u00b18%"],
+    "/moversover": {
+        "what": "ALL stocks that moved over a % in ONE list - the watcher threshold as a full report.",
+        "syntax": "/moversover [%] [nifty100 | nifty500 | sp500 | nasdaq100]",
+        "examples": ["/moversover  \u2192 every stock up/down \u2265 5% today, NIFTY 500", "/moversover 8 sp500  \u2192 S&P 500 stocks beyond \u00b18%"],
         "output": "Every stock whose session move (price vs previous close) crosses your % threshold, ranked by |move| - like the /watcher alerts but all in one report.",
         "tips": ["Market-hours gated: runs during trading hours + 1h after close (IST for NIFTY, ET for US) so stale moves are never shown."],
-        "aliases": "/bigmover, /moverlist, /watcherlist",
+        "aliases": "/bigmovers, /bigmover, /moverlist, /watcherlist",
     },
     "/topgainers": {
         "what": "Top rising stocks.",
@@ -456,7 +456,7 @@ _COMMAND_ALIASES = {
     "toplosers": "/toplosers", "losers": "/toplosers",
     "alertfilters": "/alertfilters", "filter": "/alertfilters", "actionfilters": "/alertfilters",
     "pricealert": "/pricealert", "alert": "/pricealert",
-    "watcher": "/watcher", "bigmover": "/bigmovers", "moverwatch": "/watcher",
+    "watcher": "/watcher", "bigmover": "/moversover", "bigmovers": "/moversover", "moversover": "/moversover", "moverwatch": "/watcher",
     "moversfund": "/fundmode", "fundmode": "/fundmode", "settings": "/settings",
     "schedule": "/schedule", "sched": "/schedule", "market": "/market",
     "schednow": "/schednow", "checknow": "/checknow", "status": "/status",

@@ -126,11 +126,12 @@ ALIAS_TO_MAIN = {
     "/quick": "/menu",
     "/shortcuts": "/menu",
     "/buttons": "/menu",
-    "/bigmover": "/bigmovers",
+    "/bigmover": "/moversover",
+    "/bigmovers": "/moversover",
     "/moverwatch": "/watcher",
     "/moversfund": "/fundmode",
-    "/moverlist": "/bigmovers",
-    "/watcherlist": "/bigmovers",
+    "/moverlist": "/moversover",
+    "/watcherlist": "/moversover",
 }
 
 
@@ -187,20 +188,20 @@ COMMAND_USAGE = {
         "/gappers 20 nifty100  \u2192 top 20, NIFTY 100 \u00b7 /gappers sp500 \u2192 S&P 500\n"
         "/gappers GODREJCP     \u2192 that stock's recent gap history (close \u2192 next open)"
     ),
-    "/bigmovers": (
-        "<b>/bigmovers</b> - ALL stocks beyond a % session move, one full list\n"
+    "/moversover": (
+        "<b>/moversover</b> - EVERY stock that moved over a % today, one list\n"
         "Same threshold idea as /watcher, but a single report like /toplosers\n"
         "instead of one alert per stock.\n\n"
         "<b>Quick picks</b>\n"
-        "<code>/bigmovers</code>           \u2192 every stock up/down \u2265 5% today, NIFTY 500\n"
-        "<code>/bigmovers 8</code>         \u2192 \u2265 8% session move\n"
-        "<code>/bigmovers 3 nifty100</code> \u2192 NIFTY 100\n"
-        "<code>/bigmovers 8 sp500</code>   \u2192 S&P 500\n"
-        "<code>/bigmovers 5 nasdaq100</code> \u2192 NASDAQ 100\n\n"
+        "<code>/moversover</code>            \u2192 every stock up/down \u2265 5% today, NIFTY 500\n"
+        "<code>/moversover 8</code>          \u2192 \u2265 8% session move\n"
+        "<code>/moversover 3 nifty100</code> \u2192 NIFTY 100\n"
+        "<code>/moversover 8 sp500</code>    \u2192 S&P 500\n"
+        "<code>/moversover 5 nasdaq100</code> \u2192 NASDAQ 100\n\n"
         "Move = current price vs previous close (both directions, ranked by |move|).\n"
         "Runs only during market hours + 1h after close: IST for NIFTY, ET for "
         "S&P 500 / NASDAQ 100 - so you never get stale session moves.\n"
-        "Aliases: /bigmover, /moverlist, /watcherlist"
+        "Aliases: /bigmovers, /bigmover, /moverlist, /watcherlist"
     ),
     "/topmovers": (
         "<b>/topmovers</b> - top gainers AND losers (default: last 1h, NIFTY 100)\n"
@@ -384,7 +385,7 @@ COMMAND_EXAMPLES = {
     "/usstock": ["/usstock AAPL", "/usstock MSFT", "/usstock NVDA"],
     "/harmonicpatterns": ["/harmonicpatterns", "/harmonicpatterns 500", "/harmonicpatterns RELIANCE"],
     "/topmovers": ["/topmovers", "/topmovers 1h 10", "/topmovers today 25", "/topmovers 1w 500", "/topmovers 12-08-2026"],
-    "/bigmovers": ["/bigmovers", "/bigmovers 8", "/bigmovers 3 nifty100", "/bigmovers 8 sp500"],
+    "/moversover": ["/moversover", "/moversover 8", "/moversover 3 nifty100", "/moversover 8 sp500"],
     "/topgainers": ["/topgainers", "/topgainers 1h 10", "/topgainers 100", "/topgainers 12-08-2026"],
     "/toplosers": ["/toplosers", "/toplosers 1h 10", "/toplosers 2d", "/toplosers 100", "/toplosers 12-08-2026"],
     "/gappers": ["/gappers", "/gappers 1d", "/gappers 2d", "/gappers window 3d", "/gappers 12-08-2026", "/gappers up", "/gappers all", "/gappers GODREJCP"],
@@ -563,6 +564,7 @@ def register_commands() -> bool:
         {"command": "status", "description": "Check persistence / GitHub push"},
         {"command": "checknow", "description": "Force a check and resend alerts"},
         {"command": "watcher", "description": "Big-move alerts: /watcher on, off, set 5, universe nifty500"},
+        {"command": "moversover", "description": "All stocks that moved over a % today"},
         {"command": "fundmode", "description": "Movers: button vs auto fundamentals"},
         {"command": "all", "description": "Show every command - copy & send any line"},
         {"command": "menu", "description": "One-tap command buttons - no typing"},

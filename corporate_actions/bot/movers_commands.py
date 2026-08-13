@@ -453,9 +453,10 @@ def _market_closed_message(universe_label: str, market: str) -> str:
 def handle_big_movers(chat_id, parts) -> None:
     """ALL stocks beyond a % session-move threshold, one full report.
 
-    /bigmovers            \u2192 every NIFTY 500 stock up/down >= 5% today
-    /bigmovers 8          \u2192 >= 8% session move
-    /bigmovers 5 nifty100 \u2192 NIFTY 100 \u00b7 /bigmovers 8 sp500 \u2192 S&P 500
+    /moversover           \u2192 every NIFTY 500 stock up/down >= 5% today
+    /moversover 8         \u2192 >= 8% session move
+    /moversover 5 nifty100 \u2192 NIFTY 100 \u00b7 /moversover 8 sp500 \u2192 S&P 500
+    (aliases: /bigmovers, /bigmover, /moverlist, /watcherlist)
 
     Same threshold idea as /watcher (session move vs previous close, both
     directions) but returns the whole list in a single message like
