@@ -75,10 +75,11 @@ def _bars_from_response(result: dict, name: str, exchange: str, symbol: str,
 def get_ohlc(exchange: str, symbol: str, timeframe: str = "1d") -> dict | None:
     """Return OHLC bars for a symbol/timeframe via Yahoo chart, cached.
 
-    Returns {'timestamp','open','high','low','close','volume','interval',
-    'name','exchange','symbol','timeframe'} with the arrays aligned to the
-    same bars, or None on any failure. Incomplete leading/trailing bars are
-    dropped.
+    exchange picks the Yahoo suffix: 'NSE' -> .NS, 'BSE' -> .BO, 'US' -> bare
+    ticker (NASDAQ/NYSE). Returns {'timestamp','open','high','low','close',
+    'volume','interval','name','exchange','symbol','timeframe'} with the
+    arrays aligned to the same bars, or None on any failure. Incomplete
+    leading/trailing bars are dropped.
     """
     timeframe = (timeframe or "1d").lower()
     if timeframe not in OHLC_TIMEFRAMES:
@@ -91,7 +92,8 @@ def get_ohlc(exchange: str, symbol: str, timeframe: str = "1d") -> dict | None:
     if cached and now - cached["timestamp"] < _OHLC_CACHE_SECONDS:
         log.debug("ohlc cache hit for %s:%s (%s)", exchange, symbol, interval)
         return cached["data"]
-    suffix = ".BO" if exchange.upper() == "BSE" else ".NS"
+    # 'US' -> bare ticker (NASDAQ/NYSE), 'BSE' -> .BO, anything else (NSE) -> .NS
+    suffix = "" if exchange.upper() == "US" else (".BO" if exchange.upper() == "BSE" else ".NS")
     url = (
         f"https://query1.finance.yahoo.com/v8/finance/chart/{symbol}{suffix}"
         f"?range={range}&interval={interval}&includePrePost=false"

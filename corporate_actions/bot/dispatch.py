@@ -22,6 +22,7 @@ from . import (
     corporate_action_commands,
     fundamentals_commands,
     harmonic_commands,
+    indicator_commands,
     movers_commands,
     scanner_commands,
     schedule_commands,
@@ -185,6 +186,10 @@ def handle_command(chat_id, text):
 
     if command == "/scan500":
         scanner_commands.handle_scan500(chat_id, parts)
+        return
+
+    if command in ("/ind", "/indicator", "/tech", "/technical"):
+        indicator_commands.handle_indicator(chat_id, parts)
         return
 
     if command in ("/stock", "/info", "/quote", "/stockanalysis", "/stock-analysis",

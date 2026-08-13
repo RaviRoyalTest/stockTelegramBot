@@ -103,6 +103,9 @@ ALIAS_TO_MAIN = {
     "/qualitycheck": "/checklist",
     "/quality": "/checklist",
     "/harmonic": "/harmonicpatterns",
+    "/ind": "/indicator",
+    "/tech": "/indicator",
+    "/technical": "/indicator",
     "/movers": "/topmovers",
     "/marketmovers": "/topmovers",
     "/gainers": "/topgainers",
@@ -224,6 +227,16 @@ COMMAND_USAGE = {
         "/checklist mylist    \u2192 your whole watchlist (3 per batch)\n"
         "/checklist 5-10      \u2192 watchlist positions #5-#10\n"
         "Aliases: /investcheck, /scorecard, /qualitycheck"
+    ),
+    "/indicator": (
+        "<b>/indicator</b> - clear deep-dive for ONE indicator\n"
+        "/indicator RELIANCE RSI  \u2192 value, signal, trend &amp; how to read it\n"
+        "/indicator AAPL MACD     \u2192 US tickers work too (auto-detected)\n"
+        "/indicator RELIANCE      \u2192 the FULL all-indicators card\n"
+        "Indicators: rsi \u00b7 macd \u00b7 stochastic \u00b7 bollinger \u00b7 cci \u00b7 adx \u00b7 aroon \u00b7\n"
+        "psar \u00b7 supertrend \u00b7 ema/sma \u00b7 gmma \u00b7 vwap \u00b7 atr \u00b7 donchian \u00b7\n"
+        "squeeze \u00b7 cmf \u00b7 mfi \u00b7 obv\n"
+        "Aliases: /ind, /tech, /technical"
     ),
     "/schedule": (
         "<b>/schedule</b> - your automated reports (per user)\n"
@@ -385,6 +398,7 @@ def register_commands() -> bool:
         {"command": "usstock", "description": "US stock details: /usstock AAPL (USD fundamentals)"},
         {"command": "checklist", "description": "32-point investment scorecard: /checklist RELIANCE"},
         {"command": "harmonicpatterns", "description": "Harmonic pattern scan NIFTY 100/500: /harmonicpatterns all"},
+        {"command": "indicator", "description": "One-indicator deep-dive: /indicator RELIANCE RSI (US works too)"},
         {"command": "scan500", "description": "NIFTY 500 CNC/MIS technical scanner"},
         {"command": "topmovers", "description": "Top gainers AND losers with fundamentals"},
         {"command": "topgainers", "description": "Top rising stocks with fundamentals"},
