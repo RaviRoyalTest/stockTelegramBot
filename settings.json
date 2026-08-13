@@ -7,9 +7,13 @@
       "universe": "nifty500"
     },
     "recent_commands": [
+      "/gappers today",
+      "/corpactionsformylist",
+      "/toplosers 1h",
+      "/schedule run",
+      "/schedule",
       "/moversfund auto",
       "/moversfund",
-      "/schedule",
       "/forecast GODREJCP"
     ],
     "movers_fund": "auto"
