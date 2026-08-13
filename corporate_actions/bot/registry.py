@@ -11,7 +11,7 @@ from .. import storage
 from ..core.text import split_messages
 from ..formatting.schedule import format_schedule, format_settings
 from ..telegram.client import is_configured, set_my_commands
-from ..telegram.markup import quick_menu_markup
+from ..telegram.markup import inline_command_buttons, quick_menu_markup
 from . import corporate_action_commands, scanner_commands, schedule_commands, settings_commands, status as status_commands, watchlist_commands
 from .help_texts import CA_HELP
 from .reply import reply, reply_messages
@@ -184,7 +184,8 @@ COMMAND_USAGE = {
         "/gappers GODREJCP     \u2192 that stock's recent gap history (close \u2192 next open)"
     ),
     "/topmovers": (
-        "<b>/topmovers</b> - top gainers AND losers (default: last 1h, NIFTY 100)\n\n"
+        "<b>/topmovers</b> - top gainers AND losers (default: last 1h, NIFTY 100)\n"
+        "Tap a command below to copy it, then send it.\n\n"
         "<b>Quick picks</b>\n"
         "<code>/topmovers</code>             \u2192 last 1h, NIFTY 100\n"
         "<code>/topmovers 1h 10</code>       \u2192 top 10 movers last hour\n"
@@ -200,7 +201,8 @@ COMMAND_USAGE = {
         "(via the Get Fundamentals button - change with /moversfund)."
     ),
     "/topgainers": (
-        "<b>/topgainers</b> - top rising stocks (default: today, NIFTY 500, top 30)\n\n"
+        "<b>/topgainers</b> - top rising stocks (default: today, NIFTY 500, top 30)\n"
+        "Tap a command below to copy it, then send it.\n\n"
         "<b>Quick picks</b>\n"
         "<code>/topgainers</code>          \u2192 today\u2019s top 30 gainers\n"
         "<code>/topgainers 1h</code>       \u2192 last 1h gainers\n"
@@ -216,7 +218,8 @@ COMMAND_USAGE = {
         "Each row also shows P/E, sector P/E, 52W range, div yield, holdings &amp; D/E."
     ),
     "/toplosers": (
-        "<b>/toplosers</b> - top falling stocks (default: today, NIFTY 500, top 30)\n\n"
+        "<b>/toplosers</b> - top falling stocks (default: today, NIFTY 500, top 30)\n"
+        "Tap a command below to copy it, then send it.\n\n"
         "<b>Quick picks</b>\n"
         "<code>/toplosers</code>              \u2192 today\u2019s top 30 losers\n"
         "<code>/toplosers 1h</code>           \u2192 losers in the last hour\n"
@@ -333,6 +336,37 @@ COMMAND_USAGE = {
 }
 
 
+# One-tap example commands shown as tappable reply-keyboard buttons when a
+# bare command displays its usage (typing /toplosers -> buttons for
+# /toplosers 1h 10, /toplosers 2d, ...). The button label IS the command
+# text, so tapping it runs the command - no typing, on mobile and desktop.
+COMMAND_EXAMPLES = {
+    "/corpactions": ["/corpactions", "/corpactions dividend", "/corpactions today", "/corpactions RELIANCE"],
+    "/exdates": ["/exdates today", "/exdates 7"],
+    "/news": ["/news", "/news RELIANCE", "/news 5"],
+    "/fundamentalanalyze": ["/fundamentalanalyze RELIANCE", "/fundamentalanalyze mylist", "/fundamentalanalyze 5-10"],
+    "/fundamentalreport": ["/fundamentalreport RELIANCE", "/fundamentalreport mylist", "/fundamentalreport 3-5"],
+    "/usstock": ["/usstock AAPL", "/usstock MSFT", "/usstock NVDA"],
+    "/harmonicpatterns": ["/harmonicpatterns", "/harmonicpatterns 500", "/harmonicpatterns RELIANCE"],
+    "/topmovers": ["/topmovers", "/topmovers 1h 10", "/topmovers today 25", "/topmovers 1w 500", "/topmovers 12-08-2026"],
+    "/topgainers": ["/topgainers", "/topgainers 1h 10", "/topgainers 100", "/topgainers 12-08-2026"],
+    "/toplosers": ["/toplosers", "/toplosers 1h 10", "/toplosers 2d", "/toplosers 100", "/toplosers 12-08-2026"],
+    "/gappers": ["/gappers", "/gappers 1d", "/gappers 2d", "/gappers window 3d", "/gappers 12-08-2026", "/gappers up", "/gappers all", "/gappers GODREJCP"],
+    "/checklist": ["/checklist RELIANCE", "/checklist mylist"],
+    "/indicator": ["/indicator RELIANCE RSI", "/indicator AAPL MACD", "/indicator RELIANCE"],
+    "/forecast": ["/forecast RELIANCE", "/forecast AAPL", "/forecast GODREJCP"],
+    "/learn": ["/learn", "/learn stocks", "/learn schedule", "/learn /scan500"],
+    "/schedule": ["/schedule", "/schedule add 3h /scan500", "/schedule run", "/schedule pause 1d"],
+    "/market": ["/market", "/market in", "/market us", "/market any"],
+    "/pricealert": ["/pricealert 3", "/pricealert off"],
+    "/alertfilters": ["/alertfilters dividend,bonus", "/alertfilters all"],
+    "/watcher": ["/watcher on", "/watcher off", "/watcher set 5", "/watcher universe nifty500"],
+    "/moversfund": ["/moversfund button", "/moversfund auto"],
+    "/addstock": ["/addstock RELIANCE NSE", "/addstock PGINVIT"],
+    "/removestock": ["/removestock TCS"],
+}
+
+
 # Commands that already do something useful when typed bare: describe them
 # first, then still run them, so the user sees BOTH what it does and the
 # result. value = (description, runnable(chat_id)).
@@ -392,12 +426,19 @@ def _bare_command_usage(chat_id, command) -> bool:
     usage = COMMAND_USAGE.get(command)
     if usage:
         # CURRENT status first (e.g. watcher ON/OFF, current filters, your
-        # schedule), then the subcommand list - so nothing is lost.
+        # schedule), then the subcommand list - so nothing is lost. One-tap
+        # example buttons ride along so every command can be run without
+        # typing (mobile + desktop).
         status_fn = COMMAND_STATUS.get(command)
         status = status_fn(chat_id) if status_fn else ""
+        examples = COMMAND_EXAMPLES.get(command)
+        # One-tap buttons: tap to RUN the command (callback-based, works on
+        # mobile and desktop).
+        reply_markup = inline_command_buttons(examples) if examples else None
         reply(
             chat_id,
             (status + "\n\n" if status else "") + usage,
+            reply_markup=reply_markup,
         )
         return True
     described = DESCRIBE_AND_RUN.get(command)
@@ -408,14 +449,29 @@ def _bare_command_usage(chat_id, command) -> bool:
     return False
 
 
+def _primary_examples() -> list[str]:
+    """One representative example per command, in help order (for /help)."""
+    primaries = []
+    for command in COMMAND_USAGE:
+        examples = COMMAND_EXAMPLES.get(command)
+        if examples:
+            primaries.append(examples[0])
+    return primaries
+
+
 def send_help(chat_id):
     """Send the styled HTML help message (/help, /start, unknown commands).
 
-    Rides along the persistent quick-menu reply keyboard (see /menu).
+    Rides along a blue grid of one-tap command buttons (one example per
+    command) plus the persistent quick-menu reply keyboard, so every
+    command in the help is copyable in a single tap.
     """
     from .help_texts import HELP_TEXT
 
     markup = quick_menu_markup()
+    grid = inline_command_buttons(_primary_examples(), per_row=2)
+    if grid:
+        markup["inline_keyboard"] = grid["inline_keyboard"]
     reply_messages(
         chat_id,
         split_messages(HELP_TEXT.split("\n")),
