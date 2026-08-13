@@ -1,27 +1,22 @@
 """Telegram keyboard / markup builders (reply keyboards + inline buttons)."""
 
-from urllib.parse import quote
+def inline_command_buttons(commands: list[str], per_row: int = 2) -> dict:
+    """One-tap command buttons that RUN the command when tapped.
 
-
-def inline_command_buttons(commands: list[str], bot_username: str,
-                           per_row: int = 2) -> dict:
-    """Blue one-tap buttons that pre-fill a command into the input box.
-
-    Each button is a t.me/<bot>?text=<command> deep link. Telegram renders
-    URL buttons BLUE so the user can see they are clickable/copyable, and
-    tapping one opens the chat with the command already typed in the input,
-    ready to send - works identically on mobile and desktop.
+    Each button is an inline callback button labelled with the full command
+    text. Tapping it sends a `cmd:<command>` callback which the dispatcher
+    answers and runs directly - no typing, no send button, and it works
+    identically on mobile and desktop Telegram (URL deep-links were dropped
+    because on mobile they opened the in-app browser instead of pre-filling
+    the chat). Callback data must stay under Telegram's 64-byte limit, which
+    every example command does.
     """
-    username = (bot_username or "").strip().lstrip("@")
-    if not username or not commands:
+    if not commands:
         return {}
     rows = []
     for row_start in range(0, len(commands), per_row):
         rows.append([
-            {
-                "text": command,
-                "url": f"https://t.me/{username}?text={quote(command)}",
-            }
+            {"text": command, "callback_data": f"cmd:{command}"}
             for command in commands[row_start:row_start + per_row]
         ])
     return {"inline_keyboard": rows}

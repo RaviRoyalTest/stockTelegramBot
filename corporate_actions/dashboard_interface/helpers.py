@@ -104,8 +104,17 @@ def fetch_quotes_for(items: list[dict]) -> dict:
     return prices
 
 
-def run_screen(period_key: str, direction: str, universe: str, count: int) -> list[dict]:
-    """Run a market screen and return formatted rows (symbol, change, price, name)."""
+def run_screen(period_key: str, direction: str, universe: str, count: int,
+               kind: str = "movers", target_date=None) -> list[dict]:
+    """Run a market screen and return formatted rows.
+
+    kind="movers" (default) uses the price-movement fetcher and may target a
+    specific past date (that day's historical movers); kind="gap" returns
+    overnight gaps - today or on a specific date - sorted by gap size.
+    direction is gainers/losers/all for movers, up/down/all for gaps.
+    """
+    if kind == "gap":
+        return run_gap_screen(direction, universe, count, target_date)
     period = MOVERS_PERIODS.get(period_key, ("intraday", 60))
     exchange = sources.universe_exchange(universe)
     symbols = sources.get_index_universe(universe)
@@ -113,6 +122,8 @@ def run_screen(period_key: str, direction: str, universe: str, count: int) -> li
         return []
 
     def _fetch(symbol):
+        if target_date:
+            return symbol, sources.get_daily_change_on_date(exchange, symbol, target_date)
         return symbol, fetch_period_change(symbol, period, exchange=exchange)
 
     fetched = []
@@ -144,6 +155,61 @@ def run_screen(period_key: str, direction: str, universe: str, count: int) -> li
             "Symbol": symbol,
             "Price": data.get("price"),
             "Change %": data.get("change_pct"),
+            "Name": data.get("name") or "",
+        }
+        for symbol, data in fetched[:count]
+    ]
+
+
+def run_gap_screen(direction: str, universe: str, count: int,
+                   target_date=None) -> list[dict]:
+    """Overnight-gap screen: each stock's gap at the open.
+
+    Today's gaps by default; `target_date` shows the gaps that opened on
+    that specific date. direction: "down" (gap-downs), "up" (gap-ups) or
+    "all" (both, sorted by absolute size).
+    """
+    exchange = sources.universe_exchange(universe)
+    symbols = sources.get_index_universe(universe)
+    if not symbols:
+        return []
+
+    def _fetch(symbol):
+        if target_date:
+            data = sources.get_gap_change_on_date(exchange, symbol, target_date)
+        else:
+            data = sources.get_gap_change(exchange, symbol)
+        return symbol, data
+
+    fetched = []
+    with ThreadPoolExecutor(max_workers=25) as executor:
+        futures = {executor.submit(_fetch, symbol): symbol for symbol in symbols}
+        for future in as_completed(futures):
+            symbol = futures[future]
+            try:
+                data = future.result()[1]
+            except Exception:
+                data = None
+            if data and data.get("gap_pct") is not None:
+                fetched.append((symbol, data))
+
+    if direction == "up":
+        fetched = [row for row in fetched if row[1]["gap_pct"] > 0]
+        fetched.sort(key=lambda row: row[1]["gap_pct"], reverse=True)
+    elif direction == "down":
+        fetched = [row for row in fetched if row[1]["gap_pct"] < 0]
+        fetched.sort(key=lambda row: row[1]["gap_pct"])
+    else:
+        fetched.sort(key=lambda row: abs(row[1]["gap_pct"]), reverse=True)
+
+    return [
+        {
+            "Symbol": symbol,
+            "Price": data.get("price"),
+            "Open": data.get("open"),
+            "Prev Close": data.get("prev_close"),
+            "Change %": data.get("gap_pct"),
+            "Move %": data.get("move_from_open_pct"),
             "Name": data.get("name") or "",
         }
         for symbol, data in fetched[:count]

@@ -7,7 +7,7 @@ from __future__ import annotations
 
 import logging
 
-from .. import config, storage
+from .. import storage
 from ..core.text import split_messages
 from ..formatting.schedule import format_schedule, format_settings
 from ..telegram.client import is_configured, set_my_commands
@@ -172,14 +172,14 @@ COMMAND_USAGE = {
     ),
     "/gappers": (
         "<b>/gappers</b> - overnight gap scanner: prev close \u2192 open gaps\n"
-        "/gappers              \u2192 top 15 gapping stocks today, NIFTY 500\n"
-        "/gappers 2d | 3d      \u2192 the gaps that opened 2 / 3 sessions ago\n"
+        "/gappers              \u2192 top 15 gap-DOWNs today (default), NIFTY 500\n"
+        "/gappers up | all     \u2192 gap-UPs only / both directions\n"
+        "/gappers 1d | 2d | 3d \u2192 the gaps that opened 1 / 2 / 3 sessions ago\n"
         "/gappers window 3d    \u2192 today's OPEN vs the close 3 sessions ago\n"
         "/gappers 12-08-2026   \u2192 the gaps that opened ON that date\n"
         "                       (12 Aug \u00b7 12aug \u00b7 2026-08-12 \u00b7 Aug 12 all work)\n"
         "/gappers 08-08-2026 12-08-2026  \u2192 cumulative gap over a period:\n"
         "                       open on the end date vs the close before the start\n"
-        "/gappers down         \u2192 gap-DOWNs only \u00b7 /gappers up \u2192 gap-UPs only\n"
         "/gappers 20 nifty100  \u2192 top 20, NIFTY 100 \u00b7 /gappers sp500 \u2192 S&P 500\n"
         "/gappers GODREJCP     \u2192 that stock's recent gap history (close \u2192 next open)"
     ),
@@ -351,7 +351,7 @@ COMMAND_EXAMPLES = {
     "/topmovers": ["/topmovers", "/topmovers 1h 10", "/topmovers today 25", "/topmovers 1w 500", "/topmovers 12-08-2026"],
     "/topgainers": ["/topgainers", "/topgainers 1h 10", "/topgainers 100", "/topgainers 12-08-2026"],
     "/toplosers": ["/toplosers", "/toplosers 1h 10", "/toplosers 2d", "/toplosers 100", "/toplosers 12-08-2026"],
-    "/gappers": ["/gappers", "/gappers 2d", "/gappers 3d", "/gappers window 3d", "/gappers 12-08-2026", "/gappers down", "/gappers GODREJCP"],
+    "/gappers": ["/gappers", "/gappers 1d", "/gappers 2d", "/gappers window 3d", "/gappers 12-08-2026", "/gappers up", "/gappers all", "/gappers GODREJCP"],
     "/checklist": ["/checklist RELIANCE", "/checklist mylist"],
     "/indicator": ["/indicator RELIANCE RSI", "/indicator AAPL MACD", "/indicator RELIANCE"],
     "/forecast": ["/forecast RELIANCE", "/forecast AAPL", "/forecast GODREJCP"],
@@ -432,8 +432,9 @@ def _bare_command_usage(chat_id, command) -> bool:
         status_fn = COMMAND_STATUS.get(command)
         status = status_fn(chat_id) if status_fn else ""
         examples = COMMAND_EXAMPLES.get(command)
-        # Blue one-tap buttons: tap to copy the command into the input box.
-        reply_markup = inline_command_buttons(examples, config.BOT_USERNAME) if examples else None
+        # One-tap buttons: tap to RUN the command (callback-based, works on
+        # mobile and desktop).
+        reply_markup = inline_command_buttons(examples) if examples else None
         reply(
             chat_id,
             (status + "\n\n" if status else "") + usage,
@@ -468,7 +469,7 @@ def send_help(chat_id):
     from .help_texts import HELP_TEXT
 
     markup = quick_menu_markup()
-    grid = inline_command_buttons(_primary_examples(), config.BOT_USERNAME, per_row=2)
+    grid = inline_command_buttons(_primary_examples(), per_row=2)
     if grid:
         markup["inline_keyboard"] = grid["inline_keyboard"]
     reply_messages(

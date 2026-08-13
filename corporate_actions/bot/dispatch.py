@@ -295,6 +295,7 @@ def handle_callback_query(callback) -> None:
     """Handle an inline-button tap.
 
     Supported buttons:
+      cmd:<command>          - one-tap command button -> runs the command
       stknext:<deep>:<start> - the 'Next' pagination button on stock batches
       fund:<SYMBOL>          - symbol button -> /fundamentalreport SYMBOL
       ana:<SYMBOL>           - symbol button -> /fundamentalanalyze SYMBOL
@@ -325,6 +326,21 @@ def handle_callback_query(callback) -> None:
             context["rows"], context["header"], context["failed"], context["symbols"],
             "mfund", monotonic(), is_us=bool(context.get("us")),
         )
+        return
+
+    if data.startswith("cmd:"):
+        # One-tap command buttons (bare-command hints and /help): the label
+        # IS the command text, so a tap runs it exactly as if typed - no
+        # typing, works on mobile and desktop.
+        command = data.split(":", 1)[1].strip()
+        if not command or len(command) > 200:
+            return
+        log.info("callback cmd: %s (chat %s)", command, chat_id)
+        try:
+            handle_command(chat_id, command)
+        except Exception as error:
+            log.warning("callback command %r failed: %s", command, config.redact(error))
+            reply(chat_id, f"That command failed: {config.redact(str(error))}. Use /help.")
         return
 
     if data.startswith("fund:") or data.startswith("ana:"):
