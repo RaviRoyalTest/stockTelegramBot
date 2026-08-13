@@ -59,7 +59,7 @@ def run_schedule_now(chat_id) -> None:
             commands = [command for command in config.SCHEDULED_COMMANDS if command.strip()]
         if not commands:
             reply(chat_id, "No scheduled commands for your chat yet.\n"
-                  "Add one with <code>/schedule add 3h /toplosers 1h</code>, then "
+                  "Add one with <code>/schedule add 3h /scan500</code>, then "
                   "use <code>/schedule run</code> to fire it now.")
             return
     run_command_sequence(
@@ -128,7 +128,7 @@ def handle_sched(chat_id, parts) -> None:
     """Manage YOUR OWN automated-report schedule (works for every user).
 
     /schedule                  -> show YOUR schedule
-    /schedule add <int> <cmd...> -> add a command on its own timer (e.g. /schedule add 3h /toplosers 1h)
+    /schedule add <int> <cmd...> -> add a command on its own timer (e.g. /schedule add 3h /scan500)
     /schedule remove <n>       -> remove YOUR entry n (1-based, as shown by /schedule)
     /schedule clear            -> remove all of YOUR entries
     /schedule pause <dur>      -> pause YOUR whole schedule (1d, 2d, 3d, 1w, 2w, 1mo...)
@@ -239,7 +239,7 @@ def handle_schedule_add(chat_id, parts) -> None:
         reply(
             chat_id,
             "Usage: <code>/schedule add &lt;interval&gt; &lt;command&gt;</code>\n"
-            "e.g. <code>/schedule add 3h /toplosers 1h</code> or "
+            "e.g. <code>/schedule add 3h /scan500</code> or "
             "<code>/schedule add 90m /topmovers 30m</code>\n"
             "Or at a clock time: <code>/schedule add at 09:15 /toplosers 1h</code> "
             "(daily at 09:15 IST) or <code>/schedule add at 09:15 3h /cmd</code> "
@@ -286,7 +286,7 @@ def handle_schedule_add(chat_id, parts) -> None:
     command_tokens, options = parse_schedule_options(list(parts[cmd_start:]))
     command = " ".join(command_tokens).strip()
     if not command.startswith("/"):
-        reply(chat_id, "The command must start with / (e.g. <code>/toplosers 1h</code>).")
+        reply(chat_id, "The command must start with / (e.g. <code>/scan500</code>).")
         return
     if command.lower().split()[0] in ("/sched", "/schedule"):
         reply(chat_id, "You cannot schedule /schedule itself.")

@@ -280,10 +280,10 @@ COMMAND_USAGE = {
     ),
     "/schedule": (
         "<b>/schedule</b> - your automated reports (per user)\n"
-        "/schedule add 3h /toplosers 1h    \u2192 every 3 hours\n"
+        "/schedule add 3h /scan500          \u2192 every 3 hours\n"
         "/schedule add at 09:15 /toplosers 1h  \u2192 daily at 09:15 IST\n"
-        "/schedule add 3h /toplosers 1h us \u2192 US market hours only (NASDAQ/NYSE)\n"
-        "/schedule add 3h /toplosers 1h any\u2192 no gate - any time\n"
+        "/schedule add 3h /scan500 us       \u2192 US market hours only (NASDAQ/NYSE)\n"
+        "/schedule add 3h /scan500 any      \u2192 no gate - any time\n"
         "/schedule add 3h /cmd in from 09:15 to 15:30  \u2192 explicit run window\n"
         "/schedule pause 1d | 2d | 3d | 1w | 2w | 1mo  \u2192 pause YOUR schedule\n"
         "/schedule resume                   \u2192 resume early\n"
@@ -356,7 +356,7 @@ COMMAND_EXAMPLES = {
     "/indicator": ["/indicator RELIANCE RSI", "/indicator AAPL MACD", "/indicator RELIANCE"],
     "/forecast": ["/forecast RELIANCE", "/forecast AAPL", "/forecast GODREJCP"],
     "/learn": ["/learn", "/learn stocks", "/learn schedule", "/learn /scan500"],
-    "/schedule": ["/schedule", "/schedule add 3h /toplosers 1h", "/schedule run", "/schedule pause 1d"],
+    "/schedule": ["/schedule", "/schedule add 3h /scan500", "/schedule run", "/schedule pause 1d"],
     "/market": ["/market", "/market in", "/market us", "/market any"],
     "/pricealert": ["/pricealert 3", "/pricealert off"],
     "/alertfilters": ["/alertfilters dividend,bonus", "/alertfilters all"],
@@ -508,7 +508,7 @@ def register_commands() -> bool:
         {"command": "alertfilters", "description": "Receive only chosen action types"},
         {"command": "pricealert", "description": "Alert on +/-PCT% daily price move"},
         {"command": "settings", "description": "Show your current settings"},
-        {"command": "schedule", "description": "Auto reports: /schedule add 3h /toplosers 1h, pause 1d, market us"},
+        {"command": "schedule", "description": "Auto reports: /schedule add 3h /scan500, pause 1d, market us"},
         {"command": "market", "description": "Market-hours gate for reports: /market us, in, any"},
         {"command": "status", "description": "Check persistence / GitHub push"},
         {"command": "checknow", "description": "Force a check and resend alerts"},

@@ -110,7 +110,7 @@ def format_schedule(chat_id) -> str:
             )
         return (
             "<b>Schedule:</b> no automated reports yet for your chat.\n"
-            "Add one with <code>/schedule add 3h /toplosers 1h</code>."
+            "Add one with <code>/schedule add 3h /scan500</code>."
         )
     lines = [
         "<b>Your schedule (schedule.json - pushed to GitHub)</b>",
@@ -144,7 +144,7 @@ def format_schedule(chat_id) -> str:
             line += f"  \u2014 next run {format_next_run(due_time, tz_name, tz_tag)}"
         lines.append(line)
     lines.append(
-        "\nUsage: <code>/schedule add 3h /toplosers 1h</code> (interval: 180, 90m, 3h, 1d)"
+        "\nUsage: <code>/schedule add 3h /scan500</code> (interval: 180, 90m, 3h, 1d)"
     )
     lines.append("Market gate: append <code>us</code>, <code>any</code> or "
                  "<code>in from HH:MM to HH:MM</code> to /schedule add")

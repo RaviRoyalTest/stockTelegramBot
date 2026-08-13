@@ -192,7 +192,7 @@ COMMAND_LEARN: dict = {
         "tips": [
             "Takes ~1-2 minutes - it scans all ~500 stocks.",
             "Cross-check picks with /fundamentalreport and /forecast.",
-            "Schedule it: /schedule add 3h runs it automatically in market hours.",
+            "Schedule it: /schedule add 3h /scan500 runs it automatically in market hours.",
         ],
     },
     "/topmovers": {
@@ -255,7 +255,7 @@ COMMAND_LEARN: dict = {
         "what": "Automated reports - run any command on a timer, only during your chosen market hours, with pause support.",
         "syntax": "/schedule add INTERVAL CMD [in|us|any] [from HH:MM to HH:MM] | pause D | resume | run | remove N | clear",
         "examples": [
-            "/schedule add 3h /toplosers 1h  \u2192 every 3 hours (Indian market hours by default)",
+            "/schedule add 3h /scan500  \u2192 every 3 hours (Indian market hours by default)",
             "/schedule add 3h /usstock AAPL us  \u2192 US hours only",
             "/schedule add at 09:15 /toplosers 1h  \u2192 daily at 09:15 IST",
             "/schedule add 3h /cmd in from 09:15 to 15:30  \u2192 custom window",

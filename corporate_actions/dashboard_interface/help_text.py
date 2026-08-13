@@ -48,7 +48,7 @@ HELP_TEXT = (
     "- `/settings` — view your current filter & alert config\n\n"
     "**System**\n"
     "- `/status` — where your watchlist is saved & GitHub push status\n"
-    "- `/schedule add 3h /toplosers 1h` — run a command automatically every 3h; `/schedule add at 09:15 /toplosers 1h` — daily at a clock time (works for every user; each person's reports go to their own chat)\n"
+    "- `/schedule add 3h /scan500` — run a command automatically every 3h; `/schedule add at 09:15 /toplosers 1h` — daily at a clock time (works for every user; each person's reports go to their own chat)\n"
     "- `/schedule add 3h /cmd in|us|any` — run only during Indian / US market hours (`in` = NSE/BSE 09:15-15:30 IST, `us` = NASDAQ/NYSE 09:30-16:00 ET, `any` = always)\n"
     "- `/schedule pause 1d | 2d | 3d | 1w | 2w | 1mo` — pause YOUR schedule (auto-resumes when it lapses; resume early with `/schedule resume`)\n"
     "- `/checknow` — force-run alerts and re-send all matches\n"
