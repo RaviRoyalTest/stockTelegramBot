@@ -1,27 +1,5 @@
 """Telegram keyboard / markup builders (reply keyboards + inline buttons)."""
 
-def inline_command_buttons(commands: list[str], per_row: int = 2) -> dict:
-    """One-tap command buttons that RUN the command when tapped.
-
-    Each button is an inline callback button labelled with the full command
-    text. Tapping it sends a `cmd:<command>` callback which the dispatcher
-    answers and runs directly - no typing, no send button, and it works
-    identically on mobile and desktop Telegram (URL deep-links were dropped
-    because on mobile they opened the in-app browser instead of pre-filling
-    the chat). Callback data must stay under Telegram's 64-byte limit, which
-    every example command does.
-    """
-    if not commands:
-        return {}
-    rows = []
-    for row_start in range(0, len(commands), per_row):
-        rows.append([
-            {"text": command, "callback_data": f"cmd:{command}"}
-            for command in commands[row_start:row_start + per_row]
-        ])
-    return {"inline_keyboard": rows}
-
-
 def quick_menu_markup() -> dict:
     """Persistent one-tap reply keyboard of the main commands.
 
@@ -44,20 +22,6 @@ def quick_menu_markup() -> dict:
 def hide_keyboard_markup() -> dict:
     """Remove the persistent quick-menu keyboard (ReplyKeyboardRemove)."""
     return {"remove_keyboard": True}
-
-
-def example_markup(commands: list[str], per_row: int = 2) -> dict:
-    """One-tap reply keyboard of example commands for a single command.
-
-    Each button label IS a full example command (e.g. "/toplosers 2d"), so
-    tapping it sends that text through the normal dispatcher - no typing.
-    Works identically on mobile and desktop Telegram (ReplyKeyboardMarkup),
-    and replaces the quick menu while it is shown.
-    """
-    rows = []
-    for row_start in range(0, len(commands), per_row):
-        rows.append(commands[row_start:row_start + per_row])
-    return {"keyboard": rows, "resize_keyboard": True}
 
 
 def symbol_buttons(symbols: list[str], prefix: str = "fund", per_row: int = 4) -> dict:
