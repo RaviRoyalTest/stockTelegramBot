@@ -11,7 +11,7 @@ from .. import storage
 from ..core.text import split_messages
 from ..formatting.schedule import format_schedule, format_settings
 from ..telegram.client import is_configured, set_my_commands
-from ..telegram.markup import quick_menu_markup
+from ..telegram.markup import example_markup, quick_menu_markup
 from . import corporate_action_commands, scanner_commands, schedule_commands, settings_commands, status as status_commands, watchlist_commands
 from .help_texts import CA_HELP
 from .reply import reply, reply_messages
@@ -329,6 +329,37 @@ COMMAND_USAGE = {
 }
 
 
+# One-tap example commands shown as tappable reply-keyboard buttons when a
+# bare command displays its usage (typing /toplosers -> buttons for
+# /toplosers 1h 10, /toplosers 2d, ...). The button label IS the command
+# text, so tapping it runs the command - no typing, on mobile and desktop.
+COMMAND_EXAMPLES = {
+    "/corpactions": ["/corpactions", "/corpactions dividend", "/corpactions today", "/corpactions RELIANCE"],
+    "/exdates": ["/exdates today", "/exdates 7"],
+    "/news": ["/news", "/news RELIANCE", "/news 5"],
+    "/fundamentalanalyze": ["/fundamentalanalyze RELIANCE", "/fundamentalanalyze mylist", "/fundamentalanalyze 5-10"],
+    "/fundamentalreport": ["/fundamentalreport RELIANCE", "/fundamentalreport mylist", "/fundamentalreport 3-5"],
+    "/usstock": ["/usstock AAPL", "/usstock MSFT", "/usstock NVDA"],
+    "/harmonicpatterns": ["/harmonicpatterns", "/harmonicpatterns 500", "/harmonicpatterns RELIANCE"],
+    "/topmovers": ["/topmovers", "/topmovers 1h 10", "/topmovers today 25", "/topmovers 1w 500"],
+    "/topgainers": ["/topgainers", "/topgainers 1h 10", "/topgainers 100"],
+    "/toplosers": ["/toplosers", "/toplosers 1h 10", "/toplosers 2d", "/toplosers 100"],
+    "/gappers": ["/gappers", "/gappers 2d", "/gappers 3d", "/gappers window 3d", "/gappers down", "/gappers GODREJCP"],
+    "/checklist": ["/checklist RELIANCE", "/checklist mylist"],
+    "/indicator": ["/indicator RELIANCE RSI", "/indicator AAPL MACD", "/indicator RELIANCE"],
+    "/forecast": ["/forecast RELIANCE", "/forecast AAPL", "/forecast GODREJCP"],
+    "/learn": ["/learn", "/learn stocks", "/learn schedule", "/learn /scan500"],
+    "/schedule": ["/schedule", "/schedule add 3h /scan500", "/schedule run", "/schedule pause 1d"],
+    "/market": ["/market", "/market in", "/market us", "/market any"],
+    "/pricealert": ["/pricealert 3", "/pricealert off"],
+    "/alertfilters": ["/alertfilters dividend,bonus", "/alertfilters all"],
+    "/watcher": ["/watcher on", "/watcher off", "/watcher set 5", "/watcher universe nifty500"],
+    "/moversfund": ["/moversfund button", "/moversfund auto"],
+    "/addstock": ["/addstock RELIANCE NSE", "/addstock PGINVIT"],
+    "/removestock": ["/removestock TCS"],
+}
+
+
 # Commands that already do something useful when typed bare: describe them
 # first, then still run them, so the user sees BOTH what it does and the
 # result. value = (description, runnable(chat_id)).
@@ -388,10 +419,17 @@ def _bare_command_usage(chat_id, command) -> bool:
     usage = COMMAND_USAGE.get(command)
     if usage:
         # CURRENT status first (e.g. watcher ON/OFF, current filters, your
-        # schedule), then the subcommand list - so nothing is lost.
+        # schedule), then the subcommand list - so nothing is lost. One-tap
+        # example buttons ride along so every command can be run without
+        # typing (mobile + desktop).
         status_fn = COMMAND_STATUS.get(command)
         status = status_fn(chat_id) if status_fn else ""
-        reply(chat_id, (status + "\n\n" if status else "") + usage)
+        examples = COMMAND_EXAMPLES.get(command)
+        reply(
+            chat_id,
+            (status + "\n\n" if status else "") + usage,
+            reply_markup=example_markup(examples) if examples else None,
+        )
         return True
     described = DESCRIBE_AND_RUN.get(command)
     if described:

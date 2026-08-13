@@ -25,6 +25,20 @@ def hide_keyboard_markup() -> dict:
     return {"remove_keyboard": True}
 
 
+def example_markup(commands: list[str], per_row: int = 2) -> dict:
+    """One-tap reply keyboard of example commands for a single command.
+
+    Each button label IS a full example command (e.g. "/toplosers 2d"), so
+    tapping it sends that text through the normal dispatcher - no typing.
+    Works identically on mobile and desktop Telegram (ReplyKeyboardMarkup),
+    and replaces the quick menu while it is shown.
+    """
+    rows = []
+    for row_start in range(0, len(commands), per_row):
+        rows.append(commands[row_start:row_start + per_row])
+    return {"keyboard": rows, "resize_keyboard": True}
+
+
 def symbol_buttons(symbols: list[str], prefix: str = "fund", per_row: int = 4) -> dict:
     """Inline keyboard of one button per symbol, e.g. tap PFC -> deep report.
 
