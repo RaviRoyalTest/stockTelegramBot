@@ -5,7 +5,10 @@
       "threshold": 5.0,
       "enabled": true,
       "universe": "nifty500"
-    }
+    },
+    "recent_commands": [
+      "/forecast GODREJCP"
+    ]
   },
   "@StockVigilBot": {
     "action_filters": [],
