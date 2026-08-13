@@ -200,7 +200,7 @@ COMMAND_LEARN: dict = {
         "syntax": "/topmovers [period] [N] [100 | 500 | nasdaq100]",
         "examples": ["/topmovers  \u2192 last 1h, NIFTY 100", "/topmovers 2d 500  \u2192 2-day movers, NIFTY 500", "/topmovers today nasdaq100  \u2192 today's US movers"],
         "output": "Rows with symbol, price, % move and the day's range context; ends with a Get Fundamentals button per row.",
-        "tips": ["Periods: 5m 15m 30m 1h 2h 4h today 1d 2d 5d 1w 2w 1mo 3mo 6mo 1y.", "Market-hours gated: live screens run during trading hours + 1h after close (IST for NIFTY, ET for US); a DATE query like /topmovers 12-08-2026 works any time."],
+        "tips": ["Periods: 5m 15m 30m 1h 2h 4h today 1d 2d 5d 1w 2w 1mo 3mo 6mo 1y.", "Market-hours gated: live screens run from market open until the end of the session day (IST for NIFTY, ET for US) - after-hours runs still return the last session's moves; a DATE query like /topmovers 12-08-2026 works any time."],
         "aliases": "/movers, /marketmovers",
     },
     "/moversover": {
@@ -208,7 +208,7 @@ COMMAND_LEARN: dict = {
         "syntax": "/moversover [%] [nifty100 | nifty500 | sp500 | nasdaq100]",
         "examples": ["/moversover  \u2192 every stock up/down \u2265 5% today, NIFTY 500", "/moversover 8 sp500  \u2192 S&P 500 stocks beyond \u00b18%"],
         "output": "Every stock whose session move (price vs previous close) crosses your % threshold, ranked by |move| - like the /watcher alerts but all in one report.",
-        "tips": ["Market-hours gated: runs during trading hours + 1h after close (IST for NIFTY, ET for US) so stale moves are never shown."],
+        "tips": ["Market-hours gated: runs from market open until the end of the session day (IST for NIFTY, ET for US); after-hours runs still return the last session's moves."],
         "aliases": "/bigmovers, /bigmover, /moverlist, /watcherlist",
     },
     "/topgainers": {
@@ -216,7 +216,7 @@ COMMAND_LEARN: dict = {
         "syntax": "/topgainers [period] [N] [100 | 500 | nasdaq100]",
         "examples": ["/topgainers 1h 10", "/topgainers 1mo 20 500", "/topgainers today nasdaq100"],
         "output": "Best-performing stocks over the window with price, % and fundamentals button. A bare 100/500 is the top-N count; use nifty100/nifty500 for the index.",
-        "tips": ["Market-hours gated: live screens run during trading hours + 1h after close; DATE queries work any time."],
+        "tips": ["Market-hours gated: live screens run from market open until the end of the session day; after-hours runs still return the last session's moves; DATE queries work any time."],
         "aliases": "/gainers",
     },
     "/toplosers": {
@@ -224,7 +224,7 @@ COMMAND_LEARN: dict = {
         "syntax": "/toplosers [period] [N] [100 | 500 | nasdaq100]",
         "examples": ["/toplosers  \u2192 today's top 30 losers", "/toplosers 1h 10", "/toplosers 1w nifty100"],
         "output": "Worst-performing stocks over the window - a quick 'what's bleeding today' check.",
-        "tips": ["Market-hours gated: live screens run during trading hours + 1h after close; DATE queries work any time."],
+        "tips": ["Market-hours gated: live screens run from market open until the end of the session day; after-hours runs still return the last session's moves; DATE queries work any time."],
         "aliases": "/losers",
     },
     "/alertfilters": {

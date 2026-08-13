@@ -15,6 +15,7 @@ from .hours import (
     market_tz_tag,
     next_open_after,
     normalise_market,
+    screen_available,
 )
 from .periods import MOVERS_PERIODS, period_label
 
@@ -31,6 +32,7 @@ __all__ = [
     "local_now",
     "is_between",
     "is_market_open",
+    "screen_available",
     "next_open_after",
     "entry_market",
     "entry_paused",

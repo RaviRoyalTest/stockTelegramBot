@@ -233,8 +233,9 @@ COMMAND_USAGE = {
         "<code>/moversover 8 sp500</code>    \u2192 S&P 500\n"
         "<code>/moversover 5 nasdaq100</code> \u2192 NASDAQ 100\n\n"
         "Move = current price vs previous close (both directions, ranked by |move|).\n"
-        "Runs only during market hours + 1h after close: IST for NIFTY, ET for "
-        "S&P 500 / NASDAQ 100 - so you never get stale session moves.\n"
+        "Runs from market open until the end of the session day: IST for NIFTY, "
+        "ET for S&P 500 / NASDAQ 100 - after-hours runs still return the last "
+        "session's moves (e.g. /toplosers 1h shows the final hour of trading).\n"
         "Aliases: /bigmovers, /bigmover, /moverlist, /watcherlist"
     ),
     "/topmovers": (
@@ -253,8 +254,10 @@ COMMAND_USAGE = {
         "(bare 100/500 picks the index here)\n"
         "Each row shows P/E, sector P/E, 52W range, div yield, holdings &amp; D/E "
         "(via the Get Fundamentals button - change with /fundmode).\n"
-        "Market-hours gate: live screens run during trading hours + 1h after close "
-        "(IST for NIFTY, ET for US) - a DATE query works any time."
+        "Market-hours gate: live screens run from market open until the end of "
+        "the session day (IST for NIFTY, ET for US) - after-hours runs still "
+        "return the last session's moves (e.g. /toplosers 1h shows the final "
+        "hour). A DATE query works any time."
     ),
     "/topgainers": (
         "<b>/topgainers</b> - top rising stocks (default: today, NIFTY 500, top 30)\n"
@@ -272,8 +275,10 @@ COMMAND_USAGE = {
         "Note: for gainers a bare 100/500 is the top-N count (e.g. /topgainers 100 = "
         "top 100) - use nifty100/nifty500 to pick the index. "
         "Each row also shows P/E, sector P/E, 52W range, div yield, holdings &amp; D/E.\n"
-        "Market-hours gate: live screens run during trading hours + 1h after close "
-        "(IST for NIFTY, ET for US) - a DATE query works any time."
+        "Market-hours gate: live screens run from market open until the end of "
+        "the session day (IST for NIFTY, ET for US) - after-hours runs still "
+        "return the last session's moves (e.g. /toplosers 1h shows the final "
+        "hour). A DATE query works any time."
     ),
     "/toplosers": (
         "<b>/toplosers</b> - top falling stocks (default: today, NIFTY 500, top 30)\n"
@@ -301,8 +306,10 @@ COMMAND_USAGE = {
         "top 100) - use nifty100/nifty500 to pick the index. "
         "Each row shows P/E, sector P/E, 52W range, div yield, holdings &amp; D/E "
         "(via the Get Fundamentals button - change with /fundmode).\n"
-        "Market-hours gate: live screens run during trading hours + 1h after close "
-        "(IST for NIFTY, ET for US) - a DATE query works any time."
+        "Market-hours gate: live screens run from market open until the end of "
+        "the session day (IST for NIFTY, ET for US) - after-hours runs still "
+        "return the last session's moves (e.g. /toplosers 1h shows the final "
+        "hour). A DATE query works any time."
     ),
     "/checklist": (
         "<b>/checklist</b> - 32-point investment scorecard "

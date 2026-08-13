@@ -206,6 +206,35 @@ def market_active(market, grace_minutes: int = 60, now=None) -> bool:
     return close_minutes <= current_minutes < close_minutes + max(0, int(grace_minutes))
 
 
+def screen_available(market, now=None) -> bool:
+    """True while a session's data is fresh enough to screen (on-demand).
+
+    From the market's open until the END of the same day (market-local), so
+    after-hours runs still return the last session's moves - e.g.
+    /toplosers 1h at 16:30 IST gives the final hour 14:30-15:30, and
+    /toplosers today works all evening. Weekends (no session today) are
+    always closed. This is deliberately LONGER than market_active (the
+    +1h grace that gates background alerts): an on-demand screen the user
+    explicitly asked for may run any time on a session day - the data it
+    returns is that session's data, anchored to the session close, never
+    stale.
+    """
+    key = normalise_market(market)
+    if key == "any":
+        return True
+    info = MARKETS.get(key)
+    if not info:
+        return True
+    local = local_now(key, now)
+    if local.weekday() >= 5:  # Sat / Sun - no session today
+        return False
+    open_minutes = _hhmm_minutes(info["open"])
+    current_minutes = local.hour * 60 + local.minute
+    if open_minutes is None:
+        return False
+    return current_minutes >= open_minutes
+
+
 def next_open_after(market, after_ts=None) -> float:
     """Epoch seconds when the market next opens (used for pause resume labels)."""
     info = MARKETS.get(normalise_market(market))

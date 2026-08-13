@@ -19,7 +19,7 @@ from ..formatting.stock_common import _rsi_signal, _wk52_signal
 from ..formatting.stock_india import _fundamentals_lines
 from ..formatting.stock_us import _us_movers_lines
 from ..market import MOVERS_PERIODS, fetch_period_change, period_label
-from ..market.hours import market_active, market_label, market_timezone, next_open_after
+from ..market.hours import market_label, market_timezone, next_open_after, screen_available
 from ..sources import (
     FUND_MAX_ROWS,
     get_daily_change_on_date,
@@ -219,13 +219,16 @@ def handle_market_screen(chat_id, parts, default_direction="all",
         else period_label(*period)
     )
 
-    # Market-hours gate: live screens (no explicit DATE) only run while the
-    # universe's market is open, plus a 1-hour grace after the close, so a
-    # stale move from the last session is never served. Explicit historical
-    # dates (e.g. /toplosers 12-08-2026) are exempt and work any time.
+    # Market-hours gate: live screens (no explicit DATE) run any time on a
+    # session day - from the market's open until the end of that day - so
+    # an after-hours run (e.g. /toplosers 1h an hour after the close) still
+    # returns the last session's moves, anchored to the session close. Before
+    # the open or on weekends there is no session data yet, so the screen is
+    # blocked with an explanation. Explicit historical dates (e.g.
+    # /toplosers 12-08-2026) are exempt and work any time.
     if target_date is None:
         market = "us" if is_us else "in"
-        if not market_active(market):
+        if not screen_available(market):
             log.info("screen %s: skipped - %s market closed", parts[0], universe_label)
             reply(chat_id, _market_closed_message(universe_label, market))
             return
@@ -442,9 +445,11 @@ def _market_closed_message(universe_label: str, market: str) -> str:
         when = "the next session"
     return (
         f"\u23f0 <b>{universe_label} market is closed right now.</b>\n"
-        f"Market screens only run during trading hours "
-        f"({market_label(market)}) plus up to 1 hour after close, so you "
-        f"never get stale session moves.\n"
+        f"Market screens run from market open "
+        f"({market_label(market)}) until the end of that session's day, "
+        f"so after-hours runs still return the last session's moves "
+        f"(e.g. /toplosers 1h an hour after the close shows the final "
+        f"hour of the session). Today's session hasn't opened yet.\n"
         f"Next session opens <b>{when}</b> - historical dates still work, "
         f"e.g. /toplosers 12-08-2026."
     )

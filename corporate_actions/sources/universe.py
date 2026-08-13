@@ -241,7 +241,21 @@ def get_intraday_change(exchange: str, symbol: str, period_minutes: int) -> dict
                     "name": name,
                 }
         else:
-            cutoff = now - period_minutes * 60
+            # Anchor the window to the LAST available bar (the session close
+            # after hours) instead of wall-clock 'now'. A screen run after the
+            # session (e.g. /toplosers 1h at 16:30 IST) then returns the last
+            # hour OF THE SESSION (14:30 -> 15:30 moves) rather than an empty
+            # after-hours window that fell back to the day's first bar.
+            end_ts = None
+            for timestamp in reversed(timestamps):
+                if timestamp is not None:
+                    end_ts = timestamp
+                    break
+            cutoff = (
+                end_ts - period_minutes * 60
+                if end_ts is not None
+                else now - period_minutes * 60
+            )
             base = None
             for timestamp, close in zip(timestamps, closes):
                 if close is None:

@@ -11,7 +11,7 @@ import datetime
 import streamlit as st
 
 from ...market import MOVERS_PERIODS, period_label
-from ...market.hours import is_market_open, market_active, market_label
+from ...market.hours import is_market_open, market_label, screen_available
 from ..helpers import run_bigmover_screen, run_screen, style_table
 from ..widgets import render_linked_analysis, symbol_fund_button
 
@@ -115,11 +115,12 @@ def render() -> None:
         universe_label = _UNIVERSE_LABEL(universe, "NIFTY 100")
         screen_market = "us" if universe in ("nasdaq100", "sp500") else "in"
         if kind == "bigmovers":
-            if not market_active(screen_market):
+            if not screen_available(screen_market):
                 st.warning(
                     f"{universe_label} market is closed - the rows below are from "
-                    f"the last session. Big-mover lists are most meaningful during "
-                    f"{market_label(screen_market)} + 1 hour after close."
+                    f"the last session. Today's session hasn't opened yet; screens "
+                    f"run from market open ({market_label(screen_market)}) until "
+                    f"the end of the session day."
                 )
             window_text = f"today, ≥±{threshold:g}%"
         elif target_date:
@@ -128,12 +129,13 @@ def render() -> None:
             window_text = "today's gaps"
         else:
             window_text = period_label(*MOVERS_PERIODS.get(period_key, ("intraday", 60)))
-            if not market_active(screen_market):
+            if not screen_available(screen_market):
                 st.warning(
                     f"{universe_label} market is closed - the rows below are from "
-                    f"the last session. Live movers run during "
-                    f"{market_label(screen_market)} + 1h after close; pick a "
-                    f"DATE to see that day's historical movers instead."
+                    f"the last session. Today's session hasn't opened yet; screens "
+                    f"run from market open ({market_label(screen_market)}) until "
+                    f"the end of the session day. Pick a DATE to see that day's "
+                    f"historical movers instead."
                 )
         kind_text = f"{screen_type} ({'gap-downs' if direction == 'down' else 'gap-ups' if direction == 'up' else direction})" if screen_type == "Gaps" else screen_type
         st.subheader(f"{kind_text} — {window_text} · {universe_label} (top {count})")
