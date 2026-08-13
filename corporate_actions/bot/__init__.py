@@ -7,7 +7,7 @@ Layout (one module per concern - see AGENTS.md):
   helpers.py       shared small helpers (quotes, symbol suggestions)
   corporate_action_commands.py  /corpactions, /exdates, /corpactionssummary
   watchlist_commands.py  /watchlist, /addstock, /removestock, favourites, /news
-  settings_commands.py  /alertfilters, /pricealert, /watcher, /moversfund
+  settings_commands.py  /alertfilters, /pricealert, /watcher, /fundmode
   schedule_commands.py  /menu, /schedule
   movers_commands.py  /movers, /topgainers, /toplosers
   fundamentals_commands.py  /fundamentalanalyze, /fundamentalreport

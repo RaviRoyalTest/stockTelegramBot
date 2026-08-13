@@ -47,7 +47,7 @@ WRITE_COMMANDS = {
     "/filter", "/alertfilters", "/actionfilters", "/alert", "/pricealert",
     "/sched", "/schedule", "/watcher", "/bigmover", "/moverwatch",
     "/myfavourites", "/favorites", "/favourites", "/mypicks", "/dailybrief",
-    "/moversfund", "/market",
+    "/fundmode", "/moversfund", "/market",
 }
 
 
@@ -111,7 +111,7 @@ def handle_command(chat_id, text):
         settings_commands.handle_watcher(chat_id, parts)
         return
 
-    if command == "/moversfund":
+    if command in ("/fundmode", "/moversfund"):
         settings_commands.handle_moversfund(chat_id, parts)
         return
 

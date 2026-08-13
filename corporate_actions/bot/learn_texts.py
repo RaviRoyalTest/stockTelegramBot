@@ -248,11 +248,12 @@ COMMAND_LEARN: dict = {
         "output": "Status + live alert stream of big movers as they happen.",
         "aliases": "/bigmover, /moverwatch",
     },
-    "/moversfund": {
-        "what": "Choose whether movers reports fetch fundamentals automatically or behind a button.",
-        "syntax": "/moversfund button | auto",
-        "examples": ["/moversfund auto  \u2192 fundamentals with every movers report", "/moversfund button  \u2192 tap the button instead (default)"],
+    "/fundmode": {
+        "what": "Fundamentals mode for movers screens: fetch automatically or behind a button.",
+        "syntax": "/fundmode button | auto | default",
+        "examples": ["/fundmode auto  \u2192 fundamentals with every movers report", "/fundmode button  \u2192 tap the button instead (default)", "/fundmode default  \u2192 reset to button mode"],
         "output": "Confirmation of the mode; the next movers report follows it.",
+        "aliases": "/moversfund",
     },
     "/settings": {
         "what": "View your current configuration in one place.",
@@ -388,7 +389,7 @@ TOPICS = [
         "name": "alerts",
         "title": "\u2699\ufe0f Alerts & Personalisation",
         "blurb": "Filters, price alerts, the sudden-move watcher and your settings.",
-        "commands": ["/alertfilters", "/pricealert", "/watcher", "/moversfund", "/settings"],
+        "commands": ["/alertfilters", "/pricealert", "/watcher", "/fundmode", "/settings"],
     },
     {
         "name": "automation",
@@ -456,7 +457,7 @@ _COMMAND_ALIASES = {
     "alertfilters": "/alertfilters", "filter": "/alertfilters", "actionfilters": "/alertfilters",
     "pricealert": "/pricealert", "alert": "/pricealert",
     "watcher": "/watcher", "bigmover": "/watcher", "moverwatch": "/watcher",
-    "moversfund": "/moversfund", "settings": "/settings",
+    "moversfund": "/fundmode", "fundmode": "/fundmode", "settings": "/settings",
     "schedule": "/schedule", "sched": "/schedule", "market": "/market",
     "schednow": "/schednow", "checknow": "/checknow", "status": "/status",
     "menu": "/menu", "quick": "/menu", "buttons": "/menu", "shortcuts": "/menu",

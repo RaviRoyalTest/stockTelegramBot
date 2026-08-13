@@ -70,7 +70,7 @@ def format_settings(chat_id) -> str:
                                 f"({(watcher.get('universe') or 'nifty100').upper()})"),
             "Movers fundamentals: " + ("auto" if settings.get("movers_fund") == "auto" else "button"),
             f"Your list is saved in: {where}",
-            "Customize with /alertfilters, /pricealert, /watcher and /moversfund.",
+            "Customize with /alertfilters, /pricealert, /watcher and /fundmode.",
         ]
     )
 

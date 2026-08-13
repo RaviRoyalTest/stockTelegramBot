@@ -62,6 +62,7 @@ COMMAND_STATUS = {
     "/pricealert": _pricealert_status_text,
     "/alertfilters": _alertfilters_status_text,
     "/schedule": _schedule_status_text,
+    "/fundmode": _moversfund_status_text,
     "/moversfund": _moversfund_status_text,
     "/market": _market_status_text,
 }
@@ -127,6 +128,7 @@ ALIAS_TO_MAIN = {
     "/buttons": "/menu",
     "/bigmover": "/watcher",
     "/moverwatch": "/watcher",
+    "/moversfund": "/fundmode",
     "/moverlist": "/bigmovers",
     "/watcherlist": "/bigmovers",
 }
@@ -214,7 +216,7 @@ COMMAND_USAGE = {
         "<b>Universe</b>  n100/nifty100 \u00b7 n500/nifty500 \u00b7 nasdaq100/ndx/us "
         "(bare 100/500 picks the index here)\n"
         "Each row shows P/E, sector P/E, 52W range, div yield, holdings &amp; D/E "
-        "(via the Get Fundamentals button - change with /moversfund).\n"
+        "(via the Get Fundamentals button - change with /fundmode).\n"
         "Market-hours gate: live screens run during trading hours + 1h after close "
         "(IST for NIFTY, ET for US) - a DATE query works any time."
     ),
@@ -262,7 +264,7 @@ COMMAND_USAGE = {
         "Note: for losers a bare 100/500 is the top-N count (e.g. /toplosers 100 = "
         "top 100) - use nifty100/nifty500 to pick the index. "
         "Each row shows P/E, sector P/E, 52W range, div yield, holdings &amp; D/E "
-        "(via the Get Fundamentals button - change with /moversfund).\n"
+        "(via the Get Fundamentals button - change with /fundmode).\n"
         "Market-hours gate: live screens run during trading hours + 1h after close "
         "(IST for NIFTY, ET for US) - a DATE query works any time."
     ),
@@ -348,11 +350,13 @@ COMMAND_USAGE = {
         "/watcher universe nifty500 \u2192 nifty100 | nifty500 | mylist\n"
         "/watcher       \u2192 show current status"
     ),
-    "/moversfund": (
-        "<b>/moversfund</b> - how movers reports show fundamentals\n"
-        "/moversfund button \u2192 price report ends with a <b>Get Fundamentals</b> button (default)\n"
-        "/moversfund auto   \u2192 send full fundamentals automatically with every report\n"
-        "/moversfund        \u2192 show current mode"
+    "/fundmode": (
+        "<b>/fundmode</b> - fundamentals mode for movers screens\n"
+        "/fundmode button  \u2192 price report ends with a <b>Get Fundamentals</b> button (default)\n"
+        "/fundmode auto    \u2192 send full fundamentals automatically with every report\n"
+        "/fundmode default \u2192 reset to the button mode\n"
+        "/fundmode         \u2192 show current mode\n"
+        "Aliases: /moversfund"
     ),
     "/addstock": (
         "<b>/addstock</b> - add a stock to your watchlist\n"
@@ -392,7 +396,7 @@ COMMAND_EXAMPLES = {
     "/pricealert": ["/pricealert 3", "/pricealert off"],
     "/alertfilters": ["/alertfilters dividend,bonus", "/alertfilters all"],
     "/watcher": ["/watcher on", "/watcher off", "/watcher set 5", "/watcher universe nifty500"],
-    "/moversfund": ["/moversfund button", "/moversfund auto", "/moversfund default"],
+    "/fundmode": ["/fundmode button", "/fundmode auto", "/fundmode default"],
     "/addstock": ["/addstock RELIANCE NSE", "/addstock PGINVIT"],
     "/removestock": ["/removestock TCS"],
 }
@@ -558,7 +562,7 @@ def register_commands() -> bool:
         {"command": "status", "description": "Check persistence / GitHub push"},
         {"command": "checknow", "description": "Force a check and resend alerts"},
         {"command": "watcher", "description": "Big-move alerts: /watcher on, off, set 5, universe nifty500"},
-        {"command": "moversfund", "description": "Movers: button vs auto fundamentals"},
+        {"command": "fundmode", "description": "Movers: button vs auto fundamentals"},
         {"command": "all", "description": "Show every command - copy & send any line"},
         {"command": "menu", "description": "One-tap command buttons - no typing"},
         {"command": "schednow", "description": "Run all your scheduled commands right now"},
