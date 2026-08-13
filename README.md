@@ -132,6 +132,7 @@ plus a derived Status and book-closure dates.
 | `/settings` | `/settings` | Show your current filters, price-alert and list location |
 | `/status` | `/status` | Show where your list is saved and whether GitHub push is configured |
 | `/checknow` | `/checknow` | Force a check and re-send all matching alerts to your chat |
+| `/learn [TOPIC \| /COMMAND \| all]` | `/learn stocks` · `/learn /scan500` · `/learn all` | The **detailed guide to every command** so you can recollect any of them: a bare `/learn` shows the topic index; `/learn TOPIC` walks through a whole group (`stocks`, `schedule`, `alerts`, `us stocks`, `technicals`, `movers`, `automation`, ...) with the syntax, examples, what the output means and tips for each command; `/learn /COMMAND` gives the full walkthrough of one command (`/learn /scan500`, `/learn /indicator`); `/learn all` prints the entire guide. Typo-tolerant: `/learn stocs`, `/learn sched` and `/learn stocastic`-style near-misses resolve to the right topic. Aliases: `/guide`, `/explain`, `/tutorial`, `/howto` |
 | `/help` | `/help` | Show commands |
 
 You can also ask in plain text without a slash, e.g. "corporate action",

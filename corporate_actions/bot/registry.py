@@ -108,6 +108,10 @@ ALIAS_TO_MAIN = {
     "/technical": "/indicator",
     "/analyst": "/forecast",
     "/forecastanalysis": "/forecast",
+    "/guide": "/learn",
+    "/explain": "/learn",
+    "/tutorial": "/learn",
+    "/howto": "/learn",
     "/movers": "/topmovers",
     "/marketmovers": "/topmovers",
     "/gainers": "/topgainers",
@@ -246,6 +250,15 @@ COMMAND_USAGE = {
         "                     price + upside, top executives &amp; competitors\n"
         "/forecast AAPL      \u2192 US stocks work too (auto-detected)\n"
         "Aliases: /analyst, /forecastanalysis"
+    ),
+    "/learn": (
+        "<b>/learn</b> - the detailed guide to EVERY command\n"
+        "/learn                \u2192 topic index\n"
+        "/learn stocks        \u2192 fundamental analysis group\n"
+        "/learn schedule      \u2192 automation group\n"
+        "/learn /scan500      \u2192 full walkthrough of ONE command\n"
+        "/learn all           \u2192 the entire guide\n"
+        "Aliases: /guide, /explain, /tutorial, /howto"
     ),
     "/schedule": (
         "<b>/schedule</b> - your automated reports (per user)\n"
@@ -425,6 +438,7 @@ def register_commands() -> bool:
         {"command": "all", "description": "Show every command - copy & send any line"},
         {"command": "menu", "description": "One-tap command buttons - no typing"},
         {"command": "schednow", "description": "Run all your scheduled commands right now"},
+        {"command": "learn", "description": "Detailed guide to every command: /learn stocks, /learn /scan500"},
         {"command": "help", "description": "Show all commands and examples"},
     ]
     return set_my_commands(menu)

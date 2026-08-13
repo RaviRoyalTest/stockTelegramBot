@@ -24,6 +24,7 @@ from . import (
     fundamentals_commands,
     harmonic_commands,
     indicator_commands,
+    learn_commands,
     movers_commands,
     scanner_commands,
     schedule_commands,
@@ -195,6 +196,10 @@ def handle_command(chat_id, text):
 
     if command in ("/analyst", "/forecast", "/forecastanalysis"):
         forecast_commands.handle_forecast(chat_id, parts)
+        return
+
+    if command in ("/learn", "/guide", "/explain", "/tutorial", "/howto"):
+        learn_commands.handle_learn(chat_id, parts)
         return
 
     if command in ("/stock", "/info", "/quote", "/stockanalysis", "/stock-analysis",
