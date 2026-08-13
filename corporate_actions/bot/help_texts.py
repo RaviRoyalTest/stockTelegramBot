@@ -114,7 +114,7 @@ HELP_TEXT = (
     "/bigmovers <i>[%] [100|500|sp500]</i>  \u2192 ALL stocks beyond a % session move, one list\n"
     "  /bigmovers          \u2192 every stock up/down \u2265 5% today, NIFTY 500\n"
     "  /bigmovers 8        \u2192 \u2265 8% session move\n"
-    "  /bigmovers 8 sp500  \u2192 S&P 500 (aliases /moverlist, /watcherlist)\n"
+    "  /bigmovers 8 sp500  \u2192 S&P 500 (aliases /bigmover, /moverlist, /watcherlist)\n"
     "  Runs only during market hours + 1h after close - IST for NIFTY,\n"
     "  ET for S&P 500 / NASDAQ 100 - so stale session moves are never shown.\n\n"
     "/topgainers <i>[period|DATE] [N] [100|500]</i>  \u2192 top rising stocks\n"

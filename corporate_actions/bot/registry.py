@@ -126,7 +126,7 @@ ALIAS_TO_MAIN = {
     "/quick": "/menu",
     "/shortcuts": "/menu",
     "/buttons": "/menu",
-    "/bigmover": "/watcher",
+    "/bigmover": "/bigmovers",
     "/moverwatch": "/watcher",
     "/moversfund": "/fundmode",
     "/moverlist": "/bigmovers",
@@ -199,7 +199,8 @@ COMMAND_USAGE = {
         "<code>/bigmovers 5 nasdaq100</code> \u2192 NASDAQ 100\n\n"
         "Move = current price vs previous close (both directions, ranked by |move|).\n"
         "Runs only during market hours + 1h after close: IST for NIFTY, ET for "
-        "S&P 500 / NASDAQ 100 - so you never get stale session moves."
+        "S&P 500 / NASDAQ 100 - so you never get stale session moves.\n"
+        "Aliases: /bigmover, /moverlist, /watcherlist"
     ),
     "/topmovers": (
         "<b>/topmovers</b> - top gainers AND losers (default: last 1h, NIFTY 100)\n"

@@ -45,7 +45,7 @@ log = logging.getLogger(__name__)
 WRITE_COMMANDS = {
     "/add", "/addstock", "/remove", "/removestock",
     "/filter", "/alertfilters", "/actionfilters", "/alert", "/pricealert",
-    "/sched", "/schedule", "/watcher", "/bigmover", "/moverwatch",
+    "/sched", "/schedule", "/watcher", "/moverwatch",
     "/myfavourites", "/favorites", "/favourites", "/mypicks", "/dailybrief",
     "/fundmode", "/moversfund", "/market",
 }
@@ -107,7 +107,7 @@ def handle_command(chat_id, text):
         settings_commands.handle_pricealert(chat_id, parts)
         return
 
-    if command in ("/watcher", "/bigmover", "/moverwatch"):
+    if command in ("/watcher", "/moverwatch"):
         settings_commands.handle_watcher(chat_id, parts)
         return
 
@@ -179,7 +179,7 @@ def handle_command(chat_id, text):
         movers_commands.handle_movers(chat_id, parts)
         return
 
-    if command in ("/bigmovers", "/moverlist", "/watcherlist"):
+    if command in ("/bigmovers", "/bigmover", "/moverlist", "/watcherlist"):
         movers_commands.handle_big_movers(chat_id, parts)
         return
 

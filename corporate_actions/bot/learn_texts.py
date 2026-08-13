@@ -209,7 +209,7 @@ COMMAND_LEARN: dict = {
         "examples": ["/bigmovers  \u2192 every stock up/down \u2265 5% today, NIFTY 500", "/bigmovers 8 sp500  \u2192 S&P 500 stocks beyond \u00b18%"],
         "output": "Every stock whose session move (price vs previous close) crosses your % threshold, ranked by |move| - like the /watcher alerts but all in one report.",
         "tips": ["Market-hours gated: runs during trading hours + 1h after close (IST for NIFTY, ET for US) so stale moves are never shown."],
-        "aliases": "/moverlist, /watcherlist",
+        "aliases": "/bigmover, /moverlist, /watcherlist",
     },
     "/topgainers": {
         "what": "Top rising stocks.",
@@ -246,7 +246,7 @@ COMMAND_LEARN: dict = {
         "syntax": "/watcher on | off | set N | universe U",
         "examples": ["/watcher on", "/watcher set 5", "/watcher universe nifty500  \u2192 nifty100 | nifty500 | mylist"],
         "output": "Status + live alert stream of big movers as they happen.",
-        "aliases": "/bigmover, /moverwatch",
+        "aliases": "/moverwatch",
     },
     "/fundmode": {
         "what": "Fundamentals mode for movers screens: fetch automatically or behind a button.",
@@ -456,7 +456,7 @@ _COMMAND_ALIASES = {
     "toplosers": "/toplosers", "losers": "/toplosers",
     "alertfilters": "/alertfilters", "filter": "/alertfilters", "actionfilters": "/alertfilters",
     "pricealert": "/pricealert", "alert": "/pricealert",
-    "watcher": "/watcher", "bigmover": "/watcher", "moverwatch": "/watcher",
+    "watcher": "/watcher", "bigmover": "/bigmovers", "moverwatch": "/watcher",
     "moversfund": "/fundmode", "fundmode": "/fundmode", "settings": "/settings",
     "schedule": "/schedule", "sched": "/schedule", "market": "/market",
     "schednow": "/schednow", "checknow": "/checknow", "status": "/status",
