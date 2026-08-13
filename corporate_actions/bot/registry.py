@@ -10,6 +10,7 @@ import logging
 from .. import storage
 from ..core.text import split_messages
 from ..formatting.schedule import format_schedule, format_settings
+from ..poller.watcher import DEFAULT_WATCHER
 from ..telegram.client import is_configured, set_my_commands
 from ..telegram.markup import inline_command_buttons, quick_menu_markup, recent_buttons
 from . import corporate_action_commands, scanner_commands, schedule_commands, settings_commands, status as status_commands, watchlist_commands
@@ -20,7 +21,7 @@ log = logging.getLogger(__name__)
 
 
 def _watcher_status_text(chat_id) -> str:
-    watcher = (storage.get_user_settings(chat_id) or {}).get("watcher") or {}
+    watcher = (storage.get_user_settings(chat_id) or {}).get("watcher") or DEFAULT_WATCHER
     state = "ON" if watcher.get("enabled") else "OFF"
     return (
         f"\U0001F6A8 <b>Sudden-move watcher</b>\n"
@@ -392,9 +393,10 @@ COMMAND_USAGE = {
         "Aliases: /dnd, /silence, /pauseall"
     ),
     "/watcher": (
-        "Usage:\n"
-        "/watcher on    \u2192 turn it ON\n"
+        "<b>/watcher</b> - big-move alerts \u00b7 ON by default (5% \u00b7 NIFTY 100)\n"
+        "No setup needed - you're already covered; /watcher off stops it.\n\n"
         "/watcher off   \u2192 turn it OFF\n"
+        "/watcher on    \u2192 turn it back ON\n"
         "/watcher set 3 \u2192 alert at a 3% session move (e.g. /watcher set 5 nifty500)\n"
         "/watcher universe nifty500 \u2192 nifty100 | nifty500 | mylist\n"
         "/watcher       \u2192 show current status"
@@ -446,7 +448,7 @@ COMMAND_EXAMPLES = {
     "/alertfilters": ["/alertfilters dividend,bonus", "/alertfilters all", "/alertfilters off"],
     "/corpactions": ["/corpactions on", "/corpactions off"],
     "/quiet": ["/quiet on", "/quiet 2h", "/quiet off"],
-    "/watcher": ["/watcher on", "/watcher off", "/watcher set 5", "/watcher universe nifty500"],
+    "/watcher": ["/watcher", "/watcher off", "/watcher on", "/watcher set 5", "/watcher universe nifty500"],
     "/fundmode": ["/fundmode button", "/fundmode auto", "/fundmode default"],
     "/addstock": ["/addstock RELIANCE NSE", "/addstock PGINVIT"],
     "/removestock": ["/removestock TCS"],

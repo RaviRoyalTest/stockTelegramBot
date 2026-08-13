@@ -12,6 +12,7 @@ import time
 from datetime import datetime
 
 from .. import config, storage
+from ..poller.watcher import DEFAULT_WATCHER
 from ..sources.types import ACTION_TYPES
 from .reply import reply
 
@@ -186,9 +187,15 @@ def handle_pricealert(chat_id, parts) -> None:
 
 
 def handle_watcher(chat_id, parts) -> None:
-    """Manage the chat's sudden-move watcher (/watcher)."""
+    """Manage the chat's sudden-move watcher (/watcher).
+
+    The watcher is ON by default at 5% / NIFTY 100 (DEFAULT_WATCHER) for any
+    chat that has never configured it - so no setup is needed to get the
+    big-mover alerts; /watcher off turns it off explicitly.
+    """
     settings = storage.get_user_settings(chat_id)
-    watcher = settings.get("watcher") or {}
+    stored = settings.get("watcher")
+    watcher = dict(stored) if stored else dict(DEFAULT_WATCHER)
     subcommand = parts[1].lower() if len(parts) > 1 else "status"
     if subcommand in ("on", "enable", "start"):
         if not watcher.get("threshold"):

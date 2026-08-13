@@ -10,14 +10,27 @@ from concurrent.futures import ThreadPoolExecutor, as_completed
 from .. import storage
 from ..sources import get_index_universe, get_quote
 
+# A chat that has never touched /watcher gets this default config - the
+# watcher is ON by default at 5% over NIFTY 100 (same defaults /watcher on
+# applies), so new users are covered without any setup.
+DEFAULT_WATCHER = {"enabled": True, "threshold": 5.0, "universe": "nifty100"}
+
+
+def watcher_settings(chat_id) -> dict:
+    """The chat's effective watcher config (defaults when never configured)."""
+    watcher = storage.get_user_settings(chat_id).get("watcher")
+    if not watcher:
+        return dict(DEFAULT_WATCHER)
+    return watcher
+
 
 def watcher_targets() -> list[tuple[str, dict]]:
     """[(chat_id, watcher_settings)] for every chat with the watcher on."""
     out = []
-    for chat_id, settings in storage.load_settings().items():
-        watcher_settings = settings.get("watcher") or {}
-        if watcher_settings.get("enabled") and float(watcher_settings.get("threshold") or 0) > 0:
-            out.append((str(chat_id), watcher_settings))
+    for chat_id in storage.load_settings():
+        watcher = watcher_settings(chat_id)
+        if watcher.get("enabled") and float(watcher.get("threshold") or 0) > 0:
+            out.append((str(chat_id), watcher))
     return out
 
 

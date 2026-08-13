@@ -5,6 +5,7 @@ import datetime as _datetime
 import html
 
 from .. import config, storage
+from ..poller.watcher import DEFAULT_WATCHER
 
 
 def format_interval(interval_min: int) -> str:
@@ -55,7 +56,7 @@ def format_settings(chat_id) -> str:
     settings = storage.get_user_settings(chat_id)
     filters = settings.get("action_filters") or []
     alert = settings.get("price_alert_pct")
-    watcher = settings.get("watcher") or {}
+    watcher = settings.get("watcher") or DEFAULT_WATCHER
     owner = storage.is_owner(chat_id)
     where = storage.list_location(chat_id)
     ca_state = "off" if settings.get("ca_alerts", True) is False else (

@@ -253,8 +253,9 @@ COMMAND_LEARN: dict = {
     "/watcher": {
         "what": "Sudden-move alerts: watch a universe and alert when a stock crosses your % threshold in a session.",
         "syntax": "/watcher on | off | set N | universe U",
-        "examples": ["/watcher on", "/watcher set 5", "/watcher universe nifty500  \u2192 nifty100 | nifty500 | mylist"],
+        "examples": ["/watcher", "/watcher off", "/watcher on", "/watcher set 5", "/watcher universe nifty500  \u2192 nifty100 | nifty500 | mylist"],
         "output": "Status + live alert stream of big movers as they happen.",
+        "tips": ["ON by default at 5% (NIFTY 100) - no setup needed; /watcher off stops it."],
         "aliases": "/moverwatch",
     },
     "/fundmode": {
