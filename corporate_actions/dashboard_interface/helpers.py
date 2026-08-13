@@ -161,6 +161,47 @@ def run_screen(period_key: str, direction: str, universe: str, count: int,
     ]
 
 
+def run_bigmover_screen(threshold: float, universe: str, count: int) -> list[dict]:
+    """Every stock with |session move| >= threshold % (price vs prev close).
+
+    Mirrors the bot's /bigmovers: both directions, ranked by |move|, current
+    session only. Returns raw numeric Price / Change % rows for the sortable
+    table.
+    """
+    period = ("days", 1)
+    exchange = sources.universe_exchange(universe)
+    symbols = sources.get_index_universe(universe)
+    if not symbols:
+        return []
+    threshold = float(threshold or 0)
+
+    fetched = []
+    with ThreadPoolExecutor(max_workers=25) as executor:
+        futures = {
+            executor.submit(fetch_period_change, symbol, period, exchange=exchange): symbol
+            for symbol in symbols
+        }
+        for future in as_completed(futures):
+            symbol = futures[future]
+            try:
+                data = future.result()
+            except Exception:
+                data = None
+            if data and data.get("change_pct") is not None \
+                    and abs(float(data["change_pct"])) >= threshold:
+                fetched.append((symbol, data))
+    fetched.sort(key=lambda row: abs(row[1]["change_pct"]), reverse=True)
+    return [
+        {
+            "Symbol": symbol,
+            "Price": data.get("price"),
+            "Change %": data.get("change_pct"),
+            "Name": data.get("name") or "",
+        }
+        for symbol, data in fetched[:count]
+    ]
+
+
 def run_gap_screen(direction: str, universe: str, count: int,
                    target_date=None) -> list[dict]:
     """Overnight-gap screen: each stock's gap at the open.

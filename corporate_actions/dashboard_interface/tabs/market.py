@@ -11,7 +11,8 @@ import datetime
 import streamlit as st
 
 from ...market import MOVERS_PERIODS, period_label
-from ..helpers import run_screen, style_table
+from ...market.hours import is_market_open, market_active, market_label
+from ..helpers import run_bigmover_screen, run_screen, style_table
 from ..widgets import render_linked_analysis, symbol_fund_button
 
 _UNIVERSE_LABEL = {
@@ -24,19 +25,35 @@ _UNIVERSE_LABEL = {
 def render() -> None:
     st.header("📊 Market Screens")
     st.caption(
-        "Screen NIFTY 100 / 500 / S&P 500 by price movement or overnight gaps. "
-        "Pick a date for that day's historical movers / gaps."
+        "Screen NIFTY 100 / 500 / S&P 500 by price movement, big moves or "
+        "overnight gaps. Pick a date for that day's historical movers / gaps."
+    )
+    in_open = is_market_open("in")
+    us_open = is_market_open("us")
+    st.markdown(
+        f"**India** {'🟢 OPEN' if in_open else '🔴 CLOSED'} · {market_label('in')} &nbsp;&nbsp;|&nbsp;&nbsp; "
+        f"**US** {'🟢 OPEN' if us_open else '🔴 CLOSED'} · {market_label('us')} &nbsp;&nbsp;"
+        f"<span style='color:#9ca3af'>(big-mover lists run during trading hours "
+        f"+ 1h after close)</span>",
+        unsafe_allow_html=True,
     )
 
     column_1, column_2, column_3, column_4, column_5 = st.columns([1, 1, 1, 1, 1])
     with column_1:
         screen_type = st.selectbox(
-            "Screen", ["Movers", "Gainers", "Losers", "Gaps"], key="screen_type"
+            "Screen", ["Movers", "Gainers", "Losers", "Big Movers", "Gaps"],
+            key="screen_type",
         )
     with column_2:
         if screen_type == "Gaps":
             gap_direction = st.selectbox(
                 "Direction", ["Gap Downs", "Gap Ups", "Both"], key="gap_direction"
+            )
+            period_key = "today"
+        elif screen_type == "Big Movers":
+            threshold = st.number_input(
+                "Min move % (abs)", 1.0, 25.0, 5.0, 0.5, key="screen_threshold",
+                help="Only stocks whose session move vs prev close is at least this % in either direction.",
             )
             period_key = "today"
         else:
@@ -59,6 +76,7 @@ def render() -> None:
             "Date (today by default)",
             value=datetime.date.today(),
             key="screen_date",
+            disabled=(screen_type == "Big Movers"),
         )
         if target_date == datetime.date.today():
             target_date = None  # None = live/today
@@ -66,24 +84,45 @@ def render() -> None:
     if screen_type == "Gaps":
         direction = {"Gap Downs": "down", "Gap Ups": "up", "Both": "all"}[gap_direction]
         kind = "gap"
+    elif screen_type == "Big Movers":
+        direction = "all"
+        kind = "bigmovers"
     else:
         direction = "all" if screen_type == "Movers" else screen_type.lower()
         kind = "movers"
 
     if st.button("🚀 Run screen", width="stretch"):
         with st.spinner(f"Fetching {screen_type.lower()} for {universe}..."):
-            rows = run_screen(period_key, direction, universe, count,
-                              kind=kind, target_date=target_date)
+            if kind == "bigmovers":
+                rows = run_bigmover_screen(threshold, universe, count)
+            else:
+                rows = run_screen(period_key, direction, universe, count,
+                                  kind=kind, target_date=target_date)
         st.session_state["screen_rows"] = rows
         st.session_state["screen_meta"] = (
             screen_type, period_key, direction, universe, count, target_date, kind,
+            threshold if kind == "bigmovers" else None,
         )
 
     if st.session_state.get("screen_rows"):
-        screen_type, period_key, direction, universe, count, target_date, kind = \
-            st.session_state["screen_meta"]
+        meta = st.session_state["screen_meta"]
+        if len(meta) == 7:  # sessions stored before the Big Movers screen
+            screen_type, period_key, direction, universe, count, target_date, kind = meta
+            threshold = None
+        else:
+            screen_type, period_key, direction, universe, count, target_date, kind, \
+                threshold = meta
         universe_label = _UNIVERSE_LABEL(universe, "NIFTY 100")
-        if target_date:
+        if kind == "bigmovers":
+            big_market = "us" if universe in ("nasdaq100", "sp500") else "in"
+            if not market_active(big_market):
+                st.warning(
+                    f"{universe_label} market is closed - the rows below are from "
+                    f"the last session. Big-mover lists are most meaningful during "
+                    f"{market_label(big_market)} + 1 hour after close."
+                )
+            window_text = f"today, ≥±{threshold:g}%"
+        elif target_date:
             window_text = f"on {target_date.strftime('%d-%b-%Y')}"
         elif kind == "gap":
             window_text = "today's gaps"

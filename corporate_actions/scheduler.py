@@ -194,6 +194,29 @@ def _first_due(entry: dict, market: str, interval_min: int, after_ts: float) -> 
     return after_ts + min(interval_min * 60, 60)
 
 
+# How long after an anchor an anchored entry may still fire even though the
+# half-open window check has closed (e.g. the closing report at 15:30, or a
+# late wake a minute or two after the bell).
+_GATE_GRACE_SECONDS = 600  # 10 minutes
+
+
+def _gate_allows(entry: dict, market: str, now: float, due_ts: float | None,
+                 interval_min: int) -> bool:
+    """Whether an entry may fire at `now` for a due at `due_ts`.
+
+    The regular window/market-hours gate, plus one exception: an anchored
+    entry (run window or clock times) may fire up to GATE_GRACE_SECONDS after
+    an anchor even when the window check has already closed - otherwise the
+    end-of-session report (window_end, e.g. 15:30) would be swallowed by the
+    half-open "now < close" check.
+    """
+    if entry_in_window(entry, default=market, now=now):
+        return True
+    if due_ts is None or not _entry_anchor_times(entry, interval_min):
+        return False
+    return 0 <= now - due_ts <= _GATE_GRACE_SECONDS
+
+
 def start_scheduled_reports(run_command) -> None:
     """Run scheduled reports to EACH user's own chat on a timer (daemon thread).
 
@@ -288,14 +311,24 @@ def start_scheduled_reports(run_command) -> None:
                         continue
                     # Market-hours / run-window gate: an automatic report only
                     # fires while the entry's market is open (or inside its
-                    # explicit window). When the timer lands off-hours we wait,
+                    # explicit window, or briefly after an anchor - see
+                    # _gate_allows). When the timer lands off-hours we wait,
                     # so the report arrives at the next session instead of being
                     # skipped entirely.
-                    if not entry_in_window(entry, default=market, now=now):
+                    if not _gate_allows(entry, market, now, due_ts, interval):
                         log.info(
                             "scheduled report: %s outside run window (market=%s) - waiting for next session",
                             key, market,
                         )
+                        # Never loop on a stale due forever: once the due has
+                        # been blocked well past its time, jump to the next
+                        # anchor (e.g. a server that woke long after the close
+                        # skips yesterday's close report and waits for the next
+                        # session's start instead of retrying it forever).
+                        if now - due_ts > _GATE_GRACE_SECONDS:
+                            next_anchor = _first_due(entry, market, interval, now)
+                            if next_anchor > now:
+                                next_due[key] = next_anchor
                         continue
                     for command in commands:
                         try:

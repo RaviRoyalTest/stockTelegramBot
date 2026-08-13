@@ -18,7 +18,6 @@ from .schedule_parsing import (
     parse_interval_min,
     parse_pause_minutes,
     parse_schedule_options,
-    valid_hhmm,
     valid_hhmm_list,
 )
 
