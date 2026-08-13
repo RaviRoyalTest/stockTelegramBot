@@ -36,20 +36,19 @@ def _valid_hhmm(hhmm) -> tuple | None:
     return hour, minute
 
 
-def next_at_in_tz(hhmm: str, tz_name: str | None = "Asia/Kolkata") -> float | None:
-    """Epoch seconds of the next occurrence of an "HH:MM" wall-clock time in a tz.
+def next_at_in_tz_after(hhmm: str, tz_name: str | None, after_ts: float) -> float | None:
+    """Epoch seconds of the next occurrence of an "HH:MM" wall-clock time in a
+    tz, strictly AFTER `after_ts` (epoch seconds).
 
-    Returns None when the string is not a valid HH:MM. Used by the schedule so
-    a report can be tied to an exact clock time (e.g. run at 09:15 IST) instead
-    of only an interval - and it lands on that minute regardless of the host's
-    timezone. `tz_name` picks the wall clock the HH:MM belongs to (IST for the
-    Indian market, America/New_York for the US market).
+    Unlike next_at_in_tz this is relative to an arbitrary instant, so the
+    schedule can chain clock times (e.g. after firing at 09:15 the next due
+    is 15:30 the same day, then 09:15 the next day). Returns None when the
+    string is not a valid HH:MM.
     """
     parsed = _valid_hhmm(hhmm)
     if parsed is None:
         return None
     hour, minute = parsed
-    now_utc = _datetime.datetime.now(_datetime.timezone.utc)
     timezone = None
     try:
         from zoneinfo import ZoneInfo
@@ -59,16 +58,31 @@ def next_at_in_tz(hhmm: str, tz_name: str | None = "Asia/Kolkata") -> float | No
     except Exception:
         timezone = None
     if timezone is None:
-        now_local = _datetime.datetime.now()
-        candidate = now_local.replace(hour=hour, minute=minute, second=0, microsecond=0)
-        if candidate <= now_local:
+        base = _datetime.datetime.fromtimestamp(after_ts)
+        candidate = base.replace(hour=hour, minute=minute, second=0, microsecond=0)
+        if candidate <= base:
             candidate += _datetime.timedelta(days=1)
         return candidate.timestamp()
-    now_tz = now_utc.astimezone(timezone)
-    candidate = now_tz.replace(hour=hour, minute=minute, second=0, microsecond=0)
-    if candidate <= now_tz:
+    base = _datetime.datetime.fromtimestamp(after_ts, timezone)
+    candidate = base.replace(hour=hour, minute=minute, second=0, microsecond=0)
+    if candidate <= base:
         candidate += _datetime.timedelta(days=1)
     return candidate.timestamp()
+
+
+def next_at_in_tz(hhmm: str, tz_name: str | None = "Asia/Kolkata") -> float | None:
+    """Epoch seconds of the next occurrence of an "HH:MM" wall-clock time in a tz.
+
+    Returns None when the string is not a valid HH:MM. Used by the schedule so
+    a report can be tied to an exact clock time (e.g. run at 09:15 IST) instead
+    of only an interval - and it lands on that minute regardless of the host's
+    timezone. `tz_name` picks the wall clock the HH:MM belongs to (IST for the
+    Indian market, America/New_York for the US market).
+    """
+    return next_at_in_tz_after(
+        hhmm, tz_name,
+        _datetime.datetime.now(_datetime.timezone.utc).timestamp(),
+    )
 
 
 def next_at_ist(hhmm: str) -> float | None:

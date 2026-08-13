@@ -16,7 +16,7 @@ import threading
 import time
 
 from . import config, storage
-from .core.dates import next_at_in_tz, next_at_ist
+from .core.dates import next_at_in_tz_after
 from .formatting.schedule import format_interval
 from .market.hours import (
     entry_in_window,
@@ -46,7 +46,8 @@ def schedule_source_label(entry: dict, chat, command: str) -> str:
     """
     when = format_interval(entry.get("interval_min") or config.SCHEDULED_REPORTS_INTERVAL_MIN)
     if entry.get("run_at"):
-        when += f" at {entry['run_at']} {_tz_tag(entry)}"
+        pretty_times = str(entry["run_at"]).replace(",", ", ")
+        when += f" at {pretty_times} {_tz_tag(entry)}"
     gate_bits = []
     market = entry_market(entry, default=config.SCHEDULED_REPORTS_MARKET)
     if entry.get("window_start") and entry.get("window_end"):
@@ -99,6 +100,98 @@ def schedule_entries_with_defaults(default_chat: str) -> list[dict]:
                 "default": True,
             }]
     return entries
+
+
+def _run_at_times(entry: dict) -> list[str]:
+    """Clock times (HH:MM) an entry fires at daily.
+
+    run_at may hold a comma-separated list, e.g. '09:15,15:30' - the open +
+    close reports - each of which becomes a daily anchor.
+    """
+    raw = (entry or {}).get("run_at") or ""
+    return [item.strip() for item in raw.split(",") if item.strip()]
+
+
+def _add_minutes_hhmm(hhmm: str, minutes: int) -> str:
+    """'09:15' + 60 -> '10:15' (wraps at midnight)."""
+    hour, minute = (int(part) for part in str(hhmm).split(":"))
+    total = (hour * 60 + minute + int(minutes)) % (24 * 60)
+    return f"{total // 60:02d}:{total % 60:02d}"
+
+
+def _window_anchor_times(entry: dict, interval_min: int) -> list[str]:
+    """Daily anchor clock-times for an entry with an explicit run window.
+
+    window_start, then interval ticks, ending EXACTLY at window_end - so a
+    windowed entry always fires at the start of the session AND at the end,
+    whatever the interval. Overnight windows (end <= start) anchor at the
+    two edges only. Empty when the entry has no explicit window.
+    """
+    start = str((entry or {}).get("window_start") or "").strip()
+    end = str((entry or {}).get("window_end") or "").strip()
+    if not start or not end:
+        return []
+    interval = max(15, int(interval_min or 60))
+
+    def _minutes(hhmm):
+        hour, minute = (int(part) for part in hhmm.split(":"))
+        return hour * 60 + minute
+
+    if _minutes(end) <= _minutes(start):  # overnight window - edges only
+        return [start, end]
+    times = [start]
+    tick = start
+    while True:
+        next_tick = _add_minutes_hhmm(tick, interval)
+        # next_tick == tick guards against intervals >= 24h wrapping back to
+        # the same clock time; _minutes >= end stops the grid at the window
+        # edge. Either way the loop always advances or breaks.
+        if next_tick == tick or _minutes(next_tick) >= _minutes(end):
+            break
+        times.append(next_tick)
+        tick = next_tick
+    if times[-1] != end:
+        times.append(end)
+    return times
+
+
+def _next_clock_after(times: list[str], tz_name: str, after_ts: float) -> float | None:
+    """Epoch of the next occurrence of ANY of `times` (daily) after `after_ts`."""
+    candidates = [
+        next_at_in_tz_after(hhmm, tz_name, after_ts)
+        for hhmm in times if hhmm
+    ]
+    candidates = [ts for ts in candidates if ts is not None]
+    return min(candidates) if candidates else None
+
+
+def _entry_anchor_times(entry: dict, interval_min: int) -> list[str]:
+    """Daily clock-time anchors governing an entry's next due.
+
+    An explicit run window wins (start -> interval ticks -> end); otherwise
+    run_at (possibly a comma-separated list). Empty for plain interval
+    entries, which keep the interval-only cadence.
+    """
+    windowed = _window_anchor_times(entry, interval_min)
+    if windowed:
+        return windowed
+    return _run_at_times(entry)
+
+
+def _first_due(entry: dict, market: str, interval_min: int, after_ts: float) -> float:
+    """First-run due for an entry without a persisted next_due.
+
+    Anchored entries (a run window or clock times) start at their next anchor
+    in the market's wall clock (IST for India, ET for the US); plain interval
+    entries fall back to a short first-run delay so the first report lands
+    soon after the server boots.
+    """
+    anchors = _entry_anchor_times(entry, interval_min)
+    if anchors:
+        ts = _next_clock_after(anchors, market_tz_name(market), after_ts)
+        if ts is not None:
+            return ts
+    return after_ts + min(interval_min * 60, 60)
 
 
 def start_scheduled_reports(run_command) -> None:
@@ -170,21 +263,17 @@ def start_scheduled_reports(run_command) -> None:
                     key = (chat, tuple(commands))
                     market = entry_market(entry, default=config.SCHEDULED_REPORTS_MARKET)
                     # Persisted next-due (schedule.json) wins so the cadence
-                    # survives redeploys. For a clock-time entry (run_at) the
-                    # first due is the next occurrence of HH:MM in the market's
-                    # wall clock (IST for India, ET for the US). Plain
-                    # interval entries fall back to a short first-run delay.
+                    # survives redeploys. Otherwise anchored entries (a run
+                    # window or clock times) start at their next anchor in the
+                    # market's wall clock (IST for India, ET for the US); plain
+                    # interval entries get a short first-run delay.
                     persisted = storage.schedule_next_due_ts(entry)
                     due_ts = next_due.get(key)
                     if due_ts is None:
                         if persisted is not None:
                             due_ts = persisted
-                        elif entry.get("run_at"):
-                            due_ts = next_at_in_tz(entry["run_at"], market_tz_name(market))
-                            if due_ts is None:
-                                due_ts = now + min(interval * 60, 60)
                         else:
-                            due_ts = now + min(interval * 60, 60)
+                            due_ts = _first_due(entry, market, interval, now)
                         next_due[key] = due_ts
                     if now < due_ts:
                         continue
@@ -222,7 +311,21 @@ def start_scheduled_reports(run_command) -> None:
                             )
                     # Schedule the next run AND persist it, so a redeploy
                     # resumes the same cadence instead of restarting the clock.
-                    next_due_ts = time.time() + interval * 60
+                    # Anchored entries continue along their daily clock-time
+                    # sequence (window start/end, run_at list); a single clock
+                    # time with a sub-daily interval keeps the interval cadence
+                    # (e.g. 'at 09:15 3h' -> 09:15, 12:15, 15:15...).
+                    after_ts = time.time()
+                    windowed = _window_anchor_times(entry, interval)
+                    times = _run_at_times(entry)
+                    if windowed or len(times) > 1 or (times and interval % (24 * 60) == 0):
+                        next_due_ts = _next_clock_after(
+                            windowed or times, market_tz_name(market), after_ts,
+                        )
+                        if next_due_ts is None:
+                            next_due_ts = after_ts + interval * 60
+                    else:
+                        next_due_ts = after_ts + interval * 60
                     next_due[key] = next_due_ts
                     storage.set_schedule_next_due(chat, commands, interval, next_due_ts)
             except Exception as error:  # never let a scheduler hiccup kill the thread

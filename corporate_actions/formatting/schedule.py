@@ -130,7 +130,8 @@ def format_schedule(chat_id) -> str:
             label = format_interval(interval)
         line = f"  {index}. {label}: {html.escape(', '.join(commands))}"
         if entry.get("run_at"):
-            line += f" at {entry['run_at']} {tz_tag}"
+            pretty_times = str(entry["run_at"]).replace(",", ", ")
+            line += f" at {pretty_times} {tz_tag}"
         if entry.get("window_start") and entry.get("window_end"):
             line += f" \u00b7 window {entry['window_start']}\u2013{entry['window_end']} {tz_tag}"
         elif market != "any":
@@ -148,6 +149,8 @@ def format_schedule(chat_id) -> str:
     )
     lines.append("Market gate: append <code>us</code>, <code>any</code> or "
                  "<code>in from HH:MM to HH:MM</code> to /schedule add")
+    lines.append("Open + close results: <code>/schedule add at 09:15,15:30 /cmd</code> - "
+                 "daily at both times; a run window fires at its start AND end.")
     lines.append("<code>/schedule pause 1d|3d|1w|2w|1mo</code>  /  "
                  "<code>/schedule resume</code>")
     lines.append("<code>/schedule remove 1</code>  /  <code>/schedule clear</code>")

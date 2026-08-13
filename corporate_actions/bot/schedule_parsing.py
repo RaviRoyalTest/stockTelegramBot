@@ -60,6 +60,14 @@ def valid_hhmm(hhmm) -> bool:
     return 0 <= hour <= 23 and 0 <= minute <= 59
 
 
+def valid_hhmm_list(raw) -> bool:
+    """True when the string is one HH:MM or a comma list, e.g. '09:15,15:30'."""
+    items = [item.strip() for item in str(raw or "").split(",") if item.strip()]
+    if not items:
+        return False
+    return all(valid_hhmm(item) for item in items)
+
+
 def parse_schedule_options(tokens: list[str]) -> tuple[list[str], dict]:
     """Strip trailing schedule options off a /schedule add command tail.
 

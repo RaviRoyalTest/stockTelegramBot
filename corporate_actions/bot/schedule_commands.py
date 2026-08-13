@@ -19,6 +19,7 @@ from .schedule_parsing import (
     parse_pause_minutes,
     parse_schedule_options,
     valid_hhmm,
+    valid_hhmm_list,
 )
 
 log = logging.getLogger(__name__)
@@ -244,8 +245,11 @@ def handle_schedule_add(chat_id, parts) -> None:
             "Or at a clock time: <code>/schedule add at 09:15 /toplosers 1h</code> "
             "(daily at 09:15 IST) or <code>/schedule add at 09:15 3h /cmd</code> "
             "(every 3h from 09:15).\n"
+            "Start AND end results: <code>/schedule add at 09:15,15:30 /toplosers 1h</code> "
+            "= daily at both times (open + close).\n"
             "Options after the command: <code>in|us|any</code> (market-hours gate) "
-            "and <code>from HH:MM to HH:MM</code> (run window).\n"
+            "and <code>from HH:MM to HH:MM</code> (run window) - a run window "
+            "always fires exactly at its start AND end.\n"
             "Interval: minutes (180), m (90m), h (3h) or d (1d), min 15.",
         )
         return
@@ -259,13 +263,18 @@ def handle_schedule_add(chat_id, parts) -> None:
             reply(
                 chat_id,
                 "Usage: <code>/schedule add at HH:MM &lt;command&gt;</code>\n"
-                "e.g. <code>/schedule add at 09:15 /toplosers 1h</code> (daily at 09:15 IST) "
-                "or <code>/schedule add at 09:15 3h /cmd</code> (every 3h).",
+                "e.g. <code>/schedule add at 09:15 /toplosers 1h</code> (daily at 09:15 IST), "
+                "<code>/schedule add at 09:15 3h /cmd</code> (every 3h), or several times "
+                "<code>/schedule add at 09:15,15:30 /cmd</code> (open + close).",
             )
             return
         run_at = parts[3].strip()
-        if not valid_hhmm(run_at):
-            reply(chat_id, "Bad time. Use 24h format like <code>09:15</code> or <code>18:30</code>.")
+        if not valid_hhmm_list(run_at):
+            reply(
+                chat_id,
+                "Bad time. Use 24h format like <code>09:15</code> or <code>18:30</code> - "
+                "or several times for open + close: <code>09:15,15:30</code>.",
+            )
             return
         next_due_ts = parts[4] if len(parts) > 4 else ""
         if next_due_ts.startswith("/"):
@@ -309,10 +318,11 @@ def handle_schedule_add(chat_id, parts) -> None:
     when_bits = []
     if run_at:
         tz_tag = _run_at_tz_tag(market)
+        pretty_times = run_at.replace(",", ", ")
         if interval % 1440 == 0:
-            when_bits.append(f"daily at <b>{run_at} {tz_tag}</b>")
+            when_bits.append(f"daily at <b>{pretty_times} {tz_tag}</b>")
         else:
-            when_bits.append(f"every <b>{interval} min</b> starting at <b>{run_at} {tz_tag}</b>")
+            when_bits.append(f"every <b>{interval} min</b> starting at <b>{pretty_times} {tz_tag}</b>")
     else:
         when_bits.append(f"every <b>{interval} min</b>")
     if market != "any":
