@@ -17,5 +17,14 @@
     "run_at": "09:00",
     "market": "in",
     "next_due": "2026-08-14T03:45:57"
+  },
+  {
+    "interval_min": 1440,
+    "commands": [
+      "/gappers today"
+    ],
+    "chat": "862087765",
+    "run_at": "09:15",
+    "market": "in"
   }
 ]
