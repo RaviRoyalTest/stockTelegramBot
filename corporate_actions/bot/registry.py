@@ -47,10 +47,11 @@ def _moversfund_status_text(chat_id) -> str:
     if mode == "auto":
         state = "fundamentals sent automatically with every report"
     else:
-        state = "price report ends with a <b>Get Fundamentals</b> button (default)"
+        state = "price report ends with a Get Fundamentals button (default)"
     return (
         f"\U0001F4CA <b>Movers fundamentals</b>\n"
-        f"Current mode: <b>{mode}</b> \u2014 {state}"
+        f"\u2699\ufe0f <b>Current mode: {mode}</b>\n"
+        f"   \u2192 {state}"
     )
 
 
