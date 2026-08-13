@@ -225,18 +225,17 @@ def get_intraday_change(exchange: str, symbol: str, period_minutes: int) -> dict
         quotes = (result.get("indicators") or {}).get("quote") or [{}]
         closes = (quotes[0] or {}).get("close") or []
         name = meta.get("longName") or meta.get("shortName") or ""
+        prev_close = meta.get("chartPreviousClose") or meta.get("previousClose")
         if price is None:
             data = None
         elif period_minutes <= 0:
-            prev = (
-                meta.get("chartPreviousClose")
-                or meta.get("previousClose")
-                or (closes[0] if closes else None)
-            )
+            prev = prev_close or (closes[0] if closes else None)
             if prev:
                 data = {
                     "price": price,
                     "change_pct": (price / prev - 1) * 100,
+                    "change_pct_today": ((price / prev_close - 1) * 100) if prev_close else None,
+                    "prev_close": prev_close,
                     "period_minutes": 0,
                     "name": name,
                 }
@@ -255,6 +254,8 @@ def get_intraday_change(exchange: str, symbol: str, period_minutes: int) -> dict
                 data = {
                     "price": price,
                     "change_pct": (price / base - 1) * 100,
+                    "change_pct_today": ((price / prev_close - 1) * 100) if prev_close else None,
+                    "prev_close": prev_close,
                     "period_minutes": period_minutes,
                     "name": name,
                 }
@@ -273,7 +274,9 @@ def get_daily_change(exchange: str, symbol: str, days: int) -> dict | None:
     """% move over the trailing N-day window using Yahoo daily bars, cached.
 
     days=1 means vs the previous close ("today"). Returns
-    {'price', 'change_pct', 'days', 'name'} or None.
+    {'price', 'change_pct', 'change_pct_today', 'prev_close', 'days', 'name'}
+    or None, where change_pct_today is always the move vs the previous close
+    ("today") regardless of the window.
     """
     days = max(1, int(days))
     key = (exchange.upper(), symbol.upper(), "d", days)
@@ -307,32 +310,32 @@ def get_daily_change(exchange: str, symbol: str, days: int) -> dict | None:
         result = response.json()["chart"]["result"][0]
         meta = result.get("meta") or {}
         price = meta.get("regularMarketPrice")
-        timestamps = result.get("timestamp") or []
         quotes = (result.get("indicators") or {}).get("quote") or [{}]
-        closes = (quotes[0] or {}).get("close") or []
+        closes = [close for close in (quotes[0] or {}).get("close") or [] if close is not None]
         if price is None:  # market closed - fall back to the last close
-            for close in reversed(closes):
-                if close is not None:
-                    price = close
-                    break
+            price = closes[-1] if closes else None
         name = meta.get("longName") or meta.get("shortName") or ""
+        # Previous close = the close of the last COMPLETED session. Yahoo's
+        # daily bars are timestamped at 03:45 UTC, so a calendar-time cutoff
+        # (`now - N days`) lands inside the target day and skips it - the
+        # multi-day base must be the close `days` TRADING sessions back.
+        prev_close = meta.get("chartPreviousClose") or meta.get("previousClose")
+        if len(closes) >= 2:
+            prev_close = closes[-2] or prev_close
         if days <= 1:
-            base = meta.get("chartPreviousClose") or meta.get("previousClose")
+            base = prev_close
+        elif len(closes) >= days + 1:
+            base = closes[-(days + 1)]
+        elif len(closes) >= 2:
+            base = closes[1]
         else:
-            cutoff = now - days * 86400
-            base = None
-            for timestamp, close in zip(timestamps, closes):
-                if close is None:
-                    continue
-                if timestamp >= cutoff:
-                    base = close
-                    break
-            if base is None:
-                base = next((close for close in closes if close is not None), None)
+            base = prev_close
         if price and base:
             data = {
                 "price": price,
                 "change_pct": (price / base - 1) * 100,
+                "change_pct_today": ((price / prev_close - 1) * 100) if prev_close else None,
+                "prev_close": prev_close,
                 "days": days,
                 "name": name,
             }

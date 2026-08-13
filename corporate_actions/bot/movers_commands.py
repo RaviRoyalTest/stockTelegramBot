@@ -101,19 +101,36 @@ def _move_icon(change: float) -> str:
     return "\U0001F7E1\u25bc"
 
 
+def _vs_prev_close_tag(data: dict) -> tuple[str, bool]:
+    """' · vs prev close +x.xx%' when the window move differs from today's move."""
+    today = data.get("change_pct_today")
+    change = data.get("change_pct")
+    if today is None or change is None or abs(today - change) <= 0.005:
+        return "", False
+    sign = "+" if today >= 0 else ""
+    return f"  \u00b7  vs prev close <b>{sign}{today:.2f}%</b>", True
+
+
 def format_price_movers_report(rows: list, header: str, is_us: bool = False) -> str:
     """Format the fast initial price-only movers report (Phase 1)."""
     from ..core.numbers import format_money
 
     lines = [header]
+    any_today_tag = False
     for index, (symbol, data) in enumerate(rows, 1):
         change = data["change_pct"]
         price = data.get("price")
         sign = "+" if change >= 0 else ""
+        tag, shown = _vs_prev_close_tag(data)
+        any_today_tag = any_today_tag or shown
         lines.append(
             f"{index}. {_move_icon(change)} <b>{escape(symbol)}</b>  "
-            f"{format_money(price, 'USD' if is_us else 'INR')}  <b>{sign}{change:.2f}%</b>"
+            f"{format_money(price, 'USD' if is_us else 'INR')}  "
+            f"<b>{sign}{change:.2f}%</b>{tag}"
         )
+    if any_today_tag:
+        lines.append("")
+        lines.append("\U0001F4A1 <i>vs prev close = today's move from yesterday's close.</i>")
     lines.append("")
     lines.append(
         f"\u23f3 Price data loaded for {len(rows)} stocks. "
@@ -129,21 +146,27 @@ def format_enriched_movers_report(rows: list, header: str, fund_by_symbol: dict,
     from ..core.numbers import format_money
 
     enriched_lines = [header, ""]
+    any_today_tag = False
     for index, (symbol, data) in enumerate(rows, 1):
         change = data["change_pct"]
         price = data.get("price")
         fund = fund_by_symbol.get(symbol)
         sign = "+" if change >= 0 else ""
         change_str = f"{sign}{change:.2f}%"
+        tag, shown = _vs_prev_close_tag(data)
+        any_today_tag = any_today_tag or shown
         sig_emoji, _ = _wk52_signal(price, fund)
         sig_prefix = f" {sig_emoji}" if sig_emoji else ""
         enriched_lines.append(
             f"{index}. {_move_icon(change)}{sig_prefix} <b>{escape(symbol)}</b>  "
-            f"{format_money(price, 'USD' if is_us else 'INR')}  <b>{change_str}</b>"
+            f"{format_money(price, 'USD' if is_us else 'INR')}  <b>{change_str}</b>{tag}"
         )
         fund_lines = _us_movers_lines(fund, price) if is_us else _fundamentals_lines(fund, price)
         for fund_line in fund_lines:
             enriched_lines.append("   " + fund_line)
+        enriched_lines.append("")
+    if any_today_tag:
+        enriched_lines.append("\U0001F4A1 <i>vs prev close = today's move from yesterday's close.</i>")
         enriched_lines.append("")
     return "\n".join(enriched_lines)
 
