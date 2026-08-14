@@ -105,87 +105,230 @@ def parse_screen_parts(parts, default_period, default_direction,
     return period, direction, count, universe, target_date
 
 
-def _move_icon(change: float) -> str:
-    if change >= 3.0:
-        return "\U0001F7E2\u25b2\u25b2"
-    if change >= 1.0:
-        return "\U0001F7E2\u25b2"
-    if change <= -3.0:
-        return "\U0001F534\u25bc\u25bc"
-    if change <= -1.0:
-        return "\U0001F534\u25bc"
-    if change >= 0:
-        return "\U0001F7E1\u25b2"
-    return "\U0001F7E1\u25bc"
+def _dir_icon(change: float) -> str:
+    """Leading card icon: red down triangle / green up arrow for a movers card."""
+    if change < 0:
+        return "\U0001F53B"  # red down-pointing triangle
+    return "\U0001F7E2\u25b2"  # green circle + up arrow
 
 
-def _vs_prev_close_tag(data: dict) -> tuple[str, bool]:
-    """' · vs prev close +x.xx%' when the window move differs from today's move."""
-    today = data.get("change_pct_today")
+def _today_icon(change: float) -> str:
+    """Green/red circle for the secondary 'Today' metric on a movers card."""
+    return "\U0001F7E2" if change >= 0 else "\U0001F534"
+
+
+def _metric_label(period: tuple, target_date=None) -> str:
+    """Short metric label for a movers card, e.g. ('intraday', 60) -> '1H'."""
+    if target_date is not None:
+        return "Day"
+    kind, value = period
+    if kind == "intraday":
+        return f"{value // 60}H" if value % 60 == 0 else f"{value}M"
+    if value == 1:
+        return "Today"
+    if value % 365 == 0:
+        return f"{value // 365}Y"
+    if value % 30 == 0:
+        return f"{value // 30}MO"
+    if value % 7 == 0:
+        return f"{value // 7}W"
+    return f"{value}D"
+
+
+def _period_title(period: tuple, target_date=None) -> str:
+    """Title-cased period label, e.g. ('intraday', 60) -> 'Last 1 Hour'."""
+    if target_date is not None:
+        return format_date(target_date.isoformat())
+    kind, value = period
+    if kind == "intraday":
+        if value % 60 == 0:
+            hours = value // 60
+            return f"Last {hours} Hour" if hours == 1 else f"Last {hours} Hours"
+        return f"Last {value} Min"
+    specials = {
+        "last 1 week": "Last 1 Week", "last 2 weeks": "Last 2 Weeks",
+        "last 1 month": "Last 1 Month", "last 3 months": "Last 3 Months",
+        "last 6 months": "Last 6 Months", "last 1 year": "Last 1 Year",
+    }
+    label = period_label(kind, value)
+    return specials.get(label, label[:1].upper() + label[1:])
+
+
+def _price_pair_label(period: tuple, target_date=None) -> str:
+    """The 'A → B' context line for a movers card set."""
+    if target_date is not None:
+        return "Previous Close → Closing Price"
+    kind, value = period
+    if kind == "intraday":
+        if value % 60 == 0:
+            hours = value // 60
+            ago = f"{hours} Hour" if hours == 1 else f"{hours} Hours"
+        else:
+            ago = f"{value} Min"
+        return f"{ago} Ago → Current Price"
+    if value == 1:
+        return "Previous Close → Current Price"
+    return f"{value} Days Ago → Current Price"
+
+
+def _window_start_price(data: dict, period: tuple, target_date=None):
+    """Price at the start of the movers window (the base of change_pct)."""
+    if target_date is not None or (period[0] == "days" and period[1] == 1):
+        prev = data.get("prev_close")
+        if prev:
+            return prev
+    price = data.get("price")
     change = data.get("change_pct")
-    if today is None or change is None or abs(today - change) <= 0.005:
-        return "", False
-    sign = "+" if today >= 0 else ""
-    return f"  \u00b7  vs prev close <b>{sign}{today:.2f}%</b>", True
+    if price and change is not None:
+        return price / (1 + change / 100)
+    return price
 
 
-def format_price_movers_report(rows: list, header: str, is_us: bool = False) -> str:
-    """Format the fast initial price-only movers report (Phase 1)."""
+def _movers_card_lines(index: int, symbol: str, data: dict, currency: str,
+                       metric: str, period: tuple, target_date=None,
+                       sig_emoji: str = "") -> list:
+    """The 3-line movers card: symbol (price), start → now, metric | today."""
     from ..core.numbers import format_money
 
-    lines = [header]
-    any_today_tag = False
-    for index, (symbol, data) in enumerate(rows, 1):
-        change = data["change_pct"]
-        price = data.get("price")
-        sign = "+" if change >= 0 else ""
-        tag, shown = _vs_prev_close_tag(data)
-        any_today_tag = any_today_tag or shown
-        lines.append(
-            f"{index}. {_move_icon(change)} <b>{escape(symbol)}</b>  "
-            f"{format_money(price, 'USD' if is_us else 'INR')}  "
-            f"<b>{sign}{change:.2f}%</b>{tag}"
-        )
-    if any_today_tag:
+    change = data["change_pct"]
+    price = data.get("price")
+    today = data.get("change_pct_today")
+    sign = "+" if change >= 0 else ""
+    now_str = format_money(price, currency)
+    start_str = format_money(_window_start_price(data, period, target_date), currency)
+    secondary = ""
+    # Only a secondary 'Today' line when it is a distinct metric: the window
+    # is intraday or multi-day (for 'today'/historical screens it would just
+    # duplicate the main metric).
+    distinct = (period[0] == "intraday" or (period[0] == "days" and period[1] > 1))
+    if distinct and today is not None and abs(today - change) > 0.005:
+        today_sign = "+" if today >= 0 else ""
+        secondary = f" | Today: {_today_icon(today)} {today_sign}{today:.2f}%"
+    sig = f" {sig_emoji}" if sig_emoji else ""
+    return [
+        f"{index}. {_dir_icon(change)} <b>{escape(symbol)}</b>{sig} ({now_str})",
+        f"   {start_str} \u2192 {now_str}",
+        f"   {metric}: <b>{sign}{change:.2f}%</b>{secondary}",
+    ]
+
+
+def _period_movement(period: tuple) -> str:
+    """Lowercase movement description for the footer legend."""
+    kind, value = period
+    if kind == "intraday":
+        if value % 60 == 0:
+            hours = value // 60
+            return f"Last {hours}-hour movement" if hours > 1 else "Last 1-hour movement"
+        return f"Last {value}-min movement"
+    if value == 1:
+        return "Change vs yesterday's close"
+    if value == 7:
+        return "Last 1-week movement"
+    if value == 14:
+        return "Last 2-week movement"
+    if value == 30:
+        return "Last 1-month movement"
+    if value == 90:
+        return "Last 3-month movement"
+    if value == 180:
+        return "Last 6-month movement"
+    if value == 365:
+        return "Last 1-year movement"
+    return f"Last {value}-day movement"
+
+
+def _movers_footer(metric: str, period: tuple, target_date, direction: str,
+                   min_abs, any_today: bool) -> list:
+    """Legend + command hints footer for a movers report."""
+    lines = ["", "\u2501" * 16]
+    if min_abs is not None:
+        lines.append(f"\U0001F4CC *{metric}* = Session move vs yesterday's close")
+    elif target_date is not None:
+        lines.append(f"\U0001F4CC *{metric}* = That day's close vs its previous close")
+    else:
+        lines.append(f"\U0001F4CC *{metric}* = {_period_movement(period)}")
+        if any_today:
+            lines.append("\U0001F4CC *Today* = Change vs yesterday's close")
+    if any_today and direction in ("gainers", "losers"):
+        kind_word = "loser" if direction == "losers" else "gainer"
+        opposite = "positive" if direction == "losers" else "negative"
         lines.append("")
-        lines.append("\U0001F4A1 <i>vs prev close = today's move from yesterday's close.</i>")
+        lines.append(
+            f"\U0001F4A1 A stock may be a {metric} {kind_word} "
+            f"even if it is {opposite} for the day."
+        )
+    lines.append("")
+    lines.append("Commands:")
+    if min_abs is not None:
+        lines.append(f"`/moversover {min_abs:g}` \u2192 Big movers \u2265 \u00b1{min_abs:g}%")
+        lines.append("`/movers` \u2192 All movers (both directions)")
+    else:
+        lines.append("`/gainers` \u2192 Top gainers")
+        lines.append("`/losers` \u2192 Top losers")
+        lines.append("`/movers` \u2192 All movers")
+    return lines
+
+
+def _shows_today(data: dict, period: tuple) -> bool:
+    """True when the 'Today' secondary differs from the window move."""
+    distinct = period[0] == "intraday" or (period[0] == "days" and period[1] > 1)
+    if not distinct:
+        return False
+    today = data.get("change_pct_today")
+    change = data.get("change_pct")
+    return today is not None and change is not None and abs(today - change) > 0.005
+
+
+def format_price_movers_report(rows: list, header: str, is_us: bool = False,
+                               period: tuple = ("days", 1), target_date=None,
+                               direction: str = "all", min_abs=None) -> str:
+    """Format the fast initial price-only movers report (Phase 1)."""
+    currency = "USD" if is_us else "INR"
+    metric = _metric_label(period, target_date)
+    lines = [header]
+    any_today = False
+    for index, (symbol, data) in enumerate(rows, 1):
+        any_today = any_today or _shows_today(data, period)
+        lines.extend(
+            _movers_card_lines(index, symbol, data, currency, metric, period, target_date)
+        )
     lines.append("")
     lines.append(
         f"\u23f3 Price data loaded for {len(rows)} stocks. "
         "Fetching 52W range, RSI, P/E &amp; fundamentals... "
         "Updated report coming in a few seconds."
     )
+    lines.extend(_movers_footer(metric, period, target_date, direction, min_abs, any_today))
     return "\n".join(lines)
 
 
 def format_enriched_movers_report(rows: list, header: str, fund_by_symbol: dict,
-                                  is_us: bool = False) -> str:
-    """Format the full enriched fundamentals movers report with spacious card layout."""
-    from ..core.numbers import format_money
-
+                                  is_us: bool = False, period: tuple = ("days", 1),
+                                  target_date=None, direction: str = "all",
+                                  min_abs=None) -> str:
+    """Format the full enriched fundamentals movers report with card layout."""
+    currency = "USD" if is_us else "INR"
+    metric = _metric_label(period, target_date)
     enriched_lines = [header, ""]
-    any_today_tag = False
+    any_today = False
     for index, (symbol, data) in enumerate(rows, 1):
-        change = data["change_pct"]
+        any_today = any_today or _shows_today(data, period)
         price = data.get("price")
         fund = fund_by_symbol.get(symbol)
-        sign = "+" if change >= 0 else ""
-        change_str = f"{sign}{change:.2f}%"
-        tag, shown = _vs_prev_close_tag(data)
-        any_today_tag = any_today_tag or shown
         sig_emoji, _ = _wk52_signal(price, fund)
-        sig_prefix = f" {sig_emoji}" if sig_emoji else ""
-        enriched_lines.append(
-            f"{index}. {_move_icon(change)}{sig_prefix} <b>{escape(symbol)}</b>  "
-            f"{format_money(price, 'USD' if is_us else 'INR')}  <b>{change_str}</b>{tag}"
+        enriched_lines.extend(
+            _movers_card_lines(
+                index, symbol, data, currency, metric, period, target_date,
+                sig_emoji=sig_emoji or "",
+            )
         )
         fund_lines = _us_movers_lines(fund, price) if is_us else _fundamentals_lines(fund, price)
         for fund_line in fund_lines:
             enriched_lines.append("   " + fund_line)
         enriched_lines.append("")
-    if any_today_tag:
-        enriched_lines.append("\U0001F4A1 <i>vs prev close = today's move from yesterday's close.</i>")
-        enriched_lines.append("")
+    enriched_lines.extend(
+        _movers_footer(metric, period, target_date, direction, min_abs, any_today)
+    )
     return "\n".join(enriched_lines)
 
 
@@ -300,18 +443,14 @@ def handle_market_screen(chat_id, parts, default_direction="all",
     if min_abs:
         rows = [row for row in rows if abs(row[1]["change_pct"]) >= min_abs]
         rows.sort(key=lambda row: abs(row[1]["change_pct"]), reverse=True)
-        title = f"<b>Big Movers today (\u2265\u00b1{min_abs:g}%)</b>"
     elif direction == "gainers":
         rows = [row for row in rows if row[1]["change_pct"] > 0]
         rows.sort(key=lambda row: row[1]["change_pct"], reverse=True)  # highest first
-        title = f"<b>Top Gainers - {period_label_text}</b>"
     elif direction == "losers":
         rows = [row for row in rows if row[1]["change_pct"] < 0]
         rows.sort(key=lambda row: row[1]["change_pct"])  # most negative first
-        title = f"<b>Top Losers - {period_label_text}</b>"
     else:
         rows.sort(key=lambda row: row[1]["change_pct"])  # lower -> higher
-        title = f"<b>Movers - {period_label_text}</b> · {direction} (lower \u2192 higher)"
 
     if count:
         rows = rows[:count]
@@ -329,15 +468,44 @@ def handle_market_screen(chat_id, parts, default_direction="all",
         reply(chat_id, f"No movement data found for {period_label_text} ({universe_label}).")
         return
 
+    # New card-style header: emoji title + period/count stamp + price-pair
+    # context line (mirrors the /gappers card layout).
     if min_abs:
-        header = f"{title} · {universe_label} ({len(rows)} big mover{'s' if len(rows) != 1 else ''})"
+        emoji, headline = "\u26A1", f"*{universe_label} \u2014 BIG MOVERS*"
+    elif direction == "gainers":
+        emoji, headline = "\U0001F4C8", f"*{universe_label} \u2014 TOP GAINERS*"
+    elif direction == "losers":
+        emoji, headline = "\U0001F4C9", f"*{universe_label} \u2014 TOP LOSERS*"
     else:
-        header = f"{title} · {universe_label} (Top {len(rows)})"
+        emoji, headline = "\U0001F4CA", f"*{universe_label} \u2014 MOVERS*"
+    period_title = _period_title(period, target_date)
+    if min_abs:
+        stamp = (
+            f"{period_title} | {len(rows)} stock{'s' if len(rows) != 1 else ''} "
+            f"moving \u2265 \u00b1{min_abs:g}%"
+        )
+    else:
+        stamp = f"{period_title} | Top {len(rows)}"
+    header = "\n".join([
+        f"{emoji} {headline}",
+        f"\u23f1\ufe0f *{stamp}*",
+        "",
+        f"*{_price_pair_label(period, target_date)}*",
+    ])
+    screen_meta = {
+        "period": period,
+        "target_date": target_date,
+        "direction": direction,
+        "min_abs": min_abs,
+    }
 
     # Phase 1 - the initial report: movers and their current price only, so
     # the user gets actionable numbers now instead of waiting for the slower
     # fundamentals enrichment.
-    phase1_lines = format_price_movers_report(rows, header, is_us=is_us)
+    phase1_lines = format_price_movers_report(
+        rows, header, is_us=is_us, period=period, target_date=target_date,
+        direction=direction, min_abs=min_abs,
+    )
     if failed:
         phase1_lines += f"\n({failed} of {len(symbols)} stocks could not be loaded)"
     fund_mode = (storage.get_user_settings(chat_id) or {}).get("movers_fund", "button")
@@ -350,6 +518,7 @@ def handle_market_screen(chat_id, parts, default_direction="all",
             "failed": failed,
             "symbols": len(symbols),
             "us": is_us,
+            "meta": screen_meta,
         }
         phase1_markup = fundamentals_button()
     reply_messages(chat_id, split_messages(phase1_lines.split("\n")), reply_markup=phase1_markup)
@@ -360,10 +529,14 @@ def handle_market_screen(chat_id, parts, default_direction="all",
     if fund_mode == "button":
         return
 
-    send_screen_fundamentals(chat_id, rows, header, failed, len(symbols), parts[0], started_at, is_us=is_us)
+    send_screen_fundamentals(
+        chat_id, rows, header, failed, len(symbols), parts[0], started_at,
+        is_us=is_us, meta=screen_meta,
+    )
 
 
-def send_screen_fundamentals(chat_id, rows, header, failed, symbols_total, screen_cmd, started_at, is_us=False) -> None:
+def send_screen_fundamentals(chat_id, rows, header, failed, symbols_total, screen_cmd,
+                             started_at, is_us=False, meta=None) -> None:
     """Fetch fundamentals and send the enriched movers report.
 
     Used by the "Get Fundamentals" button (button mode) and as Phase 2 of a
@@ -371,6 +544,11 @@ def send_screen_fundamentals(chat_id, rows, header, failed, symbols_total, scree
     the button always enriches the exact report the user just saw. For US
     screens (NASDAQ 100) the US fundamentals + USD formatter are used.
     """
+    meta = meta or {}
+    period = meta.get("period") or ("days", 1)
+    target_date = meta.get("target_date")
+    direction = meta.get("direction") or "all"
+    min_abs = meta.get("min_abs")
     # Phase 2 - fetch fundamentals (Screener + Yahoo Finance) and send the
     # enriched report. To protect against screener.in's aggressive rate
     # limiting, the slow screener.in part is only fetched for the first
@@ -413,7 +591,10 @@ def send_screen_fundamentals(chat_id, rows, header, failed, symbols_total, scree
         screen_cmd, len(tasks), monotonic() - t_fund,
     )
 
-    enriched_report = format_enriched_movers_report(rows, header, fund_by_symbol, is_us=is_us)
+    enriched_report = format_enriched_movers_report(
+        rows, header, fund_by_symbol, is_us=is_us, period=period,
+        target_date=target_date, direction=direction, min_abs=min_abs,
+    )
     if len(rows) > FUND_MAX_ROWS:
         enriched_report += (
             f"\n(fundamentals detail shown for the first "

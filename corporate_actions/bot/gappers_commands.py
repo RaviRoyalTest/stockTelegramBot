@@ -86,8 +86,8 @@ _SCAN_TOKENS = (
 
 
 def _gap_icon(gap_pct: float) -> str:
-    """Green up arrow for a gap-up, red down arrow for a gap-down."""
-    return "\U0001F7E2\u25b2" if gap_pct >= 0 else "\U0001F534\u25bc"
+    """Green circle for a gap-up, red circle for a gap-down."""
+    return "\U0001F7E2" if gap_pct >= 0 else "\U0001F534"
 
 
 def _usd(universe: str) -> bool:
@@ -252,55 +252,76 @@ def handle_universe_scan(chat_id, parts) -> None:
     currency = "USD" if is_us else "INR"
     if mode == "date":
         date_text = format_date(dates[0].isoformat())
-        lines = [
-            f"<b>OVERNIGHT GAP SCAN - {label}</b> \u00b7 {date_text} \u00b7 {direction_text.upper()}",
-            f"The gaps at the open on {date_text} (that day's prev close \u2192 its open), then how it closed.{direction_tip}",
-        ]
+        stamp = date_text
+        gap_tip = f"Prev Close → Open on {date_text}"
+        move_tip = f"Open on {date_text} → That Day's Close"
     elif mode == "range":
         start_text = format_date(dates[0].isoformat())
         end_text = format_date(dates[1].isoformat())
-        lines = [
-            f"<b>GAP PERIOD - {label}</b> \u00b7 {start_text} \u2192 {end_text} \u00b7 {direction_text.upper()}",
-            f"Open on {end_text} vs the close before {start_text} (cumulative gap over the period).{direction_tip}",
-        ]
+        stamp = f"{start_text} → {end_text}"
+        gap_tip = f"Close Before {start_text} → Open on {end_text}"
+        move_tip = f"Open on {end_text} → That Day's Close"
     elif mode == "offset":
-        lines = [
-            f"<b>OVERNIGHT GAP SCAN - {label}</b> \u00b7 {offset} session(s) ago \u00b7 {direction_text.upper()}",
-            f"The gaps at the open {offset} session(s) ago (that session's prev close \u2192 its open).{direction_tip}",
-        ]
+        session_word = "Session" if offset == 1 else "Sessions"
+        stamp = f"{offset} {session_word} Ago"
+        gap_tip = f"Prev Close → Open {offset} {session_word} Ago"
+        move_tip = f"Open {offset} {session_word} Ago → That Day's Close"
     elif mode == "window":
-        lines = [
-            f"<b>GAP WINDOW - {label}</b> \u00b7 close {sessions} session(s) ago \u2192 today's open \u00b7 {direction_text.upper()}",
-            f"Today's open vs the close {sessions} session(s) ago (multi-session gap), then the move since today's open.{direction_tip}",
+        session_word = "Session" if sessions == 1 else "Sessions"
+        stamp = f"{sessions}-Session Window"
+        gap_tip = f"Close {sessions} {session_word} Ago → Today's Open"
+        move_tip = "Today's Open → Current Price"
+    else:
+        stamp = "Today"
+        gap_tip = "Prev Close → Today's Open"
+        move_tip = "Today's Open → Current Price"
+
+    if direction == "gainers":
+        direction_tag, from_open_legend = "UP", [
+            "\U0001F7E2 Extending after gap-up", "\U0001F534 Fading after gap-up",
+        ]
+    elif direction == "losers":
+        direction_tag, from_open_legend = "DOWN", [
+            "\U0001F7E2 Recovering after gap-down", "\U0001F534 Falling further after gap-down",
         ]
     else:
-        lines = [
-            f"<b>OVERNIGHT GAP SCAN - {label}</b> \u00b7 today \u00b7 {direction_text.upper()}",
-            f"Prev close \u2192 today's open (gap), then the current move from open.{direction_tip}",
+        direction_tag, from_open_legend = "", [
+            "\U0001F7E2 Above the opening price", "\U0001F534 Below the opening price",
         ]
+    headline = f"\U0001F305 *OVERNIGHT GAP{('-' + direction_tag) if direction_tag else ''} SCAN*"
+
+    lines = [
+        headline,
+        f"\U0001F4CA *{label} \u00b7 {stamp}*",
+        "",
+        "*Previous Close → Opening Price*",
+    ]
     for index, (symbol, data) in enumerate(shown, 1):
         gap = data["gap_pct"]
         move = data.get("move_from_open_pct")
         prev = format_money(data["prev_close"], currency)
         open_price = format_money(data["open"], currency)
         now_price = format_money(data["price"], currency)
-        historical = mode in ("date", "range", "offset")
-        if mode == "window":
-            context = f"(close {sessions} session(s) ago {prev} \u2192 today's open {open_price})"
-        elif mode == "range":
-            context = f"(close before {start_text}: {prev} \u2192 open on {end_text}: {open_price})"
+        if move is not None:
+            move_icon = "\U0001F7E2" if move >= 0 else "\U0001F534"
+            move_str = f"{move_icon} <b>{move:+.1f}%</b>"
         else:
-            context = f"({prev} \u2192 {open_price})"
-        if historical:
-            move_str = f" \u00b7 closed {now_price} ({move:+.1f}% from open)" if move is not None else ""
-        else:
-            move_str = f" \u00b7 now {now_price} ({move:+.1f}% from open)" if move is not None else ""
-        lines.append(
-            f"{index}. {_gap_icon(gap)} <b>{escape(symbol)}</b>  opened <b>{gap:+.2f}%</b> "
-            f"{context}{move_str}"
-        )
+            move_str = "\u2014"
+        lines.append(f"{index}. {_gap_icon(gap)} <b>{escape(symbol)}</b> ({now_price})")
+        lines.append(f"   {prev} → {open_price}")
+        lines.append(f"   Gap: <b>{gap:+.2f}%</b> | From Open: {move_str}")
     if len(rows) > len(shown):
         lines.append(f"\u2026 {len(rows) - len(shown)} more of {len(rows)} gapping stocks (limit {count}).")
+    lines.append("")
+    lines.append("\u2501" * 16)
+    lines.append(f"\U0001F4CC *Gap %* = {gap_tip}")
+    lines.append(f"\U0001F4CC *From Open %* = {move_tip}")
+    lines.append("")
+    lines.extend(from_open_legend)
+    lines.append("\u2501" * 16)
+    lines.append("Commands:")
+    lines.append("`/gappers up` → Gap-Up stocks")
+    lines.append("`/gappers all` → Gap-Up + Gap-Down")
     lines.append("")
     lines.append("Use /gappers SYMBOL for that stock's recent gap history.")
     reply_messages(chat_id, split_messages(lines))
@@ -335,21 +356,23 @@ def handle_symbol_gap(chat_id, raw_symbol: str) -> None:
     currency = "USD" if exchange == "US" else "INR"
     today = history[0]
     name = escape((today.get("name") or raw).upper())
-    lines = [f"<b>OVERNIGHT GAP - {name}</b> (<code>{escape(raw)}</code>) \u00b7 {exchange}"]
     gap = today["gap_pct"]
     prev = format_money(today["prev_close"], currency)
     open_price = format_money(today["open"], currency)
-    lines.append(
-        f"{_gap_icon(gap)} Today opened <b>{gap:+.2f}%</b> vs prev close "
-        f"({prev} \u2192 {open_price})"
-    )
+    close_now = format_money(today.get("close") or today.get("price"), currency)
+    move_line = f"Gap: <b>{gap:+.2f}%</b>"
     if today.get("move_from_open_pct") is not None:
-        close_now = format_money(today["close"], currency)
-        lines.append(
-            f"Now {close_now} ({today['move_from_open_pct']:+.1f}% from open \u00b7 "
-            f"{(today['close'] / today['prev_close'] - 1.0) * 100.0:+.1f}% vs prev close)"
-        )
-    lines.append("")
+        move = today["move_from_open_pct"]
+        move_icon = "\U0001F7E2" if move >= 0 else "\U0001F534"
+        move_line += f" | From Open: {move_icon} <b>{move:+.1f}%</b>"
+    lines = [
+        f"\U0001F305 *OVERNIGHT GAP \u2014 {name}* (<code>{escape(raw)}</code> \u00b7 {exchange})",
+        "",
+        f"{_gap_icon(gap)} <b>{escape(raw)}</b> ({close_now})",
+        f"   {prev} \u2192 {open_price}",
+        f"   {move_line}",
+        "",
+    ]
     lines.append("<b>Recent sessions (close \u2192 next open):</b>")
     for row in history[:7]:
         lines.append(

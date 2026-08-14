@@ -343,6 +343,7 @@ def handle_callback_query(callback) -> None:
             chat_id,
             context["rows"], context["header"], context["failed"], context["symbols"],
             "mfund", monotonic(), is_us=bool(context.get("us")),
+            meta=context.get("meta"),
         )
         return
 
