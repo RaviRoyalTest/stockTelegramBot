@@ -710,7 +710,7 @@ def build_indicator_report(symbol: str, company: str, price, change_pct,
         suffix = f" {row_emoji}" if row_emoji else ""
         lines.append(f"  \u2022 {label}: <b>{text}</b>{suffix}")
     if trend:
-        direction_emoji = "\U0001F7E2\u25b2" if trend == "rising" else ("\U0001F534\u25bc" if trend == "falling" else "\U0001F7E1\u25b6")
+        direction_emoji = "\U0001F7E2" if trend == "rising" else ("\U0001F53B" if trend == "falling" else "\U0001F7E1\u25b6")
         lines.append(f"  \u2022 5-session trend: {direction_emoji} {trend}")
     lines.append("")
 

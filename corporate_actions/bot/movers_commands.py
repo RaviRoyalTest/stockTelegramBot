@@ -106,10 +106,10 @@ def parse_screen_parts(parts, default_period, default_direction,
 
 
 def _dir_icon(change: float) -> str:
-    """Leading card icon: red down triangle / green up arrow for a movers card."""
+    """Leading card icon: red down triangle / green circle for a movers card."""
     if change < 0:
         return "\U0001F53B"  # red down-pointing triangle
-    return "\U0001F7E2\u25b2"  # green circle + up arrow
+    return "\U0001F7E2"  # green circle
 
 
 def _today_icon(change: float) -> str:

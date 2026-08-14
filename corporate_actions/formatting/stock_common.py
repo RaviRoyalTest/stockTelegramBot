@@ -143,14 +143,14 @@ def _pct_str(value) -> str:
 
 
 def _growth_pct_str(value) -> str:
-    """YoY growth % with a green/red arrow so up/down reads at a glance."""
+    """YoY growth % with a green/red indicator so up/down reads at a glance."""
     formatted = _pct_str(value)
     try:
         numeric_value = float(value)
     except (TypeError, ValueError):
         return formatted
-    arrow = "\U0001F7E2\u25b2" if numeric_value >= 0 else "\U0001F534\u25bc"
-    return f"{arrow} {formatted}"
+    icon = "\U0001F7E2" if numeric_value >= 0 else "\U0001F53B"
+    return f"{icon} {formatted}"
 
 
 def _cr_str(value) -> str:
@@ -235,9 +235,9 @@ def _rec_history_lines(fund: dict) -> list[str]:
             diff = sum(row.get(key, 0) for key, _ in _RATING_LABELS) - \
                    sum(previous.get(key, 0) for key, _ in _RATING_LABELS)
             if diff > 0:
-                arrow = "  \U0001F7E2\u25b2"
+                arrow = "  \U0001F7E2"
             elif diff < 0:
-                arrow = "  \U0001F534\u25bc"
+                arrow = "  \U0001F53B"
         lines.append(f"  \u2022 {when}: {buckets}{arrow}")
     return lines
 

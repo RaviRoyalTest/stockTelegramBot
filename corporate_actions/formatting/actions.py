@@ -29,10 +29,9 @@ def _format_price(action) -> str:
     change = quote.get("change_pct")
     money = format_money(price, currency)
     if change is not None:
-        arrow = "\u25b2" if change >= 0 else "\u25bc"
-        color_icon = "\U0001F7E2" if change >= 0 else "\U0001F534"
+        icon = "\U0001F7E2" if change >= 0 else "\U0001F53B"
         sign = "+" if change >= 0 else ""
-        return f"{money} {color_icon}{arrow} ({sign}{change:.2f}%)"
+        return f"{money} {icon} ({sign}{change:.2f}%)"
     return money
 
 
@@ -45,12 +44,11 @@ def _price_line(action) -> str | None:
     currency = quote.get("currency", "INR")
     change = quote.get("change_pct")
     if change is not None:
-        arrow = "\u25b2" if change >= 0 else "\u25bc"
-        color_icon = "\U0001F7E2" if change >= 0 else "\U0001F534"
+        icon = "\U0001F7E2" if change >= 0 else "\U0001F53B"
         sign = "+" if change >= 0 else ""
         return (
             f"Current Price: <b>{format_money(price, currency)}</b>  "
-            f"{color_icon}{arrow} <b>{sign}{change:.2f}%</b>"
+            f"{icon} <b>{sign}{change:.2f}%</b>"
         )
     return f"Current Price: <b>{format_money(price, currency)}</b>"
 
@@ -148,10 +146,10 @@ def format_price_alert(item: dict, quote: dict, threshold: float) -> str:
     currency = quote.get("currency", "INR")
 
     if change is not None and change >= 0:
-        header_icon = "\U0001F7E2\u25b2"  # 🟢▲ up
+        header_icon = "\U0001F7E2"  # 🟢 up
         sign = "+"
     elif change is not None:
-        header_icon = "\U0001F534\u25bc"  # 🔴▼ down
+        header_icon = "\U0001F53B"  # 🔻 down
         sign = ""
     else:
         header_icon = "\u26a0\ufe0f"      # ⚠️ unknown
@@ -181,20 +179,19 @@ def format_mover_alert(symbol: str, quote: dict, change_pct: float) -> str:
 
         🚨 BIG MOVER
         **INFY** (NSE) - Infosys Limited
-        Current Price: ₹1,183.00  🔴▼ -5.62%
+        Current Price: ₹1,183.00  🔻 -5.62%
         (session move vs previous close)
     """
     price = quote.get("price")
     name = quote.get("name") or symbol
-    arrow = "\u25b2" if change_pct >= 0 else "\u25bc"
-    color_icon = "\U0001F7E2" if change_pct >= 0 else "\U0001F534"
+    icon = "\U0001F7E2" if change_pct >= 0 else "\U0001F53B"
     sign = "+" if change_pct >= 0 else ""
     lines = [
         "\U0001F6A8 <b>BIG MOVER</b>",
         f"<b>{escape(symbol)}</b> (NSE) - {escape(name)}",
     ]
     if price is not None:
-        lines.append(f"Current Price: <b>{format_money(price)}</b>  {color_icon}{arrow} <b>{sign}{change_pct:.2f}%</b>")
+        lines.append(f"Current Price: <b>{format_money(price)}</b>  {icon} <b>{sign}{change_pct:.2f}%</b>")
     lines.append("Session move vs previous close - tap below for deep fundamentals.")
     return "\n".join(lines)
 

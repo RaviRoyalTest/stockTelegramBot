@@ -46,11 +46,11 @@ def _cr_cr(value) -> str:
 
 
 def _arrow_pct(percent) -> str:
-    """Percent (already in % units) with a green/red arrow."""
+    """Percent (already in % units) with a green/red indicator."""
     if percent is None:
         return "N/A"
-    arrow = "\U0001F7E2\u25b2" if percent >= 0 else "\U0001F534\u25bc"
-    return f"{arrow} {percent:+.1f}%"
+    icon = "\U0001F7E2" if percent >= 0 else "\U0001F53B"
+    return f"{icon} {percent:+.1f}%"
 
 
 def _annual_trend_lines(fund: dict) -> list[str]:

@@ -274,13 +274,14 @@ def tg_to_markdown(text: str) -> str:
 
     def _colorize(match):
         color = "#16a34a" if "\U0001F7E2" in match.group(1) else "#dc2626"
-        return f'{match.group(1)}<span style="color:{color}">{match.group(2)} {match.group(3)}</span>'
+        return f'{match.group(1)}<span style="color:{color}">{match.group(2)}</span>'
 
-    # "🟢▲ <b>+0.43%</b>" (and 🟡/🔴 variants) -> colored percent span.
-    # The bold group must end in % so only price changes get colored, never
-    # the bold symbol that follows the arrow in movers-style rows.
+    # "🟢 <b>+0.43%</b>" / "🔻 <b>-5.19%</b>" (and 🟡/🔴 variants, with or
+    # without a trailing ▲/▼ arrow) -> colored percent span. The bold group
+    # must end in % so only price changes get colored, never the bold symbol
+    # that follows the indicator in movers-style rows.
     text = re.sub(
-        r"([\U0001F7E2\U0001F7E1\U0001F534])(\u25b2+|\u25bc+)\s*(<b>[^<]*%</b>)",
+        r"([\U0001F7E2\U0001F7E1\U0001F534\U0001F53B])(?:\u25b2+|\u25bc+)?\s*(<b>[^<]*%</b>)",
         _colorize, text,
     )
     text = re.sub(r"<b>(.*?)</b>", r"**\1**", text, flags=re.S)
