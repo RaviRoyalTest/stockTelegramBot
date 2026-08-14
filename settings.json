@@ -7,12 +7,12 @@
       "universe": "nifty500"
     },
     "recent_commands": [
+      "/gappers today",
+      "/toplosers 1h",
       "/indicator RELIANCE",
       "/fundmode button",
       "/fundmode",
-      "/gappers today",
       "/corpactionsformylist",
-      "/toplosers 1h",
       "/schedule run",
       "/schedule",
       "/moversfund auto",
@@ -22,6 +22,9 @@
   },
   "@StockVigilBot": {
     "action_filters": [],
-    "price_alert_pct": 5.0
+    "price_alert_pct": 5.0,
+    "recent_commands": [
+      "/scan500"
+    ]
   }
 }
