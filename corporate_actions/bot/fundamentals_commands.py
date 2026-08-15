@@ -14,6 +14,7 @@ from time import monotonic
 from .. import storage
 from ..core.text import escape, split_messages
 from ..formatting.stock_india import _fund_report_lines, _stock_summary_lines
+from ..formatting.stock_common import _DIVIDER
 from ..formatting.stock_us import _us_stock_lines
 from ..sources import get_fundamentals, get_quote, get_us_fundamentals
 from .helpers import MAX_FUND_BATCH, MAX_STOCK_BATCH, reply_suggestions
@@ -160,7 +161,7 @@ def build_stock_batch(chat_id, command: str, range, deep: bool) -> tuple[list[st
         body.append("")
 
     header = (
-        f"\U0001F4CA <b>{command.upper()} \u00b7 Watchlist positions "
+        f"\U0001F4CA <b>{command.upper()} \u00b7 Watchlist "
         f"{start}\u2013{start + len(work) - 1} of {total}</b>\n"
     )
     all_lines = [header] + body
@@ -168,10 +169,15 @@ def build_stock_batch(chat_id, command: str, range, deep: bool) -> tuple[list[st
     if next_start is not None:
         remaining = total - (start + len(work) - 1)
         page_end = min(total, next_start + batch_limit - 1)
-        all_lines.append(
-            f"\u2026 and {remaining} more. Tap <b>Next \u25b6</b> below or send "
-            f"<code>{command} {next_start}-{page_end}</code> for the next batch."
-        )
+        all_lines.extend([
+            _DIVIDER,
+            f"\U0001F4CC {remaining} more stocks available",
+            "",
+            "\u25b6\ufe0f Tap <b>Next</b> for next stock",
+            "or",
+            f"<code>{command} {next_start}-{page_end}</code>",
+            _DIVIDER,
+        ])
     log.info("%s batch: done %d stocks in %.1fs", command, len(work), monotonic() - started_at)
     return all_lines, next_start
 

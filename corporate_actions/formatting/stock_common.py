@@ -9,8 +9,113 @@ and US output can never drift apart accidentally.
 """
 from __future__ import annotations
 
+import re
+
 from ..core.numbers import format_money
 from ..core.text import escape
+
+_GREEN = "\U0001F7E2"
+_YELLOW = "\U0001F7E1"
+_RED = "\U0001F534"
+_DOWN = "\U0001F53B"
+
+_DIVIDER = "\u2501" * 20
+
+
+def _section(emoji: str, title: str) -> list[str]:
+    """A section header + divider line."""
+    return [f"{emoji} <b>{title}</b>", _DIVIDER]
+
+
+def _position_label(price, fund: dict) -> str | None:
+    """52-week position label, e.g. '🟢 At High' / '🔴 At Low' / '🟡 Mid-Range'."""
+    low = fund.get("wk52_low")
+    high = fund.get("wk52_high")
+    if low is None or high is None or price is None:
+        return None
+    try:
+        price = float(price)
+        low = float(low)
+        high = float(high)
+    except (TypeError, ValueError):
+        return None
+    spread = high - low
+    if spread <= 0:
+        return None
+    percent_position = (price - low) / spread
+    if percent_position >= 0.95:
+        return f"{_GREEN} At High"
+    if percent_position >= 0.75:
+        return f"{_GREEN} Near High"
+    if percent_position <= 0.05:
+        return f"{_RED} At Low"
+    if percent_position <= 0.25:
+        return f"{_RED} Near Low"
+    return f"{_YELLOW} Mid-Range"
+
+
+def _inr_group(value, decimals: int = 0) -> str:
+    """Format with Indian digit grouping (1,05,647) and fixed decimals."""
+    try:
+        number = float(value)
+    except (TypeError, ValueError):
+        return "N/A"
+    sign = "-" if number < 0 else ""
+    number = abs(number)
+    text = f"{number:.{decimals}f}"
+    if "." in text:
+        int_part, frac_part = text.split(".")
+    else:
+        int_part, frac_part = text, ""
+    if len(int_part) <= 3:
+        grouped = int_part
+    else:
+        head, tail = int_part[:-3], int_part[-3:]
+        parts = [tail]
+        while len(head) > 2:
+            parts.insert(0, head[-2:])
+            head = head[:-2]
+        if head:
+            parts.insert(0, head)
+        grouped = ",".join(parts)
+    if frac_part:
+        return f"{sign}{grouped}.{frac_part}"
+    return f"{sign}{grouped}"
+
+
+def _num_1dp(value) -> str:
+    """Number with exactly one decimal ('8.0'), or 'N/A'."""
+    try:
+        return f"{float(value):.1f}"
+    except (TypeError, ValueError):
+        return "N/A"
+
+
+def _holding_str(value) -> str:
+    """'38.09% (🟢 +0.48%)' -> '38.09% 🟢 +0.48%'."""
+    match = re.match(r"([\d.]+%)\s*\(([^)]+)\)", value or "")
+    if match:
+        return f"{match.group(1)} {match.group(2)}"
+    return value or ""
+
+
+def _holding_delta(value):
+    """Signed QoQ delta from a shareholding string ('(🟢 +0.48%)' -> 0.48)."""
+    match = re.search(r"([+-]?\d+(?:\.\d+)?)%\)", value or "")
+    if not match:
+        return None
+    try:
+        return float(match.group(1))
+    except (TypeError, ValueError):
+        return None
+
+
+def _holding_trend(value):
+    """'🟢 Positive' / '🔴 Negative' / None from a shareholding delta."""
+    delta = _holding_delta(value)
+    if delta is None:
+        return None
+    return (_GREEN, "Positive") if delta > 0 else (_RED, "Negative")
 
 
 def _wk52_signal(price, fund: dict | None) -> tuple:

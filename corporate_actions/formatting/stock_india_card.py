@@ -1,23 +1,28 @@
 """Indian quick analysis card renderer (/fundamentalanalyze, /stock).
 
 A compact single-symbol card: price & movement, valuation & ratios, balance
-sheet & earnings, profitability and shareholding. Uses the shared number /
-signal helpers from stock_common.py; the DEEP report lives in
-stock_india_report.py and the movers rows in stock_india_movers.py.
+sheet & earnings, profitability, analyst forecast, top executive and
+shareholding. Uses the shared number / signal helpers from stock_common.py;
+the DEEP report lives in stock_india_report.py and the movers rows in
+stock_india_movers.py.
 """
 from __future__ import annotations
 
 from ..core.numbers import format_money
 from ..core.text import escape
 from .stock_common import (
-    _cr_str,
-    _macd_tag,
+    _GREEN,
+    _RED,
+    _YELLOW,
+    _consensus_label,
+    _holding_str,
+    _inr_group,
+    _num_1dp,
     _num_or_na,
     _pct_str,
-    _consensus_label,
-    _rsi_signal,
+    _position_label,
+    _section,
     _top_officer,
-    _wk52_signal,
 )
 
 
@@ -27,16 +32,14 @@ def _price_move_line(quote: dict) -> str | None:
     if price is None:
         return None
     change_pct = quote.get("change_pct")
-    change_abs = quote.get("change")
     price_str = format_money(price)
     if change_pct is not None:
         sign = "+" if change_pct >= 0 else ""
-        absolute_change_str = f" ({sign}{format_money(change_abs)})" if change_abs is not None else ""
         arrow = "\u25b2" if change_pct >= 0 else "\u25bc"
-        color_icon = "\U0001F7E2" if change_pct >= 0 else "\U0001F534"
+        color_icon = _GREEN if change_pct >= 0 else _RED
         return (
-            f"Current Price: <b>{price_str}</b>  {color_icon}{arrow} "
-            f"<b>{sign}{change_pct:.2f}%</b>{absolute_change_str}"
+            f"Current Price: <b>{price_str}</b> {color_icon}{arrow} "
+            f"<b>{sign}{change_pct:.2f}%</b>"
         )
     return f"Current Price: <b>{price_str}</b>"
 
@@ -45,147 +48,167 @@ def _holding_lines(fund: dict, label_map: tuple) -> list[str]:
     out = []
     for key, emoji, label in label_map:
         if fund.get(key):
-            out.append(f"{emoji} {label}: {escape(fund[key])}")
+            out.append(f"{emoji} {label}: {escape(_holding_str(fund[key]))}")
     return out
 
 
+def _rsi_short(rsi):
+    """RSI with icon + zone, e.g. '🟢 <b>43.6</b> (Low)'."""
+    if rsi is None:
+        return None
+    try:
+        value = float(rsi)
+    except (TypeError, ValueError):
+        return None
+    if value <= 30:
+        icon, zone = _GREEN, "Oversold"
+    elif value < 45:
+        icon, zone = _GREEN, "Low"
+    elif value >= 70:
+        icon, zone = _RED, "Overbought"
+    elif value >= 60:
+        icon, zone = _RED, "High"
+    else:
+        icon, zone = _YELLOW, "Mid"
+    return f"{icon} <b>{_num_or_na(value, 1)}</b> ({zone})"
+
+
+def _macd_short(line, signal):
+    """MACD with icon + trend, e.g. '🔴 <b>-123.85</b> (Bearish)'."""
+    if line is None:
+        return None
+    bull = line >= signal
+    icon = _GREEN if bull else _RED
+    return f"{icon} <b>{_num_or_na(line, 2)}</b> ({'Bullish' if bull else 'Bearish'})"
+
+
 def _stock_summary_lines(raw_symbol, quote, fund, include_tip=True, label="") -> list[str]:
-    """Build the compact /stock summary card for one symbol."""
+    """Build the compact /fundamentalanalyze card for one symbol."""
+    quote = quote or {}
+    fund = fund or {}
     price = quote.get("price")
-    change_pct = quote.get("change_pct")
-    change_abs = quote.get("change")
     company_name = quote.get("name") or raw_symbol
+    label_prefix = f"{label} " if label else ""
 
     lines = []
-    sector_name = escape(fund.get("sector") or "Indian Equity")
-    label_prefix = f"{label} " if label else ""
-    lines.append(
-        f"\U0001F4CA {label_prefix}<b>{escape(company_name.upper())}</b> (<code>{escape(raw_symbol)}</code>)"
-    )
-    lines.append(f"Sector: <i>{sector_name}</i>")
+    lines.append(f"\U0001F4CA {label_prefix}<b>{escape(company_name.upper())}</b>")
+    lines.append(f"(<code>{escape(raw_symbol)}</code>)")
+    lines.append(f"Sector: <b>{escape(fund.get('sector') or 'Indian Equity')}</b>")
     lines.append("")
 
-    # Section 1: Price & Today's Movement
-    sig_emoji, range_tag = _wk52_signal(price, fund)
-    rsi_tag = _rsi_signal(fund.get("rsi"))
-    macd_tag = _macd_tag(fund)
-    technical_bits = [signal for signal in (range_tag, rsi_tag, macd_tag) if signal]
-    if price is not None or (
-        fund.get("wk52_high") is not None and fund.get("wk52_low") is not None
-    ) or technical_bits:
-        lines.append("<b>\U0001F4B0 PRICE & MOVEMENT</b>")
+    # PRICE & MOVEMENT
+    position = _position_label(price, fund)
+    if (
+        price is not None
+        or (fund.get("wk52_high") is not None and fund.get("wk52_low") is not None)
+        or position
+        or fund.get("rsi") is not None
+        or fund.get("macd_line") is not None
+    ):
+        lines.extend(_section("\U0001F4B0", "PRICE & MOVEMENT"))
         price_line = _price_move_line(quote)
         if price_line:
             lines.append(price_line)
-
         if fund.get("wk52_high") is not None and fund.get("wk52_low") is not None:
-            high, low = fund["wk52_high"], fund["wk52_low"]
-            lines.append(f"\U0001F4C8 52w Range: {format_money(low)} \u2013 {format_money(high)}")
+            low, high = fund["wk52_low"], fund["wk52_high"]
+            lines.append(f"52W Range: <b>\u20b9{_inr_group(low)} \u2013 \u20b9{_inr_group(high)}</b>")
             if price:
                 try:
-                    distance_from_low = ((float(price) - low) / low) * 100
-                    distance_from_high = ((high - float(price)) / high) * 100
-                    lines.append(f"📍 Distance: +{distance_from_low:.1f}% from 52w Low  \u00b7  -{distance_from_high:.1f}% from 52w High")
-                except (ValueError, TypeError, ZeroDivisionError):
+                    price_float = float(price)
+                    low_dist = (price_float - float(low)) / float(low) * 100
+                    high_dist = (price_float - float(high)) / float(high) * 100
+                    lines.append(f"From 52W Low: <b>{low_dist:+.1f}%</b>")
+                    lines.append(f"From 52W High: <b>{high_dist:+.1f}%</b>")
+                except (TypeError, ValueError, ZeroDivisionError):
                     pass
-
-        if technical_bits:
-            lines.append(f"\u26a1 Technicals: {'  •  '.join(technical_bits)}")
+        if position:
+            lines.append(f"Technicals: <b>{position}</b>")
+        rsi_tag = _rsi_short(fund.get("rsi"))
+        if rsi_tag:
+            lines.append(f"RSI(14): {rsi_tag}")
+        macd_tag = _macd_short(fund.get("macd_line"), fund.get("macd_signal"))
+        if macd_tag:
+            lines.append(f"MACD: {macd_tag}")
         lines.append("")
 
-    # Section 2: Valuation & Ratios
-    lines.append("<b>\U0001F3F7\ufe0f VALUATION & RATIOS</b>")
-    valuation_parts = []
+    # VALUATION & RATIOS
+    lines.extend(_section("\U0001F3F7\ufe0f", "VALUATION & RATIOS"))
     if fund.get("pe"):
-        valuation_parts.append(f"Stock P/E: <b>{_num_or_na(fund['pe'], 1)}</b>")
+        lines.append(f"Stock P/E: <b>{_num_or_na(fund['pe'], 1)}x</b>")
     else:
-        valuation_parts.append("Stock P/E: <b>N/A (Loss)</b>")
-
+        lines.append("Stock P/E: <b>N/A (Loss)</b>")
     if fund.get("sector_pe"):
-        valuation_parts.append(f"Sec P/E: <b>{_num_or_na(fund['sector_pe'], 1)}</b>")
-
-    if fund.get("market_cap") is not None:
-        valuation_parts.append(f"MCap: <b>\u20b9{fund['market_cap']:,.0f}Cr</b>")
-
+        lines.append(f"Sector P/E: <b>{_num_or_na(fund['sector_pe'], 1)}x</b>")
+    mcap = fund.get("market_cap")
+    if mcap is None:
+        mcap = fund.get("mcap_cr")
+    if mcap is not None:
+        lines.append(f"Market Cap: <b>\u20b9{_inr_group(mcap)} Cr</b>")
     if fund.get("debt_to_equity") is not None:
-        valuation_parts.append(f"D/E: <b>{_num_or_na(fund['debt_to_equity'], 2)}</b>")
-
+        lines.append(f"D/E: <b>{_num_or_na(fund['debt_to_equity'], 2)}x</b>")
     if fund.get("div_yield") is not None:
-        valuation_parts.append(f"Div Yield: <b>{_num_or_na(fund['div_yield'], 2)}%</b>")
-
-    lines.append("  \u00b7  ".join(valuation_parts))
+        lines.append(f"Dividend Yield: <b>{_num_or_na(fund['div_yield'], 2)}%</b>")
     lines.append("")
 
-    # Section 3: Balance sheet & earnings (D/E, liquidity, per-share, cash)
+    # BALANCE SHEET & EARNINGS
     bs_parts = []
     if fund.get("debt_to_equity") is not None:
-        bs_parts.append(f"D/E: <b>{_num_or_na(fund['debt_to_equity'], 2)}</b>")
-    if fund.get("current_ratio") is not None:
-        bs_parts.append(f"Current Ratio: <b>{_num_or_na(fund['current_ratio'], 2)}</b>")
+        bs_parts.append(f"D/E: <b>{_num_or_na(fund['debt_to_equity'], 2)}x</b>")
     if fund.get("book_value") is not None:
-        bs_parts.append(f"Book Value: <b>{_num_or_na(fund['book_value'], 2)}</b>")
+        bs_parts.append(f"Book Value: <b>\u20b9{_inr_group(fund['book_value'], 2)}</b>")
     if fund.get("trailing_eps") is not None:
-        bs_parts.append(f"EPS(TTM): <b>{_num_or_na(fund['trailing_eps'], 2)}</b>")
+        bs_parts.append(f"EPS (TTM): <b>\u20b9{_num_or_na(fund['trailing_eps'], 0)}</b>")
     if fund.get("profit_margin") is not None:
         bs_parts.append(f"Net Margin: <b>{_pct_str(fund['profit_margin'])}</b>")
-    if bs_parts or fund.get("total_cash") is not None or fund.get("total_debt") is not None:
-        lines.append("<b>\U0001F4C9 BALANCE SHEET & EARNINGS</b>")
-        if bs_parts:
-            lines.append("  \u00b7  ".join(bs_parts))
-        if fund.get("total_cash") is not None or fund.get("total_debt") is not None:
-            lines.append(
-                f"Cash: <b>{_cr_str(fund.get('total_cash'))}</b>  \u00b7  "
-                f"Debt: <b>{_cr_str(fund.get('total_debt'))}</b>"
-            )
+    if bs_parts:
+        lines.extend(_section("\U0001F4C9", "BALANCE SHEET & EARNINGS"))
+        lines.extend(bs_parts)
         lines.append("")
 
-    # Section 4: Profitability & Returns
-    lines.append("<b>\U0001F3AF PROFITABILITY & RETURNS</b>")
+    # PROFITABILITY & RETURNS
     returns_parts = []
     if fund.get("roce") is not None:
-        returns_parts.append(f"ROCE: <b>{_num_or_na(fund['roce'], 1)}%</b>")
+        returns_parts.append(f"ROCE: <b>{_num_1dp(fund['roce'])}%</b>")
     if fund.get("roe") is not None:
-        returns_parts.append(f"ROE: <b>{_num_or_na(fund['roe'], 1)}%</b>")
+        returns_parts.append(f"ROE: <b>{_num_1dp(fund['roe'])}%</b>")
     if returns_parts:
-        lines.append("  \u00b7  ".join(returns_parts))
-    else:
-        lines.append("Full financial statement trends available on Screener.in")
-    lines.append("")
+        lines.extend(_section("\U0001F3AF", "PROFITABILITY & RETURNS"))
+        lines.extend(returns_parts)
+        lines.append("")
 
-    # Analyst forecast (consensus + target + upside) - the forecast value
-    forecast_parts = []
-    if fund.get("rec_mean") is not None:
-        label = _consensus_label(fund)
-        forecast_parts.append(f"Consensus: <b>{label}</b> ({fund['rec_mean']:.1f}/5)")
+    # ANALYST FORECAST
+    forecast = []
+    consensus = _consensus_label(fund)
+    if consensus:
+        icon = {"Strong Buy": _GREEN, "Buy": _GREEN, "Hold": _YELLOW,
+                "Sell": _RED, "Strong Sell": _RED}.get(consensus, _YELLOW)
+        mean = f" ({fund['rec_mean']:.1f}/5)" if fund.get("rec_mean") is not None else ""
+        forecast.append(f"Consensus: {icon} <b>{consensus}</b>{mean}")
     if fund.get("target_mean") is not None:
         target = float(fund["target_mean"])
-        forecast_parts.append(f"Target \u20b9{target:,.0f}")
+        forecast.append(f"Target Price: <b>\u20b9{_inr_group(target)}</b>")
         if price:
             try:
                 upside = (target - float(price)) / float(price) * 100.0
-                forecast_parts.append(f"{upside:+.0f}% vs price")
+                forecast.append(f"Upside: <b>{upside:+.0f}%</b>")
             except (TypeError, ValueError):
                 pass
-    if forecast_parts:
-        lines.append("<b>\U0001F52D ANALYST FORECAST</b>")
-        lines.append("  \u00b7  ".join(forecast_parts))
+    if forecast:
+        lines.extend(_section("\U0001F52D", "ANALYST FORECAST"))
+        lines.extend(forecast)
         lines.append("")
 
-    # Top management + top competitors (one-liners)
+    # TOP EXECUTIVE
     officer = _top_officer(fund)
     if officer:
-        lines.append(f"\U0001F464 <b>{escape(officer[0])}</b> \u2014 {escape(officer[1])}")
-    peers = fund.get("competitors") or []
-    if peers:
-        names = "  \u00b7  ".join(escape(peer["name"]) for peer in peers[:4] if peer.get("name"))
-        if names:
-            lines.append(f"\U0001F3E2 Top competitors: {names}")
-    if officer or (peers and any(peer.get("name") for peer in peers[:4])):
+        lines.extend(_section("\U0001F464", "TOP EXECUTIVE"))
+        lines.append(f"<b>{escape(officer[0])}</b>")
+        lines.append(escape(officer[1]))
         lines.append("")
 
-    # Section 5: Shareholding Pattern (QoQ Trend)
-    lines.append("<b>\U0001F4BC SHAREHOLDING PATTERN (QoQ TREND)</b>")
+    # SHAREHOLDING · QoQ
     if any(fund.get(key) for key in ("promoter_pct", "fii_pct", "dii_pct", "public_pct")):
+        lines.extend(_section("\U0001F4BC", "SHAREHOLDING \u00b7 QoQ"))
         lines.extend(_holding_lines(
             fund,
             (("promoter_pct", "\U0001F451", "Promoter"),
@@ -194,6 +217,7 @@ def _stock_summary_lines(raw_symbol, quote, fund, include_tip=True, label="") ->
              ("public_pct", "\U0001F465", "Public")),
         ))
     else:
+        lines.extend(_section("\U0001F4BC", "SHAREHOLDING \u00b7 QoQ"))
         lines.append("No shareholding breakdown available.")
 
     if include_tip:
