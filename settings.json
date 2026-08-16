@@ -7,6 +7,8 @@
       "universe": "nifty500"
     },
     "recent_commands": [
+      "/gappers today",
+      "/toplosers 1h",
       "/corpactionsformylist",
       "/fundamentalreport  1",
       "/fundamentalreport",
@@ -14,9 +16,7 @@
       "/fundmode",
       "/fundamentalanalyze",
       "/fundmode button",
-      "/watchlist",
-      "/myfavourites",
-      "/toplosers 15-08-2026"
+      "/watchlist"
     ],
     "movers_fund": "button"
   },
