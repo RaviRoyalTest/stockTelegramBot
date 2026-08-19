@@ -7,8 +7,8 @@
       "universe": "nifty500"
     },
     "recent_commands": [
-      "/movers",
       "/toplosers 1h",
+      "/movers",
       "/gappers today",
       "/corpactionsformylist",
       "/news SCHNEIDER",
