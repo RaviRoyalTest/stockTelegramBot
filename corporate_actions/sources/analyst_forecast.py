@@ -17,6 +17,10 @@ import re
 import time
 
 import requests
+try:
+    import httpx
+except Exception:
+    httpx = None
 
 from .. import config
 
@@ -203,5 +207,60 @@ def fill_analyst_fallback(symbol: str, exchange: str, out: dict) -> bool:
                     out[key] = fallback[key]
             log.info("analyst fallback (stockanalysis.com) merged for %s:%s",
                      exchange, symbol)
+            return True
+    return False
+
+
+async def get_stockanalysis_forecast_async(symbol: str, exchange: str = "US") -> dict | None:
+    ticker = (symbol or "").strip().upper()
+    exchange = (exchange or "").upper()
+    if not ticker:
+        return None
+    now = time.time()
+    cache_key = (exchange, ticker)
+    cached = _stockanalysis_cache.get(cache_key)
+    if cached and now - cached["timestamp"] < _STOCKANALYSIS_CACHE_SECONDS:
+        return cached["data"]
+    if httpx is None:
+        return await asyncio.to_thread(get_stockanalysis_forecast, symbol, exchange)
+    data = None
+    try:
+        async with httpx.AsyncClient(headers={"User-Agent": config.USER_AGENT}, timeout=config.HTTP_TIMEOUT) as client:
+            r = await client.get(_stockanalysis_url(ticker, exchange))
+            if r.status_code != 200:
+                log.info("stockanalysis async: %s -> status %s", cache_key, r.status_code)
+            else:
+                html = r.text
+                summary = _parse_summary(html)
+                targets = _parse_price_targets(html)
+                ratings = _parse_ratings(html)
+                parsed = {}
+                for part in (summary, targets, ratings):
+                    if not part:
+                        continue
+                    if part is ratings and summary and summary.get("num_analysts"):
+                        part = {key: value for key, value in part.items() if key != "num_analysts"}
+                    parsed.update(part)
+                if parsed:
+                    parsed["analyst_source"] = "stockanalysis.com (S&P Global + TipRanks)"
+                    data = parsed
+                    log.info("stockanalysis async: parsed forecast for %s: %s", cache_key, list(parsed))
+    except Exception as error:
+        log.info("stockanalysis async: failed for %s: %s", cache_key, error)
+    _stockanalysis_cache[cache_key] = {"timestamp": now, "data": data}
+    return data
+
+
+async def fill_analyst_fallback_async(symbol: str, exchange: str, out: dict) -> bool:
+    has_analyst = any(out.get(key) for key in ("rec_mean", "rec_trend", "num_analysts", "target_mean"))
+    if has_analyst:
+        return False
+    if (exchange or "").upper() in ("US", "NASDAQ", "NYSE", "NSE", "BSE"):
+        fallback = await get_stockanalysis_forecast_async(symbol, exchange)
+        if fallback:
+            for key in ("rec_trend", "num_analysts", "rec_key", "target_mean", "target_high", "target_low", "target_median", "analyst_source"):
+                if fallback.get(key) is not None:
+                    out[key] = fallback[key]
+            log.info("analyst fallback (stockanalysis.com) merged for %s:%s", exchange, symbol)
             return True
     return False

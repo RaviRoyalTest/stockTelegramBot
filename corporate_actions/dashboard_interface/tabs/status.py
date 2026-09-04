@@ -5,7 +5,10 @@ import os
 import time
 from datetime import datetime
 
-import streamlit as st
+try:
+    import streamlit as st
+except Exception:
+    st = None
 
 from ... import config, scheduler, storage
 from ...bot.schedule_parsing import parse_interval_min, parse_pause_minutes
@@ -31,6 +34,8 @@ def _pause_tag(entry: dict) -> str:
 
 
 def render() -> None:
+    if st is None:
+        raise RuntimeError("Streamlit UI removed; use the FastAPI templates instead.")
     st.header("🖥️ System Status")
 
     status = poller.status

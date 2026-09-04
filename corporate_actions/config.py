@@ -109,6 +109,13 @@ BROWSER_HEADERS = {
     "Referer": "https://www.nseindia.com/",
 }
 
+# Screener service tuning: cache TTL (seconds), parallel workers, retry/backoff
+SCREENER_ROW_TTL = _env_int("SCREENER_ROW_TTL", 60, floor=1)
+SCREENER_MAX_WORKERS = _env_int("SCREENER_MAX_WORKERS", 12, floor=1)
+SCREENER_RETRY_ATTEMPTS = _env_int("SCREENER_RETRY_ATTEMPTS", 2, floor=0)
+# Backoff in seconds between retried attempts
+SCREENER_RETRY_BACKOFF = float(os.getenv("SCREENER_RETRY_BACKOFF", "0.5"))
+
 NSE_ACTIONS_URL = "https://www.nseindia.com/api/corporates-corporateActions?index=equities"
 NSE_STOCK_LIST_URL = "https://archives.nseindia.com/content/equities/EQUITY_L.csv"
 

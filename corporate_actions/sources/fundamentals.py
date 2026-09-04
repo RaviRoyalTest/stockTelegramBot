@@ -16,10 +16,15 @@ import time
 from urllib.parse import quote
 
 import requests
+try:
+    import httpx
+except Exception:
+    httpx = None
+import asyncio
 
 from .. import config
 from .analyst_forecast import fill_analyst_fallback
-from .http import _quote_session, _throttle_fund_req
+from .http import _quote_session, _throttle_fund_req, _throttle_fund_req_async, _async_client
 from .screener import get_competitors, get_sector_pe, parse_screener_fundamentals
 
 log = logging.getLogger(__name__)
@@ -49,6 +54,11 @@ _global_fund_sess = None
 _global_fund_crumb = ""
 _global_fund_crumb_ts = 0.0
 _CRUMB_CACHE_SECONDS = 3600  # 1 hour
+_yahoo_lock = threading.Lock()
+_yahoo_fail_count = 0
+_yahoo_blocked_until = 0.0
+_YAHOO_MAX_FAILS = 5
+_YAHOO_BLOCK_SECONDS = 300  # pause Yahoo requests for 5 minutes when failing
 
 
 def _invalidate_crumb():
@@ -185,6 +195,12 @@ def _quote_summary(symbol: str, suffix: str = ".NS") -> dict | None:
 
     `suffix` picks the exchange: '.NS' for NSE symbols, '' for US tickers.
     """
+    now = time.time()
+    with _yahoo_lock:
+        if now < _yahoo_blocked_until:
+            log.info("_quote_summary: Yahoo temporarily blocked until %s", _yahoo_blocked_until)
+            return None
+
     for attempt in range(2):  # second attempt after a 401 crumb refresh
         sess, crumb = _fund_session()
         if not crumb:
@@ -208,6 +224,12 @@ def _quote_summary(symbol: str, suffix: str = ".NS") -> dict | None:
                 )
                 if response.status_code == 429:
                     log.info("_quote_summary: 429 rate-limited for %s on %s — trying other host", symbol, host)
+                    with _yahoo_lock:
+                        _yahoo_fail_count += 1
+                        if _yahoo_fail_count >= _YAHOO_MAX_FAILS:
+                            _yahoo_blocked_until = time.time() + _YAHOO_BLOCK_SECONDS
+                            _yahoo_fail_count = 0
+                            log.warning("Yahoo appears rate-limited - pausing Yahoo calls for %s seconds", _YAHOO_BLOCK_SECONDS)
                     continue
                 if response.status_code == 401:
                     log.info("_quote_summary: 401 for %s on %s — refreshing crumb", symbol, host)
@@ -222,8 +244,93 @@ def _quote_summary(symbol: str, suffix: str = ".NS") -> dict | None:
                 log.info("_quote_summary: empty result for %s from %s", symbol, host)
             except Exception as error:
                 log.info("_quote_summary: failed for %s on %s: %s", symbol, host, error)
+                with _yahoo_lock:
+                    _yahoo_fail_count += 1
+                    if _yahoo_fail_count >= _YAHOO_MAX_FAILS:
+                        _yahoo_blocked_until = time.time() + _YAHOO_BLOCK_SECONDS
+                        _yahoo_fail_count = 0
+                        log.warning("Yahoo failing repeatedly - pausing Yahoo calls for %s seconds", _YAHOO_BLOCK_SECONDS)
         if not auth_retry:
             break
+    return None
+
+
+async def _quote_summary_async(symbol: str, suffix: str = ".NS") -> dict | None:
+    """Async quoteSummary using httpx.AsyncClient when available.
+
+    Falls back to running the sync `_quote_summary` in a thread when httpx
+    is not present or on unexpected failures.
+    """
+    now = time.time()
+    with _yahoo_lock:
+        if now < _yahoo_blocked_until:
+            log.info("_quote_summary_async: Yahoo temporarily blocked until %s", _yahoo_blocked_until)
+            return None
+    if httpx is None:
+        return await asyncio.to_thread(_quote_summary, symbol, suffix)
+
+    now = time.time()
+    if httpx is None:
+        return await asyncio.to_thread(_quote_summary, symbol, suffix)
+
+    # Attempt hosts similarly to sync path. Use persisted cookie jar when possible
+    # so async requests reuse the same consent state as the sync session.
+    persisted_cookies = None
+    try:
+        if _SESSION_FILE.exists():
+            payload = json.loads(_SESSION_FILE.read_text())
+            persisted_cookies = payload.get("cookies") or {}
+    except Exception:
+        persisted_cookies = None
+
+    for attempt in range(2):
+        # fetch crumb (best-effort)
+        crumb = ""
+        for crumb_host in ("https://query1.finance.yahoo.com/v1/test/getcrumb", "https://query2.finance.yahoo.com/v1/test/getcrumb"):
+            try:
+                async with httpx.AsyncClient(headers={**config.BROWSER_HEADERS}, timeout=config.HTTP_TIMEOUT, cookies=persisted_cookies) as client:
+                    r = await client.get(crumb_host)
+                    if r.status_code == 200 and (text := r.text.strip()):
+                        crumb = text
+                        break
+            except Exception:
+                continue
+
+        for host in ("https://query1.finance.yahoo.com", "https://query2.finance.yahoo.com"):
+            try:
+                await _throttle_fund_req_async()
+            except Exception:
+                pass
+            url = f"{host}/v10/finance/quoteSummary/{quote(symbol)}"
+            params = {"modules": "summaryDetail,financialData,defaultKeyStatistics,assetProfile,recommendationTrend,upgradesDowngrades", "crumb": crumb}
+            try:
+                async with httpx.AsyncClient(headers={**config.BROWSER_HEADERS}, timeout=config.HTTP_TIMEOUT, cookies=persisted_cookies) as client:
+                    r = await client.get(url, params=params)
+                    if r.status_code == 429:
+                        with _yahoo_lock:
+                            _yahoo_fail_count += 1
+                            if _yahoo_fail_count >= _YAHOO_MAX_FAILS:
+                                _yahoo_blocked_until = time.time() + _YAHOO_BLOCK_SECONDS
+                                _yahoo_fail_count = 0
+                                log.warning("Yahoo async appears rate-limited - pausing Yahoo calls for %s seconds", _YAHOO_BLOCK_SECONDS)
+                        continue
+                    if r.status_code == 401:
+                        # crumb stale - try again
+                        crumb = ""
+                        break
+                    r.raise_for_status()
+                    result = r.json().get("quoteSummary", {}).get("result")
+                    if result:
+                        return result[0]
+            except Exception:
+                with _yahoo_lock:
+                    _yahoo_fail_count += 1
+                    if _yahoo_fail_count >= _YAHOO_MAX_FAILS:
+                        _yahoo_blocked_until = time.time() + _YAHOO_BLOCK_SECONDS
+                        _yahoo_fail_count = 0
+                        log.warning("Yahoo async failing repeatedly - pausing Yahoo calls for %s seconds", _YAHOO_BLOCK_SECONDS)
+                continue
+        # if we hit a 401 and broke, retry attempt loop
     return None
 
 
@@ -232,6 +339,22 @@ def _calculate_rsi(closes: list, period: int = 14) -> float | None:
     prices = [close for close in closes if close is not None]
     if len(prices) < period + 1:
         return None
+    # Wilder smoothing implementation
+    deltas = [prices[index] - prices[index - 1] for index in range(1, len(prices))]
+    gains = [delta if delta > 0 else 0.0 for delta in deltas]
+    losses = [-delta if delta < 0 else 0.0 for delta in deltas]
+
+    avg_gain = sum(gains[:period]) / period
+    avg_loss = sum(losses[:period]) / period
+
+    for index in range(period, len(deltas)):
+        avg_gain = (avg_gain * (period - 1) + gains[index]) / period
+        avg_loss = (avg_loss * (period - 1) + losses[index]) / period
+
+    if avg_loss == 0:
+        return 100.0
+    relative_strength = avg_gain / avg_loss
+    return round(100.0 - (100.0 / (1.0 + relative_strength)), 1)
     deltas = [prices[index] - prices[index - 1] for index in range(1, len(prices))]
     gains = [delta if delta > 0 else 0.0 for delta in deltas]
     losses = [-delta if delta < 0 else 0.0 for delta in deltas]
@@ -356,6 +479,66 @@ def _chart_fundamentals(symbol: str, suffix: str = ".NS") -> dict:
             break
         except Exception as error:
             log.info("_chart_fundamentals: failed for %s on %s: %s", symbol, host, error)
+    return out
+
+
+async def _chart_fundamentals_async(symbol: str, suffix: str = ".NS") -> dict:
+    if httpx is None:
+        return await asyncio.to_thread(_chart_fundamentals, symbol, suffix)
+    client = _async_client()
+    if client is None:
+        return await asyncio.to_thread(_chart_fundamentals, symbol, suffix)
+    out = {}
+    for host in ("https://query1.finance.yahoo.com", "https://query2.finance.yahoo.com"):
+        url = f"{host}/v8/finance/chart/{quote(symbol)}{suffix}?range=1y&interval=1d&includePrePost=false"
+        try:
+            try:
+                await _throttle_fund_req_async()
+            except Exception:
+                pass
+            r = await client.get(url, timeout=config.HTTP_TIMEOUT)
+            if r.status_code == 429:
+                continue
+            r.raise_for_status()
+            payload = r.json()
+            result = (payload.get("chart") or {}).get("result") or []
+            if not result:
+                continue
+            meta = result[0].get("meta") or {}
+            high = meta.get("fiftyTwoWeekHigh") or meta.get("52WeekHigh")
+            low = meta.get("fiftyTwoWeekLow") or meta.get("52WeekLow")
+            pe_ratio = meta.get("trailingPE")
+            dividend_yield = meta.get("dividendYield")
+            if high:
+                out["wk52_high"] = high
+            if low:
+                out["wk52_low"] = low
+            if pe_ratio:
+                out["pe"] = pe_ratio
+            if dividend_yield:
+                out["div_yield"] = round(dividend_yield * 100, 2)
+
+            indicators = (result[0].get("indicators") or {}).get("quote") or [{}]
+            closes = (indicators[0] or {}).get("close") or []
+            if closes:
+                rsi_val = _calculate_rsi(closes)
+                if rsi_val is not None:
+                    out["rsi"] = rsi_val
+                macd_line, macd_signal, macd_hist = _calculate_macd(closes)
+                if macd_line is not None:
+                    out["macd_line"] = macd_line
+                if macd_signal is not None:
+                    out["macd_signal"] = macd_signal
+                if macd_hist is not None:
+                    out["macd_hist"] = macd_hist
+                sma_50, sma_200 = _calculate_sma(closes)
+                if sma_50 is not None:
+                    out["sma_50"] = sma_50
+                if sma_200 is not None:
+                    out["sma_200"] = sma_200
+            break
+        except Exception:
+            continue
     return out
 
 
@@ -622,6 +805,77 @@ def get_fundamentals(symbol: str, with_screener: bool = True) -> dict | None:
         "get_fundamentals: done %s -> %d field(s): %s",
         key, len(out), list(out.keys()) if out else [],
     )
+    return data
+
+
+async def get_fundamentals_async(symbol: str, with_screener: bool = True) -> dict | None:
+    """Async wrapper around `get_fundamentals`.
+
+    Best-effort helper: prefers async HTTP paths where available, otherwise
+    runs sync functions via `asyncio.to_thread` so callers can `await` it.
+    """
+    key = symbol.strip().upper()
+    out = {}
+    # Primary: try async quoteSummary when httpx present
+    if httpx is not None:
+        payload = await _quote_summary_async(key)
+    else:
+        payload = await asyncio.to_thread(_quote_summary, key)
+    if payload:
+        out = _extract_quote_summary(payload)
+
+    # Retry logic if incomplete
+    if with_screener and _deep_completeness(out) < 0.5:
+        if httpx is not None:
+            res2 = await _quote_summary_async(key)
+        else:
+            res2 = await asyncio.to_thread(_quote_summary, key)
+        if res2:
+            more = _extract_quote_summary(res2)
+            out.update({k: v for k, v in more.items() if v is not None})
+
+    # Chart fallback
+    if httpx is not None:
+        chart_data = await _chart_fundamentals_async(key)
+    else:
+        chart_data = await asyncio.to_thread(_chart_fundamentals, key)
+    if chart_data:
+        out.update({k: v for k, v in chart_data.items() if k not in out or out[k] is None})
+
+    # Screener + competitors (prefer async helpers)
+    if with_screener:
+        try:
+            from .screener import parse_screener_fundamentals_async, get_competitors_async
+            screener_result = await parse_screener_fundamentals_async(key)
+        except Exception:
+            screener_result = await asyncio.to_thread(parse_screener_fundamentals, key)
+        if screener_result:
+            out.update({k: v for k, v in screener_result.items() if v is not None})
+        try:
+            competitors = await get_competitors_async(key)
+        except Exception:
+            competitors = await asyncio.to_thread(get_competitors, key)
+        if competitors:
+            out["competitors"] = competitors
+
+    # Analyst fallback (prefer async helper when available)
+    try:
+        from .analyst_forecast import fill_analyst_fallback_async
+        await fill_analyst_fallback_async(key, "NSE", out)
+    except Exception:
+        await asyncio.to_thread(fill_analyst_fallback, key, "NSE", out)
+
+    data = out or None
+    now = time.time()
+    time_to_live = _FUND_CACHE_SECONDS
+    deep_ok = _deep_completeness(out) >= 0.5
+    if (with_screener and not (out.get("promoter_pct") or out.get("sector_pe"))) or not deep_ok:
+        time_to_live = _FUND_RETRY_CACHE_SECONDS
+    _fund_cache[(key, bool(with_screener))] = {
+        "timestamp": now, "data": data, "time_to_live": time_to_live,
+        "schema": _FUND_CACHE_SCHEMA,
+    }
+    _persist_fund_cache()
     return data
 
 

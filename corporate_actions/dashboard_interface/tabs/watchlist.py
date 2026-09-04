@@ -1,7 +1,10 @@
 """📌 Watchlist tab - manage the owner's watchlist and run My Favourites."""
 from __future__ import annotations
 
-import streamlit as st
+try:
+    import streamlit as st
+except Exception:
+    st = None
 
 from ... import config, sources, storage
 from ...bot.helpers import attach_quotes
@@ -33,6 +36,8 @@ from ..widgets import (
 
 
 def render() -> None:
+    if st is None:
+        raise RuntimeError("Streamlit UI removed; use the FastAPI templates instead.")
     st.header("📌 Watchlist")
     st.caption("Manage the owner's app watchlist. Other Telegram subscribers "
                "have their own lists (see System tab).")

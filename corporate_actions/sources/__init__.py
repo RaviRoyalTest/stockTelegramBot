@@ -8,7 +8,7 @@ callers can `from corporate_actions.sources import get_quote` (or
 """
 from .bse import get_bse_corporate_actions, get_bse_stock_list
 from .errors import SourceError
-from .fundamentals import FUND_MAX_ROWS, get_fundamentals
+from .fundamentals import FUND_MAX_ROWS, get_fundamentals, get_fundamentals_async
 from .us_fundamentals import get_us_fundamentals
 from .us_search import search_us_tickers
 from .news import get_stock_news
@@ -37,6 +37,21 @@ from .universe import (
     universe_exchange,
 )
 from .us_corporate_actions import get_us_corporate_actions
+from .async_api import (
+    get_quote_async,
+    get_fundamentals_async,
+    get_nse_stock_list_async,
+    get_nse_corporate_actions_async,
+    search_stocks_async,
+    get_bse_stock_list_async,
+    get_bse_corporate_actions_async,
+    parse_screener_fundamentals_async,
+    get_sector_pe_async,
+    get_index_universe_async,
+    get_ohlc_async,
+    get_stock_news_async,
+    get_us_fundamentals_async,
+)
 
 __all__ = [
     "SourceError",
@@ -73,6 +88,19 @@ __all__ = [
     "get_sector_pe",
     "parse_screener_fundamentals",
     "get_fundamentals",
+    "get_fundamentals_async",
+    "get_quote_async",
+    "get_nse_stock_list_async",
+    "get_nse_corporate_actions_async",
+    "search_stocks_async",
+    "get_bse_stock_list_async",
+    "get_bse_corporate_actions_async",
+    "parse_screener_fundamentals_async",
+    "get_sector_pe_async",
+    "get_index_universe_async",
+    "get_ohlc_async",
+    "get_stock_news_async",
+    "get_us_fundamentals_async",
     "get_us_fundamentals",
     "search_us_tickers",
     "FUND_MAX_ROWS",

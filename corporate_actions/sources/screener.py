@@ -18,6 +18,11 @@ import time
 from urllib.parse import quote
 
 from .http import _session
+import asyncio
+try:
+    import httpx
+except Exception:
+    httpx = None
 from .screener_parsing import (
     parse_company_id,
     parse_competitors,
@@ -68,6 +73,44 @@ def _screener_get(url: str) -> str | None:
     return text
 
 
+async def _screener_get_async(url: str) -> str | None:
+    """Async paced GET for screener.in pages. Uses httpx when available."""
+    global _last_screener_req, _screener_fail_count, _screener_blocked_until
+    now = time.time()
+    # use asyncio.Lock equivalent behavior via running in thread for now
+    # as screener.in expects serialised requests across the process.
+    with _screener_lock:
+        if now < _screener_blocked_until:
+            return None
+        wait = _last_screener_req + _SCREENER_INTERVAL - now
+        if wait > 0:
+            await asyncio.sleep(wait)
+        _last_screener_req = time.time()
+    try:
+        if httpx is None:
+            # fallback to sync
+            response = _session().get(url, timeout=3.0)
+            response.raise_for_status()
+            text = response.text
+        else:
+            async with httpx.AsyncClient(timeout=3.0) as client:
+                r = await client.get(url)
+                r.raise_for_status()
+                text = r.text
+    except Exception as error:
+        log.info("screener.in fetch failed for %s - %s", url, error)
+        with _screener_lock:
+            _screener_fail_count += 1
+            if _screener_fail_count >= _SCREENER_MAX_FAILS:
+                _screener_blocked_until = time.time() + _SCREENER_BLOCK_SECONDS
+                _screener_fail_count = 0
+                log.warning("screener.in appears blocked - pausing enrichment for %ss", _SCREENER_BLOCK_SECONDS)
+        return None
+    with _screener_lock:
+        _screener_fail_count = 0
+    return text
+
+
 _sector_pe_cache: dict = {}
 _SECTOR_PE_CACHE_SECONDS = 86400  # 24 hours - sectors change rarely
 _SECTOR_PE_RETRY_CACHE_SECONDS = 600  # 10 min when the fetch failed, so we retry soon
@@ -89,6 +132,26 @@ def get_sector_pe(slug: str) -> float | None:
     # A failed/empty fetch is cached only briefly so a transient screener.in
     # outage (or the 10-min circuit breaker) doesn't suppress the sector P/E
     # for a full day.
+    _sector_pe_cache[slug] = {
+        "timestamp": now,
+        "data": sector_pe,
+        "time_to_live": _SECTOR_PE_CACHE_SECONDS if sector_pe else _SECTOR_PE_RETRY_CACHE_SECONDS,
+    }
+    return sector_pe
+
+
+async def get_sector_pe_async(slug: str) -> float | None:
+    slug = (slug or "").strip()
+    if not slug:
+        return None
+    now = time.time()
+    cached = _sector_pe_cache.get(slug)
+    if cached and now - cached["timestamp"] < cached.get("time_to_live", _SECTOR_PE_CACHE_SECONDS):
+        return cached["data"]
+    sector_pe = None
+    page = await _screener_get_async(f"https://www.screener.in{slug}")
+    if page:
+        sector_pe = parse_sector_pe_table(page)
     _sector_pe_cache[slug] = {
         "timestamp": now,
         "data": sector_pe,
@@ -128,6 +191,26 @@ def get_competitors(symbol: str, limit: int = 8) -> list[dict]:
     return peers[:limit]
 
 
+async def get_competitors_async(symbol: str, limit: int = 8) -> list[dict]:
+    symbol = (symbol or "").strip().upper()
+    if not symbol:
+        return []
+    now = time.time()
+    cached = _competitors_cache.get(symbol)
+    if cached and now - cached["timestamp"] < _COMPETITORS_CACHE_SECONDS:
+        return cached["data"]
+    peers: list[dict] = []
+    company_page = await _screener_get_async(f"https://www.screener.in/company/{quote(symbol)}/")
+    if company_page:
+        company_id = parse_company_id(company_page)
+        if company_id:
+            peers_page = await _screener_get_async(f"https://www.screener.in/api/company/{company_id}/peers/")
+            if peers_page:
+                peers = parse_competitors(peers_page)
+    _competitors_cache[symbol] = {"timestamp": now, "data": peers}
+    return peers[:limit]
+
+
 def parse_screener_fundamentals(symbol: str) -> dict | None:
     """Best-effort screener.in enrichment for one symbol.
 
@@ -145,4 +228,17 @@ def parse_screener_fundamentals(symbol: str) -> dict | None:
     slug = parsed.pop("sector_slug", None)
     if slug:
         parsed["sector_pe"] = get_sector_pe(slug)
+    return parsed or None
+
+
+async def parse_screener_fundamentals_async(symbol: str) -> dict | None:
+    page = await _screener_get_async(f"https://www.screener.in/company/{quote(symbol)}/")
+    if not page:
+        return None
+    parsed = parse_page(page)
+    if not parsed:
+        return None
+    slug = parsed.pop("sector_slug", None)
+    if slug:
+        parsed["sector_pe"] = await get_sector_pe_async(slug)
     return parsed or None

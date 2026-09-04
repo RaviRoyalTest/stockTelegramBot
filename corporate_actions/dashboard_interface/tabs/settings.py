@@ -1,13 +1,18 @@
 """🎛️ Alert Settings tab - filters, price threshold and the command reference."""
 from __future__ import annotations
 
-import streamlit as st
+try:
+    import streamlit as st
+except Exception:
+    st = None
 
 from ... import config, sources, storage
 from ..help_text import HELP_TEXT
 
 
 def render() -> None:
+    if st is None:
+        raise RuntimeError("Streamlit UI removed; use the FastAPI templates instead.")
     st.header("🎛️ Alert Settings")
     st.caption("Customise which alerts you receive and how.")
 

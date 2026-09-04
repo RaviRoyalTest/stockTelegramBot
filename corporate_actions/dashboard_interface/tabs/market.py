@@ -8,7 +8,10 @@ from __future__ import annotations
 
 import datetime
 
-import streamlit as st
+try:
+    import streamlit as st
+except Exception:
+    st = None
 
 from ...market import MOVERS_PERIODS, period_label
 from ...market.hours import is_market_open, market_label, screen_available
@@ -23,6 +26,8 @@ _UNIVERSE_LABEL = {
 
 
 def render() -> None:
+    if st is None:
+        raise RuntimeError("Streamlit UI removed; use the FastAPI templates instead.")
     st.header("📊 Market Screens")
     st.caption(
         "Screen NIFTY 100 / 500 / S&P 500 by price movement, big moves or "

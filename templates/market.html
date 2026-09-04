@@ -1,0 +1,83 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <meta charset="utf-8" />
+    <title>Market Screens - Royal Stock</title>
+    <style>body{font-family:Arial;padding:20px}</style>
+  </head>
+  <body>
+    <h1>Market Screens</h1>
+    <div style="margin-bottom:12px">
+      <label>Universe: <select id="universe"><option value="nifty500">nifty500</option><option value="nifty100">nifty100</option></select></label>
+      <label style="margin-left:8px">Limit: <input id="limit" type="number" value="25" min="1" max="500"/></label>
+      <button id="run">Run</button>
+      <button id="download">Download CSV</button>
+    </div>
+
+    <table id="table" border="0" cellspacing="0" cellpadding="6" style="border-collapse:collapse;width:100%">
+      <thead style="background:#f1f5f9"><tr>
+        <th><a href="#" data-key="symbol">Symbol</a></th>
+        <th><a href="#" data-key="company">Company</a></th>
+        <th style="text-align:right"><a href="#" data-key="price">Price</a></th>
+        <th style="text-align:right"><a href="#" data-key="change_pct">%Chg</a></th>
+        <th style="text-align:right"><a href="#" data-key="pe">P/E</a></th>
+        <th style="text-align:right"><a href="#" data-key="roe">ROE</a></th>
+        <th style="text-align:right"><a href="#" data-key="market_cap">MktCap</a></th>
+      </tr></thead>
+      <tbody id="tbody"></tbody>
+    </table>
+
+    <div style="margin-top:8px">
+      <button id="prev">Prev</button>
+      <span id="pageinfo">Page 1</span>
+      <button id="next">Next</button>
+    </div>
+
+    <script>
+      let sortKey = 'market_cap';
+      let ascending = false;
+      let offset = 0;
+
+      function buildParams(){
+        const uni = document.getElementById('universe').value;
+        const limit = document.getElementById('limit').value || 25;
+        return `universe=${encodeURIComponent(uni)}&limit=${encodeURIComponent(limit)}&offset=${offset}&sort=${encodeURIComponent(sortKey)}&ascending=${ascending}`;
+      }
+
+      async function load(){
+        const res = await fetch('/api/screener?'+buildParams());
+        const rows = await res.json();
+        const tbody = document.getElementById('tbody');
+        tbody.innerHTML = '';
+        for(const r of rows){
+          const tr = document.createElement('tr');
+          tr.innerHTML = `
+            <td><b>${r.symbol}</b></td>
+            <td>${r.company||''}</td>
+            <td style="text-align:right">${r.price!=null?r.price:'-'}</td>
+            <td style="text-align:right">${r.change_pct!=null?r.change_pct:'-'}</td>
+            <td style="text-align:right">${r.pe!=null?r.pe:'-'}</td>
+            <td style="text-align:right">${r.roe!=null?r.roe:'-'}</td>
+            <td style="text-align:right">${r.market_cap!=null?r.market_cap:'-'}</td>
+          `;
+          tbody.appendChild(tr);
+        }
+        document.getElementById('pageinfo').textContent = `Offset ${offset}`;
+      }
+
+      document.getElementById('run').addEventListener('click', ()=>{ offset = 0; load(); });
+      document.getElementById('prev').addEventListener('click', ()=>{ offset = Math.max(0, offset - parseInt(document.getElementById('limit').value||25)); load(); });
+      document.getElementById('next').addEventListener('click', ()=>{ offset = offset + parseInt(document.getElementById('limit').value||25); load(); });
+      document.getElementById('download').addEventListener('click', ()=>{ window.location = '/api/screener.csv?'+buildParams().replace(/limit=\d+/, 'limit=500'); });
+
+      document.querySelectorAll('thead a').forEach(a=>a.addEventListener('click', (ev)=>{
+        ev.preventDefault();
+        const k = a.getAttribute('data-key');
+        if(sortKey === k) ascending = !ascending; else { sortKey = k; ascending = false; }
+        load();
+      }));
+
+      load();
+    </script>
+  </body>
+</html>

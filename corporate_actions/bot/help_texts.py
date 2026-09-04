@@ -1,7 +1,7 @@
 """Static help and menu texts shown by the bot (/help, /all, /menu)."""
 
 HELP_TEXT = (
-    "\U0001F4CA <b>Stock Alert Bot \u2014 Command Guide</b>\n"
+    "\U0001F4CA <b>Royal Stock \u2014 Command Guide</b>\n"
     "<i>Real-time NSE/BSE corporate actions, market movers &amp; news</i>\n\n"
     "Every command name explains what it does. The old short forms still work\n"
     "as aliases (e.g. <code>/ca</code> = <code>/corpactions</code>, "

@@ -6,7 +6,10 @@ the quick-analysis card. Pure data logic lives in helpers.py.
 """
 from __future__ import annotations
 
-import streamlit as st
+try:
+    import streamlit as st
+except Exception:
+    st = None
 
 from .. import config, sources
 from ..formatting import status_tag

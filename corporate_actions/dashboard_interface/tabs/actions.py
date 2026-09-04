@@ -3,7 +3,10 @@ from __future__ import annotations
 
 from datetime import date, timedelta
 
-import streamlit as st
+try:
+    import streamlit as st
+except Exception:
+    st = None
 
 from ... import config, sources, storage
 from ...bot.helpers import attach_quotes
@@ -26,6 +29,8 @@ from ..widgets import (
 
 
 def render() -> None:
+    if st is None:
+        raise RuntimeError("Streamlit UI removed; use the FastAPI templates instead.")
     st.header("📋 Corporate Actions (NSE + BSE)")
     st.caption("Query live corporate actions — dividends, bonus, splits, rights, buybacks — "
                "including a dedicated view for YOUR watchlist.")

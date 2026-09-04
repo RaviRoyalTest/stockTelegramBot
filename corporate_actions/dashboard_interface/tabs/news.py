@@ -1,7 +1,10 @@
 """📰 News tab - latest headlines for watchlist stocks or a single symbol."""
 from __future__ import annotations
 
-import streamlit as st
+try:
+    import streamlit as st
+except Exception:
+    st = None
 
 from ... import sources, storage
 from ...core.dates import format_timestamp
@@ -10,6 +13,8 @@ from ..widgets import symbol_picker
 
 
 def render() -> None:
+    if st is None:
+        raise RuntimeError("Streamlit UI removed; use the FastAPI templates instead.")
     st.header("📰 News")
     st.caption("Latest headlines for watchlist stocks or a single symbol.")
 

@@ -1,6 +1,6 @@
 {
-  "name": "Stock Alert Bot",
-  "short_name": "StockBot",
+  "name": "Royal Stock",
+  "short_name": "RoyalStock",
   "start_url": "/",
   "display": "standalone",
   "background_color": "#0f172a",

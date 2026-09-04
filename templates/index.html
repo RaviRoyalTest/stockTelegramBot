@@ -1,0 +1,353 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Royal Stock</title>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600;700;800&display=swap" rel="stylesheet">
+    <style>
+      :root {
+        color-scheme: light;
+        --bg: #f3f7fb;
+        --bg-strong: #eaf1f8;
+        --panel: rgba(255, 255, 255, 0.8);
+        --panel-strong: #ffffff;
+        --line: rgba(15, 23, 42, 0.1);
+        --text: #0f172a;
+        --muted: #475569;
+        --accent: #2563eb;
+        --accent-soft: rgba(37, 99, 235, 0.1);
+        --green: #16a34a;
+        --red: #dc2626;
+        --shadow: 0 12px 28px rgba(15, 23, 42, 0.08);
+      }
+
+      html[data-theme="dark"] {
+        color-scheme: dark;
+        --bg: #020817;
+        --bg-strong: #0b1220;
+        --panel: rgba(15, 23, 42, 0.82);
+        --panel-strong: #111827;
+        --line: rgba(148, 163, 184, 0.2);
+        --text: #e2e8f0;
+        --muted: #94a3b8;
+        --accent: #60a5fa;
+        --accent-soft: rgba(96, 165, 250, 0.12);
+        --green: #22c55e;
+        --red: #ef4444;
+        --shadow: 0 12px 28px rgba(2, 8, 23, 0.45);
+      }
+
+      * { box-sizing: border-box; }
+
+      html, body {
+        margin: 0;
+        min-height: 100%;
+        font-family: Inter, system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial;
+        background: linear-gradient(180deg, var(--bg) 0%, var(--bg-strong) 100%);
+        color: var(--text);
+        -webkit-font-smoothing:antialiased; -moz-osx-font-smoothing:grayscale;
+      }
+
+      body {
+        transition: background 0.2s ease, color 0.2s ease;
+      }
+
+      .shell {
+        max-width: 1200px;
+        margin: 0 auto;
+        padding: 24px;
+      }
+
+      .topbar {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        gap: 16px;
+        padding: 18px 22px;
+        border: 1px solid var(--line);
+        border-radius: 16px;
+        background: var(--panel);
+        backdrop-filter: blur(10px);
+        box-shadow: var(--shadow);
+      }
+
+      .brand {
+        font-size: clamp(1.25rem, 2vw, 1.6rem);
+        font-weight: 800;
+        letter-spacing: -0.02em;
+      }
+
+      .meta {
+        color: var(--muted);
+        font-size: 0.9rem;
+      }
+
+      .theme-toggle {
+        appearance: none;
+        border: 1px solid transparent;
+        background: linear-gradient(90deg,var(--accent) 0%, #7dd3fc 100%);
+        color: white;
+        border-radius: 10px;
+        padding: 8px 14px;
+        cursor: pointer;
+        font-weight: 700;
+        box-shadow: 0 6px 18px rgba(37,99,235,0.15);
+      }
+
+      .grid {
+        display: grid;
+        grid-template-columns: repeat(4, minmax(160px, 1fr));
+        gap: 16px;
+        margin-top: 22px;
+      }
+
+      .card {
+        background: var(--panel-strong);
+        border: 1px solid rgba(15,23,42,0.04);
+        border-radius: 12px;
+        padding: 16px;
+        box-shadow: 0 8px 20px rgba(2,6,23,0.06);
+      }
+
+      .label {
+        color: var(--muted);
+        font-size: 0.8rem;
+      }
+
+      .value {
+        margin-top: 10px;
+        font-size: 2rem;
+        font-weight: 700;
+      }
+
+      .section {
+        margin-top: 26px;
+        background: var(--panel);
+        border: 1px solid var(--line);
+        border-radius: 18px;
+        padding: 20px;
+        box-shadow: var(--shadow);
+      }
+
+      .section h2 { margin-top: 0; }
+
+      .pill-row {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 8px;
+      }
+
+      .pill {
+        display: inline-block;
+        padding: 7px 11px;
+        border-radius: 999px;
+        border: 1px solid var(--line);
+        background: var(--accent-soft);
+        color: var(--text);
+        font-size: 0.8rem;
+      }
+
+      table {
+        width: 100%;
+        border-collapse: collapse;
+        margin-top: 14px;
+        font-size: 0.95rem;
+      }
+
+      th, td {
+        text-align: left;
+        padding: 12px 10px;
+        border-bottom: 1px solid rgba(15,23,42,0.06);
+      }
+
+      th {
+        color: var(--muted);
+        font-size: 0.85rem;
+        text-transform: uppercase;
+        letter-spacing: 0.04em;
+        font-weight: 600;
+      }
+
+      tbody tr:hover { background: linear-gradient(90deg, rgba(37,99,235,0.03), transparent); }
+
+      .status-ok { color: var(--green); }
+      .status-bad { color: var(--red); }
+
+      @media (max-width: 800px) {
+        .grid { grid-template-columns: repeat(2, minmax(140px, 1fr)); }
+        .shell { padding: 16px; }
+        .topbar { flex-direction: column; align-items: flex-start; }
+      }
+    </style>
+  </head>
+  <body>
+    <div class="shell">
+      <div style="display:flex; gap:18px; align-items:flex-start;">
+        <aside style="width:260px">
+          <div class="card" style="padding:14px; margin-bottom:12px">
+            <div style="display:flex; align-items:center; gap:10px">
+              <div style="font-size:28px">📈</div>
+              <div>
+                <div style="font-weight:800; font-size:1.1rem">Royal Stock</div>
+                <div class="meta">NSE &amp; BSE · Telegram bot</div>
+              </div>
+            </div>
+          </div>
+
+          <nav class="card" style="padding:12px">
+            <div style="display:flex; flex-direction:column; gap:8px">
+              <a href="/" style="text-decoration:none; color:var(--text)">🏠 Dashboard</a>
+              <a href="/watchlist" style="text-decoration:none; color:var(--text)">📌 Watchlist</a>
+              <a href="/fundamentals" style="text-decoration:none; color:var(--text)">💹 Fundamentals</a>
+              <a href="/market" style="text-decoration:none; color:var(--text)">📊 Screener</a>
+              <a href="/exdates" style="text-decoration:none; color:var(--text)">📋 Corporate actions</a>
+              <a href="#" style="text-decoration:none; color:var(--text)">⚙️ System</a>
+            </div>
+          </nav>
+
+          <div class="card" style="padding:12px; margin-top:12px">
+            <div class="label">Telegram</div>
+            <div style="margin-top:8px">Configured · <span class="pill">@StockVigilBot</span></div>
+            <div style="margin-top:8px"><button id="sendTest">📨 Send test message</button></div>
+          </div>
+        </aside>
+
+        <main style="flex:1">
+          <div class="card" style="display:flex; justify-content:space-between; align-items:center; gap:12px;">
+            <div>
+              <div style="font-size:20px; font-weight:800">Royal Stock</div>
+              <div class="meta">Custom dashboard — non-Streamlit shell</div>
+            </div>
+            <div style="display:flex; gap:12px; align-items:center">
+              <div class="meta">App status: live</div>
+              <button class="theme-toggle" id="themeToggle" type="button" aria-label="Toggle theme">🌙 Dark</button>
+            </div>
+          </div>
+
+          <div style="display:grid; grid-template-columns:repeat(4,1fr); gap:12px; margin-top:14px">
+            <div class="card"><div class="label">Watchlist</div><div class="value" id="watchlistCount">0</div></div>
+            <div class="card"><div class="label">Poller</div><div class="value" id="pollerStatus">Idle</div></div>
+            <div class="card"><div class="label">Alerts sent</div><div class="value" id="alertsSent">0</div></div>
+            <div class="card"><div class="label">Sources</div><div class="value" id="sources">BSE/NSE</div></div>
+          </div>
+
+          <div class="section" style="margin-top:16px">
+            <h2>Quick actions</h2>
+            <div style="display:flex; gap:10px; flex-wrap:wrap">
+              <button class="card" id="loadUniverse" style="display:inline-flex; align-items:center; gap:8px">🔄 Load stock list</button>
+              <button class="card" id="refreshPrices" style="display:inline-flex; align-items:center; gap:8px">🔄 Refresh prices</button>
+              <button class="card" id="checkNow" style="display:inline-flex; align-items:center; gap:8px">🔍 Check now</button>
+              <button class="card" id="runScreener" style="display:inline-flex; align-items:center; gap:8px">▶️ Run Screener</button>
+            </div>
+          </div>
+
+          <div class="section" style="margin-top:16px">
+            <h2>Top stocks</h2>
+            <div style="display:flex; justify-content:space-between; align-items:center; gap:12px; margin-bottom:8px">
+              <div style="color:var(--muted); font-size:0.9rem">Showing top results from the selected universe</div>
+              <div style="display:flex; gap:8px; align-items:center">
+                <input id="search" placeholder="Search symbol or company" style="padding:8px 10px; border-radius:8px; border:1px solid var(--line)">
+                <select id="limit" style="padding:8px 10px; border-radius:8px; border:1px solid var(--line)">
+                  <option value="20">20</option>
+                  <option value="50" selected>50</option>
+                  <option value="100">100</option>
+                </select>
+              </div>
+            </div>
+            <table>
+              <thead>
+                <tr><th>Symbol</th><th>Company</th><th>Price</th><th>P/E</th><th>ROE</th></tr>
+              </thead>
+              <tbody id="stockRows"></tbody>
+            </table>
+          </div>
+        </main>
+      </div>
+    </div>
+
+    <script>
+      function getPreferredTheme() {
+        const saved = localStorage.getItem('theme');
+        if (saved === 'light' || saved === 'dark') return saved;
+        return window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
+      }
+
+      function applyTheme(theme) {
+        const next = theme === 'dark' ? 'dark' : 'light';
+        document.documentElement.setAttribute('data-theme', next);
+        localStorage.setItem('theme', next);
+        const button = document.getElementById('themeToggle');
+        if (button) {
+          button.textContent = next === 'dark' ? '☀️ Light' : '🌙 Dark';
+        }
+      }
+
+      const initialTheme = getPreferredTheme();
+      applyTheme(initialTheme);
+
+      document.getElementById('themeToggle')?.addEventListener('click', () => {
+        const current = document.documentElement.getAttribute('data-theme') === 'dark' ? 'dark' : 'light';
+        applyTheme(current === 'dark' ? 'light' : 'dark');
+      });
+
+      function buildQueryParams() {
+        const params = new URLSearchParams();
+        params.set('universe', 'nifty500');
+        params.set('sort', 'market_cap');
+        params.set('ascending', 'false');
+        params.set('limit', '50');
+        const getVal = (id) => { const el = document.getElementById(id); return el ? el.value : ''; };
+        const getChecked = (id) => { const el = document.getElementById(id); return el ? el.checked : false };
+        const pe = getVal('peMax');
+        const roe = getVal('roeMin');
+        const mcap = getVal('mcapMin');
+        const price = getVal('priceMin');
+        const rsi = getVal('rsiMin');
+        const macd = getChecked('macdBull');
+        const ema = getChecked('ema200');
+        const exch = getVal('exchange');
+        const sector = getVal('sector');
+        if (pe) params.set('pe_max', pe);
+        if (roe) params.set('roe_min', roe);
+        if (mcap) params.set('market_cap_min', mcap);
+        if (price) params.set('price_min', price);
+        if (rsi) params.set('rsi_min', rsi);
+        if (macd) params.set('require_macd_bull', 'true');
+        if (ema) params.set('require_above_ema200', 'true');
+        if (exch) params.set('exchange', exch);
+        if (sector) params.set('sector', sector);
+        return params.toString();
+      }
+
+      async function loadData() {
+        try {
+          const qs = buildQueryParams();
+          const res = await fetch('/api/screener?' + qs);
+          const rows = await res.json();
+          const tbody = document.getElementById('stockRows');
+          tbody.innerHTML = rows.map(r => `
+            <tr>
+              <td>${r.symbol || '-'}</td>
+              <td>${r.company || '-'}</td>
+              <td>${r.price ? '₹' + Number(r.price).toFixed(2) : '-'}</td>
+              <td>${r.pe != null ? Number(r.pe).toFixed(2) : '-'}</td>
+              <td>${r.roe != null ? Number(r.roe).toFixed(2) + '%' : '-'}</td>
+            </tr>
+          `).join('');
+
+          document.getElementById('watchlistCount').textContent = '44';
+          document.getElementById('pollerStatus').textContent = 'Idle';
+          document.getElementById('alertsSent').textContent = '0';
+          document.getElementById('marketStatus').textContent = 'Offline';
+        } catch (e) {
+          document.getElementById('stockRows').innerHTML = '<tr><td colspan="5">Unable to load screener data.</td></tr>';
+        }
+      }
+
+      loadData();
+      const runBtn = document.getElementById('runScreener');
+      if (runBtn) runBtn.addEventListener('click', () => { loadData(); });
+    </script>
+  </body>
+</html>

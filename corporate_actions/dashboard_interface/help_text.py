@@ -4,7 +4,7 @@ This is the markdown variant rendered in the dashboard's Alert Settings tab;
 the Telegram-HTML variant lives in corporate_actions/bot/help_texts.py.
 """
 HELP_TEXT = (
-    "\U0001F4CA **Stock Alert Bot — Command Guide**\n"
+    "\U0001F4CA **Royal Stock — Command Guide**\n"
     "_Real-time NSE/BSE corporate actions, market movers & news_\n\n"
     "Every command name explains what it does. The old short forms still work\n"
     "as aliases (e.g. `/ca` = `/corpactions`, `/next` = `/corpactionsformylist`).\n\n"

@@ -9,7 +9,10 @@ so the user can pick the right one - same behaviour as the bot's /stock and
 """
 from __future__ import annotations
 
-import streamlit as st
+try:
+    import streamlit as st
+except Exception:
+    st = None
 
 from ... import sources, storage
 from ...formatting.stock_india import _fund_report_lines
@@ -55,6 +58,8 @@ def _pick_row(match: dict) -> str:
 
 
 def render() -> None:
+    if st is None:
+        raise RuntimeError("Streamlit UI removed; use the FastAPI templates instead.")
     st.header("💹 Fundamental Analysis")
     st.caption("Quick analysis card (like /fundamentalanalyze) or the DEEP report "
                "(like /fundamentalreport) — plus US stocks (like /usstock). "

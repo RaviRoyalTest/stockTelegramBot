@@ -7,6 +7,11 @@ import logging
 import time
 
 import requests
+import asyncio
+try:
+    import httpx
+except Exception:
+    httpx = None
 
 from .. import config
 from ..core.dates import parse_nse_date
@@ -33,9 +38,7 @@ def get_nse_stock_list() -> list[dict]:
             symbol = (row.get("SYMBOL") or "").strip()
             company = (row.get("NAME OF COMPANY") or "").strip()
             if symbol and symbol.lower() not in ("symbol", "index"):
-                stocks.append(
-                    {"symbol": symbol, "company": company, "exchange": "NSE"}
-                )
+                stocks.append({"symbol": symbol, "company": company, "exchange": "NSE"})
         if not stocks:
             raise SourceError("NSE stock list parsed but empty")
         log.info("NSE stock list loaded: %d equities", len(stocks))
@@ -46,6 +49,36 @@ def get_nse_stock_list() -> list[dict]:
         raise SourceError(f"NSE stock list request failed: {error}") from error
     except Exception as error:  # csv.DictReader can raise Error
         raise SourceError(f"NSE stock list parse failed: {error}") from error
+
+
+async def get_nse_stock_list_async() -> list[dict]:
+    """Async version of `get_nse_stock_list` using httpx when available.
+
+    Falls back to running the sync implementation in a thread if httpx is
+    unavailable.
+    """
+    if httpx is None:
+        return await asyncio.to_thread(get_nse_stock_list)
+    try:
+        async with httpx.AsyncClient(timeout=config.HTTP_TIMEOUT) as client:
+            r = await client.get(config.NSE_STOCK_LIST_URL)
+            r.raise_for_status()
+            text = r.text
+    except Exception as e:
+        raise SourceError(f"NSE stock list request failed: {e}") from e
+    if text.startswith("\ufeff"):
+        text = text[1:]
+    reader = csv.DictReader(io.StringIO(text))
+    stocks = []
+    for row in reader:
+        symbol = (row.get("SYMBOL") or "").strip()
+        company = (row.get("NAME OF COMPANY") or "").strip()
+        if symbol and symbol.lower() not in ("symbol", "index"):
+            stocks.append({"symbol": symbol, "company": company, "exchange": "NSE"})
+    if not stocks:
+        raise SourceError("NSE stock list parsed but empty")
+    log.info("NSE stock list loaded (async): %d equities", len(stocks))
+    return stocks
 
 
 _nse_list_cache = None

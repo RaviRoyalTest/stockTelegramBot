@@ -1,0 +1,31 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <meta charset="utf-8" />
+    <title>Corporate Actions - Royal Stock</title>
+    <style>body{font-family:Arial;padding:20px}</style>
+  </head>
+  <body>
+    <h1>Corporate Actions (Ex-dates)</h1>
+    <div>
+      <label>Symbol (optional): <input id="symbol"/></label>
+      <button id="run">Fetch</button>
+      <button id="download">Download CSV</button>
+    </div>
+    <div id="out"></div>
+    <script>
+      async function fetchAndRender(){
+        const s=document.getElementById('symbol').value.trim();
+        const url='/api/corporate_actions'+(s?('?symbol='+encodeURIComponent(s)): '');
+        const res=await fetch(url);
+        const arr=await res.json();
+        document.getElementById('out').innerHTML = arr.map(a=>`<div><b>${a.symbol}</b> ${a.subject||''} — ex ${a.ex_date||a.record_date||''}</div>`).join('')||'<i>no records</i>';
+      }
+      document.getElementById('run').addEventListener('click', fetchAndRender);
+      document.getElementById('download').addEventListener('click', ()=>{
+        const s=document.getElementById('symbol').value.trim();
+        window.location = '/api/corporate_actions.csv' + (s?('?symbol='+encodeURIComponent(s)):'');
+      });
+    </script>
+  </body>
+</html>

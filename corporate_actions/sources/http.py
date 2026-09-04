@@ -5,10 +5,17 @@ and a global request-rate limiter used to stay under Yahoo's 429 threshold.
 """
 import threading
 import time
+import asyncio
 
 import requests
 
 from .. import config
+
+# Optional async HTTP client using httpx
+try:
+    import httpx
+except Exception:  # pragma: no cover - optional dependency
+    httpx = None
 
 _tls = threading.local()
 
@@ -79,3 +86,37 @@ def _throttle_chart_req():
         if wait > 0:
             time.sleep(wait)
         _last_chart_req = time.time()
+
+
+async def _throttle_chart_req_async():
+    """Async version of chart request throttling."""
+    global _last_chart_req
+    async with _chart_req_lock:  # type: ignore
+        now = time.time()
+        wait = _last_chart_req + _CHART_REQ_INTERVAL - now
+        if wait > 0:
+            await asyncio.sleep(wait)
+        _last_chart_req = time.time()
+
+
+async def _throttle_fund_req_async():
+    """Async version of fund request throttling."""
+    global _last_fund_req
+    async with _fund_req_lock:  # type: ignore
+        now = time.time()
+        wait = _last_fund_req + _FUND_REQ_INTERVAL - now
+        if wait > 0:
+            await asyncio.sleep(wait)
+        _last_fund_req = time.time()
+
+
+_async_client = None
+
+def _async_client():
+    """Return a shared httpx.AsyncClient or None if httpx unavailable."""
+    global _async_client
+    if httpx is None:
+        return None
+    if _async_client is None:
+        _async_client = httpx.AsyncClient(headers=config.BROWSER_HEADERS, timeout=config.HTTP_TIMEOUT)
+    return _async_client
