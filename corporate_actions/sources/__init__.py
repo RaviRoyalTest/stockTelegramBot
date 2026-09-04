@@ -19,6 +19,7 @@ from .nse import (
     search_stocks,
 )
 from .ohlc import OHLC_TIMEFRAMES, _HIGHER_TIMEFRAME_LADDER, get_index_ohlc, get_ohlc
+from .providers import get_company_profile, search_market_data
 from .quotes import get_quote
 from .rights import RIGHTS_OFFER_WINDOWS, attach_rights_windows
 from .screener import get_sector_pe, parse_screener_fundamentals
@@ -53,6 +54,8 @@ __all__ = [
     "get_bse_corporate_actions",
     "get_us_corporate_actions",
     "get_stock_news",
+    "search_market_data",
+    "get_company_profile",
     "get_index_universe",
     "get_intraday_change",
     "get_daily_change",

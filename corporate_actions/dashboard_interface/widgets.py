@@ -95,6 +95,11 @@ def symbol_picker(market: str, label: str, key: str, placeholder: str,
         else sources.search_stocks(query, limit=8)
     )
     if not matches:
+        matches = sources.search_market_data(
+            query,
+            filters={"market": market, "limit": 8},
+        )
+    if not matches:
         return query
     if default_to_first:
         pick = st.selectbox("Suggestions", matches, format_func=_pick_label, key=f"{key}_pick")

@@ -37,8 +37,14 @@ def _fetch_symbol(symbol: str, market: str) -> tuple[dict, dict]:
 def _suggestions_for(symbol: str, market: str) -> list[dict]:
     """Close matches for a symbol that didn't resolve (ticker + name + exchange)."""
     if market == _US:
-        return sources.search_us_tickers(symbol, limit=6)
-    return sources.search_stocks(symbol, limit=6)
+        matches = sources.search_us_tickers(symbol, limit=6)
+        if matches:
+            return matches
+        return sources.search_market_data(symbol, filters={"market": "us", "limit": 6})
+    matches = sources.search_stocks(symbol, limit=6)
+    if matches:
+        return matches
+    return sources.search_market_data(symbol, filters={"market": "in", "limit": 6})
 
 
 def _pick_row(match: dict) -> str:
