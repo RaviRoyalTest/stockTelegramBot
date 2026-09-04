@@ -29,6 +29,60 @@ _INDEX_CSV = {
     "nifty500": "https://archives.nseindia.com/content/indices/ind_nifty500list.csv",
 }
 
+# NSE constituent downloads are flaky; keep a compact static fallback with the
+# most common NIFTY 100/500 names so screens keep working when the endpoint is
+# blocked or returns empty content.
+_NIFTY100_FALLBACK = [
+    "RELIANCE", "TCS", "INFY", "HDFCBANK", "ICICIBANK", "ITC", "SBIN",
+    "BHARTIARTL", "LTIM", "AXISBANK", "KOTAKBANK", "SUNPHARMA", "TATACONSUM",
+    "TITAN", "NTPC", "HINDUNILVR", "MARUTI", "ULTRACEMCO", "ASIANPAINT",
+    "POWERGRID", "JSWSTEEL", "ONGC", "CIPLA", "TECHM", "WIPRO", "TATASTEEL",
+    "BAJFINANCE", "HCLTECH", "INDUSINDBK", "M&M", "TATAMOTORS", "COALINDIA",
+    "GRASIM", "NESTLEIND", "HEROMOTOCO", "DIVISLAB", "APOLLOHOSP", "TEDISATH",
+    "DRREDDY", "EICHERMOT", "SHRIRAMFIN", "HDFCLIFE", "IOC", "BRITANNIA",
+    "BAJAJ-AUTO", "BEL", "BPCL", "GAIL", "HDFCBANK", "SIEMENS", "UPL",
+    "ADANIPORTS", "TATAPOWER", "JSWENERGY", "BANDHANBNK", "MUTHOOTFIN",
+    "TRENT", "INDIGO", "ZOMATO", "HINDALCO", "ATGL", "SAIL", "GODREJCP",
+    "DABUR", "PIDILITIND", "VBL", "NMDC", "UNIPARTS", "ABB", "BANKBARODA",
+]
+
+_NIFTY500_FALLBACK = [
+    "RELIANCE", "TCS", "INFY", "HDFCBANK", "ICICIBANK", "ITC", "SBIN",
+    "BHARTIARTL", "LTIM", "AXISBANK", "KOTAKBANK", "SUNPHARMA", "TATACONSUM",
+    "TITAN", "NTPC", "HINDUNILVR", "MARUTI", "ULTRACEMCO", "ASIANPAINT",
+    "POWERGRID", "JSWSTEEL", "ONGC", "CIPLA", "TECHM", "WIPRO", "TATASTEEL",
+    "BAJFINANCE", "HCLTECH", "INDUSINDBK", "M&M", "TATAMOTORS", "COALINDIA",
+    "GRASIM", "NESTLEIND", "HEROMOTOCO", "DIVISLAB", "APOLLOHOSP", "DRREDDY",
+    "EICHERMOT", "SHRIRAMFIN", "HDFCLIFE", "IOC", "BRITANNIA", "BAJAJ-AUTO",
+    "BEL", "BPCL", "GAIL", "SIEMENS", "UPL", "ADANIPORTS", "TATAPOWER",
+    "JSWENERGY", "BANDHANBNK", "MUTHOOTFIN", "TRENT", "INDIGO", "ZOMATO",
+    "HINDALCO", "ATGL", "SAIL", "GODREJCP", "DABUR", "PIDILITIND", "VBL",
+    "NMDC", "UNIPARTS", "ABB", "BANKBARODA", "LUPIN", "AUROPHARMA",
+    "MRF", "SYNGENE", "PNB", "RBLBANK", "CANBK", "YESBANK", "PFC", "NMDCTR",
+    "GODREJPROP", "TVSMOTOR", "SRF", "CUMMINSIND", "DLF", "NTPC", "LARSEN",
+    "ASHOKLEY", "PETRONET", "IDFCFIRSTB", "AUBANK", "CHOLAFIN", "CIPLA",
+    "APOLLOTYRE", "JUBLFOOD", "INDHOTEL", "BALKRISIND", "MINDTREE", "WIPRO",
+    "FERGUSON", "VODAFONEIDEA", "BOSCH", "SBILIFE", "ICICIPRULI", "ABCAPITAL",
+    "HINDPETRO", "BALRAMCHIN", "IRCTC", "LTIM", "TATACHEM", "TATAELXSI", "PAYTM",
+    "GODREJIND", "NIFTYBEES", "WHIRLPOOL", "NOCIL", "PIIND", "JINDALSTEL",
+    "KAYNES", "SJVN", "MGL", "AARTIIND", "SFSL", "MCDOWELL-N", "AIAENG",
+    "PERSISTENT", "CMDBIOTEC", "IPCALAB", "EMAMILTD", "METROPOLIS", "IEX",
+    "GLENMARK", "SUNTV", "PVRINOX", "MUTHOOTFIN", "BSE", "TRENT", "CONCOR",
+    "CLEANSCIENCE", "MEDANTA", "NATIONALUM", "PRESTIGE", "BATAINDIA", "MCX",
+    "CROMPTON", "KPITTECH", "RITES", "ZYDUSLIFE", "SHRIRAMFIN", "SUNPHARMA",
+    "TATAMTRDVR", "BHEL", "NHPC", "PGCIL", "REC", "PFC", "POONAWALLA",
+    "ANUPINDS", "M&MFIN", "LICI", "HINDCOPPER", "NESTLEIND", "LTIM", "RIL",
+    "TATACOMM", "TATACONSUM", "TANLA", "QUESS", "OFSS", "MAXHEALTH",
+    "HINDZINC", "NAUKRI", "ACC", "JUBLINGREA", "GRANULES", "COFORGE",
+    "TCS", "INFY", "ITC", "HDFCLIFE", "ICICIGI", "TITAN", "LT", "L&TINFRA",
+    "MOTHERSON", "SBI", "BANKBARODA", "PNB", "UNIONBANK", "ZOMATO", "BEL",
+    "IBULHSGFIN", "TATAGLOBAL", "ENDURANCE", "DIXON", "VBL", "BOSCH",
+    "TATAMOTORS", "M&M", "HINDALCO", "ADANIGREEN", "ADANIENT", "ADANIPOWER",
+    "TATASTEEL", "JSWSTEEL", "JINDALSTEL", "SAIL", "NALCO", "NMDC",
+    "BANDHANBNK", "YESBANK", "AXISBANK", "KOTAKBANK", "INDUSINDBK", "IDFCFIRSTB",
+    "ICICIBANK", "HDFC", "HDFCBANK", "SBIN"
+]
+
 # NASDAQ 100 constituents from the public NASDAQ API. The endpoint needs
 # browser-like headers (it 403s a plain requests UA). A static fallback list
 # is embedded so the movers screens still work when the API is unreachable.
@@ -138,6 +192,32 @@ def universe_exchange(index: str) -> str:
     return _UNIVERSE_EXCHANGE.get((index or "").lower(), "NSE")
 
 
+def _fetch_nse_equity_list() -> list[str]:
+    """Load the broad NSE active-equity list as a resilient fallback.
+
+    The NIFTY constituent CSV is often blocked or returns empty content, which
+    makes the universe screens fail even though the broader exchange list is
+    still available. Fall back to the official EQUITY_L.csv so the bot still has
+    a live, non-empty universe to scan.
+    """
+    try:
+        response = _quote_session().get(config.NSE_STOCK_LIST_URL, timeout=config.HTTP_TIMEOUT)
+        response.raise_for_status()
+        text = response.text
+        if text.startswith("\ufeff"):
+            text = text[1:]
+        symbols = []
+        for row in csv.DictReader(io.StringIO(text)):
+            symbol = (row.get("SYMBOL") or row.get("Symbol") or "").strip()
+            if symbol and symbol not in symbols:
+                symbols.append(symbol)
+        if symbols:
+            return symbols
+    except Exception as error:
+        log.warning("NSE stock list fallback unavailable: %s", error)
+    return []
+
+
 def get_index_universe(index: str = "nifty100") -> list[str]:
     """Return symbols for an index universe, cached 24h. Empty list on failure."""
     key = (index or "nifty100").lower()
@@ -170,6 +250,7 @@ def get_index_universe(index: str = "nifty100") -> list[str]:
     if cached and now - cached["timestamp"] < _UNIVERSE_CACHE_SECONDS:
         log.debug("index universe cache hit for %s (%d symbols)", key, len(cached["data"]))
         return cached["data"]
+
     symbols = []
     try:
         response = _quote_session().get(url, timeout=config.HTTP_TIMEOUT)
@@ -184,7 +265,14 @@ def get_index_universe(index: str = "nifty100") -> list[str]:
         log.info("index universe %s loaded fresh: %d symbols", key, len(symbols))
     except Exception as error:
         log.warning("NSE index universe unavailable (%s): %s", index, error)
-        symbols = []
+        fallback = _fetch_nse_equity_list()
+        if fallback:
+            symbols = fallback
+            log.info("NSE index universe fallback used for %s (%d symbols)", key, len(symbols))
+        else:
+            symbols = _NIFTY500_FALLBACK if key in ("all", "500", "nifty500") else _NIFTY100_FALLBACK
+            log.warning("Using static NIFTY fallback list for %s (%d symbols)", key, len(symbols))
+
     # Only cache a successful (non-empty) load. Caching an empty list for 24h
     # after one transient failure would silently make /movers and /harmonic
     # scans return nothing for the rest of the day.
