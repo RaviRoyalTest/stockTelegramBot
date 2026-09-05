@@ -37,7 +37,7 @@ FUND_MAX_ROWS = 40  # rows enriched with the slow screener.in part per command
 # fields). Old entries (e.g. fetched before the analyst-forecast extraction
 # existed) are then treated as stale and refetched instead of serving a
 # forecast-less report for up to 24h.
-_FUND_CACHE_SCHEMA = 3
+_FUND_CACHE_SCHEMA = 4
 
 # Disk-persisted session + cache (gitignored .cache/ dir). The always-on bot
 # restarts often (Render sleep/wake), and every restart used to throw away
@@ -443,6 +443,10 @@ def _chart_fundamentals(symbol: str, suffix: str = ".NS") -> dict:
             low = meta.get("fiftyTwoWeekLow") or meta.get("52WeekLow")
             pe_ratio = meta.get("trailingPE")
             dividend_yield = meta.get("dividendYield")
+            company_name = (meta.get("longName") or meta.get("shortName") or "").strip()
+            if company_name:
+                out["company"] = company_name
+                out["name"] = company_name
             if high:
                 out["wk52_high"] = high
             if low:
@@ -511,6 +515,10 @@ async def _chart_fundamentals_async(symbol: str, suffix: str = ".NS") -> dict:
             low = meta.get("fiftyTwoWeekLow") or meta.get("52WeekLow")
             pe_ratio = meta.get("trailingPE")
             dividend_yield = meta.get("dividendYield")
+            company_name = (meta.get("longName") or meta.get("shortName") or "").strip()
+            if company_name:
+                out["company"] = company_name
+                out["name"] = company_name
             if high:
                 out["wk52_high"] = high
             if low:
@@ -789,6 +797,28 @@ def get_fundamentals(symbol: str, with_screener: bool = True) -> dict | None:
     # forecast section never silently disappears for NSE symbols either.
     fill_analyst_fallback(key, "NSE", out)
 
+    # Free (no-key) fallbacks: NSE quote-equity + Stooq CSV fill any missing
+    # price / company / 52-week / PE so the report has no loose ends even
+    # when Yahoo is rate-limited and screener.in is circuit-broken.
+    try:
+        from .free_api import get_nse_quote, get_stooq_quote, normalise_fundamentals
+
+        if out.get("price") is None or not out.get("company"):
+            nse = get_nse_quote(key)
+            if nse:
+                for field in ("price", "company", "name", "wk52_high", "wk52_low", "pe"):
+                    if out.get(field) is None and nse.get(field) is not None:
+                        out[field] = nse[field]
+                log.info("get_fundamentals: NSE fallback filled %s for %s", list(nse.keys()), key)
+        if out.get("price") is None:
+            stooq = get_stooq_quote(key, "NSE")
+            if stooq and stooq.get("price") is not None:
+                out["price"] = stooq["price"]
+                log.info("get_fundamentals: Stooq fallback price %.2f for %s", stooq["price"], key)
+        out = normalise_fundamentals(key, out, None)
+    except Exception as error:
+        log.info("get_fundamentals: free-API fallback skipped for %s: %s", key, error)
+
     data = out or None
     time_to_live = _FUND_CACHE_SECONDS
     # Shorten the cache when a part is missing so we retry it sooner instead of
@@ -866,6 +896,24 @@ async def get_fundamentals_async(symbol: str, with_screener: bool = True) -> dic
         await fill_analyst_fallback_async(key, "NSE", out)
     except Exception:
         await asyncio.to_thread(fill_analyst_fallback, key, "NSE", out)
+
+    # Free (no-key) fallbacks + alias normalisation (same as the sync path).
+    try:
+        from .free_api import get_nse_quote, get_stooq_quote, normalise_fundamentals
+
+        if out.get("price") is None or not out.get("company"):
+            nse = await asyncio.to_thread(get_nse_quote, key)
+            if nse:
+                for field in ("price", "company", "name", "wk52_high", "wk52_low", "pe"):
+                    if out.get(field) is None and nse.get(field) is not None:
+                        out[field] = nse[field]
+        if out.get("price") is None:
+            stooq = await asyncio.to_thread(get_stooq_quote, key, "NSE")
+            if stooq and stooq.get("price") is not None:
+                out["price"] = stooq["price"]
+        out = normalise_fundamentals(key, out, None)
+    except Exception:
+        pass
 
     data = out or None
     now = time.time()

@@ -3,7 +3,7 @@
 {% block content %}
   <div class="page-header">
     <h1>System</h1>
-    <p class="sub">Service health and bot configuration at a glance.</p>
+    <p class="sub">Service health and bot configuration at a glance — including free-data API reachability.</p>
   </div>
 
   <div class="grid grid-2">
@@ -19,6 +19,17 @@
       <p class="muted" id="marketInfo">—</p>
     </section>
 
+    <section class="card" aria-labelledby="freeHeading">
+      <h2 id="freeHeading">Free data APIs</h2>
+      <p><span class="pill" id="freePill">checking…</span></p>
+      <p class="muted" id="freeInfo">Yahoo · NSE · Stooq · screener.in</p>
+      <div class="form-row">
+        <button class="btn btn-sm" id="quoteProbe">🔍 Probe RELIANCE quote</button>
+        <button class="btn btn-sm" id="universeProbe">📋 Probe universe</button>
+      </div>
+      <p class="muted" id="probeInfo" aria-live="polite"></p>
+    </section>
+
     <section class="card" aria-labelledby="telegramHeading">
       <h2 id="telegramHeading">Telegram bot</h2>
       <p><span class="pill" id="tgPill">checking…</span></p>
@@ -30,6 +41,23 @@
       <h2 id="watchlistHeading">Watchlist</h2>
       <p><span class="pill" id="wlPill">checking…</span></p>
       <p class="muted" id="wlInfo">—</p>
+    </section>
+
+    <section class="card" aria-labelledby="apiHeading">
+      <h2 id="apiHeading">API endpoints</h2>
+      <p class="muted">Every tab's data source — click to verify it returns JSON:</p>
+      <div class="pill-row">
+        <a class="pill" href="/api/status">status</a>
+        <a class="pill" href="/api/universe?universe=nifty500">universe</a>
+        <a class="pill" href="/api/quote?symbol=RELIANCE">quote</a>
+        <a class="pill" href="/api/history?symbol=RELIANCE">history</a>
+        <a class="pill" href="/api/news?symbol=RELIANCE">news</a>
+        <a class="pill" href="/api/search?q=reliance">search</a>
+        <a class="pill" href="/api/screener?limit=3">screener</a>
+        <a class="pill" href="/api/fundamentals?symbol=RELIANCE">fundamentals</a>
+        <a class="pill" href="/api/corporate_actions?symbol=RELIANCE">actions</a>
+        <a class="pill" href="/health">health</a>
+      </div>
     </section>
   </div>
 {% endblock %}
@@ -52,10 +80,12 @@
           var data = await res.json();
           setPill('dashPill', 'Running', 'pill-ok');
           document.getElementById('dashInfo').textContent =
-            'App version ' + esc(data.version || '—') + ' · screener universe: ' + esc(data.universe || 'nifty500');
+            'App version ' + (data.version || '—') + ' · screener universe: ' + (data.universe || 'nifty500');
           var open = !!data.market_open;
           setPill('marketPill', open ? 'Open' : 'Closed', open ? 'pill-ok' : 'pill-bad');
           document.getElementById('marketInfo').textContent = data.market_text || '';
+          var freeOk = data.free_api_ok;
+          setPill('freePill', freeOk == null ? 'Unknown' : (freeOk ? 'Live' : 'Unreachable'), freeOk ? 'pill-ok' : (freeOk === false ? 'pill-bad' : 'pill-warn'));
           setPill('tgPill', data.telegram_configured ? 'Configured' : 'Not configured', data.telegram_configured ? 'pill-ok' : 'pill-warn');
           setPill('wlPill', data.watchlist_count + ' stocks', 'pill-ok');
           var names = (data.watchlist_preview || []).slice(0, 6).join(', ');
@@ -78,6 +108,29 @@
         } finally {
           this.disabled = false;
         }
+      });
+
+      document.getElementById('quoteProbe').addEventListener('click', async function () {
+        var info = document.getElementById('probeInfo');
+        info.textContent = 'Probing quote…';
+        try {
+          var res = await fetch('/api/quote?symbol=RELIANCE');
+          var data = await res.json();
+          var q = data.quote || {};
+          info.textContent = q.price != null
+            ? 'RELIANCE ₹' + q.price + ' (' + (q.source || '?') + ', ' + (q.change_pct != null ? q.change_pct.toFixed(2) + '%' : 'n/a') + ')'
+            : 'Quote returned no price (source: ' + (q.source || 'none') + ')';
+        } catch (err) { info.textContent = 'Probe failed: ' + err.message; }
+      });
+
+      document.getElementById('universeProbe').addEventListener('click', async function () {
+        var info = document.getElementById('probeInfo');
+        info.textContent = 'Probing universe…';
+        try {
+          var res = await fetch('/api/universe?universe=nifty500');
+          var data = await res.json();
+          info.textContent = (data.count || 0) + ' symbols in ' + (data.universe || 'nifty500');
+        } catch (err) { info.textContent = 'Probe failed: ' + err.message; }
       });
 
       loadAll();

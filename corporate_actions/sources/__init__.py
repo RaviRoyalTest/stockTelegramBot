@@ -9,6 +9,13 @@ callers can `from corporate_actions.sources import get_quote` (or
 from .bse import get_bse_corporate_actions, get_bse_stock_list
 from .errors import SourceError
 from .fundamentals import FUND_MAX_ROWS, get_fundamentals, get_fundamentals_async
+from .free_api import (
+    get_best_quote,
+    get_nse_quote,
+    get_stooq_history,
+    get_stooq_quote,
+    normalise_fundamentals,
+)
 from .us_fundamentals import get_us_fundamentals
 from .us_search import search_us_tickers
 from .news import get_stock_news
@@ -89,6 +96,11 @@ __all__ = [
     "parse_screener_fundamentals",
     "get_fundamentals",
     "get_fundamentals_async",
+    "get_best_quote",
+    "get_nse_quote",
+    "get_stooq_quote",
+    "get_stooq_history",
+    "normalise_fundamentals",
     "get_quote_async",
     "get_nse_stock_list_async",
     "get_nse_corporate_actions_async",

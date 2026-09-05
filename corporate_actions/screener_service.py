@@ -57,24 +57,39 @@ def _build_row(symbol: str) -> dict:
         return sources.get_fundamentals(symbol, with_screener=True) or {}
 
     def fetch_quote():
-        return sources.get_quote("NSE", symbol) or sources.get_quote("BSE", symbol) or {}
+        try:
+            return sources.get_best_quote("NSE", symbol) or {}
+        except Exception:
+            return sources.get_quote("NSE", symbol) or sources.get_quote("BSE", symbol) or {}
 
     fund = _fetch_with_retry(fetch_fund)
     quote = _fetch_with_retry(fetch_quote)
+    try:
+        fund = sources.normalise_fundamentals(symbol, dict(fund or {}), quote or {})
+    except Exception:
+        pass
+    price = _safe_float(quote.get("price") if quote.get("price") is not None else fund.get("price"))
     return {
         "symbol": symbol,
-        "company": fund.get("company") or fund.get("name") or symbol,
+        "company": fund.get("company") or fund.get("name") or quote.get("name") or symbol,
         "exchange": "NSE",
         "pe": _safe_float(fund.get("pe")),
         "roe": _safe_float(fund.get("roe")),
+        "roce": _safe_float(fund.get("roce")),
         "debt_to_equity": _safe_float(fund.get("debt_to_equity")),
-        "market_cap": _safe_float(fund.get("market_cap")),
-        "price": _safe_float(quote.get("price")),
+        "div_yield": _safe_float(fund.get("div_yield")),
+        "market_cap": _safe_float(fund.get("market_cap") if fund.get("market_cap") is not None else fund.get("mcap_cr")),
+        "price": price,
         "change_pct": _safe_float(quote.get("change_pct")),
-        "rsi14": _safe_float(fund.get("rsi14")),
+        "rsi14": _safe_float(fund.get("rsi14") if fund.get("rsi14") is not None else fund.get("rsi")),
         "macd_bull": bool(fund.get("macd_bull")),
-        "above_ema200": bool(fund.get("above_ema200")),
+        "above_ema200": bool(fund.get("above_ema200") if fund.get("above_ema200") is not None else fund.get("above_sma200")),
         "sector": fund.get("sector") or fund.get("industry") or None,
+        "sector_pe": _safe_float(fund.get("sector_pe")),
+        "wk52_high": _safe_float(fund.get("wk52_high")),
+        "wk52_low": _safe_float(fund.get("wk52_low")),
+        "sma_50": _safe_float(fund.get("sma_50")),
+        "sma_200": _safe_float(fund.get("sma_200")),
     }
 
 
@@ -156,6 +171,11 @@ async def _build_row_async(symbol: str) -> dict:
     try:
         # call async quote if source provides it, with timeout
         def fetch_quote():
+            try:
+                if hasattr(sources, "get_best_quote"):
+                    return sources.get_best_quote("NSE", symbol) or {}
+            except Exception:
+                pass
             return sources.get_quote("NSE", symbol) or sources.get_quote("BSE", symbol) or {}
 
         if hasattr(sources, "get_quote_async"):
@@ -171,20 +191,34 @@ async def _build_row_async(symbol: str) -> dict:
             quote = await _fetch_with_retry_async(fetch_quote)
     except Exception:
         quote = {}
+    try:
+        fund = sources.normalise_fundamentals(symbol, dict(fund or {}), quote or {})
+    except Exception:
+        pass
+    price = _safe_float(quote.get("price") if (quote or {}).get("price") is not None else (fund or {}).get("price"))
+    fund = fund or {}
+    quote = quote or {}
     return {
         "symbol": symbol,
-        "company": fund.get("company") or fund.get("name") or symbol,
+        "company": fund.get("company") or fund.get("name") or quote.get("name") or symbol,
         "exchange": "NSE",
         "pe": _safe_float(fund.get("pe")),
         "roe": _safe_float(fund.get("roe")),
+        "roce": _safe_float(fund.get("roce")),
         "debt_to_equity": _safe_float(fund.get("debt_to_equity")),
-        "market_cap": _safe_float(fund.get("market_cap")),
-        "price": _safe_float(quote.get("price")),
+        "div_yield": _safe_float(fund.get("div_yield")),
+        "market_cap": _safe_float(fund.get("market_cap") if fund.get("market_cap") is not None else fund.get("mcap_cr")),
+        "price": price,
         "change_pct": _safe_float(quote.get("change_pct")),
-        "rsi14": _safe_float(fund.get("rsi14")),
+        "rsi14": _safe_float(fund.get("rsi14") if fund.get("rsi14") is not None else fund.get("rsi")),
         "macd_bull": bool(fund.get("macd_bull")),
-        "above_ema200": bool(fund.get("above_ema200")),
+        "above_ema200": bool(fund.get("above_ema200") if fund.get("above_ema200") is not None else fund.get("above_sma200")),
         "sector": fund.get("sector") or fund.get("industry") or None,
+        "sector_pe": _safe_float(fund.get("sector_pe")),
+        "wk52_high": _safe_float(fund.get("wk52_high")),
+        "wk52_low": _safe_float(fund.get("wk52_low")),
+        "sma_50": _safe_float(fund.get("sma_50")),
+        "sma_200": _safe_float(fund.get("sma_200")),
     }
 
 
@@ -241,7 +275,9 @@ def _apply_filters(rows: list[dict], filters: dict[str, Any]) -> list[dict]:
     for r in rows:
         pe = _safe_float(r.get("pe"))
         roe = _safe_float(r.get("roe"))
+        roce = _safe_float(r.get("roce"))
         debt = _safe_float(r.get("debt_to_equity"))
+        div_yield = _safe_float(r.get("div_yield"))
         market_cap = _safe_float(r.get("market_cap"))
         price = _safe_float(r.get("price"))
         rsi = _safe_float(r.get("rsi14"))
@@ -255,6 +291,10 @@ def _apply_filters(rows: list[dict], filters: dict[str, Any]) -> list[dict]:
         if filters.get("roe_min") is not None and (roe is None or roe < float(filters["roe_min"])):
             continue
         if filters.get("roe_max") is not None and (roe is None or roe > float(filters["roe_max"])):
+            continue
+        if filters.get("roce_min") is not None and (roce is None or roce < float(filters["roce_min"])):
+            continue
+        if filters.get("div_yield_min") is not None and (div_yield is None or div_yield < float(filters["div_yield_min"])):
             continue
         if filters.get("debt_to_equity_max") is not None and (debt is None or debt > float(filters["debt_to_equity_max"])):
             continue
@@ -284,7 +324,8 @@ def _apply_filters(rows: list[dict], filters: dict[str, Any]) -> list[dict]:
 
         if filters.get("exchange") and (r.get("exchange") or "").upper() != str(filters.get("exchange")).upper():
             continue
-        if filters.get("sector") and (r.get("sector") or "").lower() != str(filters.get("sector")).lower():
+        sector_filter = (filters.get("sector") or "").strip()
+        if sector_filter and sector_filter.lower() not in (r.get("sector") or "").lower():
             continue
         name_contains = filters.get("name_contains")
         if name_contains and name_contains.lower() not in (r.get("company") or "").lower():
@@ -302,12 +343,18 @@ def _sort_rows(rows: list[dict], sort_key: str, ascending: bool) -> list[dict]:
         return rows
     key_map = {
         "symbol": lambda r: (r.get("symbol") or "").upper(),
+        "company": lambda r: (r.get("company") or "").upper(),
         "market_cap": lambda r: float(r.get("market_cap") or 0.0),
         "pe": lambda r: float(r.get("pe") or 999999),
         "roe": lambda r: float(r.get("roe") or -999999),
+        "roce": lambda r: float(r.get("roce") or -999999),
+        "div_yield": lambda r: float(r.get("div_yield") if r.get("div_yield") is not None else -999999),
+        "debt_to_equity": lambda r: float(r.get("debt_to_equity") if r.get("debt_to_equity") is not None else 999999),
         "rsi": lambda r: float(r.get("rsi14") or 0.0),
+        "rsi14": lambda r: float(r.get("rsi14") or 0.0),
         "change_pct": lambda r: float(r.get("change_pct") or 0.0),
         "price": lambda r: float(r.get("price") or 0.0),
+        "sector": lambda r: (r.get("sector") or "").upper(),
     }
     return sorted(rows, key=key_map.get(sort_key, key_map["market_cap"]), reverse=not ascending)
 
@@ -315,12 +362,18 @@ def _sort_rows(rows: list[dict], sort_key: str, ascending: bool) -> list[dict]:
 def _get_sort_key_func(sort_key: str):
     key_map = {
         "symbol": lambda r: (r.get("symbol") or "").upper(),
+        "company": lambda r: (r.get("company") or "").upper(),
         "market_cap": lambda r: float(r.get("market_cap") or 0.0),
         "pe": lambda r: float(r.get("pe") or 999999),
         "roe": lambda r: float(r.get("roe") or -999999),
+        "roce": lambda r: float(r.get("roce") or -999999),
+        "div_yield": lambda r: float(r.get("div_yield") if r.get("div_yield") is not None else -999999),
+        "debt_to_equity": lambda r: float(r.get("debt_to_equity") if r.get("debt_to_equity") is not None else 999999),
         "rsi": lambda r: float(r.get("rsi14") or 0.0),
+        "rsi14": lambda r: float(r.get("rsi14") or 0.0),
         "change_pct": lambda r: float(r.get("change_pct") or 0.0),
         "price": lambda r: float(r.get("price") or 0.0),
+        "sector": lambda r: (r.get("sector") or "").upper(),
     }
     return key_map.get(sort_key, key_map["market_cap"])
 

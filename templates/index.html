@@ -3,7 +3,7 @@
 {% block content %}
   <div class="page-header">
     <h1>Dashboard</h1>
-    <p class="sub">Live overview of your watchlist, screener and alert engine.</p>
+    <p class="sub">Live overview of your watchlist, screener and alert engine — all powered by free data sources.</p>
   </div>
 
   <div class="grid grid-4">
@@ -20,17 +20,18 @@
       <div class="value" id="telegramStat">…</div>
     </div>
     <div class="card stat">
-      <div class="label">Sources</div>
-      <div class="value" id="sourcesStat">NSE/BSE</div>
+      <div class="label">Free data API</div>
+      <div class="value" id="freeApiStat">…</div>
     </div>
   </div>
 
   <section class="card section" aria-labelledby="quickActionsHeading">
     <h2 id="quickActionsHeading">Quick actions</h2>
     <div class="form-row">
-      <button class="btn btn-primary" id="runScreener">▶️ Run screener</button>
+      <a class="btn btn-primary" href="/market">▶️ Run screener</a>
+      <a class="btn" href="/fundamentals">💹 Stock report</a>
+      <a class="btn" href="/watchlist">📌 Watchlist</a>
       <button class="btn" id="refreshPrices">🔄 Refresh prices</button>
-      <button class="btn" id="checkNow">🔍 Check now</button>
       <button class="btn" id="loadUniverse">📋 Load stock list</button>
       <button class="btn" id="sendTest">📨 Send test message</button>
       <span class="pill" id="loadStatus" hidden aria-live="polite"></span>
@@ -41,6 +42,13 @@
     <div style="display:flex; justify-content:space-between; align-items:center; gap:12px; flex-wrap:wrap;">
       <h2 id="topStocksHeading" style="margin-bottom:0;">Top stocks</h2>
       <div class="form-row" style="align-items:center;">
+        <label class="visually-hidden" for="universe">Universe</label>
+        <select id="universe" aria-label="Universe">
+          <option value="nifty500" selected>NIFTY 500</option>
+          <option value="nifty100">NIFTY 100</option>
+          <option value="nasdaq100">NASDAQ 100</option>
+          <option value="sp500">S&amp;P 500</option>
+        </select>
         <label class="visually-hidden" for="search">Search symbol or company</label>
         <input id="search" type="search" placeholder="Search symbol or company" autocomplete="off" />
         <label class="visually-hidden" for="limit">Number of results</label>
@@ -55,10 +63,10 @@
       <table>
         <caption class="visually-hidden">Top stocks by market capitalisation</caption>
         <thead>
-          <tr><th scope="col">Symbol</th><th scope="col">Company</th><th scope="col" class="num">Price</th><th scope="col" class="num">P/E</th><th scope="col" class="num">ROE</th></tr>
+          <tr><th scope="col">Symbol</th><th scope="col">Company</th><th scope="col">Sector</th><th scope="col" class="num">Price</th><th scope="col" class="num">% Chg</th><th scope="col" class="num">P/E</th><th scope="col" class="num">ROE</th><th scope="col" class="num">RSI</th></tr>
         </thead>
         <tbody id="stockRows">
-          <tr><td colspan="5" class="empty"><span class="skeleton" style="display:block;width:100%"></span></td></tr>
+          <tr><td colspan="8" class="empty"><span class="skeleton" style="display:block;width:100%"></span></td></tr>
         </tbody>
       </table>
     </div>
@@ -73,7 +81,7 @@
 
       function buildQueryParams() {
         var params = new URLSearchParams();
-        params.set('universe', 'nifty500');
+        params.set('universe', document.getElementById('universe').value || 'nifty500');
         params.set('sort', 'market_cap');
         params.set('ascending', 'false');
         params.set('limit', document.getElementById('limit').value || '50');
@@ -83,24 +91,29 @@
       async function loadData() {
         var tbody = document.getElementById('stockRows');
         try {
-          tbody.innerHTML = '<tr><td colspan="5" class="empty"><span class="skeleton" style="display:block;width:100%"></span></td></tr>';
+          tbody.innerHTML = '<tr><td colspan="8" class="empty"><span class="skeleton" style="display:block;width:100%"></span></td></tr>';
           var res = await fetch('/api/screener?' + buildQueryParams());
           if (!res.ok) throw new Error('API ' + res.status);
           var rows = await res.json();
           if (!Array.isArray(rows)) throw new Error('unexpected API response');
           tbody.innerHTML = rows.length ? rows.map(function (r) {
+            var chg = r.change_pct;
+            var chgClass = chg == null ? '' : (Number(chg) >= 0 ? 'pos' : 'neg');
             return '<tr>' +
               '<td><a href="/fundamentals?symbol=' + encodeURIComponent(r.symbol || '') + '"><strong>' + esc(r.symbol) + '</strong></a></td>' +
               '<td>' + esc(r.company || '-') + '</td>' +
+              '<td>' + esc(r.sector || '−') + '</td>' +
               '<td class="num">' + (r.price != null ? '₹' + fmtNum(r.price) : '−') + '</td>' +
+              '<td class="num ' + chgClass + '">' + RS.fmtPct(chg) + '</td>' +
               '<td class="num">' + fmtNum(r.pe) + '</td>' +
               '<td class="num">' + fmtNum(r.roe) + '</td>' +
+              '<td class="num">' + fmtNum(r.rsi14, 1) + '</td>' +
             '</tr>';
-          }).join('') : '<tr><td colspan="5" class="empty">No results.</td></tr>';
+          }).join('') : '<tr><td colspan="8" class="empty">No results.</td></tr>';
           applySearchFilter();
         } catch (err) {
           console.error('loadData failed:', err);
-          tbody.innerHTML = '<tr><td colspan="5" class="empty">Unable to load screener data. Please try again.</td></tr>';
+          tbody.innerHTML = '<tr><td colspan="8" class="empty">Unable to load screener data. Please try again.</td></tr>';
           RS.toast('Could not load screener data: ' + err.message, 'err');
         }
       }
@@ -125,8 +138,12 @@
           var tgEl = document.getElementById('telegramStat');
           tgEl.textContent = data.telegram_configured ? 'Configured' : 'Not set up';
           tgEl.className = 'value ' + (data.telegram_configured ? 'pos' : 'neg');
-          var sourcesEl = document.getElementById('sourcesStat');
-          if (sourcesEl) sourcesEl.textContent = data.sources || 'NSE/BSE';
+          var freeEl = document.getElementById('freeApiStat');
+          if (freeEl) {
+            var ok = data.free_api_ok;
+            freeEl.textContent = ok == null ? 'Unknown' : (ok ? 'Live' : 'Down');
+            freeEl.className = 'value ' + (ok ? 'pos' : (ok === false ? 'neg' : ''));
+          }
         } catch (err) { /* stats are best-effort */ }
       }
 
@@ -137,10 +154,15 @@
         setTimeout(function () { statusEl.hidden = true; }, 2500);
       }
 
-      document.getElementById('runScreener').addEventListener('click', loadData);
-      document.getElementById('refreshPrices').addEventListener('click', function () { flash('Refreshing prices…'); loadData(); });
-      document.getElementById('checkNow').addEventListener('click', function () { flash('Checking now…'); loadData(); });
-      document.getElementById('loadUniverse').addEventListener('click', function () { flash('Stock list refreshed'); });
+      document.getElementById('refreshPrices').addEventListener('click', function () { flash('Refreshing prices…'); loadData(); loadStats(); });
+      document.getElementById('loadUniverse').addEventListener('click', async function () {
+        try {
+          var u = document.getElementById('universe').value || 'nifty500';
+          var res = await fetch('/api/universe?universe=' + encodeURIComponent(u));
+          var data = await res.json();
+          flash((data.count || 0) + ' symbols in ' + u);
+        } catch (e) { flash('Could not load universe'); }
+      });
       document.getElementById('sendTest').addEventListener('click', async function () {
         this.disabled = true;
         try {
@@ -156,6 +178,7 @@
       });
       document.getElementById('search').addEventListener('input', applySearchFilter);
       document.getElementById('limit').addEventListener('change', loadData);
+      document.getElementById('universe').addEventListener('change', loadData);
 
       loadData();
       loadStats();

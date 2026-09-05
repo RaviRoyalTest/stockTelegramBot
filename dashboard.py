@@ -217,8 +217,36 @@ async def read_index(request: Request):
 
 
 @app.get("/api/watchlist")
-async def api_watchlist():
-    return JSONResponse(storage.load_watchlist())
+async def api_watchlist(enrich: bool = Query(False)):
+    items = storage.load_watchlist()
+    if not enrich:
+        return JSONResponse(items)
+    # Enriched mode: attach live price/change so the Watchlist tab shows
+    # live values without N extra round-trips from the browser.
+    enriched: list[dict] = []
+    for item in items:
+        symbol = str(item.get("symbol") or "").strip().upper()
+        exchange = str(item.get("exchange") or "NSE").upper()
+        row = dict(item)
+        try:
+            quote = await asyncio.to_thread(sources.get_best_quote, exchange, symbol)
+        except Exception:
+            quote = None
+        try:
+            if not quote:
+                quote = await asyncio.to_thread(
+                    lambda s=symbol, e=exchange: sources.get_quote(e, s)
+                    or sources.get_quote("BSE" if e == "NSE" else "NSE", s) or {}
+                )
+        except Exception:
+            quote = quote or {}
+        quote = quote or {}
+        row["price"] = quote.get("price")
+        row["change_pct"] = quote.get("change_pct")
+        row["prev_close"] = quote.get("prev_close")
+        row["quote_source"] = quote.get("source") or "none"
+        enriched.append(row)
+    return JSONResponse(enriched)
 
 
 @app.post("/api/watchlist")
@@ -260,6 +288,8 @@ async def api_screener(
     pe_max: float | None = Query(None),
     roe_min: float | None = Query(None),
     roe_max: float | None = Query(None),
+    roce_min: float | None = Query(None),
+    div_yield_min: float | None = Query(None),
     debt_max: float | None = Query(None),
     market_cap_min: float | None = Query(None),
     market_cap_max: float | None = Query(None),
@@ -285,6 +315,8 @@ async def api_screener(
         "pe_max": pe_max,
         "roe_min": roe_min,
         "roe_max": roe_max,
+        "roce_min": roce_min,
+        "div_yield_min": div_yield_min,
         "debt_to_equity_max": debt_max,
         "market_cap_min": market_cap_min,
         "market_cap_max": market_cap_max,
@@ -327,6 +359,8 @@ async def api_screener_csv(
     pe_max: float | None = Query(None),
     roe_min: float | None = Query(None),
     roe_max: float | None = Query(None),
+    roce_min: float | None = Query(None),
+    div_yield_min: float | None = Query(None),
     debt_max: float | None = Query(None),
     market_cap_min: float | None = Query(None),
     market_cap_max: float | None = Query(None),
@@ -352,6 +386,8 @@ async def api_screener_csv(
         "pe_max": pe_max,
         "roe_min": roe_min,
         "roe_max": roe_max,
+        "roce_min": roce_min,
+        "div_yield_min": div_yield_min,
         "debt_to_equity_max": debt_max,
         "market_cap_min": market_cap_min,
         "market_cap_max": market_cap_max,
@@ -386,7 +422,9 @@ async def api_screener_csv(
     import csv
     import io
 
-    cols = ["symbol", "company", "price", "change_pct", "pe", "roe", "market_cap", "rsi14"]
+    cols = ["symbol", "company", "sector", "price", "change_pct", "pe", "roe", "roce",
+            "debt_to_equity", "div_yield", "market_cap", "sector_pe", "rsi14",
+            "macd_bull", "above_ema200", "wk52_high", "wk52_low"]
 
     def gen():
         out = io.StringIO()
@@ -409,6 +447,105 @@ async def health():
     return JSONResponse({"status": "ok"})
 
 
+@app.get("/api/quote")
+async def api_quote(symbol: str | None = Query(None), exchange: str = Query("NSE")):
+    """Best-effort live quote from free sources (Yahoo -> NSE -> Stooq).
+
+    Always returns 200 with a `source` field ('yahoo'|'nse'|'stooq'|'none')
+    so the UI can badge where the price came from instead of blanking.
+    """
+    if not symbol:
+        raise HTTPException(status_code=400, detail="symbol is required")
+    key = symbol.strip().upper().removesuffix(".NS").removesuffix(".BO")
+    ex = (exchange or "NSE").strip().upper()
+    try:
+        quote = await asyncio.to_thread(sources.get_best_quote, ex, key)
+        return JSONResponse({"symbol": key, "exchange": ex, "quote": quote or {"source": "none"}})
+    except Exception as exc:
+        raise HTTPException(status_code=500, detail=str(exc))
+
+
+@app.get("/api/history")
+async def api_history(
+    symbol: str | None = Query(None),
+    exchange: str = Query("NSE"),
+    timeframe: str = Query("1d"),
+):
+    """OHLC history for the fundamentals price chart (Yahoo -> Stooq).
+
+    Returns {'symbol','bars': {timestamp,open,high,low,close,volume,...},
+    'source'} with at most ~260 daily bars, downsampled server-side when the
+    full 1y series would bloat the response.
+    """
+    if not symbol:
+        raise HTTPException(status_code=400, detail="symbol is required")
+    key = symbol.strip().upper().removesuffix(".NS").removesuffix(".BO")
+    ex = (exchange or "NSE").strip().upper()
+    tf = (timeframe or "1d").strip().lower()
+    if tf not in ("1d", "1w", "1mo"):
+        tf = "1d"
+    try:
+        bars = await asyncio.to_thread(sources.get_ohlc, ex, key, tf)
+        source = "yahoo"
+        if not bars or not bars.get("close"):
+            try:
+                bars = await asyncio.to_thread(sources.get_stooq_history, key, ex)
+                source = "stooq"
+            except Exception:
+                bars = None
+        if not bars:
+            return JSONResponse({"symbol": key, "bars": None, "source": "none"})
+        # Downsample to <= 160 points so the canvas chart stays fast.
+        closes = bars.get("close") or []
+        if len(closes) > 160:
+            step = max(1, len(closes) // 160)
+            for field in ("timestamp", "open", "high", "low", "close", "volume"):
+                values = bars.get(field) or []
+                bars[field] = values[::step]
+        bars["source"] = bars.get("source") or source
+        return JSONResponse({"symbol": key, "bars": bars, "source": bars.get("source")})
+    except Exception as exc:
+        raise HTTPException(status_code=500, detail=str(exc))
+
+
+@app.get("/api/news")
+async def api_news(symbol: str | None = Query(None), limit: int = Query(5, ge=1, le=20)):
+    """Latest headlines for a symbol (Google News RSS -> Yahoo fallback)."""
+    if not symbol:
+        raise HTTPException(status_code=400, detail="symbol is required")
+    key = symbol.strip().upper().removesuffix(".NS").removesuffix(".BO")
+    try:
+        items = await asyncio.to_thread(sources.get_stock_news, "NSE", key, limit)
+        return JSONResponse({"symbol": key, "news": items or []})
+    except Exception as exc:
+        raise HTTPException(status_code=500, detail=str(exc))
+
+
+@app.get("/api/search")
+async def api_search(q: str | None = Query(None), market: str = Query("in"), limit: int = Query(8, ge=1, le=20)):
+    """Symbol autocomplete backed by NSE search + Yahoo provider fallback."""
+    term = (q or "").strip()
+    if not term:
+        return JSONResponse({"results": []})
+    try:
+        results = await asyncio.to_thread(
+            sources.search_market_data, term, {"market": market, "limit": limit}, limit
+        )
+        return JSONResponse({"results": results or []})
+    except Exception as exc:
+        raise HTTPException(status_code=500, detail=str(exc))
+
+
+@app.get("/api/universe")
+async def api_universe(universe: str = Query("nifty500")):
+    """Index constituent symbols (NIFTY 500 / NIFTY 100 / NASDAQ 100 / S&P 500)."""
+    try:
+        symbols = await asyncio.to_thread(sources.get_index_universe, universe)
+        return JSONResponse({"universe": universe, "count": len(symbols or []), "symbols": symbols or []})
+    except Exception as exc:
+        raise HTTPException(status_code=500, detail=str(exc))
+
+
 @app.get("/api/fundamentals")
 async def api_fundamentals(symbol: str | None = Query(None), refresh: bool = Query(False)):
     """Deep fundamentals for one symbol — the same dataset the Telegram bot's
@@ -425,14 +562,27 @@ async def api_fundamentals(symbol: str | None = Query(None), refresh: bool = Que
             try:
                 from corporate_actions.sources import fundamentals as fund_source
                 fund_source._fund_cache.pop((key, True), None)
+                fund_source._fund_cache.pop((key, False), None)
                 log.info("/api/fundamentals: cache cleared for %s (refresh=1)", key)
             except Exception:
                 pass
         fund = await asyncio.to_thread(sources.get_fundamentals, key, True) or {}
-        quote = await asyncio.to_thread(
-            lambda: sources.get_quote("NSE", key) or sources.get_quote("BSE", key) or {}
-        )
-        return JSONResponse({"symbol": key, "fund": fund, "quote": quote})
+        try:
+            quote = await asyncio.to_thread(sources.get_best_quote, "NSE", key)
+        except Exception:
+            quote = None
+        if not quote or quote.get("price") is None:
+            try:
+                quote = await asyncio.to_thread(
+                    lambda: sources.get_quote("NSE", key) or sources.get_quote("BSE", key) or {}
+                )
+            except Exception:
+                quote = quote or {}
+        try:
+            fund = sources.normalise_fundamentals(key, dict(fund or {}), quote or {})
+        except Exception:
+            pass
+        return JSONResponse({"symbol": key, "fund": fund, "quote": quote or {}})
     except Exception as e:
         log.exception("/api/fundamentals failed: %s", e)
         raise HTTPException(status_code=500, detail=str(e))
@@ -443,8 +593,16 @@ async def api_fundamentals_csv(symbol: str | None = Query(None)):
     if not symbol:
         raise HTTPException(status_code=400, detail="symbol is required")
     try:
-        fund = sources.get_fundamentals(symbol, with_screener=True) or {}
-        quote = sources.get_quote("NSE", symbol) or sources.get_quote("BSE", symbol) or {}
+        key = (symbol or "").strip().upper().removesuffix(".NS").removesuffix(".BO")
+        fund = sources.get_fundamentals(key, with_screener=True) or {}
+        try:
+            quote = sources.get_best_quote("NSE", key) or {}
+        except Exception:
+            quote = sources.get_quote("NSE", key) or sources.get_quote("BSE", key) or {}
+        try:
+            fund = sources.normalise_fundamentals(key, dict(fund or {}), quote or {})
+        except Exception:
+            pass
         import csv, io
         si = io.StringIO()
         writer = csv.writer(si)
@@ -452,7 +610,7 @@ async def api_fundamentals_csv(symbol: str | None = Query(None)):
             k: v for k, v in fund.items() if not isinstance(v, (dict, list))
         }
         writer.writerow(["field", "value"])
-        writer.writerow(["symbol", symbol])
+        writer.writerow(["symbol", key])
         writer.writerow(["company", quote.get("name") or fund.get("company") or fund.get("name") or ""])
         writer.writerow(["price", quote.get("price", "")])
         for k in sorted(flat):
@@ -551,6 +709,14 @@ async def api_status():
     items = storage.load_watchlist()
     open_now = market_hours.is_market_open("in")
     info = market_hours.MARKETS.get("in", {})
+    # Lightweight free-API health: one cheap Stooq fetch so System tab can
+    # show whether live quotes are reachable without hammering Yahoo.
+    free_api_ok: bool | None = None
+    try:
+        probe = await asyncio.to_thread(sources.get_stooq_quote, "RELIANCE", "NSE")
+        free_api_ok = bool(probe and probe.get("price"))
+    except Exception:
+        free_api_ok = False
     return JSONResponse({
         "version": app.version,
         "watchlist_count": len(items),
@@ -558,7 +724,8 @@ async def api_status():
         "market_open": open_now,
         "market_text": f"{info.get('label', 'India')} \u00b7 {info.get('open', '09:15')}\u2013{info.get('close', '15:30')} IST",
         "telegram_configured": telegram_client.is_configured(),
-        "sources": "NSE / BSE / Yahoo",
+        "sources": "Yahoo · NSE · Stooq · screener.in",
+        "free_api_ok": free_api_ok,
         "universe": "nifty500",
     })
 

@@ -3,7 +3,7 @@
 {% block content %}
   <div class="page-header">
     <h1>Watchlist</h1>
-    <p class="sub">Stocks the alert engine watches. Changes here apply to the Telegram bot too.</p>
+    <p class="sub">Stocks the alert engine watches — now with live prices from free sources. Changes here apply to the Telegram bot too.</p>
   </div>
 
   <section class="card" aria-labelledby="addHeading">
@@ -11,7 +11,8 @@
     <form id="addForm" class="form-row">
       <div class="field">
         <label for="symbol">Symbol (NSE)</label>
-        <input id="symbol" name="symbol" required placeholder="e.g. RELIANCE" autocomplete="off" style="text-transform:uppercase" />
+        <input id="symbol" name="symbol" required placeholder="e.g. RELIANCE" autocomplete="off" style="text-transform:uppercase" list="symbolList" />
+        <datalist id="symbolList"></datalist>
       </div>
       <div class="field">
         <label for="company">Company name <span class="muted">(optional)</span></label>
@@ -19,6 +20,7 @@
       </div>
       <button class="btn btn-primary" type="submit">➕ Add to watchlist</button>
       <a class="btn" href="/api/watchlist.csv">⬇️ Download CSV</a>
+      <button class="btn" type="button" id="refreshBtn">🔄 Refresh prices</button>
     </form>
   </section>
 
@@ -32,12 +34,12 @@
     </div>
     <div class="table-scroll" style="margin-top:12px;">
       <table>
-        <caption class="visually-hidden">Watchlist stocks</caption>
+        <caption class="visually-hidden">Watchlist stocks with live prices</caption>
         <thead>
-          <tr><th scope="col">Symbol</th><th scope="col">Company</th><th scope="col">Exchange</th><th scope="col" class="num">Actions</th></tr>
+          <tr><th scope="col">Symbol</th><th scope="col">Company</th><th scope="col">Exchange</th><th scope="col" class="num">Price</th><th scope="col" class="num">% Chg</th><th scope="col">Source</th><th scope="col" class="num">Actions</th></tr>
         </thead>
         <tbody id="wlRows">
-          <tr><td colspan="4" class="empty"><span class="skeleton" style="display:block;width:100%"></span></td></tr>
+          <tr><td colspan="7" class="empty"><span class="skeleton" style="display:block;width:100%"></span></td></tr>
         </tbody>
       </table>
     </div>
@@ -50,32 +52,38 @@
       'use strict';
       var esc = RS.escapeHtml;
 
-      async function load() {
+      async function load(enriched) {
         var tbody = document.getElementById('wlRows');
         try {
-          var res = await fetch('/api/watchlist');
+          if (enriched) tbody.innerHTML = '<tr><td colspan="7" class="empty"><span class="skeleton" style="display:block;width:100%"></span></td></tr>';
+          var res = await fetch('/api/watchlist' + (enriched === false ? '' : '?enrich=1'));
           if (!res.ok) throw new Error('API ' + res.status);
           var items = await res.json();
           if (!Array.isArray(items)) throw new Error('unexpected response');
           document.getElementById('wlCount').textContent = String(items.length);
           if (!items.length) {
-            tbody.innerHTML = '<tr><td colspan="4" class="empty">Watchlist is empty — add your first stock above.</td></tr>';
+            tbody.innerHTML = '<tr><td colspan="7" class="empty">Watchlist is empty — add your first stock above.</td></tr>';
             return;
           }
           tbody.innerHTML = items.map(function (item) {
             var sym = String(item.symbol || '');
             var ex = String(item.exchange || 'NSE');
+            var chg = item.change_pct;
+            var chgClass = chg == null ? '' : (Number(chg) >= 0 ? 'pos' : 'neg');
             return '<tr>' +
               '<td><a href="/fundamentals?symbol=' + encodeURIComponent(sym) + '"><strong>' + esc(sym) + '</strong></a></td>' +
               '<td>' + esc(item.company || '−') + '</td>' +
               '<td><span class="pill">' + esc(ex) + '</span></td>' +
+              '<td class="num">' + (item.price != null ? '₹' + RS.fmtNum(item.price) : '−') + '</td>' +
+              '<td class="num ' + chgClass + '">' + RS.fmtPct(chg) + '</td>' +
+              '<td><span class="muted">' + esc(item.quote_source || '') + '</span></td>' +
               '<td class="num"><button class="btn btn-danger btn-sm" ' +
                 'data-sym="' + esc(sym) + '" data-ex="' + esc(ex) + '">Remove</button></td>' +
             '</tr>';
           }).join('');
           applyFilter();
         } catch (err) {
-          tbody.innerHTML = '<tr><td colspan="4" class="empty">Unable to load the watchlist.</td></tr>';
+          tbody.innerHTML = '<tr><td colspan="7" class="empty">Unable to load the watchlist.</td></tr>';
           RS.toast('Could not load watchlist: ' + err.message, 'err');
         }
       }
@@ -87,11 +95,27 @@
         });
       }
 
+      var searchTimer = null;
+      document.getElementById('symbol').addEventListener('input', function () {
+        var term = this.value.trim();
+        clearTimeout(searchTimer);
+        if (term.length < 2) return;
+        searchTimer = setTimeout(function () {
+          fetch('/api/search?q=' + encodeURIComponent(term) + '&limit=8').then(function (r) {
+            return r.ok ? r.json() : { results: [] };
+          }).then(function (j) {
+            document.getElementById('symbolList').innerHTML = (j.results || []).map(function (r) {
+              return '<option value="' + esc(String(r.symbol || '').toUpperCase()) + '">' + esc(r.name || '') + '</option>';
+            }).join('');
+          }).catch(function () {});
+        }, 250);
+      });
+
       document.getElementById('addForm').addEventListener('submit', async function (event) {
         event.preventDefault();
         var symbolInput = document.getElementById('symbol');
         var companyInput = document.getElementById('company');
-        var symbol = symbolInput.value.trim().toUpperCase();
+        var symbol = symbolInput.value.trim().toUpperCase().replace(/\.NS$|\.BO$/, '');
         if (!symbol) return;
         var button = this.querySelector('button[type="submit"]');
         button.disabled = true;
@@ -106,7 +130,7 @@
           symbolInput.value = '';
           companyInput.value = '';
           symbolInput.focus();
-          load();
+          load(true);
         } catch (err) {
           RS.toast('Could not add ' + symbol + ': ' + err.message, 'err');
         } finally {
@@ -123,7 +147,7 @@
             '&exchange=' + encodeURIComponent(button.dataset.ex || 'NSE'), { method: 'DELETE' });
           if (!res.ok) throw new Error('HTTP ' + res.status);
           RS.toast('Removed ' + button.dataset.sym, 'ok');
-          load();
+          load(false);
         } catch (err) {
           button.disabled = false;
           RS.toast('Could not remove: ' + err.message, 'err');
@@ -131,7 +155,8 @@
       });
 
       document.getElementById('filter').addEventListener('input', applyFilter);
-      load();
+      document.getElementById('refreshBtn').addEventListener('click', function () { load(true); });
+      load(true);
     })();
   </script>
 {% endblock %}

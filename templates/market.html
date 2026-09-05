@@ -3,21 +3,46 @@
 {% block content %}
   <div class="page-header">
     <h1>Market screener</h1>
-    <p class="sub">Filter the full NIFTY universe by fundamentals and momentum. Click a column header to sort.</p>
+    <p class="sub">Filter the full index universe by valuation, quality, yield and momentum — every filter maps to a free-data field, so no screen ends in blanks. Click a column header to sort.</p>
   </div>
 
-  <section class="card" aria-labelledby="filtersHeading">
-    <h2 id="filtersHeading">Filters</h2>
-    <form id="filtersForm" class="form-row">
+  <section class="card" aria-labelledby="presetsHeading">
+    <h2 id="presetsHeading">One-tap strategies</h2>
+    <div class="form-row" id="presetRow">
+      <button class="btn" data-preset="value">💎 Value (P/E&lt;20 · ROE&gt;15)</button>
+      <button class="btn" data-preset="quality">🏆 Quality (ROE&gt;18 · low debt)</button>
+      <button class="btn" data-preset="dividend">💵 Dividend (yield&gt;1.5%)</button>
+      <button class="btn" data-preset="momentum">🚀 Momentum (RSI 50–75 · trend up)</button>
+      <button class="btn" data-preset="oversold">🧲 Oversold (RSI&lt;30)</button>
+      <button class="btn" data-preset="largecap">🏦 Large-cap (₹20k Cr+)</button>
+      <button class="btn" data-preset="clear">↺ Clear all</button>
+    </div>
+  </section>
+
+  <section class="card section" aria-labelledby="filtersHeading">
+    <div style="display:flex; justify-content:space-between; align-items:center; gap:12px; flex-wrap:wrap;">
+      <h2 id="filtersHeading" style="margin-bottom:0;">Filters <span class="pill" id="activeCount">0 active</span></h2>
+      <div class="form-row">
+        <button class="btn btn-sm" type="button" id="saveFilters">💾 Save</button>
+        <button class="btn btn-sm" type="button" id="loadFilters">📂 Load saved</button>
+      </div>
+    </div>
+    <form id="filtersForm" class="form-row" style="margin-top:12px;">
       <div class="field">
         <label for="universe">Universe</label>
         <select id="universe">
           <option value="nifty500" selected>NIFTY 500</option>
           <option value="nifty100">NIFTY 100</option>
+          <option value="nasdaq100">NASDAQ 100</option>
+          <option value="sp500">S&amp;P 500</option>
         </select>
       </div>
       <div class="field">
-        <label for="peMax">Max P/E</label>
+        <label for="peMin">P/E min</label>
+        <input id="peMin" type="number" inputmode="decimal" min="0" step="any" placeholder="e.g. 5" />
+      </div>
+      <div class="field">
+        <label for="peMax">P/E max</label>
         <input id="peMax" type="number" inputmode="decimal" min="0" step="any" placeholder="e.g. 25" />
       </div>
       <div class="field">
@@ -25,8 +50,64 @@
         <input id="roeMin" type="number" inputmode="decimal" step="any" placeholder="e.g. 15" />
       </div>
       <div class="field">
+        <label for="roeMax">Max ROE %</label>
+        <input id="roeMax" type="number" inputmode="decimal" step="any" placeholder="e.g. 60" />
+      </div>
+      <div class="field">
+        <label for="roceMin">Min ROCE %</label>
+        <input id="roceMin" type="number" inputmode="decimal" step="any" placeholder="e.g. 15" />
+      </div>
+      <div class="field">
+        <label for="divMin">Min div yield %</label>
+        <input id="divMin" type="number" inputmode="decimal" min="0" step="any" placeholder="e.g. 1.5" />
+      </div>
+      <div class="field">
+        <label for="debtMax">Max D/E</label>
+        <input id="debtMax" type="number" inputmode="decimal" min="0" step="any" placeholder="e.g. 0.5" />
+      </div>
+      <div class="field">
         <label for="mcapMin">Min mkt cap (₹ Cr)</label>
         <input id="mcapMin" type="number" inputmode="decimal" min="0" step="any" placeholder="e.g. 5000" />
+      </div>
+      <div class="field">
+        <label for="mcapMax">Max mkt cap (₹ Cr)</label>
+        <input id="mcapMax" type="number" inputmode="decimal" min="0" step="any" placeholder="e.g. 100000" />
+      </div>
+      <div class="field">
+        <label for="priceMin">Min price ₹</label>
+        <input id="priceMin" type="number" inputmode="decimal" min="0" step="any" placeholder="e.g. 100" />
+      </div>
+      <div class="field">
+        <label for="priceMax">Max price ₹</label>
+        <input id="priceMax" type="number" inputmode="decimal" min="0" step="any" placeholder="e.g. 5000" />
+      </div>
+      <div class="field">
+        <label for="rsiMin">RSI min</label>
+        <input id="rsiMin" type="number" inputmode="decimal" min="0" max="100" step="any" placeholder="e.g. 50" />
+      </div>
+      <div class="field">
+        <label for="rsiMax">RSI max</label>
+        <input id="rsiMax" type="number" inputmode="decimal" min="0" max="100" step="any" placeholder="e.g. 75" />
+      </div>
+      <div class="field">
+        <label for="chgMin">Day change min %</label>
+        <input id="chgMin" type="number" inputmode="decimal" step="any" placeholder="e.g. -2" />
+      </div>
+      <div class="field">
+        <label for="chgMax">Day change max %</label>
+        <input id="chgMax" type="number" inputmode="decimal" step="any" placeholder="e.g. 5" />
+      </div>
+      <div class="field">
+        <label for="sector">Sector contains</label>
+        <input id="sector" type="text" placeholder="e.g. Bank" autocomplete="off" />
+      </div>
+      <div class="field">
+        <label for="symContains">Symbol contains</label>
+        <input id="symContains" type="text" placeholder="e.g. HDFC" autocomplete="off" style="text-transform:uppercase" />
+      </div>
+      <div class="field">
+        <label for="nameContains">Company contains</label>
+        <input id="nameContains" type="text" placeholder="e.g. Reliance" autocomplete="off" />
       </div>
       <div class="field">
         <label for="limit">Rows</label>
@@ -37,6 +118,14 @@
           <option value="250">250</option>
         </select>
       </div>
+      <div class="field" style="flex-direction:row; align-items:center; gap:8px;">
+        <label style="display:flex; align-items:center; gap:6px; font-weight:600;">
+          <input id="macdBull" type="checkbox" style="width:auto;" /> MACD bullish
+        </label>
+        <label style="display:flex; align-items:center; gap:6px; font-weight:600;">
+          <input id="aboveEma" type="checkbox" style="width:auto;" /> Above 200-DMA
+        </label>
+      </div>
       <button class="btn btn-primary" type="submit">▶️ Run screener</button>
       <button class="btn" type="button" id="resetFilters">↺ Reset</button>
       <a class="btn" href="#" id="downloadCsv">⬇️ CSV</a>
@@ -45,7 +134,7 @@
 
   <section class="card section" aria-labelledby="resultsHeading">
     <div style="display:flex; justify-content:space-between; align-items:center; gap:12px; flex-wrap:wrap;">
-      <h2 id="resultsHeading" style="margin-bottom:0;">Results</h2>
+      <h2 id="resultsHeading" style="margin-bottom:0;">Results <span class="pill" id="resCount">0</span></h2>
       <span class="muted" id="pageinfo" aria-live="polite">Page 1</span>
     </div>
     <div class="table-scroll" style="margin-top:12px;">
@@ -55,15 +144,21 @@
           <tr>
             <th scope="col" data-key="symbol"><button class="sort">Symbol</button></th>
             <th scope="col" data-key="company"><button class="sort">Company</button></th>
+            <th scope="col" data-key="sector"><button class="sort">Sector</button></th>
             <th scope="col" class="num" data-key="price"><button class="sort">Price</button></th>
             <th scope="col" class="num" data-key="change_pct"><button class="sort">% Chg</button></th>
             <th scope="col" class="num" data-key="pe"><button class="sort">P/E</button></th>
             <th scope="col" class="num" data-key="roe"><button class="sort">ROE</button></th>
+            <th scope="col" class="num" data-key="roce"><button class="sort">ROCE</button></th>
+            <th scope="col" class="num" data-key="debt_to_equity"><button class="sort">D/E</button></th>
+            <th scope="col" class="num" data-key="div_yield"><button class="sort">Div%</button></th>
             <th scope="col" class="num" data-key="market_cap"><button class="sort">Mkt cap</button></th>
+            <th scope="col" class="num" data-key="rsi"><button class="sort">RSI</button></th>
+            <th scope="col" data-key="trend">Trend</th>
           </tr>
         </thead>
         <tbody id="tbody">
-          <tr><td colspan="7" class="empty"><span class="skeleton" style="display:block;width:100%"></span></td></tr>
+          <tr><td colspan="13" class="empty"><span class="skeleton" style="display:block;width:100%"></span></td></tr>
         </tbody>
       </table>
     </div>
@@ -81,61 +176,175 @@
       var fmtNum = RS.fmtNum, fmtPct = RS.fmtPct, esc = RS.escapeHtml;
       var sortKey = 'market_cap', ascending = false, offset = 0;
 
+      var PRESETS = {
+        value: { pe_max: '20', roe_min: '15', debt_max: '0.5' },
+        quality: { roe_min: '18', roce_min: '18', debt_max: '0.3' },
+        dividend: { div_min: '1.5', pe_max: '25' },
+        momentum: { rsiMin: '50', rsiMax: '75', aboveEma: true, macdBull: true },
+        oversold: { rsiMax: '30' },
+        largecap: { mcapMin: '20000' },
+        clear: {}
+      };
+
+      function fieldIds() {
+        return ['peMin', 'peMax', 'roeMin', 'roeMax', 'roceMin', 'divMin', 'debtMax',
+          'mcapMin', 'mcapMax', 'priceMin', 'priceMax', 'rsiMin', 'rsiMax',
+          'chgMin', 'chgMax', 'sector', 'symContains', 'nameContains'];
+      }
+
+      function applyPreset(name) {
+        var p = PRESETS[name] || {};
+        document.getElementById('filtersForm').reset();
+        if (p.pe_max) document.getElementById('peMax').value = p.pe_max;
+        if (p.roe_min) document.getElementById('roeMin').value = p.roe_min;
+        if (p.roce_min) document.getElementById('roceMin').value = p.roce_min;
+        if (p.div_min) document.getElementById('divMin').value = p.div_min;
+        if (p.debt_max) document.getElementById('debtMax').value = p.debt_max;
+        if (p.mcapMin) document.getElementById('mcapMin').value = p.mcapMin;
+        if (p.rsiMin) document.getElementById('rsiMin').value = p.rsiMin;
+        if (p.rsiMax) document.getElementById('rsiMax').value = p.rsiMax;
+        if (p.aboveEma) document.getElementById('aboveEma').checked = true;
+        if (p.macdBull) document.getElementById('macdBull').checked = true;
+        offset = 0;
+        updateActiveCount();
+        load();
+      }
+
+      function updateActiveCount() {
+        var n = 0;
+        fieldIds().forEach(function (id) {
+          if ((document.getElementById(id).value || '').trim() !== '') n++;
+        });
+        if (document.getElementById('macdBull').checked) n++;
+        if (document.getElementById('aboveEma').checked) n++;
+        document.getElementById('activeCount').textContent = n + ' active';
+      }
+
       function buildParams() {
         var params = new URLSearchParams();
         params.set('universe', document.getElementById('universe').value);
-        var val = function (id) { return document.getElementById(id).value; };
+        var val = function (id) { return document.getElementById(id).value.trim(); };
+        if (val('peMin')) params.set('pe_min', val('peMin'));
         if (val('peMax')) params.set('pe_max', val('peMax'));
         if (val('roeMin')) params.set('roe_min', val('roeMin'));
+        if (val('roeMax')) params.set('roe_max', val('roeMax'));
+        if (val('roceMin')) params.set('roce_min', val('roceMin'));
+        if (val('divMin')) params.set('div_yield_min', val('divMin'));
+        if (val('debtMax')) params.set('debt_max', val('debtMax'));
         if (val('mcapMin')) params.set('market_cap_min', val('mcapMin'));
-        params.set('limit', val('limit') || '25');
+        if (val('mcapMax')) params.set('market_cap_max', val('mcapMax'));
+        if (val('priceMin')) params.set('price_min', val('priceMin'));
+        if (val('priceMax')) params.set('price_max', val('priceMax'));
+        if (val('rsiMin')) params.set('rsi_min', val('rsiMin'));
+        if (val('rsiMax')) params.set('rsi_max', val('rsiMax'));
+        if (val('chgMin')) params.set('change_pct_min', val('chgMin'));
+        if (val('chgMax')) params.set('change_pct_max', val('chgMax'));
+        if (val('sector')) params.set('sector', val('sector'));
+        if (val('symContains')) params.set('symbol_contains', val('symContains').toUpperCase());
+        if (val('nameContains')) params.set('name_contains', val('nameContains'));
+        if (document.getElementById('macdBull').checked) params.set('require_macd_bull', 'true');
+        if (document.getElementById('aboveEma').checked) params.set('require_above_ema200', 'true');
+        params.set('limit', document.getElementById('limit').value || '25');
         params.set('offset', String(offset));
         params.set('sort', sortKey);
         params.set('ascending', String(ascending));
         return params.toString();
       }
 
+      function trendBadges(r) {
+        var out = [];
+        if (r.macd_bull) out.push('<span class="pill pill-ok">MACD▲</span>');
+        if (r.above_ema200) out.push('<span class="pill">200DMA▲</span>');
+        if (!out.length) out.push('<span class="muted">−</span>');
+        return out.join(' ');
+      }
+
       async function load() {
         var tbody = document.getElementById('tbody');
         try {
-          tbody.innerHTML = '<tr><td colspan="7" class="empty"><span class="skeleton" style="display:block;width:100%"></span></td></tr>';
+          tbody.innerHTML = '<tr><td colspan="13" class="empty"><span class="skeleton" style="display:block;width:100%"></span></td></tr>';
           var res = await fetch('/api/screener?' + buildParams());
           if (!res.ok) throw new Error('API ' + res.status);
           var rows = await res.json();
           if (!Array.isArray(rows)) throw new Error('unexpected response');
+          document.getElementById('resCount').textContent = String(rows.length) + ' rows';
           tbody.innerHTML = rows.length ? rows.map(function (r) {
             var chg = r.change_pct;
             var chgClass = chg == null ? '' : (Number(chg) >= 0 ? 'pos' : 'neg');
             var mcap = r.market_cap == null ? '−' : '₹' + fmtNum(r.market_cap, 0) + ' Cr';
+            var rsi = r.rsi14;
+            var rsiClass = '';
+            if (rsi != null) { rsiClass = Number(rsi) >= 70 ? 'neg' : (Number(rsi) <= 30 ? 'pos' : ''); }
             return '<tr>' +
               '<td><a href="/fundamentals?symbol=' + encodeURIComponent(r.symbol || '') + '"><strong>' + esc(r.symbol) + '</strong></a></td>' +
               '<td>' + esc(r.company || '−') + '</td>' +
+              '<td>' + esc(r.sector || '−') + '</td>' +
               '<td class="num">' + (r.price != null ? '₹' + fmtNum(r.price) : '−') + '</td>' +
               '<td class="num ' + chgClass + '">' + fmtPct(chg) + '</td>' +
               '<td class="num">' + fmtNum(r.pe) + '</td>' +
               '<td class="num">' + fmtNum(r.roe) + '</td>' +
+              '<td class="num">' + fmtNum(r.roce) + '</td>' +
+              '<td class="num">' + fmtNum(r.debt_to_equity) + '</td>' +
+              '<td class="num">' + fmtNum(r.div_yield) + '</td>' +
               '<td class="num">' + mcap + '</td>' +
+              '<td class="num ' + rsiClass + '">' + fmtNum(rsi, 1) + '</td>' +
+              '<td>' + trendBadges(r) + '</td>' +
             '</tr>';
-          }).join('') : '<tr><td colspan="7" class="empty">No results — try loosening the filters.</td></tr>';
+          }).join('') : '<tr><td colspan="13" class="empty">No results — try loosening the filters or a one-tap strategy.</td></tr>';
           document.getElementById('pageinfo').textContent =
             'Rows ' + (offset + 1) + '–' + (offset + rows.length);
         } catch (err) {
-          tbody.innerHTML = '<tr><td colspan="7" class="empty">Unable to load results. Please try again.</td></tr>';
+          tbody.innerHTML = '<tr><td colspan="13" class="empty">Unable to load results. Please try again.</td></tr>';
           RS.toast('Screener failed: ' + err.message, 'err');
         }
       }
 
-      function resetOffset() { offset = 0; }
+      document.getElementById('presetRow').addEventListener('click', function (event) {
+        var btn = event.target.closest('button[data-preset]');
+        if (!btn) return;
+        applyPreset(btn.dataset.preset);
+      });
 
       document.getElementById('filtersForm').addEventListener('submit', function (event) {
         event.preventDefault();
-        resetOffset();
+        offset = 0;
+        updateActiveCount();
         load();
       });
+      document.getElementById('filtersForm').addEventListener('input', updateActiveCount);
       document.getElementById('resetFilters').addEventListener('click', function () {
         document.getElementById('filtersForm').reset();
         sortKey = 'market_cap'; ascending = false; offset = 0;
+        updateActiveCount();
         load();
+      });
+      document.getElementById('saveFilters').addEventListener('click', function () {
+        try {
+          var state = {};
+          fieldIds().forEach(function (id) { state[id] = document.getElementById(id).value; });
+          state.universe = document.getElementById('universe').value;
+          state.limit = document.getElementById('limit').value;
+          state.macdBull = document.getElementById('macdBull').checked;
+          state.aboveEma = document.getElementById('aboveEma').checked;
+          localStorage.setItem('screenerFilters', JSON.stringify(state));
+          RS.toast('Filters saved', 'ok');
+        } catch (e) { RS.toast('Could not save: ' + e.message, 'err'); }
+      });
+      document.getElementById('loadFilters').addEventListener('click', function () {
+        try {
+          var raw = localStorage.getItem('screenerFilters');
+          if (!raw) { RS.toast('No saved filters yet', 'err'); return; }
+          var state = JSON.parse(raw);
+          fieldIds().forEach(function (id) { if (state[id] != null) document.getElementById(id).value = state[id]; });
+          if (state.universe) document.getElementById('universe').value = state.universe;
+          if (state.limit) document.getElementById('limit').value = state.limit;
+          document.getElementById('macdBull').checked = !!state.macdBull;
+          document.getElementById('aboveEma').checked = !!state.aboveEma;
+          offset = 0;
+          updateActiveCount();
+          load();
+          RS.toast('Saved filters loaded', 'ok');
+        } catch (e) { RS.toast('Could not load: ' + e.message, 'err'); }
       });
       document.getElementById('prev').addEventListener('click', function () {
         offset = Math.max(0, offset - parseInt(document.getElementById('limit').value || '25', 10));
@@ -169,6 +378,15 @@
         });
       });
 
+      // Restore saved filters silently on first visit.
+      try {
+        var saved = localStorage.getItem('screenerFilters');
+        if (saved) {
+          var s = JSON.parse(saved);
+          fieldIds().forEach(function (id) { if (s[id]) document.getElementById(id).value = s[id]; });
+        }
+      } catch (e) { /* ignore */ }
+      updateActiveCount();
       load();
     })();
   </script>

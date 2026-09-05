@@ -402,6 +402,17 @@ def parse_shareholding(page: str) -> dict:
     return out
 
 
+def parse_company_name(page: str) -> str | None:
+    """Company display name from a screener.in company page (<h1>), or None."""
+    match = re.search(r"<h1[^>]*>(.*?)</h1>", page, re.S | re.I)
+    if not match:
+        return None
+    text = re.sub(r"<[^>]+>|\s+", " ", html.unescape(match.group(1))).strip()
+    # screener.in h1 looks like "Reliance Industries Ltd" - drop trailing badges
+    text = re.split(r"\s{2,}", text)[0].strip()
+    return text or None
+
+
 def parse_page(page: str) -> dict | None:
     """All enrichments from one screener.in company page (pure, no fetches).
 
@@ -410,6 +421,10 @@ def parse_page(page: str) -> dict | None:
     page yields nothing.
     """
     out: dict = {}
+    name = parse_company_name(page)
+    if name:
+        out["company"] = name
+        out["name"] = name
     deep = parse_deep_tables(page)
     if deep:
         out.update(deep)

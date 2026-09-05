@@ -3,7 +3,7 @@
 {% block content %}
   <div class="page-header">
     <h1>Stock report</h1>
-    <p class="sub">The full fundamental report — the same data the Telegram bot sends with /fundamentalreport.</p>
+    <p class="sub">Every fundamental we can fetch from free sources — Yahoo, NSE, Stooq &amp; screener.in — with the source badged so nothing is a mystery blank.</p>
   </div>
 
   <section class="card" aria-labelledby="lookupHeading">
@@ -11,13 +11,15 @@
     <form id="lookupForm" class="form-row">
       <div class="field" style="flex:1; min-width:220px;">
         <label for="symbol">Symbol (NSE)</label>
-        <input id="symbol" required placeholder="e.g. RELIANCE" autocomplete="off" style="text-transform:uppercase" />
+        <input id="symbol" required placeholder="e.g. RELIANCE" autocomplete="off" style="text-transform:uppercase" list="symbolList" />
+        <datalist id="symbolList"></datalist>
       </div>
       <button class="btn btn-primary" type="submit" id="go">🔍 Fetch full report</button>
       <button class="btn" type="button" id="refresh" title="Bypass the data cache and refetch">♻️ Refresh data</button>
       <button class="btn" type="button" id="download">⬇️ CSV</button>
+      <button class="btn" type="button" id="addWatch" title="Add this symbol to the watchlist">📌 Watch</button>
     </form>
-    <p class="note" style="margin-bottom:0;">First fetch of a symbol takes up to ~30s (live scraping of financial tables); afterwards it's instant from cache.</p>
+    <p class="note" style="margin-bottom:0;">First fetch of a symbol takes up to ~30s (live scraping of financial tables); afterwards it's instant from cache. Start typing for suggestions.</p>
   </section>
 
   <div id="report" class="section" hidden>
@@ -29,6 +31,8 @@
         <span class="chg" id="rChg"></span>
       </div>
       <div class="pill-row" style="margin-top:10px;" id="rBadges"></div>
+      <p class="note" id="rSources" style="margin:8px 0 0;"></p>
+      <div class="note" id="rCompleteness" style="margin-top:6px;" aria-live="polite"></div>
     </section>
 
     <div class="section-grid section">
@@ -60,6 +64,12 @@
       <section class="card" aria-labelledby="hShare">
         <h2 id="hShare">💼 Per-share &amp; scale</h2>
         <table class="kv"><tbody id="rShare"></tbody></table>
+      </section>
+
+      <!-- financial health (NEW: covers current/quick/free-cashflow gaps) -->
+      <section class="card" aria-labelledby="hHealth">
+        <h2 id="hHealth">🧪 Financial health</h2>
+        <table class="kv"><tbody id="rHealth"></tbody></table>
       </section>
 
       <!-- balance sheet -->
@@ -101,7 +111,7 @@
       <!-- peers -->
       <section class="card" aria-labelledby="hPeers">
         <h2 id="hPeers">🏢 Peers</h2>
-        <div class="table-scroll"><table class="table-mini"><thead><tr><th>Symbol</th><th class="num">Price</th><th class="num">P/E</th></tr></thead><tbody id="rPeers"></tbody></table></div>
+        <div class="table-scroll"><table class="table-mini"><thead><tr><th>Peer</th><th class="num">Price</th><th class="num">P/E</th><th class="num">Mkt cap</th></tr></thead><tbody id="rPeers"></tbody></table></div>
       </section>
 
       <!-- management -->
@@ -109,7 +119,26 @@
         <h2 id="hMgmt">👤 Top management</h2>
         <div id="rMgmt"></div>
       </section>
+
+      <!-- news (NEW) -->
+      <section class="card" aria-labelledby="hNews">
+        <h2 id="hNews">📰 Latest news</h2>
+        <div id="rNews"><p class="muted">No news loaded yet.</p></div>
+      </section>
+
+      <!-- corporate actions (NEW) -->
+      <section class="card" aria-labelledby="hCA">
+        <h2 id="hCA">📋 Corporate actions</h2>
+        <div id="rCA"><p class="muted">No actions loaded yet.</p></div>
+      </section>
     </div>
+
+    <!-- price chart: full width (NEW) -->
+    <section class="card section" aria-labelledby="hChart">
+      <h2 id="hChart">📊 Price history <span class="muted" id="rChartSrc"></span></h2>
+      <canvas id="rChart" height="180" style="width:100%;height:220px;" aria-label="Price history chart"></canvas>
+      <p class="note" id="rChartNote" style="margin-bottom:0;"></p>
+    </section>
 
     <!-- 5 year performance: full width -->
     <section class="card section" aria-labelledby="h5y">
@@ -144,7 +173,6 @@
     (function () {
       'use strict';
       var esc = RS.escapeHtml;
-      var NUM_FIELDS = { price: 2 };
 
       function fmt(v, d) {
         if (v === null || v === undefined || v === '') return '−';
@@ -158,21 +186,91 @@
       function x(v) { return (v == null) ? '−' : fmt(v) + 'x'; }
 
       function rows(pairs) {
-        return pairs.filter(function (p) { return p && p[1] !== null; })
+        var html = pairs.filter(function (p) { return p && p[1] !== null && p[1] !== undefined; })
           .map(function (p) {
             return '<tr><th scope="row">' + esc(p[0]) + '</th><td>' + p[1] + '</td></tr>';
-          }).join('') || '<tr><td class="empty">No data</td></tr>';
-      }
-
-      function cls(v, goodWhenPositive) {
-        if (v == null || isNaN(Number(v))) return '';
-        return Number(v) >= 0 ? 'pos' : 'neg';
+          }).join('');
+        return html || '<tr><td class="empty">No data from free sources right now — try ♻️ Refresh.</td></tr>';
       }
 
       function signed(v, d) {
         if (v == null || isNaN(Number(v))) return null;
         var n = Number(v);
         return '<span class="' + (n >= 0 ? 'pos' : 'neg') + '">' + (n >= 0 ? '+' : '') + fmt(n, d) + '%</span>';
+      }
+
+      function drawChart(canvas, closes) {
+        var ctx = canvas.getContext('2d');
+        var W = canvas.width = canvas.clientWidth * 2;
+        var H = canvas.height = 440;
+        ctx.clearRect(0, 0, W, H);
+        if (!closes || closes.length < 2) return;
+        var min = Math.min.apply(null, closes), max = Math.max.apply(null, closes);
+        if (max === min) max = min + 1;
+        var up = closes[closes.length - 1] >= closes[0];
+        ctx.strokeStyle = up ? '#16a34a' : '#dc2626';
+        ctx.lineWidth = 3;
+        ctx.beginPath();
+        closes.forEach(function (c, i) {
+          var px = 8 + (W - 16) * i / (closes.length - 1);
+          var py = 12 + (H - 40) * (1 - (c - min) / (max - min));
+          if (i === 0) ctx.moveTo(px, py); else ctx.lineTo(px, py);
+        });
+        ctx.stroke();
+        ctx.fillStyle = '#64748b';
+        ctx.font = '22px Inter, sans-serif';
+        ctx.fillText(fmt(min, 0), 10, H - 8);
+        ctx.fillText(fmt(max, 0), 10, 30);
+      }
+
+      async function loadExtras(symbol) {
+        // News + corporate actions + price history load in parallel; each
+        // degrades independently so one slow source never blanks the report.
+        try {
+          var nr = await fetch('/api/news?symbol=' + encodeURIComponent(symbol) + '&limit=5');
+          if (nr.ok) {
+            var nj = await nr.json();
+            var items = nj.news || [];
+            document.getElementById('rNews').innerHTML = items.length ? '<ul style="margin:0;padding-left:18px;">' +
+              items.map(function (n) {
+                var t = esc(n.title || 'Untitled');
+                return n.link ? '<li><a href="' + esc(n.link) + '" target="_blank" rel="noopener">' + t + '</a>' +
+                  (n.publisher ? ' <span class="muted">· ' + esc(n.publisher) + '</span>' : '') + '</li>'
+                  : '<li>' + t + '</li>';
+              }).join('') + '</ul>' : '<p class="muted">No recent headlines found.</p>';
+          }
+        } catch (e) { /* news is best-effort */ }
+        try {
+          var cr2 = await fetch('/api/corporate_actions?symbol=' + encodeURIComponent(symbol));
+          if (cr2.ok) {
+            var actions = await cr2.json();
+            var mine = (actions || []).filter(function (a) {
+              return !a.symbol || String(a.symbol).toUpperCase() === symbol.toUpperCase();
+            }).slice(0, 6);
+            document.getElementById('rCA').innerHTML = mine.length ? '<ul style="margin:0;padding-left:18px;">' +
+              mine.map(function (a) {
+                return '<li><strong>' + esc(a.symbol || symbol) + '</strong> — ' + esc(a.subject || a.purpose || 'announcement') +
+                  ' <span class="muted">' + esc(a.ex_date || a.record_date || '') + '</span></li>';
+              }).join('') + '</ul>' : '<p class="muted">No corporate actions found for ' + esc(symbol) + '.</p>';
+          }
+        } catch (e) { /* actions are best-effort */ }
+        try {
+          var hr = await fetch('/api/history?symbol=' + encodeURIComponent(symbol));
+          if (hr.ok) {
+            var hj = await hr.json();
+            var bars = hj.bars;
+            document.getElementById('rChartSrc').textContent = bars && bars.source ? '· ' + bars.source : '';
+            if (bars && bars.close && bars.close.length > 1) {
+              drawChart(document.getElementById('rChart'), bars.close.filter(function (c) { return c != null; }));
+              var first = bars.close[0], last = bars.close[bars.close.length - 1];
+              var chg = (first && last) ? ((last / first - 1) * 100) : null;
+              document.getElementById('rChartNote').textContent =
+                bars.close.length + ' sessions · ' + (chg == null ? '' : (chg >= 0 ? '+' : '') + chg.toFixed(1) + '% over the window');
+            } else {
+              document.getElementById('rChartNote').textContent = 'Price history unavailable from free sources right now.';
+            }
+          }
+        } catch (e) { /* chart is best-effort */ }
       }
 
       async function loadReport(symbol, refresh) {
@@ -183,14 +281,18 @@
         report.hidden = false;
         go.disabled = true;
         document.getElementById('rTitle').textContent = symbol;
+        document.getElementById('rNews').innerHTML = '<p class="muted">Loading news…</p>';
+        document.getElementById('rCA').innerHTML = '<p class="muted">Loading actions…</p>';
+        document.getElementById('rChartNote').textContent = 'Loading price history…';
         document.querySelectorAll('#report tbody, #rTrend, #rPeers, #rMgmt, #r5yHead, #r5yBody, #rQHead, #rQBody').forEach(function (el) {
-          if (el.tagName === 'TBODY') el.innerHTML = '<tr><td colspan="6" class="empty"><span class="skeleton" style="display:block;width:100%"></span></td></tr>';
+          el.innerHTML = '<tr><td colspan="6" class="empty"><span class="skeleton" style="display:block;width:100%"></span></td></tr>';
         });
         try {
           var res = await fetch('/api/fundamentals?symbol=' + encodeURIComponent(symbol) + (refresh ? '&refresh=1' : ''));
           if (!res.ok) throw new Error('HTTP ' + res.status);
           var data = await res.json();
           render(data);
+          loadExtras(symbol);
           history.replaceState(null, '', '/fundamentals?symbol=' + encodeURIComponent(symbol));
         } catch (err) {
           console.error('loadReport failed:', err);
@@ -217,20 +319,38 @@
 
         var badges = [];
         if (f.sector) badges.push(f.sector);
-        if (f.industry) badges.push(f.industry);
+        if (f.industry && f.industry !== f.sector) badges.push(f.industry);
         if (f.rec_key) badges.push('Analysts: ' + String(f.rec_key).toUpperCase());
-        if (f.mcap_cr != null) badges.push('Mkt cap ₹' + fmt(f.mcap_cr, 0) + ' Cr');
+        if (f.mcap_cr != null || f.market_cap != null) badges.push('Mkt cap ₹' + fmt(f.mcap_cr != null ? f.mcap_cr : f.market_cap, 0) + ' Cr');
+        if (q.source && q.source !== 'none') badges.push('Price: ' + q.source);
         document.getElementById('rBadges').innerHTML = badges.map(function (b) {
           return '<span class="pill">' + esc(b) + '</span>';
         }).join('');
+
+        var srcList = f.data_sources || (f.analyst_source ? [f.analyst_source] : []);
+        if (q.source && q.source !== 'none' && srcList.indexOf(q.source) === -1) srcList.push(q.source);
+        document.getElementById('rSources').textContent =
+          srcList.length ? 'Sources: ' + srcList.join(' · ') : 'Sources: cache';
+
+        // Completeness: fraction of key fields present (no more mystery blanks).
+        var keyFields = ['price', 'pe', 'forward_pe', 'price_to_book', 'div_yield', 'roe', 'roce',
+          'debt_to_equity', 'mcap_cr', 'wk52_high', 'rsi', 'sma_50', 'promoter_pct', 'sector_pe',
+          'target_mean', 'current_ratio', 'free_cashflow', 'ebitda', 'book_value'];
+        var have = keyFields.filter(function (k) { return f[k] != null || q[k] != null; }).length;
+        var comp = document.getElementById('rCompleteness');
+        comp.innerHTML = 'Coverage <strong>' + have + '/' + keyFields.length + '</strong> key fields' +
+          (have < keyFields.length ? ' <span class="muted">— missing fields mean every free source was down, try ♻️ Refresh in a bit.</span>' : ' <span class="pos">— complete.</span>');
 
         // ---- price & movement ----
         var posVs50 = (f.sma_50 != null && price != null) ? (price >= f.sma_50 ? '<span class="pos">Above</span>' : '<span class="neg">Below</span>') : null;
         var posVs200 = (f.sma_200 != null && price != null) ? (price >= f.sma_200 ? '<span class="pos">Above</span>' : '<span class="neg">Below</span>') : null;
         document.getElementById('rMove').innerHTML = rows([
           ['Day change', q.change_pct != null ? signed(q.change_pct) : null],
-          ['52-week low', f.wk52_low != null ? cr(f.wk52_low) : null],
-          ['52-week high', f.wk52_high != null ? cr(f.wk52_high) : null],
+          ['Prev close', q.prev_close != null ? cr(q.prev_close) : null],
+          ['Open', q.open != null ? cr(q.open) : null],
+          ['Day high / low', (q.high != null || q.low != null) ? (cr(q.high) + ' / ' + cr(q.low)) : null],
+          ['52-week low', (f.wk52_low != null ? cr(f.wk52_low) : (q.wk52_low != null ? cr(q.wk52_low) : null))],
+          ['52-week high', (f.wk52_high != null ? cr(f.wk52_high) : (q.wk52_high != null ? cr(q.wk52_high) : null))],
           ['vs 50-day SMA', posVs50],
           ['vs 200-day SMA', posVs200],
           ['Beta', f.beta != null ? fmt(f.beta) : null],
@@ -242,15 +362,17 @@
           ['MACD line', f.macd_line != null ? fmt(f.macd_line) : null],
           ['MACD signal', f.macd_signal != null ? fmt(f.macd_signal) : null],
           ['MACD histogram', f.macd_hist != null ? fmt(f.macd_hist) : null],
+          ['Signal', (f.macd_bull != null) ? (f.macd_bull ? '<span class="pos">Bullish</span>' : '<span class="neg">Bearish</span>') : null],
           ['50-day SMA', f.sma_50 != null ? cr(f.sma_50) : null],
           ['200-day SMA', f.sma_200 != null ? cr(f.sma_200) : null],
         ]);
 
         // ---- valuation ----
         document.getElementById('rVal').innerHTML = rows([
-          ['P/E (trailing)', f.pe != null ? x(f.pe) : null],
+          ['P/E (trailing)', f.pe != null ? x(f.pe) : (q.pe != null ? x(q.pe) : null)],
           ['Forward P/E', f.forward_pe != null ? x(f.forward_pe) : null],
           ['Sector P/E', f.sector_pe != null ? x(f.sector_pe) : null],
+          ['PEG', f.peg != null ? fmt(f.peg) : null],
           ['Price / Book', f.price_to_book != null ? x(f.price_to_book) : null],
           ['Price / Sales', f.price_to_sales != null ? x(f.price_to_sales) : null],
           ['Dividend yield', f.div_yield != null ? pct(f.div_yield) : null],
@@ -261,6 +383,7 @@
         document.getElementById('rGrowth').innerHTML = rows([
           ['Earnings growth YoY', f.earnings_growth != null ? signed(f.earnings_growth * 100, 1) : null],
           ['Revenue growth YoY', f.revenue_growth != null ? signed(f.revenue_growth * 100, 1) : null],
+          ['Total revenue', f.total_revenue != null ? '₹' + fmt(f.total_revenue / 1e7, 0) + ' Cr' : null],
           ['Gross margin', f.gross_margin != null ? pct(f.gross_margin * 100, 1) : null],
           ['EBITDA margin', f.ebitda_margin != null ? pct(f.ebitda_margin * 100, 1) : null],
           ['Operating margin', f.operating_margin != null ? pct(f.operating_margin * 100, 1) : null],
@@ -276,20 +399,33 @@
           ['Cash / share', f.cash_per_share != null ? cr(f.cash_per_share) : null],
           ['Shares outstanding', f.shares_outstanding != null ? fmt(f.shares_outstanding / 1e7, 2) + ' Cr' : null],
           ['Float shares', f.float_shares != null ? fmt(f.float_shares / 1e7, 2) + ' Cr' : null],
+          ['Total cash', f.total_cash != null ? '₹' + fmt(f.total_cash / 1e7, 0) + ' Cr' : null],
+          ['Total debt', f.total_debt != null ? '₹' + fmt(f.total_debt / 1e7, 0) + ' Cr' : null],
           ['Employees', f.employees != null ? fmt(f.employees, 0) : null],
+        ]);
+
+        // ---- financial health (NEW) ----
+        document.getElementById('rHealth').innerHTML = rows([
+          ['Current ratio', f.current_ratio != null ? x(f.current_ratio) : null],
+          ['Quick ratio', f.quick_ratio != null ? x(f.quick_ratio) : null],
+          ['Debt / Equity', f.debt_to_equity != null ? x(f.debt_to_equity) : null],
+          ['Interest coverage', f.interest_coverage_ratio != null ? x(f.interest_coverage_ratio) : null],
+          ['Operating cash flow', f.operating_cashflow != null ? '₹' + fmt(f.operating_cashflow / 1e7, 0) + ' Cr' : null],
+          ['Free cash flow', f.free_cashflow != null ? '₹' + fmt(f.free_cashflow / 1e7, 0) + ' Cr' : null],
         ]);
 
         // ---- balance sheet ----
         var bs = f.balance_sheet || {};
         document.getElementById('rBal').innerHTML = rows([
+          ['Year', bs.year || null],
           ['Debt / Equity', f.debt_to_equity != null ? x(f.debt_to_equity) : null],
           ['Interest coverage', f.interest_coverage_ratio != null ? x(f.interest_coverage_ratio) : null],
           ['Net worth', bs.net_worth != null ? cr(bs.net_worth, 0) + ' Cr' : null],
           ['Borrowings', bs.borrowings != null ? cr(bs.borrowings, 0) + ' Cr' : null],
+          ['Total liabilities', bs.total_liabilities != null ? cr(bs.total_liabilities, 0) + ' Cr' : null],
+          ['Fixed assets', bs.fixed_assets != null ? cr(bs.fixed_assets, 0) + ' Cr' : null],
           ['Total assets', bs.total_assets != null ? cr(bs.total_assets, 0) + ' Cr' : null],
           ['Investments', bs.investments != null ? cr(bs.investments, 0) + ' Cr' : null],
-          ['Total cash', f.total_cash != null ? '₹' + fmt(f.total_cash / 1e7, 0) + ' Cr' : null],
-          ['Total debt', f.total_debt != null ? '₹' + fmt(f.total_debt / 1e7, 0) + ' Cr' : null],
         ]);
 
         // ---- cash flow ----
@@ -301,7 +437,7 @@
           ['Cash from investing', cash(cf.cfi)],
           ['Cash from financing', cash(cf.cff)],
           ['Net cash flow', cash(cf.net_cash_flow)],
-          ['Free cash flow', cash(cf.free_cash_flow)],
+          ['Free cash flow', cash(cf.free_cash_flow != null ? cf.free_cash_flow : f.free_cashflow)],
         ]);
 
         // ---- returns ----
@@ -336,6 +472,7 @@
           ? signed((f.target_mean - price) / price * 100, 1) : null;
         document.getElementById('rAnalyst').innerHTML = rows([
           ['Consensus', f.rec_key ? String(f.rec_key).toUpperCase() : null],
+          ['Source', f.analyst_source ? esc(f.analyst_source) : null],
           ['Mean rating (1=buy, 5=sell)', f.rec_mean != null ? fmt(f.rec_mean) : null],
           ['Analysts covering', f.num_analysts != null ? fmt(f.num_analysts, 0) : null],
           ['Mean target', f.target_mean != null ? cr(f.target_mean) : null],
@@ -359,28 +496,36 @@
                 hist.map(function (h) { return '<td class="num">' + fmt((h || {})[k], 0) + '</td>'; }).join('') +
                 '</tr>';
             }).join('') + '</tbody></table>';
+        } else if (f.rec_trend) {
+          var t = f.rec_trend;
+          document.getElementById('rTrend').innerHTML =
+            '<table class="table-mini"><thead><tr><th>Rating</th><th class="num">Latest</th></tr></thead><tbody>' +
+            keys.map(function (k) { return '<tr><th scope="row">' + labels[k] + '</th><td class="num">' + fmt(t[k], 0) + '</td></tr>'; }).join('') +
+            '</tbody></table>';
         } else {
-          document.getElementById('rTrend').innerHTML = '<p class="muted">No rating history available.</p>';
+          document.getElementById('rTrend').innerHTML = '<p class="muted">No rating history available from free sources.</p>';
         }
 
         // ---- peers ----
         var peers = f.competitors || [];
         document.getElementById('rPeers').innerHTML = peers.length ? peers.map(function (p) {
-          var sym = typeof p === 'string' ? p : (p.symbol || '');
-          var link = '<a href="/fundamentals?symbol=' + encodeURIComponent(sym) + '"><strong>' + esc(sym) + '</strong></a>';
           if (typeof p === 'string') {
-            return '<tr><td>' + link + '</td><td class="num">−</td><td class="num">−</td></tr>';
+            return '<tr><td><a href="/fundamentals?symbol=' + encodeURIComponent(p) + '"><strong>' + esc(p) + '</strong></a></td><td class="num">−</td><td class="num">−</td><td class="num">−</td></tr>';
           }
-          return '<tr><td>' + link + '</td><td class="num">' + (p.price != null ? cr(p.price) : '−') + '</td>' +
-            '<td class="num">' + (p.pe != null ? fmt(p.pe) : '−') + '</td></tr>';
-        }).join('') : '<tr><td colspan="3" class="empty">No peer data.</td></tr>';
+          var sym = p.symbol || p.name || '';
+          var link = '<a href="/fundamentals?symbol=' + encodeURIComponent(sym) + '"><strong>' + esc(sym) + '</strong></a>';
+          return '<tr><td>' + link + '<br><span class="muted">' + esc(p.name || '') + '</span></td>' +
+            '<td class="num">' + (p.price != null ? cr(p.price) : '−') + '</td>' +
+            '<td class="num">' + (p.pe != null ? fmt(p.pe) : '−') + '</td>' +
+            '<td class="num">' + (p.market_cap != null ? fmt(p.market_cap, 0) : '−') + '</td></tr>';
+        }).join('') : '<tr><td colspan="4" class="empty">No peer data from free sources.</td></tr>';
 
         // ---- management ----
         var officers = f.officers || [];
         document.getElementById('rMgmt').innerHTML = officers.length ? officers.map(function (o) {
           return '<div class="officer"><div><div class="who">' + esc(o.name) + '</div>' +
             '<div class="role">' + esc(o.title || '') + '</div></div></div>';
-        }).join('') : '<p class="muted">No officer data.</p>';
+        }).join('') : '<p class="muted">No officer data from free sources.</p>';
 
         // ---- 5-year performance ----
         var annuals = f.annuals || [];
@@ -403,7 +548,7 @@
           }).join('');
         } else {
           document.getElementById('r5yHead').innerHTML = '';
-          document.getElementById('r5yBody').innerHTML = '<tr><td class="empty">No annual data available.</td></tr>';
+          document.getElementById('r5yBody').innerHTML = '<tr><td class="empty">No annual data available from free sources.</td></tr>';
         }
 
         // ---- quarterly results ----
@@ -423,17 +568,35 @@
           }).join('');
         } else {
           document.getElementById('rQHead').innerHTML = '';
-          document.getElementById('rQBody').innerHTML = '<tr><td class="empty">No quarterly data available.</td></tr>';
+          document.getElementById('rQBody').innerHTML = '<tr><td class="empty">No quarterly data available from free sources.</td></tr>';
         }
       }
 
+      // Autocomplete via free search API.
+      var searchTimer = null;
+      document.getElementById('symbol').addEventListener('input', function () {
+        var term = this.value.trim();
+        clearTimeout(searchTimer);
+        if (term.length < 2) return;
+        searchTimer = setTimeout(function () {
+          fetch('/api/search?q=' + encodeURIComponent(term) + '&limit=8').then(function (r) {
+            return r.ok ? r.json() : { results: [] };
+          }).then(function (j) {
+            var dl = document.getElementById('symbolList');
+            dl.innerHTML = (j.results || []).map(function (r) {
+              return '<option value="' + esc(String(r.symbol || '').toUpperCase()) + '">' + esc(r.name || '') + '</option>';
+            }).join('');
+          }).catch(function () { /* suggestions are best-effort */ });
+        }, 250);
+      });
+
       document.getElementById('lookupForm').addEventListener('submit', function (event) {
         event.preventDefault();
-        var symbol = document.getElementById('symbol').value.trim().toUpperCase();
+        var symbol = document.getElementById('symbol').value.trim().toUpperCase().replace(/\.NS$|\.BO$/, '');
         if (symbol) loadReport(symbol, false);
       });
       document.getElementById('refresh').addEventListener('click', function () {
-        var symbol = document.getElementById('symbol').value.trim().toUpperCase();
+        var symbol = document.getElementById('symbol').value.trim().toUpperCase().replace(/\.NS$|\.BO$/, '');
         if (!symbol) { RS.toast('Enter a symbol first', 'err'); return; }
         RS.toast('Refreshing data…');
         loadReport(symbol, true);
@@ -443,12 +606,24 @@
         if (!symbol) { RS.toast('Enter a symbol first', 'err'); return; }
         window.location = '/api/fundamentals.csv?symbol=' + encodeURIComponent(symbol);
       });
+      document.getElementById('addWatch').addEventListener('click', async function () {
+        var symbol = document.getElementById('symbol').value.trim().toUpperCase().replace(/\.NS$|\.BO$/, '');
+        if (!symbol) { RS.toast('Enter a symbol first', 'err'); return; }
+        try {
+          var res = await fetch('/api/watchlist', {
+            method: 'POST', headers: { 'content-type': 'application/json' },
+            body: JSON.stringify({ items: [{ symbol: symbol }] }),
+          });
+          if (!res.ok) throw new Error('HTTP ' + res.status);
+          RS.toast('Added ' + symbol + ' to watchlist', 'ok');
+        } catch (err) { RS.toast('Could not add: ' + err.message, 'err'); }
+      });
 
       // deep-link: /fundamentals?symbol=RELIANCE
       var initial = new URLSearchParams(window.location.search).get('symbol');
       if (initial) {
-        document.getElementById('symbol').value = initial.toUpperCase();
-        loadReport(initial.toUpperCase(), false);
+        document.getElementById('symbol').value = initial.toUpperCase().replace(/\.NS$|\.BO$/, '');
+        loadReport(initial.toUpperCase().replace(/\.NS$|\.BO$/, ''), false);
       }
     })();
   </script>
