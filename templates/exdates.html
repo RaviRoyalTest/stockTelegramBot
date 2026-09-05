@@ -78,7 +78,7 @@
       function renderRows(items) {
         document.getElementById('tbody').innerHTML = items.map(function (item) {
           return '<tr>' +
-            '<td><strong>' + esc(item.symbol || '−') + '</strong></td>' +
+            '<td><a href="/fundamentals?symbol=' + encodeURIComponent(item.symbol || '') + '"><strong>' + esc(item.symbol || '−') + '</strong></a></td>' +
             '<td>' + esc(item.subject || item.purpose || '−') + '</td>' +
             '<td>' + esc(item.ex_date || '−') + '</td>' +
             '<td>' + esc(item.record_date || '−') + '</td>' +

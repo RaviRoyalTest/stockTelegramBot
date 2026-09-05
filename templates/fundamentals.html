@@ -1,9 +1,9 @@
 {% extends "base.html" %}
-{% block title %}Fundamentals · Royal Stock{% endblock %}
+{% block title %}Stock Report · Royal Stock{% endblock %}
 {% block content %}
   <div class="page-header">
-    <h1>Fundamental analysis</h1>
-    <p class="sub">Valuation, profitability and quality metrics for any listed stock.</p>
+    <h1>Stock report</h1>
+    <p class="sub">The full fundamental report — the same data the Telegram bot sends with /fundamentalreport.</p>
   </div>
 
   <section class="card" aria-labelledby="lookupHeading">
@@ -13,91 +13,443 @@
         <label for="symbol">Symbol (NSE)</label>
         <input id="symbol" required placeholder="e.g. RELIANCE" autocomplete="off" style="text-transform:uppercase" />
       </div>
-      <button class="btn btn-primary" type="submit" id="go">🔍 Fetch</button>
+      <button class="btn btn-primary" type="submit" id="go">🔍 Fetch full report</button>
+      <button class="btn" type="button" id="refresh" title="Bypass the data cache and refetch">♻️ Refresh data</button>
       <button class="btn" type="button" id="download">⬇️ CSV</button>
     </form>
+    <p class="note" style="margin-bottom:0;">First fetch of a symbol takes up to ~30s (live scraping of financial tables); afterwards it's instant from cache.</p>
   </section>
 
-  <section class="card section" aria-live="polite" aria-labelledby="resultHeading">
-    <h2 id="resultHeading">Result</h2>
-    <div id="card">
-      <p class="muted">Enter a symbol above and press Fetch.</p>
+  <div id="report" class="section" hidden>
+    <!-- header -->
+    <section class="card" aria-labelledby="rTitle">
+      <div class="report-title">
+        <h2 id="rTitle">—</h2>
+        <span class="price" id="rPrice"></span>
+        <span class="chg" id="rChg"></span>
+      </div>
+      <div class="pill-row" style="margin-top:10px;" id="rBadges"></div>
+    </section>
+
+    <div class="section-grid section">
+      <!-- price & movement -->
+      <section class="card" aria-labelledby="hMove">
+        <h2 id="hMove">💰 Price &amp; movement</h2>
+        <table class="kv"><tbody id="rMove"></tbody></table>
+      </section>
+
+      <!-- technicals -->
+      <section class="card" aria-labelledby="hTech">
+        <h2 id="hTech">📈 Technical indicators</h2>
+        <table class="kv"><tbody id="rTech"></tbody></table>
+      </section>
+
+      <!-- valuation -->
+      <section class="card" aria-labelledby="hVal">
+        <h2 id="hVal">🏷️ Valuation</h2>
+        <table class="kv"><tbody id="rVal"></tbody></table>
+      </section>
+
+      <!-- growth & margins -->
+      <section class="card" aria-labelledby="hGrowth">
+        <h2 id="hGrowth">📈 Growth &amp; margins</h2>
+        <table class="kv"><tbody id="rGrowth"></tbody></table>
+      </section>
+
+      <!-- per share -->
+      <section class="card" aria-labelledby="hShare">
+        <h2 id="hShare">💼 Per-share &amp; scale</h2>
+        <table class="kv"><tbody id="rShare"></tbody></table>
+      </section>
+
+      <!-- balance sheet -->
+      <section class="card" aria-labelledby="hBal">
+        <h2 id="hBal">🏦 Balance sheet</h2>
+        <table class="kv"><tbody id="rBal"></tbody></table>
+      </section>
+
+      <!-- cash flow -->
+      <section class="card" aria-labelledby="hCash">
+        <h2 id="hCash">💵 Cash flow <span class="muted" id="rCashYear"></span></h2>
+        <table class="kv"><tbody id="rCash"></tbody></table>
+      </section>
+
+      <!-- returns -->
+      <section class="card" aria-labelledby="hRet">
+        <h2 id="hRet">🎯 Returns</h2>
+        <table class="kv"><tbody id="rRet"></tbody></table>
+      </section>
+
+      <!-- shareholding -->
+      <section class="card" aria-labelledby="hHold">
+        <h2 id="hHold">👥 Shareholding</h2>
+        <table class="kv"><tbody id="rHold"></tbody></table>
+      </section>
+
+      <!-- analyst view -->
+      <section class="card" aria-labelledby="hAnalyst">
+        <h2 id="hAnalyst">🔭 Analyst view</h2>
+        <table class="kv"><tbody id="rAnalyst"></tbody></table>
+      </section>
+
+      <!-- rating trend -->
+      <section class="card" aria-labelledby="hTrend">
+        <h2 id="hTrend">📅 Rating trend</h2>
+        <div id="rTrend" class="table-scroll"></div>
+      </section>
+
+      <!-- peers -->
+      <section class="card" aria-labelledby="hPeers">
+        <h2 id="hPeers">🏢 Peers</h2>
+        <div class="table-scroll"><table class="table-mini"><thead><tr><th>Symbol</th><th class="num">Price</th><th class="num">P/E</th></tr></thead><tbody id="rPeers"></tbody></table></div>
+      </section>
+
+      <!-- management -->
+      <section class="card" aria-labelledby="hMgmt">
+        <h2 id="hMgmt">👤 Top management</h2>
+        <div id="rMgmt"></div>
+      </section>
     </div>
-    <canvas id="fundChart" width="600" height="200" style="max-width:600px; margin-top:14px;" aria-hidden="true"></canvas>
-  </section>
+
+    <!-- 5 year performance: full width -->
+    <section class="card section" aria-labelledby="h5y">
+      <h2 id="h5y">📈 5-year performance</h2>
+      <div class="table-scroll">
+        <table class="table-mini">
+          <thead><tr id="r5yHead"></tr></thead>
+          <tbody id="r5yBody"></tbody>
+        </table>
+      </div>
+    </section>
+
+    <!-- quarterly results: full width -->
+    <section class="card section" aria-labelledby="hQ">
+      <h2 id="hQ">📅 Quarterly results</h2>
+      <div class="table-scroll">
+        <table class="table-mini">
+          <thead><tr id="rQHead"></tr></thead>
+          <tbody id="rQBody"></tbody>
+        </table>
+      </div>
+    </section>
+  </div>
+
+  <div id="placeholder" class="card section">
+    <p class="muted" style="margin:0;">Enter a symbol above and press <strong>Fetch full report</strong>.</p>
+  </div>
 {% endblock %}
 
 {% block scripts %}
-  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
   <script>
     (function () {
       'use strict';
-      var esc = RS.escapeHtml, fmtNum = RS.fmtNum;
+      var esc = RS.escapeHtml;
+      var NUM_FIELDS = { price: 2 };
+
+      function fmt(v, d) {
+        if (v === null || v === undefined || v === '') return '−';
+        var n = Number(v);
+        if (isNaN(n)) return esc(v);
+        return n.toLocaleString(undefined, { maximumFractionDigits: d == null ? 2 : d });
+      }
+
+      function cr(v, d) { return (v == null) ? '−' : '₹' + fmt(v, d == null ? 0 : d); }
+      function pct(v, d) { return (v == null) ? '−' : fmt(v, d) + '%'; }
+      function x(v) { return (v == null) ? '−' : fmt(v) + 'x'; }
+
+      function rows(pairs) {
+        return pairs.filter(function (p) { return p && p[1] !== null; })
+          .map(function (p) {
+            return '<tr><th scope="row">' + esc(p[0]) + '</th><td>' + p[1] + '</td></tr>';
+          }).join('') || '<tr><td class="empty">No data</td></tr>';
+      }
+
+      function cls(v, goodWhenPositive) {
+        if (v == null || isNaN(Number(v))) return '';
+        return Number(v) >= 0 ? 'pos' : 'neg';
+      }
+
+      function signed(v, d) {
+        if (v == null || isNaN(Number(v))) return null;
+        var n = Number(v);
+        return '<span class="' + (n >= 0 ? 'pos' : 'neg') + '">' + (n >= 0 ? '+' : '') + fmt(n, d) + '%</span>';
+      }
+
+      async function loadReport(symbol, refresh) {
+        var report = document.getElementById('report');
+        var placeholder = document.getElementById('placeholder');
+        var go = document.getElementById('go');
+        placeholder.hidden = true;
+        report.hidden = false;
+        go.disabled = true;
+        document.getElementById('rTitle').textContent = symbol;
+        document.querySelectorAll('#report tbody, #rTrend, #rPeers, #rMgmt, #r5yHead, #r5yBody, #rQHead, #rQBody').forEach(function (el) {
+          if (el.tagName === 'TBODY') el.innerHTML = '<tr><td colspan="6" class="empty"><span class="skeleton" style="display:block;width:100%"></span></td></tr>';
+        });
+        try {
+          var res = await fetch('/api/fundamentals?symbol=' + encodeURIComponent(symbol) + (refresh ? '&refresh=1' : ''));
+          if (!res.ok) throw new Error('HTTP ' + res.status);
+          var data = await res.json();
+          render(data);
+          history.replaceState(null, '', '/fundamentals?symbol=' + encodeURIComponent(symbol));
+        } catch (err) {
+          console.error('loadReport failed:', err);
+          RS.toast('Could not load report for ' + symbol + ': ' + err.message, 'err');
+          placeholder.hidden = false;
+          report.hidden = true;
+        } finally {
+          go.disabled = false;
+        }
+      }
 
       function render(data) {
-        var fund = data.fund || {};
-        var quote = data.quote || {};
-        var rows = [
-          ['Price', quote.price != null ? '₹' + fmtNum(quote.price) : '−'],
-          ['Change', quote.change_pct != null ? RS.fmtPct(quote.change_pct) : '−'],
-          ['Market cap', fund.market_cap != null ? '₹' + fmtNum(fund.market_cap, 0) + ' Cr' : '−'],
-          ['P/E', fmtNum(fund.pe)],
-          ['ROE', fmtNum(fund.roe)],
-          ['Debt / Equity', fmtNum(fund.debt_to_equity)],
-          ['RSI (14)', fmtNum(fund.rsi14)],
-          ['Sector', fund.sector || fund.industry || '−'],
-        ];
-        document.getElementById('card').innerHTML =
-          '<table><tbody>' + rows.map(function (pair) {
-            return '<tr><th scope="row" style="width:40%">' + esc(pair[0]) + '</th><td>' + esc(pair[1]) + '</td></tr>';
-          }).join('') + '</tbody></table>';
-        renderChart(fund);
-      }
+        var f = data.fund || {};
+        var q = data.quote || {};
+        var price = (q.price != null) ? q.price : f.price;
 
-      function renderChart(fund) {
-        try {
-          if (!window.Chart) return;
-          var ctx = document.getElementById('fundChart').getContext('2d');
-          if (window._fundChart) window._fundChart.destroy();
-          window._fundChart = new Chart(ctx, {
-            type: 'bar',
-            data: {
-              labels: ['P/E', 'ROE'],
-              datasets: [{ label: 'Value', data: [fund.pe || 0, fund.roe || 0], backgroundColor: ['#3b82f6', '#10b981'] }],
-            },
-            options: { scales: { y: { beginAtZero: true } } },
-          });
-        } catch (err) { /* chart is decorative */ }
-      }
+        document.getElementById('rTitle').textContent = (q.name || f.company || f.name || data.symbol).toUpperCase();
+        document.getElementById('rPrice').textContent = price != null ? '₹' + fmt(price) : '−';
+        var chgEl = document.getElementById('rChg');
+        if (q.change_pct != null) {
+          chgEl.textContent = RS.fmtPct(q.change_pct);
+          chgEl.className = 'chg ' + (Number(q.change_pct) >= 0 ? 'pos' : 'neg');
+        } else { chgEl.textContent = ''; }
 
-      async function fetchFundamentals(symbol) {
-        var card = document.getElementById('card');
-        card.innerHTML = '<p class="muted">Loading ' + esc(symbol) + '…</p>';
-        var button = document.getElementById('go');
-        button.disabled = true;
-        try {
-          var res = await fetch('/api/fundamentals?symbol=' + encodeURIComponent(symbol));
-          if (!res.ok) throw new Error(res.status === 404 ? 'not found' : 'HTTP ' + res.status);
-          render(await res.json());
-        } catch (err) {
-          card.innerHTML = '<p class="muted">Could not load data for ' + esc(symbol) + '. Check the symbol and try again.</p>';
-          RS.toast('Lookup failed: ' + err.message, 'err');
-        } finally {
-          button.disabled = false;
-          document.getElementById('symbol').focus();
+        var badges = [];
+        if (f.sector) badges.push(f.sector);
+        if (f.industry) badges.push(f.industry);
+        if (f.rec_key) badges.push('Analysts: ' + String(f.rec_key).toUpperCase());
+        if (f.mcap_cr != null) badges.push('Mkt cap ₹' + fmt(f.mcap_cr, 0) + ' Cr');
+        document.getElementById('rBadges').innerHTML = badges.map(function (b) {
+          return '<span class="pill">' + esc(b) + '</span>';
+        }).join('');
+
+        // ---- price & movement ----
+        var posVs50 = (f.sma_50 != null && price != null) ? (price >= f.sma_50 ? '<span class="pos">Above</span>' : '<span class="neg">Below</span>') : null;
+        var posVs200 = (f.sma_200 != null && price != null) ? (price >= f.sma_200 ? '<span class="pos">Above</span>' : '<span class="neg">Below</span>') : null;
+        document.getElementById('rMove').innerHTML = rows([
+          ['Day change', q.change_pct != null ? signed(q.change_pct) : null],
+          ['52-week low', f.wk52_low != null ? cr(f.wk52_low) : null],
+          ['52-week high', f.wk52_high != null ? cr(f.wk52_high) : null],
+          ['vs 50-day SMA', posVs50],
+          ['vs 200-day SMA', posVs200],
+          ['Beta', f.beta != null ? fmt(f.beta) : null],
+        ]);
+
+        // ---- technicals ----
+        document.getElementById('rTech').innerHTML = rows([
+          ['RSI (14)', f.rsi != null ? fmt(f.rsi, 1) : (f.rsi14 != null ? fmt(f.rsi14, 1) : null)],
+          ['MACD line', f.macd_line != null ? fmt(f.macd_line) : null],
+          ['MACD signal', f.macd_signal != null ? fmt(f.macd_signal) : null],
+          ['MACD histogram', f.macd_hist != null ? fmt(f.macd_hist) : null],
+          ['50-day SMA', f.sma_50 != null ? cr(f.sma_50) : null],
+          ['200-day SMA', f.sma_200 != null ? cr(f.sma_200) : null],
+        ]);
+
+        // ---- valuation ----
+        document.getElementById('rVal').innerHTML = rows([
+          ['P/E (trailing)', f.pe != null ? x(f.pe) : null],
+          ['Forward P/E', f.forward_pe != null ? x(f.forward_pe) : null],
+          ['Sector P/E', f.sector_pe != null ? x(f.sector_pe) : null],
+          ['Price / Book', f.price_to_book != null ? x(f.price_to_book) : null],
+          ['Price / Sales', f.price_to_sales != null ? x(f.price_to_sales) : null],
+          ['Dividend yield', f.div_yield != null ? pct(f.div_yield) : null],
+          ['EV', f.enterprise_value != null ? '₹' + fmt(f.enterprise_value / 1e7, 0) + ' Cr' : null],
+        ]);
+
+        // ---- growth & margins ----
+        document.getElementById('rGrowth').innerHTML = rows([
+          ['Earnings growth YoY', f.earnings_growth != null ? signed(f.earnings_growth * 100, 1) : null],
+          ['Revenue growth YoY', f.revenue_growth != null ? signed(f.revenue_growth * 100, 1) : null],
+          ['Gross margin', f.gross_margin != null ? pct(f.gross_margin * 100, 1) : null],
+          ['EBITDA margin', f.ebitda_margin != null ? pct(f.ebitda_margin * 100, 1) : null],
+          ['Operating margin', f.operating_margin != null ? pct(f.operating_margin * 100, 1) : null],
+          ['Profit margin', f.profit_margin != null ? pct(f.profit_margin * 100, 1) : null],
+        ]);
+
+        // ---- per share & scale ----
+        document.getElementById('rShare').innerHTML = rows([
+          ['EPS (trailing)', f.trailing_eps != null ? cr(f.trailing_eps) : null],
+          ['EPS (forward)', f.forward_eps != null ? cr(f.forward_eps) : null],
+          ['Book value', f.book_value != null ? cr(f.book_value) : null],
+          ['Revenue / share', f.revenue_per_share != null ? cr(f.revenue_per_share) : null],
+          ['Cash / share', f.cash_per_share != null ? cr(f.cash_per_share) : null],
+          ['Shares outstanding', f.shares_outstanding != null ? fmt(f.shares_outstanding / 1e7, 2) + ' Cr' : null],
+          ['Float shares', f.float_shares != null ? fmt(f.float_shares / 1e7, 2) + ' Cr' : null],
+          ['Employees', f.employees != null ? fmt(f.employees, 0) : null],
+        ]);
+
+        // ---- balance sheet ----
+        var bs = f.balance_sheet || {};
+        document.getElementById('rBal').innerHTML = rows([
+          ['Debt / Equity', f.debt_to_equity != null ? x(f.debt_to_equity) : null],
+          ['Interest coverage', f.interest_coverage_ratio != null ? x(f.interest_coverage_ratio) : null],
+          ['Net worth', bs.net_worth != null ? cr(bs.net_worth, 0) + ' Cr' : null],
+          ['Borrowings', bs.borrowings != null ? cr(bs.borrowings, 0) + ' Cr' : null],
+          ['Total assets', bs.total_assets != null ? cr(bs.total_assets, 0) + ' Cr' : null],
+          ['Investments', bs.investments != null ? cr(bs.investments, 0) + ' Cr' : null],
+          ['Total cash', f.total_cash != null ? '₹' + fmt(f.total_cash / 1e7, 0) + ' Cr' : null],
+          ['Total debt', f.total_debt != null ? '₹' + fmt(f.total_debt / 1e7, 0) + ' Cr' : null],
+        ]);
+
+        // ---- cash flow ----
+        var cf = f.cash_flow || {};
+        document.getElementById('rCashYear').textContent = cf.year ? '· ' + cf.year : '';
+        function cash(v) { return (v == null) ? null : '<span class="' + (v >= 0 ? 'pos' : 'neg') + '">₹' + fmt(v, 0) + ' Cr</span>'; }
+        document.getElementById('rCash').innerHTML = rows([
+          ['Cash from operations', cash(cf.cfo)],
+          ['Cash from investing', cash(cf.cfi)],
+          ['Cash from financing', cash(cf.cff)],
+          ['Net cash flow', cash(cf.net_cash_flow)],
+          ['Free cash flow', cash(cf.free_cash_flow)],
+        ]);
+
+        // ---- returns ----
+        document.getElementById('rRet').innerHTML = rows([
+          ['ROE', f.roe != null ? pct(f.roe, 1) : null],
+          ['ROCE', f.roce != null ? pct(f.roce, 1) : null],
+          ['EBITDA', f.ebitda != null ? '₹' + fmt(f.ebitda / 1e7, 0) + ' Cr' : null],
+        ]);
+
+        // ---- shareholding ----
+        function holding(label, v) {
+          if (v == null) return null;
+          var m = String(v).match(/^([\d.]+)\s*(?:(\+\d+\.?\d*|-[\d.]+))?/);
+          if (!m) return [label, esc(v)];
+          var base = m[1], delta = m[2];
+          var out = base + '%';
+          if (delta) {
+            var dn = Number(delta);
+            out += ' <span class="' + (dn >= 0 ? 'pos' : 'neg') + '">' + (dn >= 0 ? '+' : '') + dn.toFixed(2) + '% QoQ</span>';
+          }
+          return [label, out];
+        }
+        document.getElementById('rHold').innerHTML = rows([
+          holding('Promoters', f.promoter_pct),
+          holding('FIIs', f.fii_pct),
+          holding('DIIs', f.dii_pct),
+          holding('Public', f.public_pct),
+        ]);
+
+        // ---- analyst view ----
+        var upside = (f.target_mean != null && price != null && price > 0)
+          ? signed((f.target_mean - price) / price * 100, 1) : null;
+        document.getElementById('rAnalyst').innerHTML = rows([
+          ['Consensus', f.rec_key ? String(f.rec_key).toUpperCase() : null],
+          ['Mean rating (1=buy, 5=sell)', f.rec_mean != null ? fmt(f.rec_mean) : null],
+          ['Analysts covering', f.num_analysts != null ? fmt(f.num_analysts, 0) : null],
+          ['Mean target', f.target_mean != null ? cr(f.target_mean) : null],
+          ['Potential upside', upside],
+          ['High target', f.target_high != null ? cr(f.target_high) : null],
+          ['Median target', f.target_median != null ? cr(f.target_median) : null],
+          ['Low target', f.target_low != null ? cr(f.target_low) : null],
+        ]);
+
+        // ---- rating trend table ----
+        var hist = f.rec_history || [];
+        var keys = ['strong_buy', 'buy', 'hold', 'sell', 'strong_sell'];
+        var labels = { strong_buy: 'Strong buy', buy: 'Buy', hold: 'Hold', sell: 'Sell', strong_sell: 'Strong sell' };
+        if (hist.length) {
+          document.getElementById('rTrend').innerHTML =
+            '<table class="table-mini"><thead><tr><th>Rating</th>' +
+            hist.map(function (h) { return '<th class="num">' + esc(h.period || '') + '</th>'; }).join('') +
+            '</tr></thead><tbody>' +
+            keys.map(function (k) {
+              return '<tr><th scope="row">' + labels[k] + '</th>' +
+                hist.map(function (h) { return '<td class="num">' + fmt((h || {})[k], 0) + '</td>'; }).join('') +
+                '</tr>';
+            }).join('') + '</tbody></table>';
+        } else {
+          document.getElementById('rTrend').innerHTML = '<p class="muted">No rating history available.</p>';
+        }
+
+        // ---- peers ----
+        var peers = f.competitors || [];
+        document.getElementById('rPeers').innerHTML = peers.length ? peers.map(function (p) {
+          var sym = typeof p === 'string' ? p : (p.symbol || '');
+          var link = '<a href="/fundamentals?symbol=' + encodeURIComponent(sym) + '"><strong>' + esc(sym) + '</strong></a>';
+          if (typeof p === 'string') {
+            return '<tr><td>' + link + '</td><td class="num">−</td><td class="num">−</td></tr>';
+          }
+          return '<tr><td>' + link + '</td><td class="num">' + (p.price != null ? cr(p.price) : '−') + '</td>' +
+            '<td class="num">' + (p.pe != null ? fmt(p.pe) : '−') + '</td></tr>';
+        }).join('') : '<tr><td colspan="3" class="empty">No peer data.</td></tr>';
+
+        // ---- management ----
+        var officers = f.officers || [];
+        document.getElementById('rMgmt').innerHTML = officers.length ? officers.map(function (o) {
+          return '<div class="officer"><div><div class="who">' + esc(o.name) + '</div>' +
+            '<div class="role">' + esc(o.title || '') + '</div></div></div>';
+        }).join('') : '<p class="muted">No officer data.</p>';
+
+        // ---- 5-year performance ----
+        var annuals = f.annuals || [];
+        if (annuals.length) {
+          var cells = function (item, key) { return item[key] != null ? fmt(item[key], 1) : '−'; };
+          document.getElementById('r5yHead').innerHTML =
+            '<th scope="col">Metric</th>' + annuals.map(function (a) { return '<th class="num">' + esc(a.year) + '</th>'; }).join('');
+          var metricRows = [
+            ['Sales (₹ Cr)', function (a) { return cells(a, 'sales'); }],
+            ['Sales YoY', function (a) { return a.sales_growth != null ? signed(a.sales_growth, 1) : '−'; }],
+            ['OPM %', function (a) { return cells(a, 'opm'); }],
+            ['Net profit (₹ Cr)', function (a) { return cells(a, 'net_profit'); }],
+            ['Profit YoY', function (a) { return a.profit_growth != null ? signed(a.profit_growth, 1) : '−'; }],
+            ['EPS', function (a) { return cells(a, 'eps'); }],
+            ['ROCE %', function (a) { return a.roce != null ? cells(a, 'roce') : '−'; }],
+          ];
+          document.getElementById('r5yBody').innerHTML = metricRows.map(function (rowDef) {
+            return '<tr><th scope="row">' + rowDef[0] + '</th>' +
+              annuals.map(function (a) { return '<td class="num">' + rowDef[1](a) + '</td>'; }).join('') + '</tr>';
+          }).join('');
+        } else {
+          document.getElementById('r5yHead').innerHTML = '';
+          document.getElementById('r5yBody').innerHTML = '<tr><td class="empty">No annual data available.</td></tr>';
+        }
+
+        // ---- quarterly results ----
+        var quarters = f.quarters || [];
+        if (quarters.length) {
+          document.getElementById('rQHead').innerHTML =
+            '<th scope="col">Metric</th>' + quarters.map(function (a) { return '<th class="num">' + esc(a.quarter) + '</th>'; }).join('');
+          var qRows = [
+            ['Sales (₹ Cr)', function (a) { return a.sales != null ? fmt(a.sales, 1) : '−'; }],
+            ['OPM %', function (a) { return a.opm != null ? fmt(a.opm, 1) : '−'; }],
+            ['Net profit (₹ Cr)', function (a) { return a.net_profit != null ? fmt(a.net_profit, 1) : '−'; }],
+            ['EPS', function (a) { return a.eps != null ? fmt(a.eps, 2) : '−'; }],
+          ];
+          document.getElementById('rQBody').innerHTML = qRows.map(function (rowDef) {
+            return '<tr><th scope="row">' + rowDef[0] + '</th>' +
+              quarters.map(function (a) { return '<td class="num">' + rowDef[1](a) + '</td>'; }).join('') + '</tr>';
+          }).join('');
+        } else {
+          document.getElementById('rQHead').innerHTML = '';
+          document.getElementById('rQBody').innerHTML = '<tr><td class="empty">No quarterly data available.</td></tr>';
         }
       }
 
       document.getElementById('lookupForm').addEventListener('submit', function (event) {
         event.preventDefault();
         var symbol = document.getElementById('symbol').value.trim().toUpperCase();
-        if (symbol) fetchFundamentals(symbol);
+        if (symbol) loadReport(symbol, false);
+      });
+      document.getElementById('refresh').addEventListener('click', function () {
+        var symbol = document.getElementById('symbol').value.trim().toUpperCase();
+        if (!symbol) { RS.toast('Enter a symbol first', 'err'); return; }
+        RS.toast('Refreshing data…');
+        loadReport(symbol, true);
       });
       document.getElementById('download').addEventListener('click', function () {
         var symbol = document.getElementById('symbol').value.trim().toUpperCase();
         if (!symbol) { RS.toast('Enter a symbol first', 'err'); return; }
         window.location = '/api/fundamentals.csv?symbol=' + encodeURIComponent(symbol);
       });
+
+      // deep-link: /fundamentals?symbol=RELIANCE
+      var initial = new URLSearchParams(window.location.search).get('symbol');
+      if (initial) {
+        document.getElementById('symbol').value = initial.toUpperCase();
+        loadReport(initial.toUpperCase(), false);
+      }
     })();
   </script>
 {% endblock %}

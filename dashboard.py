@@ -410,26 +410,29 @@ async def health():
 
 
 @app.get("/api/fundamentals")
-async def api_fundamentals(symbol: str | None = Query(None)):
+async def api_fundamentals(symbol: str | None = Query(None), refresh: bool = Query(False)):
+    """Deep fundamentals for one symbol — the same dataset the Telegram bot's
+    /fundamentalreport shows. Runs the bot's own sync fetch in a worker thread
+    WITHOUT a timeout: a partial report helps nobody, and results are cached
+    by the source layer anyway (first cold fetch can take ~20-30s while the
+    screener.in tables are scraped; ?refresh=1 bypasses the cache)."""
     if not symbol:
         raise HTTPException(status_code=400, detail="symbol is required")
+    key = symbol.strip().upper().removesuffix(".NS").removesuffix(".BO")
     log = logging.getLogger(__name__)
     try:
-        fund_timeout = float(os.getenv("FUND_API_TIMEOUT", "10"))
-        quote_timeout = float(os.getenv("QUOTE_API_TIMEOUT", "6"))
-        try:
-            fund = await asyncio.wait_for(sources.get_fundamentals_async(symbol, True), timeout=fund_timeout) or {}
-        except asyncio.TimeoutError:
-            log.warning("/api/fundamentals: get_fundamentals_async timed out for %s", symbol)
-            fund = {}
-        try:
-            quote = await asyncio.wait_for(sources.get_quote_async("NSE", symbol), timeout=quote_timeout)
-            if not quote:
-                quote = await asyncio.wait_for(sources.get_quote_async("BSE", symbol), timeout=quote_timeout)
-        except asyncio.TimeoutError:
-            log.warning("/api/fundamentals: quote lookup timed out for %s", symbol)
-            quote = {}
-        return JSONResponse({"symbol": symbol, "fund": fund, "quote": quote})
+        if refresh:
+            try:
+                from corporate_actions.sources import fundamentals as fund_source
+                fund_source._fund_cache.pop((key, True), None)
+                log.info("/api/fundamentals: cache cleared for %s (refresh=1)", key)
+            except Exception:
+                pass
+        fund = await asyncio.to_thread(sources.get_fundamentals, key, True) or {}
+        quote = await asyncio.to_thread(
+            lambda: sources.get_quote("NSE", key) or sources.get_quote("BSE", key) or {}
+        )
+        return JSONResponse({"symbol": key, "fund": fund, "quote": quote})
     except Exception as e:
         log.exception("/api/fundamentals failed: %s", e)
         raise HTTPException(status_code=500, detail=str(e))
@@ -445,25 +448,15 @@ async def api_fundamentals_csv(symbol: str | None = Query(None)):
         import csv, io
         si = io.StringIO()
         writer = csv.writer(si)
-        keys = [
-            "symbol",
-            "company",
-            "price",
-            "market_cap",
-            "pe",
-            "roe",
-            "debt_to_equity",
-        ]
-        writer.writerow(keys)
-        writer.writerow([
-            symbol,
-            fund.get("company") or fund.get("name") or "",
-            quote.get("price"),
-            fund.get("market_cap"),
-            fund.get("pe"),
-            fund.get("roe"),
-            fund.get("debt_to_equity"),
-        ])
+        flat = {
+            k: v for k, v in fund.items() if not isinstance(v, (dict, list))
+        }
+        writer.writerow(["field", "value"])
+        writer.writerow(["symbol", symbol])
+        writer.writerow(["company", quote.get("name") or fund.get("company") or fund.get("name") or ""])
+        writer.writerow(["price", quote.get("price", "")])
+        for k in sorted(flat):
+            writer.writerow([k, flat[k]])
         return HTMLResponse(content=si.getvalue(), media_type="text/csv")
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))

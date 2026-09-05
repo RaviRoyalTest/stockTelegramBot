@@ -108,7 +108,7 @@
             var chgClass = chg == null ? '' : (Number(chg) >= 0 ? 'pos' : 'neg');
             var mcap = r.market_cap == null ? '−' : '₹' + fmtNum(r.market_cap, 0) + ' Cr';
             return '<tr>' +
-              '<td><strong>' + esc(r.symbol) + '</strong></td>' +
+              '<td><a href="/fundamentals?symbol=' + encodeURIComponent(r.symbol || '') + '"><strong>' + esc(r.symbol) + '</strong></a></td>' +
               '<td>' + esc(r.company || '−') + '</td>' +
               '<td class="num">' + (r.price != null ? '₹' + fmtNum(r.price) : '−') + '</td>' +
               '<td class="num ' + chgClass + '">' + fmtPct(chg) + '</td>' +
