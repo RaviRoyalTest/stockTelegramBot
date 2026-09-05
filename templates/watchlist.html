@@ -1,40 +1,137 @@
-<!DOCTYPE html>
-<html>
-  <head>
-    <meta charset="utf-8" />
-    <title>Watchlist - Royal Stock</title>
-    <style>body{font-family:Arial;padding:20px}</style>
-  </head>
-  <body>
+{% extends "base.html" %}
+{% block title %}Watchlist · Royal Stock{% endblock %}
+{% block content %}
+  <div class="page-header">
     <h1>Watchlist</h1>
-    <div style="margin-bottom:8px">
-      <label>Symbol: <input id="symbol"/></label>
-      <label>Company: <input id="company"/></label>
-      <button id="add">Add</button>
-      <button id="download">Download CSV</button>
+    <p class="sub">Stocks the alert engine watches. Changes here apply to the Telegram bot too.</p>
+  </div>
+
+  <section class="card" aria-labelledby="addHeading">
+    <h2 id="addHeading">Add a stock</h2>
+    <form id="addForm" class="form-row">
+      <div class="field">
+        <label for="symbol">Symbol (NSE)</label>
+        <input id="symbol" name="symbol" required placeholder="e.g. RELIANCE" autocomplete="off" style="text-transform:uppercase" />
+      </div>
+      <div class="field">
+        <label for="company">Company name <span class="muted">(optional)</span></label>
+        <input id="company" name="company" placeholder="e.g. Reliance Industries" autocomplete="off" />
+      </div>
+      <button class="btn btn-primary" type="submit">➕ Add to watchlist</button>
+      <a class="btn" href="/api/watchlist.csv">⬇️ Download CSV</a>
+    </form>
+  </section>
+
+  <section class="card section" aria-labelledby="listHeading">
+    <div style="display:flex; justify-content:space-between; align-items:center; gap:12px; flex-wrap:wrap;">
+      <h2 id="listHeading" style="margin-bottom:0;">Your stocks <span class="pill" id="wlCount">0</span></h2>
+      <label class="field" style="min-width:220px;">
+        <span>Filter</span>
+        <input id="filter" type="search" placeholder="Type to filter…" autocomplete="off" />
+      </label>
     </div>
-    <div id="list"></div>
-    <script>
-      async function load(){
-        const res = await fetch('/api/watchlist');
-        const items = await res.json();
-        document.getElementById('list').innerHTML = items.map(i=>`<div><b>${i.symbol}</b> — ${i.company||''} <button data-sym="${i.symbol}" data-ex="${i.exchange||'NSE'}" class="rm">Remove</button></div>`).join('');
-        document.querySelectorAll('.rm').forEach(b=>b.addEventListener('click', async (e)=>{
-          const s = e.currentTarget.getAttribute('data-sym');
-          const ex = e.currentTarget.getAttribute('data-ex') || 'NSE';
-          await fetch('/api/watchlist?symbol='+encodeURIComponent(s)+'&exchange='+encodeURIComponent(ex), {method:'DELETE'});
-          load();
-        }));
+    <div class="table-scroll" style="margin-top:12px;">
+      <table>
+        <caption class="visually-hidden">Watchlist stocks</caption>
+        <thead>
+          <tr><th scope="col">Symbol</th><th scope="col">Company</th><th scope="col">Exchange</th><th scope="col" class="num">Actions</th></tr>
+        </thead>
+        <tbody id="wlRows">
+          <tr><td colspan="4" class="empty"><span class="skeleton" style="display:block;width:100%"></span></td></tr>
+        </tbody>
+      </table>
+    </div>
+  </section>
+{% endblock %}
+
+{% block scripts %}
+  <script>
+    (function () {
+      'use strict';
+      var esc = RS.escapeHtml;
+
+      async function load() {
+        var tbody = document.getElementById('wlRows');
+        try {
+          var res = await fetch('/api/watchlist');
+          if (!res.ok) throw new Error('API ' + res.status);
+          var items = await res.json();
+          if (!Array.isArray(items)) throw new Error('unexpected response');
+          document.getElementById('wlCount').textContent = String(items.length);
+          if (!items.length) {
+            tbody.innerHTML = '<tr><td colspan="4" class="empty">Watchlist is empty — add your first stock above.</td></tr>';
+            return;
+          }
+          tbody.innerHTML = items.map(function (item) {
+            var sym = String(item.symbol || '');
+            var ex = String(item.exchange || 'NSE');
+            return '<tr>' +
+              '<td><strong>' + esc(sym) + '</strong></td>' +
+              '<td>' + esc(item.company || '−') + '</td>' +
+              '<td><span class="pill">' + esc(ex) + '</span></td>' +
+              '<td class="num"><button class="btn btn-danger btn-sm" ' +
+                'data-sym="' + esc(sym) + '" data-ex="' + esc(ex) + '">Remove</button></td>' +
+            '</tr>';
+          }).join('');
+          applyFilter();
+        } catch (err) {
+          tbody.innerHTML = '<tr><td colspan="4" class="empty">Unable to load the watchlist.</td></tr>';
+          RS.toast('Could not load watchlist: ' + err.message, 'err');
+        }
       }
-      document.getElementById('add').addEventListener('click', async ()=>{
-        const s=document.getElementById('symbol').value.trim();
-        const c=document.getElementById('company').value.trim();
-        if(!s) return alert('enter symbol');
-        await fetch('/api/watchlist', {method:'POST', headers:{'content-type':'application/json'}, body: JSON.stringify({items:[{symbol:s,company:c}]})});
-        load();
+
+      function applyFilter() {
+        var q = document.getElementById('filter').value.trim().toLowerCase();
+        document.querySelectorAll('#wlRows tr').forEach(function (tr) {
+          tr.style.display = tr.textContent.toLowerCase().indexOf(q) !== -1 ? '' : 'none';
+        });
+      }
+
+      document.getElementById('addForm').addEventListener('submit', async function (event) {
+        event.preventDefault();
+        var symbolInput = document.getElementById('symbol');
+        var companyInput = document.getElementById('company');
+        var symbol = symbolInput.value.trim().toUpperCase();
+        if (!symbol) return;
+        var button = this.querySelector('button[type="submit"]');
+        button.disabled = true;
+        try {
+          var res = await fetch('/api/watchlist', {
+            method: 'POST',
+            headers: { 'content-type': 'application/json' },
+            body: JSON.stringify({ items: [{ symbol: symbol, company: companyInput.value.trim() }] }),
+          });
+          if (!res.ok) throw new Error('HTTP ' + res.status);
+          RS.toast('Added ' + symbol, 'ok');
+          symbolInput.value = '';
+          companyInput.value = '';
+          symbolInput.focus();
+          load();
+        } catch (err) {
+          RS.toast('Could not add ' + symbol + ': ' + err.message, 'err');
+        } finally {
+          button.disabled = false;
+        }
       });
-      document.getElementById('download').addEventListener('click', ()=>{ window.location = '/api/watchlist.csv'; });
+
+      document.getElementById('wlRows').addEventListener('click', async function (event) {
+        var button = event.target.closest('button[data-sym]');
+        if (!button) return;
+        button.disabled = true;
+        try {
+          var res = await fetch('/api/watchlist?symbol=' + encodeURIComponent(button.dataset.sym) +
+            '&exchange=' + encodeURIComponent(button.dataset.ex || 'NSE'), { method: 'DELETE' });
+          if (!res.ok) throw new Error('HTTP ' + res.status);
+          RS.toast('Removed ' + button.dataset.sym, 'ok');
+          load();
+        } catch (err) {
+          button.disabled = false;
+          RS.toast('Could not remove: ' + err.message, 'err');
+        }
+      });
+
+      document.getElementById('filter').addEventListener('input', applyFilter);
       load();
-    </script>
-  </body>
-</html>
+    })();
+  </script>
+{% endblock %}

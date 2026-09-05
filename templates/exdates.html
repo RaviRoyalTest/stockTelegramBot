@@ -1,31 +1,115 @@
-<!DOCTYPE html>
-<html>
-  <head>
-    <meta charset="utf-8" />
-    <title>Corporate Actions - Royal Stock</title>
-    <style>body{font-family:Arial;padding:20px}</style>
-  </head>
-  <body>
-    <h1>Corporate Actions (Ex-dates)</h1>
-    <div>
-      <label>Symbol (optional): <input id="symbol"/></label>
-      <button id="run">Fetch</button>
-      <button id="download">Download CSV</button>
+{% extends "base.html" %}
+{% block title %}Corporate Actions · Royal Stock{% endblock %}
+{% block content %}
+  <div class="page-header">
+    <h1>Corporate actions &amp; ex-dates</h1>
+    <p class="sub">Dividends, splits, bonuses and rights issues announced on NSE and BSE.</p>
+  </div>
+
+  <section class="card" aria-labelledby="fetchHeading">
+    <h2 id="fetchHeading">Fetch actions</h2>
+    <form id="fetchForm" class="form-row">
+      <div class="field" style="flex:1; min-width:220px;">
+        <label for="symbol">Symbol <span class="muted">(leave blank for all)</span></label>
+        <input id="symbol" placeholder="e.g. RELIANCE" autocomplete="off" style="text-transform:uppercase" />
+      </div>
+      <button class="btn btn-primary" type="submit">🔍 Fetch</button>
+      <button class="btn" type="button" id="download">⬇️ CSV</button>
+    </form>
+  </section>
+
+  <section class="card section" aria-labelledby="actionsHeading">
+    <div style="display:flex; justify-content:space-between; align-items:center; gap:12px; flex-wrap:wrap;">
+      <h2 id="actionsHeading" style="margin-bottom:0;">Announcements <span class="pill" id="caCount">0</span></h2>
+      <label class="field" style="min-width:220px;">
+        <span>Filter results</span>
+        <input id="filter" type="search" placeholder="Type to filter…" autocomplete="off" />
+      </label>
     </div>
-    <div id="out"></div>
-    <script>
-      async function fetchAndRender(){
-        const s=document.getElementById('symbol').value.trim();
-        const url='/api/corporate_actions'+(s?('?symbol='+encodeURIComponent(s)): '');
-        const res=await fetch(url);
-        const arr=await res.json();
-        document.getElementById('out').innerHTML = arr.map(a=>`<div><b>${a.symbol}</b> ${a.subject||''} — ex ${a.ex_date||a.record_date||''}</div>`).join('')||'<i>no records</i>';
+    <div class="table-scroll" style="margin-top:12px;">
+      <table>
+        <caption class="visually-hidden">Corporate action announcements</caption>
+        <thead>
+          <tr>
+            <th scope="col">Symbol</th>
+            <th scope="col">Action</th>
+            <th scope="col">Ex-date</th>
+            <th scope="col">Record date</th>
+            <th scope="col">Source</th>
+          </tr>
+        </thead>
+        <tbody id="tbody">
+          <tr><td colspan="5" class="empty"><span class="skeleton" style="display:block;width:100%"></span></td></tr>
+        </tbody>
+      </table>
+    </div>
+  </section>
+{% endblock %}
+
+{% block scripts %}
+  <script>
+    (function () {
+      'use strict';
+      var esc = RS.escapeHtml;
+      var latest = [];
+
+      async function fetchAndRender() {
+        var tbody = document.getElementById('tbody');
+        var symbol = document.getElementById('symbol').value.trim().toUpperCase();
+        try {
+          tbody.innerHTML = '<tr><td colspan="5" class="empty"><span class="skeleton" style="display:block;width:100%"></span></td></tr>';
+          var url = '/api/corporate_actions' + (symbol ? '?symbol=' + encodeURIComponent(symbol) : '');
+          var res = await fetch(url);
+          if (!res.ok) throw new Error('API ' + res.status);
+          latest = await res.json();
+          if (!Array.isArray(latest)) throw new Error('unexpected response');
+          document.getElementById('caCount').textContent = String(latest.length);
+          if (!latest.length) {
+            tbody.innerHTML = '<tr><td colspan="5" class="empty">No announcements found.</td></tr>';
+            return;
+          }
+          renderRows(latest);
+        } catch (err) {
+          tbody.innerHTML = '<tr><td colspan="5" class="empty">Unable to load corporate actions. Please try again.</td></tr>';
+          RS.toast('Fetch failed: ' + err.message, 'err');
+        }
       }
-      document.getElementById('run').addEventListener('click', fetchAndRender);
-      document.getElementById('download').addEventListener('click', ()=>{
-        const s=document.getElementById('symbol').value.trim();
-        window.location = '/api/corporate_actions.csv' + (s?('?symbol='+encodeURIComponent(s)):'');
+
+      function renderRows(items) {
+        document.getElementById('tbody').innerHTML = items.map(function (item) {
+          return '<tr>' +
+            '<td><strong>' + esc(item.symbol || '−') + '</strong></td>' +
+            '<td>' + esc(item.subject || item.purpose || '−') + '</td>' +
+            '<td>' + esc(item.ex_date || '−') + '</td>' +
+            '<td>' + esc(item.record_date || '−') + '</td>' +
+            '<td><span class="pill">' + esc(item.source || item.exchange || 'NSE') + '</span></td>' +
+          '</tr>';
+        }).join('');
+      }
+
+      document.getElementById('filter').addEventListener('input', function () {
+        var query = this.value.trim().toLowerCase();
+        var filtered = !query ? latest : latest.filter(function (item) {
+          return JSON.stringify(item).toLowerCase().indexOf(query) !== -1;
+        });
+        document.getElementById('caCount').textContent = String(filtered.length);
+        if (!filtered.length) {
+          document.getElementById('tbody').innerHTML = '<tr><td colspan="5" class="empty">No matches.</td></tr>';
+          return;
+        }
+        renderRows(filtered);
       });
-    </script>
-  </body>
-</html>
+
+      document.getElementById('fetchForm').addEventListener('submit', function (event) {
+        event.preventDefault();
+        fetchAndRender();
+      });
+      document.getElementById('download').addEventListener('click', function () {
+        var symbol = document.getElementById('symbol').value.trim().toUpperCase();
+        window.location = '/api/corporate_actions.csv' + (symbol ? '?symbol=' + encodeURIComponent(symbol) : '');
+      });
+
+      fetchAndRender();
+    })();
+  </script>
+{% endblock %}

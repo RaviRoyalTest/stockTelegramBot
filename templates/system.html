@@ -1,0 +1,86 @@
+{% extends "base.html" %}
+{% block title %}System · Royal Stock{% endblock %}
+{% block content %}
+  <div class="page-header">
+    <h1>System</h1>
+    <p class="sub">Service health and bot configuration at a glance.</p>
+  </div>
+
+  <div class="grid grid-2">
+    <section class="card" aria-labelledby="healthHeading">
+      <h2 id="healthHeading">Dashboard service</h2>
+      <p><span class="pill pill-ok" id="dashPill">checking…</span></p>
+      <p class="muted" id="dashInfo">—</p>
+    </section>
+
+    <section class="card" aria-labelledby="marketHeading">
+      <h2 id="marketHeading">Market status</h2>
+      <p><span class="pill" id="marketPill">checking…</span></p>
+      <p class="muted" id="marketInfo">—</p>
+    </section>
+
+    <section class="card" aria-labelledby="telegramHeading">
+      <h2 id="telegramHeading">Telegram bot</h2>
+      <p><span class="pill" id="tgPill">checking…</span></p>
+      <p class="muted">Send a test message to the configured chat:</p>
+      <button class="btn btn-primary" id="tgTest">📨 Send test message</button>
+    </section>
+
+    <section class="card" aria-labelledby="watchlistHeading">
+      <h2 id="watchlistHeading">Watchlist</h2>
+      <p><span class="pill" id="wlPill">checking…</span></p>
+      <p class="muted" id="wlInfo">—</p>
+    </section>
+  </div>
+{% endblock %}
+
+{% block scripts %}
+  <script>
+    (function () {
+      'use strict';
+      var esc = RS.escapeHtml;
+
+      function setPill(id, text, cls) {
+        var el = document.getElementById(id);
+        el.textContent = text;
+        el.className = 'pill' + (cls ? ' ' + cls : '');
+      }
+
+      async function loadAll() {
+        try {
+          var res = await fetch('/api/status');
+          var data = await res.json();
+          setPill('dashPill', 'Running', 'pill-ok');
+          document.getElementById('dashInfo').textContent =
+            'App version ' + esc(data.version || '—') + ' · screener universe: ' + esc(data.universe || 'nifty500');
+          var open = !!data.market_open;
+          setPill('marketPill', open ? 'Open' : 'Closed', open ? 'pill-ok' : 'pill-bad');
+          document.getElementById('marketInfo').textContent = data.market_text || '';
+          setPill('tgPill', data.telegram_configured ? 'Configured' : 'Not configured', data.telegram_configured ? 'pill-ok' : 'pill-warn');
+          setPill('wlPill', data.watchlist_count + ' stocks', 'pill-ok');
+          var names = (data.watchlist_preview || []).slice(0, 6).join(', ');
+          document.getElementById('wlInfo').textContent = names ? 'Including: ' + names : '—';
+        } catch (err) {
+          setPill('dashPill', 'Unreachable', 'pill-bad');
+          RS.toast('Status check failed: ' + err.message, 'err');
+        }
+      }
+
+      document.getElementById('tgTest').addEventListener('click', async function () {
+        this.disabled = true;
+        try {
+          var res = await fetch('/api/telegram/test', { method: 'POST' });
+          var data = await res.json();
+          RS.toast(data.ok ? 'Test message sent!' : 'Telegram: ' + data.detail, data.ok ? 'ok' : 'err');
+          if (data.ok) setPill('tgPill', 'Configured · delivered', 'pill-ok');
+        } catch (err) {
+          RS.toast('Test failed: ' + err.message, 'err');
+        } finally {
+          this.disabled = false;
+        }
+      });
+
+      loadAll();
+    })();
+  </script>
+{% endblock %}

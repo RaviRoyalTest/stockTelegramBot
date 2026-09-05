@@ -1,53 +1,103 @@
-<!DOCTYPE html>
-<html>
-  <head>
-    <meta charset="utf-8" />
-    <title>Fundamentals - Royal Stock</title>
-    <style>body{font-family:Arial;padding:20px}</style>
-  </head>
-  <body>
-    <h1>Fundamental Analysis</h1>
-    <div style="margin-bottom:8px">
-      <label>Symbol: <input id="symbol"/></label>
-      <button id="go">Fetch</button>
-      <button id="download">Download CSV</button>
+{% extends "base.html" %}
+{% block title %}Fundamentals · Royal Stock{% endblock %}
+{% block content %}
+  <div class="page-header">
+    <h1>Fundamental analysis</h1>
+    <p class="sub">Valuation, profitability and quality metrics for any listed stock.</p>
+  </div>
+
+  <section class="card" aria-labelledby="lookupHeading">
+    <h2 id="lookupHeading">Look up a stock</h2>
+    <form id="lookupForm" class="form-row">
+      <div class="field" style="flex:1; min-width:220px;">
+        <label for="symbol">Symbol (NSE)</label>
+        <input id="symbol" required placeholder="e.g. RELIANCE" autocomplete="off" style="text-transform:uppercase" />
+      </div>
+      <button class="btn btn-primary" type="submit" id="go">🔍 Fetch</button>
+      <button class="btn" type="button" id="download">⬇️ CSV</button>
+    </form>
+  </section>
+
+  <section class="card section" aria-live="polite" aria-labelledby="resultHeading">
+    <h2 id="resultHeading">Result</h2>
+    <div id="card">
+      <p class="muted">Enter a symbol above and press Fetch.</p>
     </div>
-    <div id="card"></div>
-    <canvas id="fundChart" width="600" height="200" style="max-width:600px;margin-top:12px"></canvas>
-    <script>
-      async function render(symbol){
-        const res = await fetch('/api/fundamentals?symbol='+encodeURIComponent(symbol));
-        if(!res.ok){ alert('error'); return }
-        const data = await res.json();
-        const f = data.fund||{};
-        const q = data.quote||{};
-        document.getElementById('card').innerHTML = `
-          <h2>${data.symbol} — ${f.company||''}</h2>
-          <table>
-            <tr><td>Price</td><td>${q.price||'-'}</td></tr>
-            <tr><td>Market Cap</td><td>${f.market_cap||'-'}</td></tr>
-            <tr><td>P/E</td><td>${f.pe||'-'}</td></tr>
-            <tr><td>ROE</td><td>${f.roe||'-'}</td></tr>
-            <tr><td>Debt/Equity</td><td>${f.debt_to_equity||'-'}</td></tr>
-          </table>
-        `;
-        // render small bar chart for PE vs ROE
-        try{
-          const ctx = document.getElementById('fundChart').getContext('2d');
-          const labels = ['P/E','ROE'];
-          const values = [f.pe||0, f.roe||0];
-          if(window._fundChart) window._fundChart.destroy();
-          window._fundChart = new Chart(ctx, {type:'bar', data:{labels:labels,datasets:[{label:data.symbol, data:values, backgroundColor:['#3b82f6','#10b981']}]} , options:{scales:{y:{beginAtZero:true}}}});
-        }catch(e){/* ignore if Chart not available */}
+    <canvas id="fundChart" width="600" height="200" style="max-width:600px; margin-top:14px;" aria-hidden="true"></canvas>
+  </section>
+{% endblock %}
+
+{% block scripts %}
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+  <script>
+    (function () {
+      'use strict';
+      var esc = RS.escapeHtml, fmtNum = RS.fmtNum;
+
+      function render(data) {
+        var fund = data.fund || {};
+        var quote = data.quote || {};
+        var rows = [
+          ['Price', quote.price != null ? '₹' + fmtNum(quote.price) : '−'],
+          ['Change', quote.change_pct != null ? RS.fmtPct(quote.change_pct) : '−'],
+          ['Market cap', fund.market_cap != null ? '₹' + fmtNum(fund.market_cap, 0) + ' Cr' : '−'],
+          ['P/E', fmtNum(fund.pe)],
+          ['ROE', fmtNum(fund.roe)],
+          ['Debt / Equity', fmtNum(fund.debt_to_equity)],
+          ['RSI (14)', fmtNum(fund.rsi14)],
+          ['Sector', fund.sector || fund.industry || '−'],
+        ];
+        document.getElementById('card').innerHTML =
+          '<table><tbody>' + rows.map(function (pair) {
+            return '<tr><th scope="row" style="width:40%">' + esc(pair[0]) + '</th><td>' + esc(pair[1]) + '</td></tr>';
+          }).join('') + '</tbody></table>';
+        renderChart(fund);
       }
-      document.getElementById('go').addEventListener('click', ()=>{
-        const s = document.getElementById('symbol').value.trim(); if(!s) return alert('enter'); render(s);
+
+      function renderChart(fund) {
+        try {
+          if (!window.Chart) return;
+          var ctx = document.getElementById('fundChart').getContext('2d');
+          if (window._fundChart) window._fundChart.destroy();
+          window._fundChart = new Chart(ctx, {
+            type: 'bar',
+            data: {
+              labels: ['P/E', 'ROE'],
+              datasets: [{ label: 'Value', data: [fund.pe || 0, fund.roe || 0], backgroundColor: ['#3b82f6', '#10b981'] }],
+            },
+            options: { scales: { y: { beginAtZero: true } } },
+          });
+        } catch (err) { /* chart is decorative */ }
+      }
+
+      async function fetchFundamentals(symbol) {
+        var card = document.getElementById('card');
+        card.innerHTML = '<p class="muted">Loading ' + esc(symbol) + '…</p>';
+        var button = document.getElementById('go');
+        button.disabled = true;
+        try {
+          var res = await fetch('/api/fundamentals?symbol=' + encodeURIComponent(symbol));
+          if (!res.ok) throw new Error(res.status === 404 ? 'not found' : 'HTTP ' + res.status);
+          render(await res.json());
+        } catch (err) {
+          card.innerHTML = '<p class="muted">Could not load data for ' + esc(symbol) + '. Check the symbol and try again.</p>';
+          RS.toast('Lookup failed: ' + err.message, 'err');
+        } finally {
+          button.disabled = false;
+          document.getElementById('symbol').focus();
+        }
+      }
+
+      document.getElementById('lookupForm').addEventListener('submit', function (event) {
+        event.preventDefault();
+        var symbol = document.getElementById('symbol').value.trim().toUpperCase();
+        if (symbol) fetchFundamentals(symbol);
       });
-      document.getElementById('download').addEventListener('click', ()=>{
-        const s = document.getElementById('symbol').value.trim(); if(!s) return alert('enter');
-        window.location = '/api/fundamentals.csv?symbol='+encodeURIComponent(s);
+      document.getElementById('download').addEventListener('click', function () {
+        var symbol = document.getElementById('symbol').value.trim().toUpperCase();
+        if (!symbol) { RS.toast('Enter a symbol first', 'err'); return; }
+        window.location = '/api/fundamentals.csv?symbol=' + encodeURIComponent(symbol);
       });
-    </script>
-    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
-  </body>
-</html>
+    })();
+  </script>
+{% endblock %}

@@ -55,11 +55,14 @@ def remove_from_watchlist(symbol: str, exchange: str) -> list[dict]:
     with _lock, _file_lock(config.WATCHLIST_FILE):
         current = read_json(config.WATCHLIST_FILE, [])
         before = len(current)
+        # Items stored without an exchange (older dashboard adds) match any
+        # requested exchange so they can still be removed.
         kept = [
             item
             for item in current
             if not (item.get("symbol", "").upper() == symbol.upper()
-                    and item.get("exchange", "").upper() == exchange.upper())
+                    and (not item.get("exchange")
+                         or item.get("exchange", "").upper() == exchange.upper()))
         ]
         write_json(config.WATCHLIST_FILE, kept)
     log.info(

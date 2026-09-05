@@ -1,391 +1,164 @@
-<!DOCTYPE html>
-<html lang="en">
-  <head>
-    <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Royal Stock</title>
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600;700;800&display=swap" rel="stylesheet">
-    <style>
-      :root {
-        color-scheme: light;
-        --bg: #f3f7fb;
-        --bg-strong: #eaf1f8;
-        --panel: rgba(255, 255, 255, 0.8);
-        --panel-strong: #ffffff;
-        --line: rgba(15, 23, 42, 0.1);
-        --text: #0f172a;
-        --muted: #475569;
-        --accent: #2563eb;
-        --accent-soft: rgba(37, 99, 235, 0.1);
-        --green: #16a34a;
-        --red: #dc2626;
-        --shadow: 0 12px 28px rgba(15, 23, 42, 0.08);
-      }
+{% extends "base.html" %}
+{% block title %}Dashboard · Royal Stock{% endblock %}
+{% block content %}
+  <div class="page-header">
+    <h1>Dashboard</h1>
+    <p class="sub">Live overview of your watchlist, screener and alert engine.</p>
+  </div>
 
-      html[data-theme="dark"] {
-        color-scheme: dark;
-        --bg: #020817;
-        --bg-strong: #0b1220;
-        --panel: rgba(15, 23, 42, 0.82);
-        --panel-strong: #111827;
-        --line: rgba(148, 163, 184, 0.2);
-        --text: #e2e8f0;
-        --muted: #94a3b8;
-        --accent: #60a5fa;
-        --accent-soft: rgba(96, 165, 250, 0.12);
-        --green: #22c55e;
-        --red: #ef4444;
-        --shadow: 0 12px 28px rgba(2, 8, 23, 0.45);
-      }
+  <div class="grid grid-4">
+    <div class="card stat">
+      <div class="label">Watchlist</div>
+      <div class="value" id="watchlistCount">…</div>
+    </div>
+    <div class="card stat">
+      <div class="label">Market status</div>
+      <div class="value" id="marketStatus">…</div>
+    </div>
+    <div class="card stat">
+      <div class="label">Telegram</div>
+      <div class="value" id="telegramStat">…</div>
+    </div>
+    <div class="card stat">
+      <div class="label">Sources</div>
+      <div class="value" id="sourcesStat">NSE/BSE</div>
+    </div>
+  </div>
 
-      * { box-sizing: border-box; }
+  <section class="card section" aria-labelledby="quickActionsHeading">
+    <h2 id="quickActionsHeading">Quick actions</h2>
+    <div class="form-row">
+      <button class="btn btn-primary" id="runScreener">▶️ Run screener</button>
+      <button class="btn" id="refreshPrices">🔄 Refresh prices</button>
+      <button class="btn" id="checkNow">🔍 Check now</button>
+      <button class="btn" id="loadUniverse">📋 Load stock list</button>
+      <button class="btn" id="sendTest">📨 Send test message</button>
+      <span class="pill" id="loadStatus" hidden aria-live="polite"></span>
+    </div>
+  </section>
 
-      html, body {
-        margin: 0;
-        min-height: 100%;
-        font-family: Inter, system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial;
-        background: linear-gradient(180deg, var(--bg) 0%, var(--bg-strong) 100%);
-        color: var(--text);
-        -webkit-font-smoothing:antialiased; -moz-osx-font-smoothing:grayscale;
-      }
-
-      body {
-        transition: background 0.2s ease, color 0.2s ease;
-      }
-
-      .shell {
-        max-width: 1200px;
-        margin: 0 auto;
-        padding: 24px;
-      }
-
-      .topbar {
-        display: flex;
-        justify-content: space-between;
-        align-items: center;
-        gap: 16px;
-        padding: 18px 22px;
-        border: 1px solid var(--line);
-        border-radius: 16px;
-        background: var(--panel);
-        backdrop-filter: blur(10px);
-        box-shadow: var(--shadow);
-      }
-
-      .brand {
-        font-size: clamp(1.25rem, 2vw, 1.6rem);
-        font-weight: 800;
-        letter-spacing: -0.02em;
-      }
-
-      .meta {
-        color: var(--muted);
-        font-size: 0.9rem;
-      }
-
-      .theme-toggle {
-        appearance: none;
-        border: 1px solid transparent;
-        background: linear-gradient(90deg,var(--accent) 0%, #7dd3fc 100%);
-        color: white;
-        border-radius: 10px;
-        padding: 8px 14px;
-        cursor: pointer;
-        font-weight: 700;
-        box-shadow: 0 6px 18px rgba(37,99,235,0.15);
-      }
-
-      .grid {
-        display: grid;
-        grid-template-columns: repeat(4, minmax(160px, 1fr));
-        gap: 16px;
-        margin-top: 22px;
-      }
-
-      .card {
-        background: var(--panel-strong);
-        border: 1px solid rgba(15,23,42,0.04);
-        border-radius: 12px;
-        padding: 16px;
-        box-shadow: 0 8px 20px rgba(2,6,23,0.06);
-      }
-
-      .label {
-        color: var(--muted);
-        font-size: 0.8rem;
-      }
-
-      .value {
-        margin-top: 10px;
-        font-size: 2rem;
-        font-weight: 700;
-      }
-
-      .section {
-        margin-top: 26px;
-        background: var(--panel);
-        border: 1px solid var(--line);
-        border-radius: 18px;
-        padding: 20px;
-        box-shadow: var(--shadow);
-      }
-
-      .section h2 { margin-top: 0; }
-
-      .pill-row {
-        display: flex;
-        flex-wrap: wrap;
-        gap: 8px;
-      }
-
-      .pill {
-        display: inline-block;
-        padding: 7px 11px;
-        border-radius: 999px;
-        border: 1px solid var(--line);
-        background: var(--accent-soft);
-        color: var(--text);
-        font-size: 0.8rem;
-      }
-
-      table {
-        width: 100%;
-        border-collapse: collapse;
-        margin-top: 14px;
-        font-size: 0.95rem;
-      }
-
-      th, td {
-        text-align: left;
-        padding: 12px 10px;
-        border-bottom: 1px solid rgba(15,23,42,0.06);
-      }
-
-      th {
-        color: var(--muted);
-        font-size: 0.85rem;
-        text-transform: uppercase;
-        letter-spacing: 0.04em;
-        font-weight: 600;
-      }
-
-      tbody tr:hover { background: linear-gradient(90deg, rgba(37,99,235,0.03), transparent); }
-
-      .status-ok { color: var(--green); }
-      .status-bad { color: var(--red); }
-
-      @media (max-width: 800px) {
-        .grid { grid-template-columns: repeat(2, minmax(140px, 1fr)); }
-        .shell { padding: 16px; }
-        .topbar { flex-direction: column; align-items: flex-start; }
-      }
-    </style>
-  </head>
-  <body>
-    <div class="shell">
-      <div style="display:flex; gap:18px; align-items:flex-start;">
-        <aside style="width:260px">
-          <div class="card" style="padding:14px; margin-bottom:12px">
-            <div style="display:flex; align-items:center; gap:10px">
-              <div style="font-size:28px">📈</div>
-              <div>
-                <div style="font-weight:800; font-size:1.1rem">Royal Stock</div>
-                <div class="meta">NSE &amp; BSE · Telegram bot</div>
-              </div>
-            </div>
-          </div>
-
-          <nav class="card" style="padding:12px">
-            <div style="display:flex; flex-direction:column; gap:8px">
-              <a href="/" style="text-decoration:none; color:var(--text)">🏠 Dashboard</a>
-              <a href="/watchlist" style="text-decoration:none; color:var(--text)">📌 Watchlist</a>
-              <a href="/fundamentals" style="text-decoration:none; color:var(--text)">💹 Fundamentals</a>
-              <a href="/market" style="text-decoration:none; color:var(--text)">📊 Screener</a>
-              <a href="/exdates" style="text-decoration:none; color:var(--text)">📋 Corporate actions</a>
-              <a href="#" style="text-decoration:none; color:var(--text)">⚙️ System</a>
-            </div>
-          </nav>
-
-          <div class="card" style="padding:12px; margin-top:12px">
-            <div class="label">Telegram</div>
-            <div style="margin-top:8px">Configured · <span class="pill">@StockVigilBot</span></div>
-            <div style="margin-top:8px"><button id="sendTest">📨 Send test message</button></div>
-          </div>
-        </aside>
-
-        <main style="flex:1">
-          <div class="card" style="display:flex; justify-content:space-between; align-items:center; gap:12px;">
-            <div>
-              <div style="font-size:20px; font-weight:800">Royal Stock</div>
-              <div class="meta">Custom dashboard — non-Streamlit shell</div>
-            </div>
-            <div style="display:flex; gap:12px; align-items:center">
-              <div class="meta">App status: live</div>
-              <button class="theme-toggle" id="themeToggle" type="button" aria-label="Toggle theme">🌙 Dark</button>
-            </div>
-          </div>
-
-          <div style="display:grid; grid-template-columns:repeat(4,1fr); gap:12px; margin-top:14px">
-            <div class="card"><div class="label">Watchlist</div><div class="value" id="watchlistCount">0</div></div>
-            <div class="card"><div class="label">Poller</div><div class="value" id="pollerStatus">Idle</div></div>
-            <div class="card"><div class="label">Alerts sent</div><div class="value" id="alertsSent">0</div></div>
-            <div class="card"><div class="label">Sources</div><div class="value" id="sources">BSE/NSE</div></div>
-          </div>
-
-          <div class="section" style="margin-top:16px">
-            <h2>Quick actions</h2>
-            <div style="display:flex; gap:10px; flex-wrap:wrap">
-              <button class="card" id="loadUniverse" style="display:inline-flex; align-items:center; gap:8px">🔄 Load stock list</button>
-              <button class="card" id="refreshPrices" style="display:inline-flex; align-items:center; gap:8px">🔄 Refresh prices</button>
-              <button class="card" id="checkNow" style="display:inline-flex; align-items:center; gap:8px">🔍 Check now</button>
-              <span class="pill" id="loadStatus" style="display:none"></span>
-              <button class="card" id="runScreener" style="display:inline-flex; align-items:center; gap:8px">▶️ Run Screener</button>
-            </div>
-          </div>
-
-          <div class="section" style="margin-top:16px">
-            <h2>Top stocks</h2>
-            <div style="display:flex; justify-content:space-between; align-items:center; gap:12px; margin-bottom:8px">
-              <div style="color:var(--muted); font-size:0.9rem">Showing top results from the selected universe</div>
-              <div style="display:flex; gap:8px; align-items:center">
-                <input id="search" placeholder="Search symbol or company" style="padding:8px 10px; border-radius:8px; border:1px solid var(--line)">
-                <select id="limit" style="padding:8px 10px; border-radius:8px; border:1px solid var(--line)">
-                  <option value="20">20</option>
-                  <option value="50" selected>50</option>
-                  <option value="100">100</option>
-                </select>
-              </div>
-            </div>
-            <table>
-              <thead>
-                <tr><th>Symbol</th><th>Company</th><th>Price</th><th>P/E</th><th>ROE</th></tr>
-              </thead>
-              <tbody id="stockRows"></tbody>
-            </table>
-          </div>
-        </main>
+  <section class="card section" aria-labelledby="topStocksHeading">
+    <div style="display:flex; justify-content:space-between; align-items:center; gap:12px; flex-wrap:wrap;">
+      <h2 id="topStocksHeading" style="margin-bottom:0;">Top stocks</h2>
+      <div class="form-row" style="align-items:center;">
+        <label class="visually-hidden" for="search">Search symbol or company</label>
+        <input id="search" type="search" placeholder="Search symbol or company" autocomplete="off" />
+        <label class="visually-hidden" for="limit">Number of results</label>
+        <select id="limit" aria-label="Number of results">
+          <option value="20">20 rows</option>
+          <option value="50" selected>50 rows</option>
+          <option value="100">100 rows</option>
+        </select>
       </div>
     </div>
+    <div class="table-scroll" style="margin-top:12px;">
+      <table>
+        <caption class="visually-hidden">Top stocks by market capitalisation</caption>
+        <thead>
+          <tr><th scope="col">Symbol</th><th scope="col">Company</th><th scope="col" class="num">Price</th><th scope="col" class="num">P/E</th><th scope="col" class="num">ROE</th></tr>
+        </thead>
+        <tbody id="stockRows">
+          <tr><td colspan="5" class="empty"><span class="skeleton" style="display:block;width:100%"></span></td></tr>
+        </tbody>
+      </table>
+    </div>
+  </section>
+{% endblock %}
 
-    <script>
-      function getPreferredTheme() {
-        const saved = localStorage.getItem('theme');
-        if (saved === 'light' || saved === 'dark') return saved;
-        return window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
-      }
-
-      function applyTheme(theme) {
-        const next = theme === 'dark' ? 'dark' : 'light';
-        document.documentElement.setAttribute('data-theme', next);
-        localStorage.setItem('theme', next);
-        const button = document.getElementById('themeToggle');
-        if (button) {
-          button.textContent = next === 'dark' ? '☀️ Light' : '🌙 Dark';
-        }
-      }
-
-      const initialTheme = getPreferredTheme();
-      applyTheme(initialTheme);
-
-      document.getElementById('themeToggle')?.addEventListener('click', () => {
-        const current = document.documentElement.getAttribute('data-theme') === 'dark' ? 'dark' : 'light';
-        applyTheme(current === 'dark' ? 'light' : 'dark');
-      });
+{% block scripts %}
+  <script>
+    (function () {
+      'use strict';
+      var fmtNum = RS.fmtNum, esc = RS.escapeHtml;
 
       function buildQueryParams() {
-        const params = new URLSearchParams();
+        var params = new URLSearchParams();
         params.set('universe', 'nifty500');
         params.set('sort', 'market_cap');
         params.set('ascending', 'false');
-        params.set('limit', document.getElementById('limit')?.value || '50');
-        const getVal = (id) => { const el = document.getElementById(id); return el ? el.value : ''; };
-        const getChecked = (id) => { const el = document.getElementById(id); return el ? el.checked : false };
-        const pe = getVal('peMax');
-        const roe = getVal('roeMin');
-        const mcap = getVal('mcapMin');
-        const price = getVal('priceMin');
-        const rsi = getVal('rsiMin');
-        const macd = getChecked('macdBull');
-        const ema = getChecked('ema200');
-        const exch = getVal('exchange');
-        const sector = getVal('sector');
-        if (pe) params.set('pe_max', pe);
-        if (roe) params.set('roe_min', roe);
-        if (mcap) params.set('market_cap_min', mcap);
-        if (price) params.set('price_min', price);
-        if (rsi) params.set('rsi_min', rsi);
-        if (macd) params.set('require_macd_bull', 'true');
-        if (ema) params.set('require_above_ema200', 'true');
-        if (exch) params.set('exchange', exch);
-        if (sector) params.set('sector', sector);
+        params.set('limit', document.getElementById('limit').value || '50');
         return params.toString();
       }
 
       async function loadData() {
-        const tbody = document.getElementById('stockRows');
+        var tbody = document.getElementById('stockRows');
         try {
-          tbody.innerHTML = '<tr><td colspan="5">Loading…</td></tr>';
-          const qs = buildQueryParams();
-          const res = await fetch('/api/screener?' + qs);
+          tbody.innerHTML = '<tr><td colspan="5" class="empty"><span class="skeleton" style="display:block;width:100%"></span></td></tr>';
+          var res = await fetch('/api/screener?' + buildQueryParams());
           if (!res.ok) throw new Error('API ' + res.status);
-          const rows = await res.json();
+          var rows = await res.json();
           if (!Array.isArray(rows)) throw new Error('unexpected API response');
-          tbody.innerHTML = rows.length ? rows.map(r => `
-            <tr>
-              <td>${r.symbol || '-'}</td>
-              <td>${r.company || '-'}</td>
-              <td>${r.price != null ? '₹' + Number(r.price).toFixed(2) : '-'}</td>
-              <td>${r.pe != null ? Number(r.pe).toFixed(2) : '-'}</td>
-              <td>${r.roe != null ? Number(r.roe).toFixed(2) + '%' : '-'}</td>
-            </tr>
-          `).join('') : '<tr><td colspan="5">No results.</td></tr>';
-
-          document.getElementById('watchlistCount').textContent = '44';
-          document.getElementById('pollerStatus').textContent = 'Idle';
-          document.getElementById('alertsSent').textContent = '0';
-        } catch (e) {
-          console.error('loadData failed:', e);
-          tbody.innerHTML = '<tr><td colspan="5">Unable to load screener data. Please try again.</td></tr>';
+          tbody.innerHTML = rows.length ? rows.map(function (r) {
+            return '<tr>' +
+              '<td><strong>' + esc(r.symbol) + '</strong></td>' +
+              '<td>' + esc(r.company || '-') + '</td>' +
+              '<td class="num">' + (r.price != null ? '₹' + fmtNum(r.price) : '−') + '</td>' +
+              '<td class="num">' + fmtNum(r.pe) + '</td>' +
+              '<td class="num">' + fmtNum(r.roe) + '</td>' +
+            '</tr>';
+          }).join('') : '<tr><td colspan="5" class="empty">No results.</td></tr>';
+          applySearchFilter();
+        } catch (err) {
+          console.error('loadData failed:', err);
+          tbody.innerHTML = '<tr><td colspan="5" class="empty">Unable to load screener data. Please try again.</td></tr>';
+          RS.toast('Could not load screener data: ' + err.message, 'err');
         }
       }
+
+      function applySearchFilter() {
+        var q = document.getElementById('search').value.trim().toLowerCase();
+        document.querySelectorAll('#stockRows tr').forEach(function (tr) {
+          tr.style.display = tr.textContent.toLowerCase().indexOf(q) !== -1 ? '' : 'none';
+        });
+      }
+
+      async function loadStats() {
+        try {
+          var res = await fetch('/api/status');
+          if (!res.ok) return;
+          var data = await res.json();
+          document.getElementById('watchlistCount').textContent = String(data.watchlist_count);
+          var marketEl = document.getElementById('marketStatus');
+          var open = !!data.market_open;
+          marketEl.textContent = open ? 'Open' : 'Closed';
+          marketEl.className = 'value ' + (open ? 'pos' : 'neg');
+          var tgEl = document.getElementById('telegramStat');
+          tgEl.textContent = data.telegram_configured ? 'Configured' : 'Not set up';
+          tgEl.className = 'value ' + (data.telegram_configured ? 'pos' : 'neg');
+          var sourcesEl = document.getElementById('sourcesStat');
+          if (sourcesEl) sourcesEl.textContent = data.sources || 'NSE/BSE';
+        } catch (err) { /* stats are best-effort */ }
+      }
+
+      function flash(text) {
+        var statusEl = document.getElementById('loadStatus');
+        statusEl.textContent = text;
+        statusEl.hidden = false;
+        setTimeout(function () { statusEl.hidden = true; }, 2500);
+      }
+
+      document.getElementById('runScreener').addEventListener('click', loadData);
+      document.getElementById('refreshPrices').addEventListener('click', function () { flash('Refreshing prices…'); loadData(); });
+      document.getElementById('checkNow').addEventListener('click', function () { flash('Checking now…'); loadData(); });
+      document.getElementById('loadUniverse').addEventListener('click', function () { flash('Stock list refreshed'); });
+      document.getElementById('sendTest').addEventListener('click', async function () {
+        this.disabled = true;
+        try {
+          var res = await fetch('/api/telegram/test', { method: 'POST' });
+          if (!res.ok) throw new Error('HTTP ' + res.status);
+          var data = await res.json();
+          RS.toast(data.ok ? 'Test message sent!' : 'Telegram: ' + data.detail, data.ok ? 'ok' : 'err');
+        } catch (err) {
+          RS.toast('Test message failed: ' + err.message, 'err');
+        } finally {
+          this.disabled = false;
+        }
+      });
+      document.getElementById('search').addEventListener('input', applySearchFilter);
+      document.getElementById('limit').addEventListener('change', loadData);
 
       loadData();
-      const runBtn = document.getElementById('runScreener');
-      if (runBtn) runBtn.addEventListener('click', () => { loadData(); });
-      document.getElementById('search')?.addEventListener('input', () => {
-        const q = document.getElementById('search').value.trim().toLowerCase();
-        document.querySelectorAll('#stockRows tr').forEach(tr => {
-          tr.style.display = tr.textContent.toLowerCase().includes(q) ? '' : 'none';
-        });
-      });
-      document.getElementById('limit')?.addEventListener('change', () => { loadData(); });
-
-      async function flash(text) {
-        const statusEl = document.getElementById('loadStatus');
-        if (!statusEl) return;
-        statusEl.textContent = text;
-        statusEl.style.display = '';
-        await new Promise(resolve => setTimeout(resolve, 2500));
-        if (statusEl.textContent === text) {
-          statusEl.textContent = '';
-          statusEl.style.display = 'none';
-        }
-      }
-
-      document.getElementById('loadUniverse')?.addEventListener('click', async () => {
-        await flash('Loading universe…');
-      });
-      document.getElementById('refreshPrices')?.addEventListener('click', async () => {
-        flash('Refreshing prices…');
-        loadData();
-      });
-      document.getElementById('checkNow')?.addEventListener('click', async () => {
-        flash('Checking now…');
-        loadData();
-      });
-      document.getElementById('sendTest')?.addEventListener('click', async () => {
-        flash('Test message queued');
-      });
-    </script>
-  </body>
-</html>
+      loadStats();
+    })();
+  </script>
+{% endblock %}

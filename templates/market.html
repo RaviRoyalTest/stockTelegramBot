@@ -1,83 +1,175 @@
-<!DOCTYPE html>
-<html>
-  <head>
-    <meta charset="utf-8" />
-    <title>Market Screens - Royal Stock</title>
-    <style>body{font-family:Arial;padding:20px}</style>
-  </head>
-  <body>
-    <h1>Market Screens</h1>
-    <div style="margin-bottom:12px">
-      <label>Universe: <select id="universe"><option value="nifty500">nifty500</option><option value="nifty100">nifty100</option></select></label>
-      <label style="margin-left:8px">Limit: <input id="limit" type="number" value="25" min="1" max="500"/></label>
-      <button id="run">Run</button>
-      <button id="download">Download CSV</button>
+{% extends "base.html" %}
+{% block title %}Screener · Royal Stock{% endblock %}
+{% block content %}
+  <div class="page-header">
+    <h1>Market screener</h1>
+    <p class="sub">Filter the full NIFTY universe by fundamentals and momentum. Click a column header to sort.</p>
+  </div>
+
+  <section class="card" aria-labelledby="filtersHeading">
+    <h2 id="filtersHeading">Filters</h2>
+    <form id="filtersForm" class="form-row">
+      <div class="field">
+        <label for="universe">Universe</label>
+        <select id="universe">
+          <option value="nifty500" selected>NIFTY 500</option>
+          <option value="nifty100">NIFTY 100</option>
+        </select>
+      </div>
+      <div class="field">
+        <label for="peMax">Max P/E</label>
+        <input id="peMax" type="number" inputmode="decimal" min="0" step="any" placeholder="e.g. 25" />
+      </div>
+      <div class="field">
+        <label for="roeMin">Min ROE %</label>
+        <input id="roeMin" type="number" inputmode="decimal" step="any" placeholder="e.g. 15" />
+      </div>
+      <div class="field">
+        <label for="mcapMin">Min mkt cap (₹ Cr)</label>
+        <input id="mcapMin" type="number" inputmode="decimal" min="0" step="any" placeholder="e.g. 5000" />
+      </div>
+      <div class="field">
+        <label for="limit">Rows</label>
+        <select id="limit">
+          <option value="25" selected>25</option>
+          <option value="50">50</option>
+          <option value="100">100</option>
+          <option value="250">250</option>
+        </select>
+      </div>
+      <button class="btn btn-primary" type="submit">▶️ Run screener</button>
+      <button class="btn" type="button" id="resetFilters">↺ Reset</button>
+      <a class="btn" href="#" id="downloadCsv">⬇️ CSV</a>
+    </form>
+  </section>
+
+  <section class="card section" aria-labelledby="resultsHeading">
+    <div style="display:flex; justify-content:space-between; align-items:center; gap:12px; flex-wrap:wrap;">
+      <h2 id="resultsHeading" style="margin-bottom:0;">Results</h2>
+      <span class="muted" id="pageinfo" aria-live="polite">Page 1</span>
     </div>
-
-    <table id="table" border="0" cellspacing="0" cellpadding="6" style="border-collapse:collapse;width:100%">
-      <thead style="background:#f1f5f9"><tr>
-        <th><a href="#" data-key="symbol">Symbol</a></th>
-        <th><a href="#" data-key="company">Company</a></th>
-        <th style="text-align:right"><a href="#" data-key="price">Price</a></th>
-        <th style="text-align:right"><a href="#" data-key="change_pct">%Chg</a></th>
-        <th style="text-align:right"><a href="#" data-key="pe">P/E</a></th>
-        <th style="text-align:right"><a href="#" data-key="roe">ROE</a></th>
-        <th style="text-align:right"><a href="#" data-key="market_cap">MktCap</a></th>
-      </tr></thead>
-      <tbody id="tbody"></tbody>
-    </table>
-
-    <div style="margin-top:8px">
-      <button id="prev">Prev</button>
-      <span id="pageinfo">Page 1</span>
-      <button id="next">Next</button>
+    <div class="table-scroll" style="margin-top:12px;">
+      <table>
+        <caption class="visually-hidden">Screener results, sortable by column</caption>
+        <thead>
+          <tr>
+            <th scope="col" data-key="symbol"><button class="sort">Symbol</button></th>
+            <th scope="col" data-key="company"><button class="sort">Company</button></th>
+            <th scope="col" class="num" data-key="price"><button class="sort">Price</button></th>
+            <th scope="col" class="num" data-key="change_pct"><button class="sort">% Chg</button></th>
+            <th scope="col" class="num" data-key="pe"><button class="sort">P/E</button></th>
+            <th scope="col" class="num" data-key="roe"><button class="sort">ROE</button></th>
+            <th scope="col" class="num" data-key="market_cap"><button class="sort">Mkt cap</button></th>
+          </tr>
+        </thead>
+        <tbody id="tbody">
+          <tr><td colspan="7" class="empty"><span class="skeleton" style="display:block;width:100%"></span></td></tr>
+        </tbody>
+      </table>
     </div>
+    <div class="form-row" style="margin-top:14px; justify-content:space-between;">
+      <button class="btn" id="prev">← Previous</button>
+      <button class="btn" id="next">Next →</button>
+    </div>
+  </section>
+{% endblock %}
 
-    <script>
-      let sortKey = 'market_cap';
-      let ascending = false;
-      let offset = 0;
+{% block scripts %}
+  <script>
+    (function () {
+      'use strict';
+      var fmtNum = RS.fmtNum, fmtPct = RS.fmtPct, esc = RS.escapeHtml;
+      var sortKey = 'market_cap', ascending = false, offset = 0;
 
-      function buildParams(){
-        const uni = document.getElementById('universe').value;
-        const limit = document.getElementById('limit').value || 25;
-        return `universe=${encodeURIComponent(uni)}&limit=${encodeURIComponent(limit)}&offset=${offset}&sort=${encodeURIComponent(sortKey)}&ascending=${ascending}`;
+      function buildParams() {
+        var params = new URLSearchParams();
+        params.set('universe', document.getElementById('universe').value);
+        var val = function (id) { return document.getElementById(id).value; };
+        if (val('peMax')) params.set('pe_max', val('peMax'));
+        if (val('roeMin')) params.set('roe_min', val('roeMin'));
+        if (val('mcapMin')) params.set('market_cap_min', val('mcapMin'));
+        params.set('limit', val('limit') || '25');
+        params.set('offset', String(offset));
+        params.set('sort', sortKey);
+        params.set('ascending', String(ascending));
+        return params.toString();
       }
 
-      async function load(){
-        const res = await fetch('/api/screener?'+buildParams());
-        const rows = await res.json();
-        const tbody = document.getElementById('tbody');
-        tbody.innerHTML = '';
-        for(const r of rows){
-          const tr = document.createElement('tr');
-          tr.innerHTML = `
-            <td><b>${r.symbol}</b></td>
-            <td>${r.company||''}</td>
-            <td style="text-align:right">${r.price!=null?r.price:'-'}</td>
-            <td style="text-align:right">${r.change_pct!=null?r.change_pct:'-'}</td>
-            <td style="text-align:right">${r.pe!=null?r.pe:'-'}</td>
-            <td style="text-align:right">${r.roe!=null?r.roe:'-'}</td>
-            <td style="text-align:right">${r.market_cap!=null?r.market_cap:'-'}</td>
-          `;
-          tbody.appendChild(tr);
+      async function load() {
+        var tbody = document.getElementById('tbody');
+        try {
+          tbody.innerHTML = '<tr><td colspan="7" class="empty"><span class="skeleton" style="display:block;width:100%"></span></td></tr>';
+          var res = await fetch('/api/screener?' + buildParams());
+          if (!res.ok) throw new Error('API ' + res.status);
+          var rows = await res.json();
+          if (!Array.isArray(rows)) throw new Error('unexpected response');
+          tbody.innerHTML = rows.length ? rows.map(function (r) {
+            var chg = r.change_pct;
+            var chgClass = chg == null ? '' : (Number(chg) >= 0 ? 'pos' : 'neg');
+            var mcap = r.market_cap == null ? '−' : '₹' + fmtNum(r.market_cap, 0) + ' Cr';
+            return '<tr>' +
+              '<td><strong>' + esc(r.symbol) + '</strong></td>' +
+              '<td>' + esc(r.company || '−') + '</td>' +
+              '<td class="num">' + (r.price != null ? '₹' + fmtNum(r.price) : '−') + '</td>' +
+              '<td class="num ' + chgClass + '">' + fmtPct(chg) + '</td>' +
+              '<td class="num">' + fmtNum(r.pe) + '</td>' +
+              '<td class="num">' + fmtNum(r.roe) + '</td>' +
+              '<td class="num">' + mcap + '</td>' +
+            '</tr>';
+          }).join('') : '<tr><td colspan="7" class="empty">No results — try loosening the filters.</td></tr>';
+          document.getElementById('pageinfo').textContent =
+            'Rows ' + (offset + 1) + '–' + (offset + rows.length);
+        } catch (err) {
+          tbody.innerHTML = '<tr><td colspan="7" class="empty">Unable to load results. Please try again.</td></tr>';
+          RS.toast('Screener failed: ' + err.message, 'err');
         }
-        document.getElementById('pageinfo').textContent = `Offset ${offset}`;
       }
 
-      document.getElementById('run').addEventListener('click', ()=>{ offset = 0; load(); });
-      document.getElementById('prev').addEventListener('click', ()=>{ offset = Math.max(0, offset - parseInt(document.getElementById('limit').value||25)); load(); });
-      document.getElementById('next').addEventListener('click', ()=>{ offset = offset + parseInt(document.getElementById('limit').value||25); load(); });
-      document.getElementById('download').addEventListener('click', ()=>{ window.location = '/api/screener.csv?'+buildParams().replace(/limit=\d+/, 'limit=500'); });
+      function resetOffset() { offset = 0; }
 
-      document.querySelectorAll('thead a').forEach(a=>a.addEventListener('click', (ev)=>{
-        ev.preventDefault();
-        const k = a.getAttribute('data-key');
-        if(sortKey === k) ascending = !ascending; else { sortKey = k; ascending = false; }
+      document.getElementById('filtersForm').addEventListener('submit', function (event) {
+        event.preventDefault();
+        resetOffset();
         load();
-      }));
+      });
+      document.getElementById('resetFilters').addEventListener('click', function () {
+        document.getElementById('filtersForm').reset();
+        sortKey = 'market_cap'; ascending = false; offset = 0;
+        load();
+      });
+      document.getElementById('prev').addEventListener('click', function () {
+        offset = Math.max(0, offset - parseInt(document.getElementById('limit').value || '25', 10));
+        load();
+      });
+      document.getElementById('next').addEventListener('click', function () {
+        offset += parseInt(document.getElementById('limit').value || '25', 10);
+        load();
+      });
+      document.getElementById('downloadCsv').addEventListener('click', function (event) {
+        event.preventDefault();
+        var params = new URLSearchParams(buildParams());
+        params.set('limit', '500');
+        params.delete('offset');
+        window.location = '/api/screener.csv?' + params.toString();
+      });
+
+      document.querySelectorAll('th[data-key] button.sort').forEach(function (button) {
+        button.addEventListener('click', function () {
+          var key = button.closest('th').dataset.key;
+          if (sortKey === key) { ascending = !ascending; }
+          else { sortKey = key; ascending = false; }
+          document.querySelectorAll('th[data-key]').forEach(function (th) {
+            if (th.dataset.key === key) {
+              th.setAttribute('aria-sort', ascending ? 'ascending' : 'descending');
+            } else {
+              th.removeAttribute('aria-sort');
+            }
+          });
+          load();
+        });
+      });
 
       load();
-    </script>
-  </body>
-</html>
+    })();
+  </script>
+{% endblock %}

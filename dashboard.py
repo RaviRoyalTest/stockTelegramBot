@@ -19,6 +19,8 @@ import traceback
 
 from corporate_actions import sources, storage
 from corporate_actions.screener_service import screen_universe, screen_universe_async
+from corporate_actions.market import hours as market_hours
+from corporate_actions.telegram import client as telegram_client
 import asyncio
 import logging
 
@@ -81,6 +83,7 @@ def _fallback_index_html() -> str:
       h1 { margin-top: 0; }
       .muted { color: #475569; }
       .code { background: #eef5ff; border: 1px solid #d9e7ff; border-radius: 10px; padding: 10px 12px; display: inline-block; }
+      nav a { margin-right: 12px; }
     </style>
   </head>
   <body>
@@ -88,6 +91,14 @@ def _fallback_index_html() -> str:
     <h1>📈 Royal Stock</h1>
       <p class=\"muted\">Custom dashboard · no Streamlit shell</p>
       <p>The dashboard is running, but the template renderer could not load the HTML shell.</p>
+      <nav>
+        <a href=\"/\">Dashboard</a>
+        <a href=\"/watchlist\">Watchlist</a>
+        <a href=\"/fundamentals\">Fundamentals</a>
+        <a href=\"/market\">Screener</a>
+        <a href=\"/exdates\">Corporate actions</a>
+        <a href=\"/system\">System</a>
+      </nav>
       <div class=\"code\">/api/screener</div>
       <p class=\"muted\">Refresh in a moment or check the app logs for template issues.</p>
     </div>
@@ -194,18 +205,15 @@ def _sort_rows(rows: list[dict], sort_key: str, ascending: bool) -> list[dict]:
 @app.get("/", response_class=HTMLResponse)
 async def read_index(request: Request):
     try:
-        return templates.TemplateResponse("index.html", {"request": request})
+        return templates.TemplateResponse(request, "index.html")
     except Exception as exc:
         # log the template rendering error for debugging
         log = logging.getLogger(__name__)
         log.error("Template render failed: %s", exc)
         log.debug(traceback.format_exc())
-        # attempt to serve the raw index.html file as a last resort so UI still loads
-        try:
-            with open(os.path.join(BASE_DIR, "templates", "index.html"), "r", encoding="utf-8") as f:
-                return HTMLResponse(f.read())
-        except Exception:
-            return HTMLResponse(_fallback_index_html())
+        # serve the self-contained fallback page (raw template source would
+        # just show Jinja tags to the browser since pages extend base.html)
+        return HTMLResponse(_fallback_index_html())
 
 
 @app.get("/api/watchlist")
@@ -218,7 +226,7 @@ async def add_watchlist(payload: dict):
     items = payload.get("items") or []
     if not isinstance(items, list):
         raise HTTPException(status_code=400, detail="items must be a list")
-    result = storage.add_to_watchlist(items)
+    result = storage.add_to_watchlist([{**item, "exchange": (item.get("exchange") or "NSE").upper()} for item in items])
     return JSONResponse({"items": result, "count": len(result)})
 
 
@@ -521,22 +529,59 @@ async def api_corporate_actions_csv(symbol: str | None = Query(None)):
 
 @app.get("/market", response_class=HTMLResponse)
 async def market_page(request: Request):
-    return templates.TemplateResponse("market.html", {"request": request})
+    return templates.TemplateResponse(request, "market.html")
 
 
 @app.get("/fundamentals", response_class=HTMLResponse)
 async def fundamentals_page(request: Request):
-    return templates.TemplateResponse("fundamentals.html", {"request": request})
+    return templates.TemplateResponse(request, "fundamentals.html")
 
 
 @app.get("/watchlist", response_class=HTMLResponse)
 async def watchlist_page(request: Request):
-    return templates.TemplateResponse("watchlist.html", {"request": request})
+    return templates.TemplateResponse(request, "watchlist.html")
 
 
 @app.get("/exdates", response_class=HTMLResponse)
 async def exdates_page(request: Request):
-    return templates.TemplateResponse("exdates.html", {"request": request})
+    return templates.TemplateResponse(request, "exdates.html")
+
+
+@app.get("/system", response_class=HTMLResponse)
+async def system_page(request: Request):
+    return templates.TemplateResponse(request, "system.html")
+
+
+@app.get("/api/status")
+async def api_status():
+    """One call the UI uses to fill status cards on dashboard + system pages."""
+    items = storage.load_watchlist()
+    open_now = market_hours.is_market_open("in")
+    info = market_hours.MARKETS.get("in", {})
+    return JSONResponse({
+        "version": app.version,
+        "watchlist_count": len(items),
+        "watchlist_preview": [str(it.get("symbol") or "") for it in items[:10]],
+        "market_open": open_now,
+        "market_text": f"{info.get('label', 'India')} \u00b7 {info.get('open', '09:15')}\u2013{info.get('close', '15:30')} IST",
+        "telegram_configured": telegram_client.is_configured(),
+        "sources": "NSE / BSE / Yahoo",
+        "universe": "nifty500",
+    })
+
+
+@app.post("/api/telegram/test")
+async def api_telegram_test():
+    """Fire a real Telegram message so the user can verify the bot config."""
+    log = logging.getLogger(__name__)
+    if not telegram_client.is_configured():
+        raise HTTPException(status_code=503, detail="Telegram is not configured")
+    try:
+        telegram_client.send_message("✅ Royal Stock dashboard test message — Telegram is working.")
+        return JSONResponse({"ok": True})
+    except Exception as exc:
+        log.warning("/api/telegram/test failed: %s", exc)
+        raise HTTPException(status_code=502, detail=str(exc))
 
 
 if __name__ == "__main__":
