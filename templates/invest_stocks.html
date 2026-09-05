@@ -1,0 +1,492 @@
+{% extends "base.html" %}
+{% block title %}Stock Tools · Royal Stock{% endblock %}
+{% block content %}
+  <div class="page-header">
+    <h1>📈 Stock tools</h1>
+    <p class="sub">Average calculator, profit calculator + simulator, loss-recovery table, portfolio P&amp;L with live prices, and the 32-point checklist. <a href="/invest">← All investment tools</a></p>
+  </div>
+
+  <!-- ======================= AVERAGE CALCULATOR ======================= -->
+  <section class="card" aria-labelledby="hAvg">
+    <h2 id="hAvg">Stock Average Calculator</h2>
+    <p class="muted">Calculate the average purchase price when accumulating stock positions.</p>
+    <h3 style="font-size:0.95rem;">Initial Investment</h3>
+    <div class="form-row">
+      <div class="field"><label for="avgQty0">Initial Quantity</label><input id="avgQty0" type="number" min="0" step="any" placeholder="e.g., 100" /></div>
+      <div class="field"><label for="avgPrice0">Initial Purchase Price (₹)</label><input id="avgPrice0" type="number" min="0" step="any" placeholder="e.g., 150.50" /></div>
+    </div>
+    <h3 style="font-size:0.95rem; margin-top:12px;">Additional Purchases</h3>
+    <div id="avgRows"></div>
+    <div class="form-row" style="margin-top:8px;">
+      <button class="btn btn-sm" type="button" id="avgAdd">➕ Add Purchase</button>
+    </div>
+    <h3 style="font-size:0.95rem; margin-top:12px;">Target Analysis</h3>
+    <div class="form-row">
+      <div class="field"><label for="avgCmp">Current Market Price (₹)</label><input id="avgCmp" type="number" min="0" step="any" placeholder="e.g., 140.00" /></div>
+      <div class="field"><label for="avgTarget">Target Price (₹)</label><input id="avgTarget" type="number" min="0" step="any" placeholder="e.g., 145.00" /></div>
+      <button class="btn btn-primary" type="button" id="avgGo">Calculate</button>
+      <button class="btn" type="button" id="avgReset">Reset All</button>
+    </div>
+    <table class="kv" style="margin-top:12px;"><tbody id="avgOut"><tr><td class="empty">Enter quantities and prices, then Calculate.</td></tr></tbody></table>
+  </section>
+
+  <!-- ======================= PROFIT CALCULATOR ======================= -->
+  <section class="card section" aria-labelledby="hProfit">
+    <h2 id="hProfit">Stock Profit Calculator</h2>
+    <p class="muted">Calculate profit percentage and track multiple stock groups.</p>
+    <div id="profitGroups"></div>
+    <div class="form-row" style="margin-top:8px;">
+      <button class="btn btn-sm" type="button" id="profitAdd">➕ Add Stock Group</button>
+      <button class="btn btn-primary btn-sm" type="button" id="profitGo">Calculate Profit</button>
+      <button class="btn btn-sm" type="button" id="profitReset">Reset</button>
+    </div>
+    <table class="kv" style="margin-top:12px;"><tbody id="profitOut"><tr><td class="empty">Add a group and press Calculate Profit.</td></tr></tbody></table>
+
+    <h3 style="font-size:0.95rem; margin-top:16px;">Profit Simulator</h3>
+    <div class="form-row">
+      <div class="field"><label for="simAmount">Enter amount (₹)</label><input id="simAmount" type="number" min="0" step="any" placeholder="Enter amount (₹)" /></div>
+      <div class="field"><label for="simBuy">Buy price (₹)</label><input id="simBuy" type="number" min="0" step="any" placeholder="e.g., 250.50" /></div>
+      <div class="field"><label for="simSell">Sell price (₹)</label><input id="simSell" type="number" min="0" step="any" placeholder="e.g., 405.80" /></div>
+      <div class="field"><label for="simDays">Holding days</label><input id="simDays" type="number" min="0" step="any" placeholder="e.g., 365" /></div>
+      <button class="btn btn-primary" type="button" id="simGo">Calculate</button>
+    </div>
+    <table class="kv" style="margin-top:12px;"><tbody id="simOut"><tr><td class="empty">Simulate a trade above.</td></tr></tbody></table>
+  </section>
+
+  <!-- ======================= RECOVERY TABLE ======================= -->
+  <section class="card section" aria-labelledby="hRec">
+    <h2 id="hRec">📉 Stock Loss Recovery Table</h2>
+    <p class="muted">If a stock drops by X%, how much does it need to gain (from the new lower price) to get back to the original value?</p>
+    <div class="card" style="box-shadow:none;">
+      <strong>💡 The Math Behind It</strong>
+      <p class="muted" style="margin:6px 0;">If a stock falls by d%, the new price is (1 − d/100) of the original. To reach the original price again, the gain needed is:</p>
+      <p><code>Recovery % = [1 ÷ (1 − d/100) − 1] × 100</code></p>
+      <p class="muted" style="margin:0;">A 50% drop needs a 100% gain; a 90% drop needs a massive 900% gain!</p>
+    </div>
+    <h3 style="font-size:0.95rem; margin-top:12px;">🔢 Custom Drop Calculator</h3>
+    <div class="form-row">
+      <div class="field"><label for="recDrop">Drop Percentage (%)</label><input id="recDrop" type="number" min="0" step="any" placeholder="e.g. 35.5" /></div>
+      <button class="btn btn-primary" type="button" id="recGo">Calculate Recovery</button>
+    </div>
+    <p id="recCustom" class="note" aria-live="polite"></p>
+    <h3 style="font-size:0.95rem;">Filter &amp; Sort</h3>
+    <div class="form-row">
+      <div class="field"><label for="recMin">Min Drop (%)</label><input id="recMin" type="number" value="1" min="1" max="100" /></div>
+      <div class="field"><label for="recMax">Max Drop (%)</label><input id="recMax" type="number" value="100" min="1" max="100" /></div>
+      <div class="field"><label for="recSev">Filter by Severity</label>
+        <select id="recSev"><option>All</option><option>Minor</option><option>Moderate</option><option>Major</option><option>Severe</option><option>Catastrophic</option></select>
+      </div>
+      <button class="btn btn-sm" type="button" id="recReset">✕ Reset all</button>
+    </div>
+    <div class="table-scroll" style="margin-top:12px; max-height:420px; overflow-y:auto;">
+      <table class="table-mini">
+        <thead><tr>
+          <th scope="col">#</th>
+          <th scope="col" data-k="drop"><button class="sort">Drop (%)</button></th>
+          <th scope="col" data-k="recovery"><button class="sort">Recovery Gain (%)</button></th>
+          <th scope="col" data-k="severity"><button class="sort">Severity</button></th>
+          <th scope="col">Insight</th>
+        </tr></thead>
+        <tbody id="recBody"></tbody>
+      </table>
+    </div>
+    <p class="note">The recovery percentage is calculated from the new lower price, not the original price. This illustrates why avoiding large losses is critical — recovering from deep drawdowns requires disproportionately large gains.</p>
+  </section>
+
+  <!-- ======================= PORTFOLIO P&L ======================= -->
+  <section class="card section" aria-labelledby="hPnl">
+    <h2 id="hPnl">Portfolio P&amp;L <span class="muted" style="font-weight:400;">(live CMP)</span></h2>
+    <p class="muted">Add your holdings — live prices are fetched free, then invested vs current value, unrealised P&amp;L and realised profit at your sell price are computed.</p>
+    <div id="pnlRows"></div>
+    <div class="form-row" style="margin-top:8px;">
+      <button class="btn btn-sm" type="button" id="pnlAdd">➕ Add Holding</button>
+      <button class="btn btn-primary btn-sm" type="button" id="pnlGo">📊 Analyse with live prices</button>
+    </div>
+    <div class="table-scroll" style="margin-top:12px;">
+      <table class="table-mini">
+        <thead><tr><th>Symbol</th><th class="num">Qty</th><th class="num">Buy ₹</th><th class="num">CMP ₹</th><th class="num">Invested</th><th class="num">Current</th><th class="num">Unrealised</th><th class="num">P&amp;L %</th><th class="num">If sold @ ₹</th></tr></thead>
+        <tbody id="pnlBody"><tr><td colspan="9" class="empty">Add holdings above, then analyse.</td></tr></tbody>
+      </table>
+    </div>
+    <p class="note" id="pnlTotal"></p>
+  </section>
+
+  <!-- ======================= STOCK CHECKLIST ======================= -->
+  <section class="card section" aria-labelledby="hCheck">
+    <h2 id="hCheck">Stock Investment Checklist</h2>
+    <p class="muted">Use this checklist to evaluate potential stock investments systematically. Progress is saved on this device.</p>
+    <p><span class="pill" id="checkProgress">0 / 32</span>
+      <button class="btn btn-sm" type="button" id="checkReset">Reset</button>
+      <button class="btn btn-sm" type="button" id="checkCopy">📋 Copy summary</button>
+    </p>
+    <div id="checkGroups"></div>
+  </section>
+{% endblock %}
+
+{% block scripts %}
+  <script>
+    (function () {
+      'use strict';
+      var esc = RS.escapeHtml, fmtNum = RS.fmtNum;
+      function num(v) { var n = Number(v); return isFinite(n) ? n : null; }
+      function inr(v, d) { return v == null ? '−' : '₹' + fmtNum(v, d == null ? 2 : d); }
+      function kv(pairs) {
+        return pairs.map(function (p) {
+          return '<tr><th scope="row">' + esc(p[0]) + '</th><td>' + p[1] + '</td></tr>';
+        }).join('');
+      }
+      function pnl(v, suffix) {
+        if (v == null || !isFinite(v)) return '−';
+        return '<span class="' + (v >= 0 ? 'pos' : 'neg') + '">' + (v >= 0 ? '+' : '') + fmtNum(v) + (suffix || '') + '</span>';
+      }
+
+      /* ---------- AVERAGE ---------- */
+      var avgN = 0;
+      function avgRow() {
+        avgN++;
+        var div = document.createElement('div');
+        div.className = 'form-row';
+        div.style.marginTop = '8px';
+        div.innerHTML =
+          '<div class="field"><label>Quantity</label><input type="number" min="0" step="any" class="avgQ" placeholder="e.g., 50" /></div>' +
+          '<div class="field"><label>Purchase Price (₹)</label><input type="number" min="0" step="any" class="avgP" placeholder="e.g., 140.00" /></div>' +
+          '<button class="btn btn-sm btn-danger" type="button">Remove</button>';
+        div.querySelector('button').addEventListener('click', function () { div.remove(); });
+        return div;
+      }
+      document.getElementById('avgAdd').addEventListener('click', function () {
+        document.getElementById('avgRows').appendChild(avgRow());
+      });
+      document.getElementById('avgRows').appendChild(avgRow());
+      document.getElementById('avgReset').addEventListener('click', function () {
+        ['avgQty0', 'avgPrice0', 'avgCmp', 'avgTarget'].forEach(function (id) { document.getElementById(id).value = ''; });
+        document.getElementById('avgRows').innerHTML = '';
+        document.getElementById('avgRows').appendChild(avgRow());
+        document.getElementById('avgOut').innerHTML = '<tr><td class="empty">Enter quantities and prices, then Calculate.</td></tr>';
+      });
+      document.getElementById('avgGo').addEventListener('click', function () {
+        var qty = num(document.getElementById('avgQty0').value) || 0;
+        var price = num(document.getElementById('avgPrice0').value) || 0;
+        var tq = qty, ti = qty * price;
+        document.querySelectorAll('#avgRows .form-row').forEach(function (row) {
+          var q = num(row.querySelector('.avgQ').value) || 0;
+          var p = num(row.querySelector('.avgP').value) || 0;
+          tq += q; ti += q * p;
+        });
+        if (tq <= 0) { RS.toast('Enter at least one quantity', 'err'); return; }
+        var avg = ti / tq;
+        var cmp = num(document.getElementById('avgCmp').value);
+        var tgt = num(document.getElementById('avgTarget').value);
+        var rows = [
+          ['Total Quantity', fmtNum(tq, 0) + ' shares'],
+          ['Total Amount Invested', inr(ti)],
+          ['Average Purchase Price', inr(avg)],
+        ];
+        if (cmp != null) {
+          var cv = tq * cmp, pl = cv - ti;
+          rows.push(['Current Value', inr(cv)]);
+          rows.push(['Profit/Loss', pnl(pl) + ' (' + pnl(ti ? pl / ti * 100 : null, '%') + ')']);
+        }
+        if (tgt != null) {
+          var tv = tq * tgt, pp = tv - ti;
+          rows.push(['Target Value', inr(tv)]);
+          rows.push(['Potential Profit', pnl(pp) + ' (' + pnl(ti ? pp / ti * 100 : null, '%') + ')']);
+        }
+        document.getElementById('avgOut').innerHTML = kv(rows);
+      });
+
+      /* ---------- PROFIT ---------- */
+      var pgN = 0;
+      function profitGroup() {
+        pgN++;
+        var div = document.createElement('div');
+        div.className = 'card';
+        div.style.boxShadow = 'none';
+        div.style.marginTop = '8px';
+        div.innerHTML =
+          '<strong>Stock Group ' + pgN + '</strong>' +
+          '<div class="form-row" style="margin-top:8px;">' +
+          '<div class="field"><label>Quantity</label><input type="number" min="0" step="any" class="pQ" placeholder="e.g., 100" /></div>' +
+          '<div class="field"><label>Purchase Price (₹)</label><input type="number" min="0" step="any" class="pB" placeholder="e.g., 250.50" /></div>' +
+          '<div class="field"><label>Current/Selling Price (₹)</label><input type="number" min="0" step="any" class="pS" placeholder="e.g., 405.80" /></div>' +
+          '<div class="field"><label>Holding Period (days)</label><input type="number" min="0" step="any" class="pD" placeholder="e.g., 365" /></div>' +
+          '<button class="btn btn-sm btn-danger" type="button">Remove Group</button></div>';
+        div.querySelector('button').addEventListener('click', function () { div.remove(); });
+        return div;
+      }
+      function annP(invested, value, days) {
+        if (!invested || invested <= 0 || value == null || days == null || days <= 0) return null;
+        return (Math.pow(value / invested, 365 / days) - 1) * 100;
+      }
+      document.getElementById('profitAdd').addEventListener('click', function () {
+        document.getElementById('profitGroups').appendChild(profitGroup());
+      });
+      document.getElementById('profitGroups').appendChild(profitGroup());
+      document.getElementById('profitReset').addEventListener('click', function () {
+        document.getElementById('profitGroups').innerHTML = '';
+        pgN = 0;
+        document.getElementById('profitGroups').appendChild(profitGroup());
+        document.getElementById('profitOut').innerHTML = '<tr><td class="empty">Add a group and press Calculate Profit.</td></tr>';
+      });
+      document.getElementById('profitGo').addEventListener('click', function () {
+        var ti = 0, tv = 0, rows = [], gi = 0;
+        document.querySelectorAll('#profitGroups .card').forEach(function (g) {
+          gi++;
+          var q = num(g.querySelector('.pQ').value) || 0;
+          var b = num(g.querySelector('.pB').value) || 0;
+          var s = num(g.querySelector('.pS').value);
+          var d = num(g.querySelector('.pD').value);
+          var inv = q * b;
+          ti += inv;
+          if (s != null) {
+            var val = q * s, pl = val - inv;
+            tv += val;
+            rows.push(['Group ' + gi + ' P/L', pnl(pl) + ' (' + pnl(inv ? pl / inv * 100 : null, '%') + ')' +
+              (d ? ' · ann. ' + pnl(annP(inv, val, d), '%') : '')]);
+          }
+        });
+        var out = [['Total Investment', inr(ti)], ['Current Value', inr(tv)]];
+        var tpl = tv - ti;
+        out.push(['Profit/Loss', pnl(tpl)]);
+        out.push(['Profit %', pnl(ti ? tpl / ti * 100 : null, '%')]);
+        document.getElementById('profitOut').innerHTML = kv(out.concat(rows));
+      });
+      document.getElementById('simGo').addEventListener('click', function () {
+        var amt = num(document.getElementById('simAmount').value);
+        var buy = num(document.getElementById('simBuy').value);
+        var sell = num(document.getElementById('simSell').value);
+        var days = num(document.getElementById('simDays').value);
+        if (amt == null || buy == null || buy <= 0) { RS.toast('Enter amount and a valid buy price', 'err'); return; }
+        var qty = Math.floor(amt / buy * 100) / 100;
+        var cost = qty * buy, val = sell != null ? qty * sell : null;
+        var rows = [['Shares purchasable', fmtNum(qty)], ['Cost', inr(cost)]];
+        if (val != null) {
+          rows.push(['Value at sell price', inr(val)]);
+          rows.push(['Profit/Loss', pnl(val - cost) + ' (' + pnl(cost ? (val - cost) / cost * 100 : null, '%') + ')']);
+          if (days) rows.push(['Annualized Return', pnl(annP(cost, val, days), '%')]);
+        }
+        document.getElementById('simOut').innerHTML = kv(rows);
+      });
+
+      /* ---------- RECOVERY ---------- */
+      function recGain(drop) {
+        if (drop >= 100) return Infinity;
+        return (1 / (1 - drop / 100) - 1) * 100;
+      }
+      function recSev(drop) {
+        if (drop >= 90) return { label: 'Catastrophic', cls: 'pill-bad' };
+        if (drop >= 70) return { label: 'Severe', cls: 'pill-warn' };
+        if (drop >= 50) return { label: 'Major', cls: 'pill-warn' };
+        if (drop >= 20) return { label: 'Moderate', cls: '' };
+        return { label: 'Minor', cls: 'pill-ok' };
+      }
+      function recInsight(drop, gain) {
+        if (!isFinite(gain)) return 'Complete loss — unrecoverable';
+        if (drop === 50) return '50% drop = 100% gain needed!';
+        if (drop >= 90) return 'Needs ' + gain.toFixed(0) + '× original investment';
+        if (drop >= 75) return 'Needs ' + gain.toFixed(0) + '% gain to break even';
+        return 'Needs ' + gain.toFixed(2) + '% gain to break even';
+      }
+      var recSortK = 'drop', recSortD = 'asc';
+      function renderRec() {
+        var min = Math.max(1, parseInt(document.getElementById('recMin').value, 10) || 1);
+        var max = Math.min(100, parseInt(document.getElementById('recMax').value, 10) || 100);
+        var sevF = document.getElementById('recSev').value;
+        var rows = [];
+        for (var d = 1; d <= 100; d++) {
+          var g = recGain(d), s = recSev(d);
+          if (d < min || d > max) continue;
+          if (sevF !== 'All' && s.label !== sevF) continue;
+          rows.push({ drop: d, gain: g, sev: s });
+        }
+        var order = { Catastrophic: 5, Severe: 4, Major: 3, Moderate: 2, Minor: 1 };
+        rows.sort(function (a, b) {
+          var c = 0;
+          if (recSortK === 'drop') c = a.drop - b.drop;
+          else if (recSortK === 'recovery') c = (isFinite(a.gain) ? a.gain : 1e12) - (isFinite(b.gain) ? b.gain : 1e12);
+          else c = order[a.sev.label] - order[b.sev.label];
+          return recSortD === 'asc' ? c : -c;
+        });
+        document.getElementById('recBody').innerHTML = rows.length ? rows.map(function (r, i) {
+          return '<tr><td>' + (i + 1) + '</td><td class="num">' + r.drop + '%</td>' +
+            '<td class="num">' + (isFinite(r.gain) ? fmtNum(r.gain) + '%' : '∞') + '</td>' +
+            '<td><span class="pill ' + r.sev.cls + '">' + r.sev.label + '</span></td>' +
+            '<td>' + esc(recInsight(r.drop, r.gain)) + '</td></tr>';
+        }).join('') : '<tr><td colspan="5" class="empty">No rows match your filters.</td></tr>';
+      }
+      document.querySelectorAll('th[data-k] button.sort').forEach(function (btn) {
+        btn.addEventListener('click', function () {
+          var k = btn.closest('th').dataset.k;
+          if (recSortK === k) recSortD = recSortD === 'asc' ? 'desc' : 'asc';
+          else { recSortK = k; recSortD = 'asc'; }
+          renderRec();
+        });
+      });
+      ['recMin', 'recMax', 'recSev'].forEach(function (id) {
+        document.getElementById(id).addEventListener('input', renderRec);
+      });
+      document.getElementById('recReset').addEventListener('click', function () {
+        document.getElementById('recMin').value = '1';
+        document.getElementById('recMax').value = '100';
+        document.getElementById('recSev').value = 'All';
+        recSortK = 'drop'; recSortD = 'asc';
+        renderRec();
+      });
+      document.getElementById('recGo').addEventListener('click', function () {
+        var d = num(document.getElementById('recDrop').value);
+        var el = document.getElementById('recCustom');
+        if (d == null || d <= 0) { el.textContent = 'Please enter a valid positive number.'; return; }
+        if (d >= 100) { el.textContent = 'A 100% or more drop means the value reaches zero — no recovery possible.'; return; }
+        var g = recGain(d);
+        el.innerHTML = 'Drop entered: <strong>' + fmtNum(d) + '%</strong> → Recovery gain needed: <strong>' +
+          fmtNum(g) + '%</strong> <span class="muted">(' + esc(recInsight(d, g)) + ')</span>';
+      });
+      renderRec();
+
+      /* ---------- PORTFOLIO P&L ---------- */
+      function pnlRow() {
+        var div = document.createElement('div');
+        div.className = 'form-row';
+        div.style.marginTop = '8px';
+        div.innerHTML =
+          '<div class="field"><label>Symbol</label><input class="hS" placeholder="RELIANCE" style="text-transform:uppercase" /></div>' +
+          '<div class="field"><label>Qty</label><input type="number" min="0" step="any" class="hQ" placeholder="10" /></div>' +
+          '<div class="field"><label>Buy Price ₹</label><input type="number" min="0" step="any" class="hB" placeholder="250.50" /></div>' +
+          '<div class="field"><label>Sell Price ₹ (optional)</label><input type="number" min="0" step="any" class="hSell" placeholder="for realised P&L" /></div>' +
+          '<button class="btn btn-sm btn-danger" type="button">Remove</button>';
+        div.querySelector('button').addEventListener('click', function () { div.remove(); });
+        return div;
+      }
+      document.getElementById('pnlAdd').addEventListener('click', function () {
+        document.getElementById('pnlRows').appendChild(pnlRow());
+      });
+      document.getElementById('pnlRows').appendChild(pnlRow());
+      document.getElementById('pnlGo').addEventListener('click', async function () {
+        var holdings = [];
+        document.querySelectorAll('#pnlRows .form-row').forEach(function (row) {
+          var s = row.querySelector('.hS').value.trim().toUpperCase().replace(/\.NS$|\.BO$/, '');
+          var q = num(row.querySelector('.hQ').value) || 0;
+          var b = num(row.querySelector('.hB').value) || 0;
+          var sell = num(row.querySelector('.hSell').value);
+          if (s && q > 0 && b > 0) holdings.push({ s: s, q: q, b: b, sell: sell });
+        });
+        if (!holdings.length) { RS.toast('Add at least one holding', 'err'); return; }
+        var tbody = document.getElementById('pnlBody');
+        tbody.innerHTML = '<tr><td colspan="9" class="empty"><span class="skeleton" style="display:block;width:100%"></span></td></tr>';
+        var ti = 0, tv = 0;
+        var html = '';
+        for (var k = 0; k < holdings.length; k++) {
+          var h = holdings[k], cmp = null;
+          try {
+            var res = await fetch('/api/quote?symbol=' + encodeURIComponent(h.s));
+            if (res.ok) { var j = await res.json(); cmp = (j.quote || {}).price; }
+          } catch (e) { /* best-effort per row */ }
+          var inv = h.q * h.b, cur = cmp != null ? h.q * cmp : null;
+          ti += inv; if (cur != null) tv += cur;
+          var pl = cur != null ? cur - inv : null;
+          var sold = h.sell != null ? (h.sell - h.b) * h.q : null;
+          html += '<tr><td><a href="/fundamentals?symbol=' + encodeURIComponent(h.s) + '"><strong>' + esc(h.s) + '</strong></a></td>' +
+            '<td class="num">' + fmtNum(h.q, 0) + '</td><td class="num">' + inr(h.b) + '</td>' +
+            '<td class="num">' + (cmp != null ? inr(cmp) : '−') + '</td>' +
+            '<td class="num">' + inr(inv) + '</td><td class="num">' + (cur != null ? inr(cur) : '−') + '</td>' +
+            '<td class="num">' + pnl(pl) + '</td><td class="num">' + pnl(inv ? (cur - inv) / inv * 100 : null, '%') + '</td>' +
+            '<td class="num">' + pnl(sold) + '</td></tr>';
+        }
+        tbody.innerHTML = html;
+        document.getElementById('pnlTotal').textContent =
+          'Total invested ' + inr(ti) + ' · current value ' + inr(tv) +
+          ' · overall ' + ((tv - ti) >= 0 ? '+' : '') + fmtNum(tv - ti) +
+          ' (' + ((tv - ti) >= 0 ? '+' : '') + fmtNum(ti ? (tv - ti) / ti * 100 : 0) + '%)';
+      });
+
+      /* ---------- STOCK CHECKLIST (32 items, same set as the React app) ---------- */
+      var GROUPS = [
+        { title: 'Personal — First Principles (10)', items: [
+          'Low debt-to-equity ratio (<1.0)',
+          'Decreasing debt over the past 3 years',
+          'Increasing year-on-year sales',
+          'Positive net profit in last 5 years',
+          'Return on Equity (ROE) > 20%',
+          'Increasing net profit year-on-year',
+          'Consistent revenue growth (>10% YoY)',
+          'Less PE (<10)',
+          'Less price to book',
+          'Lower PE and lower Price to Book is for sure better stock',
+        ]},
+        { title: 'AI — Financial Health (6)', items: [
+          'Strong profit margins (>15%)',
+          'Positive Free Cash Flow (FCF)',
+          'Return on Equity (ROE) > 15% consistently',
+          'Return on Capital (ROCE/ROIC) > 15%',
+          'Interest coverage ratio > 4x–5x (EBIT / Interest)',
+          'Current ratio > 1.5 (short-term liquidity)',
+        ]},
+        { title: 'AI — Valuation (5)', items: [
+          'Reasonable P/E ratio — in-line with 5-year historical average',
+          'PEG ratio < 1.5 (not overpaying for growth)',
+          'Price-to-Free-Cash-Flow (P/FCF) < 20',
+          'EV/EBITDA reasonable vs. direct sector peers',
+          'Consistent dividends or steady share buybacks',
+        ]},
+        { title: 'AI — Business Quality (6)', items: [
+          'Strong economic moat (brand, network effect, switching cost)',
+          'Can raise prices during inflation without losing customers',
+          'Transparent, capable and shareholder-friendly management',
+          'No single customer accounts for >10% of revenue',
+          'Adequate R&D investment to stay ahead of competition',
+          'Clear growth strategy & addressable market',
+        ]},
+        { title: 'AI — Risk & Stability (5)', items: [
+          'No frequent auditor changes or accounting red flags',
+          'Promoter pledged shares < 5% (ideally zero)',
+          'Outstanding shares are stable — no excessive dilution',
+          'Not overly vulnerable to sudden regulatory changes',
+          'Business can survive recession or high interest rate cycles',
+        ]},
+      ];
+      var LS_KEY = 'investStockChecklist';
+      var saved = {};
+      try { saved = JSON.parse(localStorage.getItem(LS_KEY) || '{}'); } catch (e) { saved = {}; }
+      var total = 0;
+      document.getElementById('checkGroups').innerHTML = GROUPS.map(function (g, gi) {
+        return '<h3 style="font-size:0.95rem; margin:12px 0 6px;">' + esc(g.title) + '</h3>' +
+          g.items.map(function (label, ii) {
+            var id = gi + '-' + ii;
+            total++;
+            var on = !!saved[id];
+            return '<label style="display:flex; gap:8px; align-items:flex-start; padding:6px 0; border-bottom:1px solid var(--line-soft); cursor:pointer;">' +
+              '<input type="checkbox" data-id="' + id + '"' + (on ? ' checked' : '') + ' style="width:auto; margin-top:4px;" />' +
+              '<span>' + esc(label) + '</span></label>';
+          }).join('');
+      }).join('');
+      function checkCount() {
+        var n = document.querySelectorAll('#checkGroups input:checked').length;
+        document.getElementById('checkProgress').textContent = n + ' / ' + total;
+      }
+      document.getElementById('checkGroups').addEventListener('change', function () {
+        var state = {};
+        document.querySelectorAll('#checkGroups input').forEach(function (box) {
+          if (box.checked) state[box.dataset.id] = true;
+        });
+        try { localStorage.setItem(LS_KEY, JSON.stringify(state)); } catch (e) {}
+        checkCount();
+      });
+      document.getElementById('checkReset').addEventListener('click', function () {
+        document.querySelectorAll('#checkGroups input').forEach(function (box) { box.checked = false; });
+        try { localStorage.removeItem(LS_KEY); } catch (e) {}
+        checkCount();
+      });
+      document.getElementById('checkCopy').addEventListener('click', function () {
+        var lines = [];
+        document.querySelectorAll('#checkGroups input').forEach(function (box) {
+          lines.push((box.checked ? '[x] ' : '[ ] ') + box.parentElement.textContent.trim());
+        });
+        var text = 'Stock Investment Checklist\n' + lines.join('\n');
+        if (navigator.clipboard) navigator.clipboard.writeText(text).then(
+          function () { RS.toast('Checklist copied', 'ok'); },
+          function () { RS.toast('Copy failed', 'err'); });
+      });
+      checkCount();
+    })();
+  </script>
+{% endblock %}

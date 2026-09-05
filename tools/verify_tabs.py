@@ -85,20 +85,49 @@ finally:
 
 print("== new web routes ==")
 for must in ["/api/movers", "/api/analysis", "/api/checklist", "/api/indicator",
-             "/api/harmonic", "/movers", "/forecast", "/checklist",
-             "/indicator", "/news"]:
+             "/api/harmonic", "/api/metals", "/movers", "/forecast", "/checklist",
+             "/indicator", "/news", "/invest", "/invest/stocks",
+             "/invest/mutual-funds", "/invest/bonds", "/invest/commodities"]:
     print(("OK  " if must in paths else "MISS"), must)
 
 print("== new web templates ==")
 for name in ["movers.html", "forecast.html", "checklist.html",
-             "indicator.html", "news.html"]:
+             "indicator.html", "news.html", "invest.html",
+             "invest_stocks.html", "invest_mutual.html", "invest_bonds.html",
+             "invest_commodities.html"]:
     p = pathlib.Path("templates") / name
     print(("OK  " if p.exists() else "MISS"), name)
+
+print("== invest content ==")
+stocks = pathlib.Path("templates/invest_stocks.html").read_text(encoding="utf-8")
+for needle in ["avgGo", "profitGo", "simGo", "recBody", "pnlGo", "checkGroups",
+               "Recovery % = [1", "Annualized Return"]:
+    print(("OK  " if needle in stocks else "MISS"), "stocks:" + needle)
+mf = pathlib.Path("templates/invest_mutual.html").read_text(encoding="utf-8")
+for needle in ["pane-sip", "pane-swp", "mfTable", "mfChecks", "Sharpe ratio"]:
+    print(("OK  " if needle in mf else "MISS"), "mutual:" + needle)
+bonds = pathlib.Path("templates/invest_bonds.html").read_text(encoding="utf-8")
+for needle in ["beforeChecks", "bondChecks", "Investment grade credit rating"]:
+    print(("OK  " if needle in bonds else "MISS"), "bonds:" + needle)
+comm = pathlib.Path("templates/invest_commodities.html").read_text(encoding="utf-8")
+for needle in ["rRatio", "/api/metals", "Historical Context", "Investment Guidelines"]:
+    print(("OK  " if needle in comm else "MISS"), "commodities:" + needle)
+
+print("== metals consensus ==")
+from corporate_actions.sources.metals import _consensus
+
+checks = [
+    _consensus([]) is None,
+    _consensus([2000.0]) == 2000.0,
+    _consensus([2000.0, 2020.0]) == 2010.0,
+    _consensus([2000.0, 2005.0, 2100.0]) == 2002.5,
+]
+print("OK   metals_consensus" if all(checks) else f"FAIL metals_consensus {checks}")
 
 print("== nav links ==")
 nb = pathlib.Path("templates/base.html").read_text(encoding="utf-8")
 for link in ['href="/movers"', 'href="/forecast"', 'href="/checklist"',
-             'href="/indicator"', 'href="/news"']:
+             'href="/indicator"', 'href="/news"', 'href="/invest"']:
     print(("OK  " if link in nb else "MISS"), link)
 
 print("== bot report extras ==")

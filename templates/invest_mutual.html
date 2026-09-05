@@ -1,0 +1,237 @@
+{% extends "base.html" %}
+{% block title %}Mutual Funds · Royal Stock{% endblock %}
+{% block content %}
+  <div class="page-header">
+    <h1>🏦 Mutual fund tools</h1>
+    <p class="sub">SIP / lumpsum returns, SWP duration, sustainable withdrawal and the 18-point fund checklist. <a href="/invest">← All investment tools</a></p>
+  </div>
+
+  <section class="card" aria-labelledby="hCalc">
+    <h2 id="hCalc">Mutual Fund Calculator</h2>
+    <div class="form-row" role="tablist" aria-label="Calculator mode">
+      <button class="btn btn-sm modeBtn btn-primary" data-mode="sip" type="button">SIP Returns</button>
+      <button class="btn btn-sm modeBtn" data-mode="lumpsum" type="button">Lumpsum Returns</button>
+      <button class="btn btn-sm modeBtn" data-mode="swp" type="button">SWP Duration</button>
+      <button class="btn btn-sm modeBtn" data-mode="sus" type="button">Sustainable SWP</button>
+    </div>
+
+    <div id="pane-sip" class="modePane" style="margin-top:12px;">
+      <p class="muted">Systematic Investment Plan — regular monthly investments (annuity-due).</p>
+      <div class="form-row">
+        <div class="field"><label for="sipAmt">Monthly Investment (₹)</label><input id="sipAmt" type="number" min="0" step="any" placeholder="e.g., 5000" /></div>
+        <div class="field"><label for="sipYears">Investment Duration (Years)</label><input id="sipYears" type="number" min="0" step="any" placeholder="e.g., 10" /></div>
+        <div class="field"><label for="sipRate">Expected Return Rate (%)</label><input id="sipRate" type="number" min="0" step="any" placeholder="e.g., 12" /></div>
+      </div>
+    </div>
+
+    <div id="pane-lumpsum" class="modePane" style="margin-top:12px;" hidden>
+      <p class="muted">One-time investment compounding annually.</p>
+      <div class="form-row">
+        <div class="field"><label for="lumAmt">Investment Amount (₹)</label><input id="lumAmt" type="number" min="0" step="any" placeholder="e.g., 100000" /></div>
+        <div class="field"><label for="lumYears">Investment Duration (Years)</label><input id="lumYears" type="number" min="0" step="any" placeholder="e.g., 10" /></div>
+        <div class="field"><label for="lumRate">Expected Return Rate (%)</label><input id="lumRate" type="number" min="0" step="any" placeholder="e.g., 12" /></div>
+      </div>
+    </div>
+
+    <div id="pane-swp" class="modePane" style="margin-top:12px;" hidden>
+      <p class="muted">Systematic Withdrawal Plan — how long does the corpus last with monthly withdrawals?</p>
+      <div class="form-row">
+        <div class="field"><label for="swpCorpus">Corpus Amount (₹)</label><input id="swpCorpus" type="number" min="0" step="any" placeholder="e.g., 1000000" /></div>
+        <div class="field"><label for="swpW">Monthly Withdrawal (₹)</label><input id="swpW" type="number" min="0" step="any" placeholder="e.g., 10000" /></div>
+        <div class="field"><label for="swpRate">Expected Return Rate (%)</label><input id="swpRate" type="number" min="0" step="any" placeholder="e.g., 8" /></div>
+        <div class="field"><label for="swpInfl">Yearly inflation on withdrawal (%)</label><input id="swpInfl" type="number" min="0" step="any" placeholder="0" value="0" /></div>
+      </div>
+    </div>
+
+    <div id="pane-sus" class="modePane" style="margin-top:12px;" hidden>
+      <p class="muted">What fixed monthly withdrawal exactly exhausts the corpus over the chosen duration?</p>
+      <div class="form-row">
+        <div class="field"><label for="susCorpus">Corpus Amount (₹)</label><input id="susCorpus" type="number" min="0" step="any" placeholder="e.g., 1000000" /></div>
+        <div class="field"><label for="susYears">Withdrawal Duration (Years)</label><input id="susYears" type="number" min="0" step="any" placeholder="e.g., 20" /></div>
+        <div class="field"><label for="susRate">Expected Return Rate (%)</label><input id="susRate" type="number" min="0" step="any" placeholder="e.g., 8" /></div>
+      </div>
+    </div>
+
+    <div class="form-row" style="margin-top:12px;">
+      <button class="btn btn-primary" type="button" id="mfGo">Calculate</button>
+      <button class="btn" type="button" id="mfReset">Reset</button>
+    </div>
+    <table class="kv" style="margin-top:12px;"><tbody id="mfOut"><tr><td class="empty">Pick a mode, enter values, then Calculate.</td></tr></tbody></table>
+    <div id="mfTableWrap" class="table-scroll" style="margin-top:12px;" hidden>
+      <table class="table-mini">
+        <thead><tr><th>Year</th><th class="num">Invested (₹)</th><th class="num">Value (₹)</th><th class="num">Gains (₹)</th></tr></thead>
+        <tbody id="mfTable"></tbody>
+      </table>
+    </div>
+  </section>
+
+  <section class="card section" aria-labelledby="hCheck">
+    <h2 id="hCheck">Mutual Fund Investment Checklist</h2>
+    <p class="muted">Use this checklist to evaluate potential mutual fund investments systematically. Saved on this device.</p>
+    <p><span class="pill" id="mfProgress">0 / 18</span>
+      <button class="btn btn-sm" type="button" id="mfCheckReset">Reset</button>
+      <button class="btn btn-sm" type="button" id="mfCheckCopy">📋 Copy summary</button>
+    </p>
+    <div id="mfChecks"></div>
+  </section>
+{% endblock %}
+
+{% block scripts %}
+  <script>
+    (function () {
+      'use strict';
+      var esc = RS.escapeHtml, fmtNum = RS.fmtNum;
+      function num(v) { var n = Number(v); return isFinite(n) ? n : null; }
+      function inr(v) { return v == null ? '−' : '₹' + fmtNum(v == null ? 0 : v, 0); }
+      function kv(pairs) {
+        return pairs.map(function (p) {
+          return '<tr><th scope="row">' + esc(p[0]) + '</th><td>' + p[1] + '</td></tr>';
+        }).join('');
+      }
+
+      var mode = 'sip';
+      document.querySelectorAll('.modeBtn').forEach(function (btn) {
+        btn.addEventListener('click', function () {
+          mode = btn.dataset.mode;
+          document.querySelectorAll('.modeBtn').forEach(function (b) { b.classList.remove('btn-primary'); });
+          btn.classList.add('btn-primary');
+          document.querySelectorAll('.modePane').forEach(function (p) { p.hidden = true; });
+          document.getElementById('pane-' + mode).hidden = false;
+        });
+      });
+
+      function sipFV(monthly, annualRate, years) {
+        var r = annualRate / 1200, n = Math.round(years * 12);
+        if (r <= 0) return monthly * n;
+        return monthly * ((Math.pow(1 + r, n) - 1) / r) * (1 + r);
+      }
+
+      document.getElementById('mfReset').addEventListener('click', function () {
+        document.querySelectorAll('.modePane input').forEach(function (el) { if (el.id !== 'swpInfl') el.value = ''; });
+        document.getElementById('mfOut').innerHTML = '<tr><td class="empty">Pick a mode, enter values, then Calculate.</td></tr>';
+        document.getElementById('mfTableWrap').hidden = true;
+      });
+
+      document.getElementById('mfGo').addEventListener('click', function () {
+        var out = [], table = '';
+        document.getElementById('mfTableWrap').hidden = true;
+        if (mode === 'sip') {
+          var m = num(document.getElementById('sipAmt').value);
+          var y = num(document.getElementById('sipYears').value);
+          var r = num(document.getElementById('sipRate').value);
+          if (m == null || y == null || r == null || m < 100 || y < 1) { RS.toast('Monthly ≥ ₹100 and duration ≥ 1 year', 'err'); return; }
+          var invested = m * 12 * y, fv = sipFV(m, r, y);
+          out = [['Total Invested', inr(invested)], ['Maturity Value', inr(fv)], ['Capital Gains', inr(fv - invested)]];
+          var rows = '';
+          for (var yr = 1; yr <= Math.min(Math.round(y), 40); yr++) {
+            var inv = m * 12 * yr, val = sipFV(m, r, yr);
+            rows += '<tr><td>' + yr + '</td><td class="num">' + inr(inv) + '</td><td class="num">' + inr(val) + '</td><td class="num">' + inr(val - inv) + '</td></tr>';
+          }
+          document.getElementById('mfTable').innerHTML = rows;
+          document.getElementById('mfTableWrap').hidden = false;
+        } else if (mode === 'lumpsum') {
+          var p = num(document.getElementById('lumAmt').value);
+          var ly = num(document.getElementById('lumYears').value);
+          var lr = num(document.getElementById('lumRate').value);
+          if (p == null || ly == null || lr == null || p < 100 || ly < 1) { RS.toast('Amount ≥ ₹100 and duration ≥ 1 year', 'err'); return; }
+          var mat = p * Math.pow(1 + lr / 100, ly);
+          out = [['Total Invested', inr(p)], ['Maturity Value', inr(mat)], ['Capital Gains', inr(mat - p)]];
+          var lrows = '';
+          for (var y2 = 1; y2 <= Math.min(Math.round(ly), 40); y2++) {
+            var v2 = p * Math.pow(1 + lr / 100, y2);
+            lrows += '<tr><td>' + y2 + '</td><td class="num">' + inr(p) + '</td><td class="num">' + inr(v2) + '</td><td class="num">' + inr(v2 - p) + '</td></tr>';
+          }
+          document.getElementById('mfTable').innerHTML = lrows;
+          document.getElementById('mfTableWrap').hidden = false;
+        } else if (mode === 'swp') {
+          var c = num(document.getElementById('swpCorpus').value);
+          var w = num(document.getElementById('swpW').value);
+          var sr = num(document.getElementById('swpRate').value);
+          var infl = num(document.getElementById('swpInfl').value) || 0;
+          if (c == null || w == null || sr == null || c <= 0 || w <= 0) { RS.toast('Enter corpus, withdrawal and return', 'err'); return; }
+          var mr = sr / 1200, bal = c, mo = 0, cw = w, air = infl / 100;
+          while (bal > 0 && mo < 1200) {
+            if (infl > 0 && mo > 12 && (mo - 1) % 12 === 0) cw = cw * (1 + air);
+            bal = bal + bal * mr - cw;
+            mo++;
+            if (bal <= 0) break;
+          }
+          if (mo >= 1200) {
+            var forever = c * mr;
+            out = [['Withdrawal Duration', 'Beyond 100 years — withdrawals are covered by returns'],
+              ['Interest-only (forever) withdrawal', inr(forever) + ' / month']];
+          } else {
+            out = [['Withdrawal Duration', Math.floor(mo / 12) + ' years ' + (mo % 12) + ' months (' + mo + ' months)']];
+          }
+        } else {
+          var sc = num(document.getElementById('susCorpus').value);
+          var sy = num(document.getElementById('susYears').value);
+          var srate = num(document.getElementById('susRate').value);
+          if (sc == null || sy == null || srate == null || sc <= 0 || sy <= 0) { RS.toast('Enter corpus, duration and return', 'err'); return; }
+          var smr = srate / 1200, n = Math.round(sy * 12), sus;
+          if (smr <= 0) sus = sc / n;
+          else sus = sc * smr / (1 - Math.pow(1 + smr, -n));
+          out = [['Sustainable Monthly Withdrawal', inr(sus)],
+            ['Total withdrawn over ' + sy + ' years', inr(sus * n)],
+            ['Interest-only (never touch principal)', inr(sc * smr) + ' / month']];
+        }
+        document.getElementById('mfOut').innerHTML = kv(out);
+      });
+
+      /* ---------- MF CHECKLIST (18 items + info, same set as the React app) ---------- */
+      var ITEMS = [
+        ['Good Sharpe ratio (>2)', 'Measures risk-adjusted return. >2 is excellent, 1-2 is good, <1 is poor.', 'mine'],
+        ['Positive alpha', 'Measures excess return over benchmark. Positive alpha (>0) is good, negative is bad.', 'mine'],
+        ['Low beta (<1)', 'Measures volatility vs market. <1 is less volatile (good for conservative), >1 is more volatile.', 'mine'],
+        ['Low expense ratio (<1% for equity, <0.5% for index)', 'Annual fund management cost. <1% for equity, <0.5% for index funds is good. Lower is better.', 'mine'],
+        ['Good upside (>100%) and downside (<100%) capture ratios', 'Upside capture >100% means fund gains more than market in uptrends. Downside capture <100% means fund loses less than market in downtrends. Both are desirable.', 'mine'],
+        ['Adequate AUM (>₹1000 crores)', 'Assets Under Management. >₹1000 crores is considered stable.', 'AI'],
+        ['Reputed and established fund house', 'Reputed, established fund houses are preferred for stability and governance.', 'AI'],
+        ['Consistent returns over 5 years', 'Consistent returns over 5 years show good performance. Compare with peers/benchmark.', 'AI'],
+        ['Experienced fund manager (>5 years)', 'Experienced manager (>5 years) is a positive sign.', 'AI'],
+        ['Fund category matches investment goal', 'Should match your investment goal (e.g., equity for growth, debt for safety).', 'AI'],
+        ['Risk level suitable for my profile', 'Should match your risk profile. High risk for aggressive, low for conservative.', 'AI'],
+        ['Reasonable exit load structure', 'Fee for early withdrawal. Lower or zero exit load is better.', 'AI'],
+        ['4-star or 5-star rating by CRISIL/Morningstar', '4-star or 5-star by CRISIL/Morningstar is good. Lower ratings indicate higher risk.', 'AI'],
+        ['Beats benchmark consistently', 'Fund should beat its benchmark regularly, not just in one year.', 'AI'],
+        ['Well-diversified portfolio (>30 stocks)', 'More than 30 stocks is well-diversified. Less is riskier.', 'AI'],
+        ['Lower volatility than peers', 'Lower volatility than peers is preferred for stability.', 'AI'],
+        ['Good Sharpe ratio (>1.5)', 'Risk-adjusted return. >1.5 is good, <1 is poor.', 'AI'],
+        ['Limited downside capture ratio', 'Lower downside capture ratio means less loss in market falls. <100% is good.', 'AI'],
+      ];
+      var LS = 'investMfChecklist', saved = {};
+      try { saved = JSON.parse(localStorage.getItem(LS) || '{}'); } catch (e) { saved = {}; }
+      document.getElementById('mfChecks').innerHTML = ITEMS.map(function (it, i) {
+        return '<label style="display:flex; gap:8px; align-items:flex-start; padding:6px 0; border-bottom:1px solid var(--line-soft); cursor:pointer;">' +
+          '<input type="checkbox" data-id="' + i + '"' + (saved[i] ? ' checked' : '') + ' style="width:auto; margin-top:4px;" />' +
+          '<span><strong>' + esc(it[0]) + '</strong> <span class="pill">' + esc(it[2]) + '</span><br>' +
+          '<span class="muted">' + esc(it[1]) + '</span></span></label>';
+      }).join('');
+      function mfCount() {
+        document.getElementById('mfProgress').textContent =
+          document.querySelectorAll('#mfChecks input:checked').length + ' / ' + ITEMS.length;
+      }
+      document.getElementById('mfChecks').addEventListener('change', function () {
+        var s = {};
+        document.querySelectorAll('#mfChecks input').forEach(function (b) { if (b.checked) s[b.dataset.id] = true; });
+        try { localStorage.setItem(LS, JSON.stringify(s)); } catch (e) {}
+        mfCount();
+      });
+      document.getElementById('mfCheckReset').addEventListener('click', function () {
+        document.querySelectorAll('#mfChecks input').forEach(function (b) { b.checked = false; });
+        try { localStorage.removeItem(LS); } catch (e) {}
+        mfCount();
+      });
+      document.getElementById('mfCheckCopy').addEventListener('click', function () {
+        var lines = ['Mutual Fund Investment Checklist'];
+        document.querySelectorAll('#mfChecks input').forEach(function (b, i) {
+          lines.push((b.checked ? '[x] ' : '[ ] ') + ITEMS[i][0]);
+        });
+        if (navigator.clipboard) navigator.clipboard.writeText(lines.join('\n')).then(
+          function () { RS.toast('Checklist copied', 'ok'); },
+          function () { RS.toast('Copy failed', 'err'); });
+      });
+      mfCount();
+    })();
+  </script>
+{% endblock %}

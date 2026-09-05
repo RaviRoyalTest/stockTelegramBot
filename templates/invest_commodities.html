@@ -1,0 +1,141 @@
+{% extends "base.html" %}
+{% block title %}Commodities · Royal Stock{% endblock %}
+{% block content %}
+  <div class="page-header">
+    <h1>🥇 Gold vs Silver Ratio Analysis</h1>
+    <p class="sub">Analyze the gold-silver ratio to identify buying opportunities. <a href="/invest">← All investment tools</a></p>
+  </div>
+
+  <section class="card" aria-labelledby="hPrices">
+    <h2 id="hPrices">Current Prices</h2>
+    <p class="muted">Enter prices manually or fetch live data.</p>
+    <div class="form-row">
+      <div class="field"><label for="gold">Gold Price (per oz)</label><input id="gold" type="number" min="0" step="any" placeholder="2000" value="2050" /></div>
+      <div class="field"><label for="silver">Silver Price (per oz)</label><input id="silver" type="number" min="0" step="any" placeholder="25" value="24" /></div>
+      <button class="btn btn-primary" type="button" id="calc">Calculate Ratio</button>
+      <button class="btn" type="button" id="live">🔄 Get Live Prices</button>
+    </div>
+    <p class="note" id="liveMeta" aria-live="polite"></p>
+    <div class="grid grid-4" style="margin-top:12px;">
+      <div class="card stat" style="box-shadow:none;"><div class="label">Current Ratio</div><div class="value" id="rRatio">…</div><div class="muted">Gold ounces per Silver ounce</div></div>
+      <div class="card stat" style="box-shadow:none;"><div class="label">Recommendation</div><div class="value" id="rRec" style="font-size:1.1rem;">…</div></div>
+      <div class="card stat" style="box-shadow:none;"><div class="label">Signal Strength</div><div class="value" id="rStr" style="font-size:1.1rem;">…</div></div>
+      <div class="card stat" style="box-shadow:none;"><div class="label">Interpretation</div><div class="value" id="rInterp" style="font-size:0.95rem; font-weight:400;">…</div></div>
+    </div>
+    <p class="note" id="rInr"></p>
+  </section>
+
+  <section class="card section" aria-labelledby="hLive">
+    <h2 id="hLive">Live Price Comparison (USD)</h2>
+    <div class="table-scroll"><table class="table-mini">
+      <thead><tr><th>Source</th><th class="num">Gold</th><th class="num">Silver</th><th>Last Updated</th></tr></thead>
+      <tbody id="liveBody"><tr><td colspan="4" class="empty">Press “Get Live Prices”.</td></tr></tbody>
+    </table></div>
+  </section>
+
+  <div class="section-grid section">
+    <section class="card" aria-labelledby="hHist">
+      <h2 id="hHist">Historical Context</h2>
+      <table class="kv"><tbody>
+        <tr><th scope="row">Historical Average</th><td>60–70</td></tr>
+        <tr><th scope="row">20-Year Range</th><td>30–120</td></tr>
+        <tr><th scope="row">All-Time High (2020)</th><td>~125</td></tr>
+        <tr><th scope="row">Natural Ratio</th><td>15–17</td></tr>
+      </tbody></table>
+    </section>
+    <section class="card" aria-labelledby="hGuide">
+      <h2 id="hGuide">Investment Guidelines</h2>
+      <table class="kv"><tbody>
+        <tr><th scope="row">Ratio &gt; 80</th><td>Silver is undervalued — favor silver purchases</td></tr>
+        <tr><th scope="row">Ratio 60–80</th><td>Near average — monitor for better entry points</td></tr>
+        <tr><th scope="row">Ratio &lt; 50</th><td>Gold is undervalued — favor gold purchases</td></tr>
+        <tr><th scope="row">Extreme Ratios</th><td>&lt;40 or &gt;90 indicate strong buying opportunities</td></tr>
+      </tbody></table>
+    </section>
+  </div>
+
+  <section class="card section" aria-labelledby="hInfo">
+    <h2 id="hInfo">📊 Understanding the Gold-Silver Ratio</h2>
+    <p><strong>What it means:</strong> <span class="muted">The gold-silver ratio represents how many ounces of silver it takes to purchase one ounce of gold.</span></p>
+    <p><strong>How to use it:</strong> <span class="muted">When the ratio is high, silver is relatively cheap compared to gold. When low, gold is relatively cheap compared to silver.</span></p>
+    <p><strong>Investment strategy:</strong> <span class="muted">Investors can use this ratio to switch between gold and silver holdings, buying the relatively undervalued metal and selling the overvalued one.</span></p>
+    <p style="margin-bottom:0;"><strong>Important note:</strong> <span class="muted">This ratio is just one tool among many. Always consider broader market conditions, your investment goals, and diversification strategy.</span></p>
+  </section>
+{% endblock %}
+
+{% block scripts %}
+  <script>
+    (function () {
+      'use strict';
+      var esc = RS.escapeHtml, fmtNum = RS.fmtNum;
+      var usdInr = null;
+
+      function analyse(ratio) {
+        if (ratio == null || !isFinite(ratio) || ratio <= 0) return null;
+        if (ratio >= 90) return { rec: '🥈 Buy Silver', str: 'Strong', msg: 'Silver is extremely undervalued relative to gold. Strong buy signal for silver.' };
+        if (ratio >= 80) return { rec: '🥈 Buy Silver', str: 'Moderate', msg: 'Silver is significantly undervalued. Consider accumulating silver positions.' };
+        if (ratio > 70) return { rec: '🥈 Buy Silver', str: 'Weak', msg: 'Silver is moderately undervalued. Potential opportunity to buy silver.' };
+        if (ratio >= 50) return { rec: '⚖️ Neutral / Hold', str: '—', msg: 'Ratio is near historical average. Monitor both metals for better entry points.' };
+        if (ratio >= 40) return { rec: '🥇 Buy Gold', str: 'Weak', msg: 'Gold is starting to look relatively undervalued. Consider building gold positions.' };
+        if (ratio >= 30) return { rec: '🥇 Buy Gold', str: 'Moderate', msg: 'Gold is significantly undervalued. Good opportunity to accumulate gold.' };
+        return { rec: '🥇 Buy Gold', str: 'Strong', msg: 'Gold is extremely undervalued relative to silver. Strong buy signal for gold.' };
+      }
+
+      function render(g, s, meta) {
+        var ratio = g && s ? g / s : null;
+        document.getElementById('rRatio').textContent = ratio != null ? ratio.toFixed(2) : '−';
+        var a = analyse(ratio);
+        document.getElementById('rRec').textContent = a ? a.rec : '−';
+        document.getElementById('rStr').textContent = a ? a.str : '−';
+        document.getElementById('rInterp').textContent = a ? a.msg : 'Enter valid prices.';
+        if (meta) document.getElementById('liveMeta').textContent = meta;
+        if (usdInr && g && s) {
+          var g10 = g / 31.1035 * 10 * usdInr, sKg = s / 31.1035 * 1000 * usdInr;
+          document.getElementById('rInr').textContent =
+            '≈ ₹' + fmtNum(g10, 0) + ' per 10g gold · ₹' + fmtNum(sKg, 0) + ' per kg silver (@ $1 = ₹' + usdInr + ')';
+        } else {
+          document.getElementById('rInr').textContent = '';
+        }
+      }
+
+      document.getElementById('calc').addEventListener('click', function () {
+        var g = Number(document.getElementById('gold').value);
+        var s = Number(document.getElementById('silver').value);
+        render(isFinite(g) && g > 0 ? g : null, isFinite(s) && s > 0 ? s : null, '');
+      });
+
+      document.getElementById('live').addEventListener('click', async function () {
+        var btn = this;
+        btn.disabled = true;
+        btn.textContent = 'Fetching…';
+        try {
+          var res = await fetch('/api/metals');
+          if (!res.ok) throw new Error('API ' + res.status);
+          var data = await res.json();
+          var rows = data.sources || [];
+          document.getElementById('liveBody').innerHTML = rows.length ? rows.map(function (r) {
+            return '<tr><td>' + esc(r.source) + '</td><td class="num">$' + fmtNum(r.gold) + '</td>' +
+              '<td class="num">$' + fmtNum(r.silver) + '</td><td>' + esc(r.time || '') + '</td></tr>';
+          }).join('') : '<tr><td colspan="4" class="empty">All APIs failed — enter prices manually.</td></tr>';
+          if (data.gold && data.silver) {
+            document.getElementById('gold').value = data.gold.toFixed(2);
+            document.getElementById('silver').value = data.silver.toFixed(2);
+            usdInr = data.usd_inr;
+            var names = rows.map(function (r) { return r.source; }).join(', ');
+            render(data.gold, data.silver,
+              '✓ Updated: ' + (data.updated || '') + ' (Avg of ' + rows.length + ': ' + names + ')');
+          } else {
+            RS.toast('Unable to auto-fetch from any source. Please enter manually.', 'err');
+          }
+        } catch (err) {
+          RS.toast('Live prices failed: ' + err.message, 'err');
+        } finally {
+          btn.disabled = false;
+          btn.textContent = '🔄 Get Live Prices';
+        }
+      });
+
+      render(2050, 24, '');
+    })();
+  </script>
+{% endblock %}

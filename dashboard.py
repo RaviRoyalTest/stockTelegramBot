@@ -835,8 +835,6 @@ async def api_indicator(symbol: str | None = Query(None), name: str | None = Que
         raise
     except Exception as exc:
         raise HTTPException(status_code=500, detail=str(exc))
-
-
 @app.get("/api/harmonic")
 async def api_harmonic(symbol: str | None = Query(None), timeframe: str = Query("1d")):
     """Harmonic-pattern report for one symbol (bot /harmonicpatterns parity)."""
@@ -866,6 +864,21 @@ async def api_harmonic(symbol: str | None = Query(None), timeframe: str = Query(
         return JSONResponse({"symbol": key, "timeframe": tf, "lines": lines})
     except HTTPException:
         raise
+    except Exception as exc:
+        raise HTTPException(status_code=500, detail=str(exc))
+
+
+@app.get("/api/metals")
+async def api_metals():
+    """Consensus gold/silver USD prices + per-source table (Commodities parity).
+
+    Three free sources (CoinPaprika, currency-api, CoinGecko), closest-pair
+    consensus, 5-minute server cache. Nulls when all are down — the UI then
+    falls back to manual entry instead of blanking.
+    """
+    try:
+        data = await asyncio.to_thread(sources.get_metals)
+        return JSONResponse(data)
     except Exception as exc:
         raise HTTPException(status_code=500, detail=str(exc))
 
@@ -1041,6 +1054,31 @@ async def news_page(request: Request):
     return templates.TemplateResponse(request, "news.html")
 
 
+@app.get("/invest", response_class=HTMLResponse)
+async def invest_page(request: Request):
+    return templates.TemplateResponse(request, "invest.html")
+
+
+@app.get("/invest/stocks", response_class=HTMLResponse)
+async def invest_stocks_page(request: Request):
+    return templates.TemplateResponse(request, "invest_stocks.html")
+
+
+@app.get("/invest/mutual-funds", response_class=HTMLResponse)
+async def invest_mutual_page(request: Request):
+    return templates.TemplateResponse(request, "invest_mutual.html")
+
+
+@app.get("/invest/bonds", response_class=HTMLResponse)
+async def invest_bonds_page(request: Request):
+    return templates.TemplateResponse(request, "invest_bonds.html")
+
+
+@app.get("/invest/commodities", response_class=HTMLResponse)
+async def invest_commodities_page(request: Request):
+    return templates.TemplateResponse(request, "invest_commodities.html")
+
+
 @app.get("/fundamentals", response_class=HTMLResponse)
 async def fundamentals_page(request: Request):
     return templates.TemplateResponse(request, "fundamentals.html")
@@ -1067,12 +1105,15 @@ async def api_status():
     items = storage.load_watchlist()
     open_now = market_hours.is_market_open("in")
     info = market_hours.MARKETS.get("in", {})
-    # Lightweight free-API health: one cheap Stooq fetch so System tab can
-    # show whether live quotes are reachable without hammering Yahoo.
+    # Lightweight free-API health: probe the real fallback chain (Yahoo ->
+    # NSE -> Stooq) once so the System/dashboard card reflects what users
+    # actually get, instead of "Down" when only Stooq is unreachable.
     free_api_ok: bool | None = None
+    free_api_source: str | None = None
     try:
-        probe = await asyncio.to_thread(sources.get_stooq_quote, "RELIANCE", "NSE")
+        probe = await asyncio.to_thread(sources.get_best_quote, "NSE", "RELIANCE")
         free_api_ok = bool(probe and probe.get("price"))
+        free_api_source = (probe or {}).get("source")
     except Exception:
         free_api_ok = False
     return JSONResponse({
@@ -1084,6 +1125,7 @@ async def api_status():
         "telegram_configured": telegram_client.is_configured(),
         "sources": "Yahoo · NSE · Stooq · screener.in",
         "free_api_ok": free_api_ok,
+        "free_api_source": free_api_source,
         "universe": "nifty500",
     })
 
