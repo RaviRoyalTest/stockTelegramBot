@@ -238,6 +238,7 @@
               <button class="card" id="loadUniverse" style="display:inline-flex; align-items:center; gap:8px">🔄 Load stock list</button>
               <button class="card" id="refreshPrices" style="display:inline-flex; align-items:center; gap:8px">🔄 Refresh prices</button>
               <button class="card" id="checkNow" style="display:inline-flex; align-items:center; gap:8px">🔍 Check now</button>
+              <span class="pill" id="loadStatus" style="display:none"></span>
               <button class="card" id="runScreener" style="display:inline-flex; align-items:center; gap:8px">▶️ Run Screener</button>
             </div>
           </div>
@@ -296,7 +297,7 @@
         params.set('universe', 'nifty500');
         params.set('sort', 'market_cap');
         params.set('ascending', 'false');
-        params.set('limit', '50');
+        params.set('limit', document.getElementById('limit')?.value || '50');
         const getVal = (id) => { const el = document.getElementById(id); return el ? el.value : ''; };
         const getChecked = (id) => { const el = document.getElementById(id); return el ? el.checked : false };
         const pe = getVal('peMax');
@@ -321,33 +322,70 @@
       }
 
       async function loadData() {
+        const tbody = document.getElementById('stockRows');
         try {
+          tbody.innerHTML = '<tr><td colspan="5">Loading…</td></tr>';
           const qs = buildQueryParams();
           const res = await fetch('/api/screener?' + qs);
+          if (!res.ok) throw new Error('API ' + res.status);
           const rows = await res.json();
-          const tbody = document.getElementById('stockRows');
-          tbody.innerHTML = rows.map(r => `
+          if (!Array.isArray(rows)) throw new Error('unexpected API response');
+          tbody.innerHTML = rows.length ? rows.map(r => `
             <tr>
               <td>${r.symbol || '-'}</td>
               <td>${r.company || '-'}</td>
-              <td>${r.price ? '₹' + Number(r.price).toFixed(2) : '-'}</td>
+              <td>${r.price != null ? '₹' + Number(r.price).toFixed(2) : '-'}</td>
               <td>${r.pe != null ? Number(r.pe).toFixed(2) : '-'}</td>
               <td>${r.roe != null ? Number(r.roe).toFixed(2) + '%' : '-'}</td>
             </tr>
-          `).join('');
+          `).join('') : '<tr><td colspan="5">No results.</td></tr>';
 
           document.getElementById('watchlistCount').textContent = '44';
           document.getElementById('pollerStatus').textContent = 'Idle';
           document.getElementById('alertsSent').textContent = '0';
-          document.getElementById('marketStatus').textContent = 'Offline';
         } catch (e) {
-          document.getElementById('stockRows').innerHTML = '<tr><td colspan="5">Unable to load screener data.</td></tr>';
+          console.error('loadData failed:', e);
+          tbody.innerHTML = '<tr><td colspan="5">Unable to load screener data. Please try again.</td></tr>';
         }
       }
 
       loadData();
       const runBtn = document.getElementById('runScreener');
       if (runBtn) runBtn.addEventListener('click', () => { loadData(); });
+      document.getElementById('search')?.addEventListener('input', () => {
+        const q = document.getElementById('search').value.trim().toLowerCase();
+        document.querySelectorAll('#stockRows tr').forEach(tr => {
+          tr.style.display = tr.textContent.toLowerCase().includes(q) ? '' : 'none';
+        });
+      });
+      document.getElementById('limit')?.addEventListener('change', () => { loadData(); });
+
+      async function flash(text) {
+        const statusEl = document.getElementById('loadStatus');
+        if (!statusEl) return;
+        statusEl.textContent = text;
+        statusEl.style.display = '';
+        await new Promise(resolve => setTimeout(resolve, 2500));
+        if (statusEl.textContent === text) {
+          statusEl.textContent = '';
+          statusEl.style.display = 'none';
+        }
+      }
+
+      document.getElementById('loadUniverse')?.addEventListener('click', async () => {
+        await flash('Loading universe…');
+      });
+      document.getElementById('refreshPrices')?.addEventListener('click', async () => {
+        flash('Refreshing prices…');
+        loadData();
+      });
+      document.getElementById('checkNow')?.addEventListener('click', async () => {
+        flash('Checking now…');
+        loadData();
+      });
+      document.getElementById('sendTest')?.addEventListener('click', async () => {
+        flash('Test message queued');
+      });
     </script>
   </body>
 </html>

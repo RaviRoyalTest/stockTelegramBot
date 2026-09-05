@@ -195,6 +195,7 @@ def _quote_summary(symbol: str, suffix: str = ".NS") -> dict | None:
 
     `suffix` picks the exchange: '.NS' for NSE symbols, '' for US tickers.
     """
+    global _yahoo_fail_count, _yahoo_blocked_until
     now = time.time()
     with _yahoo_lock:
         if now < _yahoo_blocked_until:
@@ -261,6 +262,7 @@ async def _quote_summary_async(symbol: str, suffix: str = ".NS") -> dict | None:
     Falls back to running the sync `_quote_summary` in a thread when httpx
     is not present or on unexpected failures.
     """
+    global _yahoo_fail_count, _yahoo_blocked_until
     now = time.time()
     with _yahoo_lock:
         if now < _yahoo_blocked_until:

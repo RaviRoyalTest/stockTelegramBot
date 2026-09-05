@@ -408,52 +408,28 @@ async def screen_universe_async(
 
     tasks = [asyncio.create_task(worker(s)) for s in ordered_symbols]
 
-    # streaming heap selection to keep only top_k candidates
-    heap: list = []
+    # wait until every task finishes or the deadline expires, then cancel the
+    # stragglers so this coroutine always returns promptly with what it has.
+    results: list[dict] = []
+    pending = set(tasks)
+    while pending:
+        remaining_seconds = deadline - time.time()
+        if remaining_seconds <= 0:
+            break
+        done, pending = await asyncio.wait(pending, timeout=remaining_seconds)
+        for task in done:
+            row = task.result()
+            if row:
+                results.append(row)
+    for task in pending:
+        task.cancel()
+    if pending:
+        await asyncio.gather(*pending, return_exceptions=True)
+
     if ascending:
-        idx = 0
-        for coro in asyncio.as_completed(tasks):
-            if time.time() > deadline:
-                break
-            r = await coro
-            if not r:
-                continue
-            try:
-                kval = keyfunc(r)
-            except Exception:
-                kval = None
-            score = kval if kval is not None else float('inf')
-            item = (-score, idx, r)
-            if len(heap) < top_k:
-                heapq.heappush(heap, item)
-            else:
-                if item > heap[0]:
-                    heapq.heapreplace(heap, item)
-            idx += 1
-        selected = [t[2] for t in heap]
-        selected.sort(key=keyfunc)
+        selected = heapq.nsmallest(top_k, results, key=keyfunc)
     else:
-        idx = 0
-        for coro in asyncio.as_completed(tasks):
-            if time.time() > deadline:
-                break
-            r = await coro
-            if not r:
-                continue
-            try:
-                kval = keyfunc(r)
-            except Exception:
-                kval = None
-            score = kval if kval is not None else float('-inf')
-            item = (score, idx, r)
-            if len(heap) < top_k:
-                heapq.heappush(heap, item)
-            else:
-                if item > heap[0]:
-                    heapq.heapreplace(heap, item)
-            idx += 1
-        selected = [t[2] for t in heap]
-        selected.sort(key=keyfunc, reverse=True)
+        selected = heapq.nlargest(top_k, results, key=keyfunc)
 
     filtered = _apply_filters(selected, filters)
     final_sorted = _sort_rows(filtered, sort, ascending)
@@ -472,11 +448,18 @@ async def prewarm_universe(universe: str = "nifty500", limit: int = 100) -> None
     if not symbols:
         return
     sem = asyncio.Semaphore(int(getattr(config, "SCREENER_MAX_WORKERS", 6)))
+    # bound the prewarm so a slow source cannot block server startup forever
+    prewarm_deadline = time.time() + float(getattr(config, "SCREENER_SOURCE_TIMEOUT", 5.0)) * 2
 
     async def worker(sym: str):
+        if time.time() > prewarm_deadline:
+            return
         async with sem:
             try:
-                await _get_cached_row_async(sym)
+                await asyncio.wait_for(
+                    _get_cached_row_async(sym),
+                    timeout=max(0.5, prewarm_deadline - time.time()),
+                )
             except Exception:
                 pass
 

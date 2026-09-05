@@ -295,14 +295,17 @@ async def api_screener(
     }
     log = logging.getLogger(__name__)
     timeout = float(os.getenv("SCREENER_API_TIMEOUT", "15"))
+    # give the service a small grace window past the endpoint timeout so it can
+    # return its best partial results instead of being cancelled at the deadline
+    service_timeout = timeout + 1.5
     try:
         rows = await asyncio.wait_for(
             screen_universe_async(universe=universe, filters=filters, sort=sort, ascending=ascending, limit=limit, offset=offset),
-            timeout=timeout,
+            timeout=service_timeout,
         )
         return JSONResponse(rows)
     except asyncio.TimeoutError:
-        log.warning("/api/screener timed out after %s seconds", timeout)
+        log.warning("/api/screener timed out after %s seconds", service_timeout)
         raise HTTPException(status_code=504, detail="screener timeout")
     except Exception as e:
         log.exception("/api/screener failed: %s", e)
@@ -359,13 +362,15 @@ async def api_screener_csv(
     }
     log = logging.getLogger(__name__)
     timeout = float(os.getenv("SCREENER_API_TIMEOUT", "30"))
+    # same grace window as /api/screener so partial results still arrive
+    service_timeout = timeout + 1.5
     try:
         rows = await asyncio.wait_for(
             screen_universe_async(universe=universe, filters=filters, sort=sort, ascending=ascending, limit=limit, offset=offset),
-            timeout=timeout,
+            timeout=service_timeout,
         )
     except asyncio.TimeoutError:
-        log.warning("/api/screener.csv timed out after %s seconds", timeout)
+        log.warning("/api/screener.csv timed out after %s seconds", service_timeout)
         raise HTTPException(status_code=504, detail="screener csv timeout")
     except Exception as e:
         log.exception("/api/screener.csv failed: %s", e)

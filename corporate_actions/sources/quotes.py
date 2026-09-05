@@ -38,6 +38,7 @@ def _clean_company_name(raw_name: str) -> str:
 
 def get_quote(exchange: str, symbol: str) -> dict | None:
     """Return {'price', 'prev_close', 'change_pct', 'currency', 'name'} or None."""
+    global _yahoo_fail_count, _yahoo_blocked_until
     exchange = exchange.upper()
     symbol = symbol.upper().removesuffix(".NS").removesuffix(".BO").strip()
     now = time.time()
@@ -121,6 +122,7 @@ async def get_quote_async(exchange: str, symbol: str) -> dict | None:
     Falls back to running the sync `get_quote` in a thread if `httpx` is
     unavailable.
     """
+    global _yahoo_fail_count, _yahoo_blocked_until
     exchange = exchange.upper()
     symbol = symbol.upper().removesuffix(".NS").removesuffix(".BO").strip()
     now = time.time()
