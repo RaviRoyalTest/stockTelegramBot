@@ -14,6 +14,13 @@
         <input id="symbol" required placeholder="e.g. RELIANCE" autocomplete="off" style="text-transform:uppercase" list="symbolList" />
         <datalist id="symbolList"></datalist>
       </div>
+      <div class="field">
+        <label for="market">Market</label>
+        <select id="market">
+          <option value="in" selected>India (NSE/BSE)</option>
+          <option value="us">US (NASDAQ/NYSE)</option>
+        </select>
+      </div>
       <button class="btn btn-primary" type="submit" id="go">🔍 Fetch full report</button>
       <button class="btn" type="button" id="refresh" title="Bypass the data cache and refetch">♻️ Refresh data</button>
       <button class="btn" type="button" id="download">⬇️ CSV</button>
@@ -33,6 +40,24 @@
       <div class="pill-row" style="margin-top:10px;" id="rBadges"></div>
       <p class="note" id="rSources" style="margin:8px 0 0;"></p>
       <div class="note" id="rCompleteness" style="margin-top:6px;" aria-live="polite"></div>
+    </section>
+
+    <!-- snapshot & verdict (same rules as the Telegram deep report) -->
+    <section class="card section" aria-labelledby="hSnap">
+      <h2 id="hSnap">🧠 Snapshot &amp; verdict</h2>
+      <p style="margin:0 0 8px; font-size:1.1rem;" id="rVerdict"><span class="muted">Loading…</span></p>
+      <table class="kv"><tbody id="rSnap"></tbody></table>
+      <div class="section-grid" style="margin-top:12px;">
+        <div>
+          <h3 style="margin:0 0 6px; font-size:0.95rem;">✅ Key positives</h3>
+          <div id="rPositives"><p class="muted">Loading…</p></div>
+        </div>
+        <div>
+          <h3 style="margin:0 0 6px; font-size:0.95rem;">⚠️ Key concerns</h3>
+          <div id="rConcerns"><p class="muted">Loading…</p></div>
+        </div>
+      </div>
+      <p class="note" id="rQuestion" style="margin-bottom:0;"></p>
     </section>
 
     <div class="section-grid section">
@@ -173,6 +198,8 @@
     (function () {
       'use strict';
       var esc = RS.escapeHtml;
+      var CUR = '₹';
+      var MARKET = 'in';
 
       function fmt(v, d) {
         if (v === null || v === undefined || v === '') return '−';
@@ -181,7 +208,7 @@
         return n.toLocaleString(undefined, { maximumFractionDigits: d == null ? 2 : d });
       }
 
-      function cr(v, d) { return (v == null) ? '−' : '₹' + fmt(v, d == null ? 0 : d); }
+      function cr(v, d) { return (v == null) ? '−' : CUR + fmt(v, d == null ? 0 : d); }
       function pct(v, d) { return (v == null) ? '−' : fmt(v, d) + '%'; }
       function x(v) { return (v == null) ? '−' : fmt(v) + 'x'; }
 
@@ -223,7 +250,27 @@
         ctx.fillText(fmt(max, 0), 10, 30);
       }
 
-      async function loadExtras(symbol) {
+      async function loadExtras(symbol, market) {
+        // Snapshot & verdict (same rules as the Telegram deep report).
+        try {
+          var ar = await fetch('/api/analysis?symbol=' + encodeURIComponent(symbol) + '&market=' + encodeURIComponent(market || 'in'));
+          if (ar.ok) {
+            var aj = await ar.json();
+            document.getElementById('rVerdict').innerHTML = aj.verdict
+              ? '<strong>Verdict: ' + esc(aj.verdict) + '</strong>' : '<span class="muted">No verdict available.</span>';
+            document.getElementById('rSnap').innerHTML = rows((aj.snapshot || []).map(function (s) {
+              return [s.label, esc(s.icon || '') + ' <strong>' + esc(s.word || '') + '</strong>'];
+            }));
+            document.getElementById('rPositives').innerHTML = (aj.positives || []).length
+              ? '<ul style="margin:0;padding-left:18px;">' + aj.positives.map(function (p) { return '<li>' + esc(p) + '</li>'; }).join('') + '</ul>'
+              : '<p class="muted">None flagged.</p>';
+            document.getElementById('rConcerns').innerHTML = (aj.concerns || []).length
+              ? '<ul style="margin:0;padding-left:18px;">' + aj.concerns.map(function (c) { return '<li>' + esc(c) + '</li>'; }).join('') + '</ul>'
+              : '<p class="muted">None flagged.</p>';
+            document.getElementById('rQuestion').textContent = (aj.main_question || []).length
+              ? 'Main question: ' + aj.main_question.join(' ') : '';
+          }
+        } catch (e) { /* snapshot is best-effort */ }
         // News + corporate actions + price history load in parallel; each
         // degrades independently so one slow source never blanks the report.
         try {
@@ -273,10 +320,12 @@
         } catch (e) { /* chart is best-effort */ }
       }
 
-      async function loadReport(symbol, refresh) {
+      async function loadReport(symbol, refresh, market) {
         var report = document.getElementById('report');
         var placeholder = document.getElementById('placeholder');
         var go = document.getElementById('go');
+        MARKET = market || 'in';
+        CUR = MARKET === 'us' ? '$' : '₹';
         placeholder.hidden = true;
         report.hidden = false;
         go.disabled = true;
@@ -284,15 +333,20 @@
         document.getElementById('rNews').innerHTML = '<p class="muted">Loading news…</p>';
         document.getElementById('rCA').innerHTML = '<p class="muted">Loading actions…</p>';
         document.getElementById('rChartNote').textContent = 'Loading price history…';
+        document.getElementById('rVerdict').innerHTML = '<span class="muted">Loading…</span>';
+        document.getElementById('rSnap').innerHTML = '';
+        document.getElementById('rPositives').innerHTML = '<p class="muted">Loading…</p>';
+        document.getElementById('rConcerns').innerHTML = '<p class="muted">Loading…</p>';
+        document.getElementById('rQuestion').textContent = '';
         document.querySelectorAll('#report tbody, #rTrend, #rPeers, #rMgmt, #r5yHead, #r5yBody, #rQHead, #rQBody').forEach(function (el) {
           el.innerHTML = '<tr><td colspan="6" class="empty"><span class="skeleton" style="display:block;width:100%"></span></td></tr>';
         });
         try {
-          var res = await fetch('/api/fundamentals?symbol=' + encodeURIComponent(symbol) + (refresh ? '&refresh=1' : ''));
+          var res = await fetch('/api/fundamentals?symbol=' + encodeURIComponent(symbol) + (refresh ? '&refresh=1' : '') + '&market=' + encodeURIComponent(MARKET));
           if (!res.ok) throw new Error('HTTP ' + res.status);
           var data = await res.json();
           render(data);
-          loadExtras(symbol);
+          loadExtras(symbol, MARKET);
           history.replaceState(null, '', '/fundamentals?symbol=' + encodeURIComponent(symbol));
         } catch (err) {
           console.error('loadReport failed:', err);
@@ -310,7 +364,7 @@
         var price = (q.price != null) ? q.price : f.price;
 
         document.getElementById('rTitle').textContent = (q.name || f.company || f.name || data.symbol).toUpperCase();
-        document.getElementById('rPrice').textContent = price != null ? '₹' + fmt(price) : '−';
+        document.getElementById('rPrice').textContent = price != null ? CUR + fmt(price) : '−';
         var chgEl = document.getElementById('rChg');
         if (q.change_pct != null) {
           chgEl.textContent = RS.fmtPct(q.change_pct);
@@ -321,7 +375,8 @@
         if (f.sector) badges.push(f.sector);
         if (f.industry && f.industry !== f.sector) badges.push(f.industry);
         if (f.rec_key) badges.push('Analysts: ' + String(f.rec_key).toUpperCase());
-        if (f.mcap_cr != null || f.market_cap != null) badges.push('Mkt cap ₹' + fmt(f.mcap_cr != null ? f.mcap_cr : f.market_cap, 0) + ' Cr');
+        if (MARKET === 'us' && f.mcap_usd != null) badges.push('Mkt cap $' + fmt(f.mcap_usd, 2) + 'B');
+        else if (f.mcap_cr != null || f.market_cap != null) badges.push('Mkt cap ₹' + fmt(f.mcap_cr != null ? f.mcap_cr : f.market_cap, 0) + ' Cr');
         if (q.source && q.source !== 'none') badges.push('Price: ' + q.source);
         document.getElementById('rBadges').innerHTML = badges.map(function (b) {
           return '<span class="pill">' + esc(b) + '</span>';
@@ -397,8 +452,8 @@
           ['Book value', f.book_value != null ? cr(f.book_value) : null],
           ['Revenue / share', f.revenue_per_share != null ? cr(f.revenue_per_share) : null],
           ['Cash / share', f.cash_per_share != null ? cr(f.cash_per_share) : null],
-          ['Shares outstanding', f.shares_outstanding != null ? fmt(f.shares_outstanding / 1e7, 2) + ' Cr' : null],
-          ['Float shares', f.float_shares != null ? fmt(f.float_shares / 1e7, 2) + ' Cr' : null],
+          ['Shares outstanding', f.shares_outstanding != null ? (MARKET === 'us' ? fmt(f.shares_outstanding / 1e9, 2) + 'B' : fmt(f.shares_outstanding / 1e7, 2) + ' Cr') : null],
+          ['Float shares', f.float_shares != null ? (MARKET === 'us' ? fmt(f.float_shares / 1e9, 2) + 'B' : fmt(f.float_shares / 1e7, 2) + ' Cr') : null],
           ['Total cash', f.total_cash != null ? '₹' + fmt(f.total_cash / 1e7, 0) + ' Cr' : null],
           ['Total debt', f.total_debt != null ? '₹' + fmt(f.total_debt / 1e7, 0) + ' Cr' : null],
           ['Employees', f.employees != null ? fmt(f.employees, 0) : null],
@@ -592,14 +647,14 @@
 
       document.getElementById('lookupForm').addEventListener('submit', function (event) {
         event.preventDefault();
-        var symbol = document.getElementById('symbol').value.trim().toUpperCase().replace(/\.NS$|\.BO$/, '');
-        if (symbol) loadReport(symbol, false);
+        var symbol = document.getElementById('symbol').value.trim().toUpperCase().replace(/\.NS$|\.BO$|\.US$/, '');
+        if (symbol) loadReport(symbol, false, document.getElementById('market').value);
       });
       document.getElementById('refresh').addEventListener('click', function () {
-        var symbol = document.getElementById('symbol').value.trim().toUpperCase().replace(/\.NS$|\.BO$/, '');
+        var symbol = document.getElementById('symbol').value.trim().toUpperCase().replace(/\.NS$|\.BO$|\.US$/, '');
         if (!symbol) { RS.toast('Enter a symbol first', 'err'); return; }
         RS.toast('Refreshing data…');
-        loadReport(symbol, true);
+        loadReport(symbol, true, document.getElementById('market').value);
       });
       document.getElementById('download').addEventListener('click', function () {
         var symbol = document.getElementById('symbol').value.trim().toUpperCase();
@@ -621,9 +676,13 @@
 
       // deep-link: /fundamentals?symbol=RELIANCE
       var initial = new URLSearchParams(window.location.search).get('symbol');
+      var initialMarket = new URLSearchParams(window.location.search).get('market');
+      if (initialMarket && document.getElementById('market').querySelector('option[value="' + initialMarket + '"]')) {
+        document.getElementById('market').value = initialMarket;
+      }
       if (initial) {
-        document.getElementById('symbol').value = initial.toUpperCase().replace(/\.NS$|\.BO$/, '');
-        loadReport(initial.toUpperCase().replace(/\.NS$|\.BO$/, ''), false);
+        document.getElementById('symbol').value = initial.toUpperCase().replace(/\.NS$|\.BO$|\.US$/, '');
+        loadReport(initial.toUpperCase().replace(/\.NS$|\.BO$|\.US$/, ''), false, document.getElementById('market').value);
       }
     })();
   </script>

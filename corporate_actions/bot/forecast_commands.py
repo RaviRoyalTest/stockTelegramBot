@@ -12,7 +12,15 @@ import logging
 
 from ..core.text import escape, split_messages
 from ..formatting.forecast import build_forecast_lines
-from ..sources import get_fundamentals, get_quote, get_us_fundamentals, search_stocks, search_us_tickers
+from ..sources import (
+    get_best_quote,
+    get_fundamentals,
+    get_quote,
+    get_us_fundamentals,
+    normalise_fundamentals,
+    search_stocks,
+    search_us_tickers,
+)
 from .reply import reply, reply_messages
 
 log = logging.getLogger(__name__)
@@ -60,7 +68,10 @@ def handle_forecast(chat_id, parts) -> None:
     raw_symbol = parts[1].upper().strip()
 
     # Auto-detect the market: NSE \u2192 BSE \u2192 US (same order as /indicator).
-    quote = get_quote("NSE", raw_symbol) or get_quote("BSE", raw_symbol) or {}
+    try:
+        quote = get_best_quote("NSE", raw_symbol) or {}
+    except Exception:
+        quote = get_quote("NSE", raw_symbol) or get_quote("BSE", raw_symbol) or {}
     is_us = False
     if quote.get("price") is None:
         us_quote = get_quote("US", raw_symbol) or {}
@@ -71,6 +82,10 @@ def handle_forecast(chat_id, parts) -> None:
         fund = get_us_fundamentals(raw_symbol) or {}
     else:
         fund = get_fundamentals(raw_symbol, with_screener=True) or {}
+        try:
+            fund = normalise_fundamentals(raw_symbol, dict(fund), quote or {})
+        except Exception:
+            pass
 
     if quote.get("price") is None and not fund:
         log.info("forecast: no data for %s - showing suggestions", raw_symbol)

@@ -546,19 +546,346 @@ async def api_universe(universe: str = Query("nifty500")):
         raise HTTPException(status_code=500, detail=str(exc))
 
 
+@app.get("/api/analysis")
+async def api_analysis(symbol: str | None = Query(None), market: str = Query("in")):
+    """Snapshot ratings, verdict, concerns, positives and the main question.
+
+    Same rules as the Telegram deep report's snapshot/verdict (bot parity),
+    returned as plain JSON data for the web Snapshot & Verdict card.
+    """
+    if not symbol:
+        raise HTTPException(status_code=400, detail="symbol is required")
+    key = symbol.strip().upper().removesuffix(".NS").removesuffix(".BO")
+    want_us = (market or "in").strip().lower() in ("us", "usa", "nasdaq", "nyse")
+    try:
+        from corporate_actions.analysis_service import build_analysis
+
+        if want_us:
+            fund = await asyncio.to_thread(sources.get_us_fundamentals, key) or {}
+            quote = await asyncio.to_thread(lambda: sources.get_quote("US", key) or {}) or {}
+        else:
+            fund = await asyncio.to_thread(sources.get_fundamentals, key, True) or {}
+            try:
+                quote = await asyncio.to_thread(sources.get_best_quote, "NSE", key) or {}
+            except Exception:
+                quote = await asyncio.to_thread(
+                    lambda: sources.get_quote("NSE", key) or sources.get_quote("BSE", key) or {}
+                ) or {}
+            try:
+                fund = sources.normalise_fundamentals(key, dict(fund or {}), quote or {})
+            except Exception:
+                pass
+        price = (quote or {}).get("price", (fund or {}).get("price"))
+        data = await asyncio.to_thread(build_analysis, fund or {}, price)
+        return JSONResponse({"symbol": key, "market": "us" if want_us else "in", **data})
+    except Exception as exc:
+        raise HTTPException(status_code=500, detail=str(exc))
+
+
+@app.get("/api/movers")
+async def api_movers(
+    mode: str = Query("gainers"),
+    universe: str = Query("nifty500"),
+    period: str = Query("today"),
+    limit: int = Query(20, ge=1, le=100),
+):
+    """Market screens (bot /topmovers /topgainers /toplosers /gappers parity).
+
+    mode: gainers | losers | movers (both, ranked by |move|) | gappers.
+    period: 5m 15m 30m 1h 2h 4h today 1d 2d 5d 1w 2w 1mo 3mo 6mo 1y.
+    Top rows are enriched with the screener row (pe/roe/mcap/rsi/...) so the
+    table never shows bare numbers without context.
+    """
+    from corporate_actions import screener_service
+    from corporate_actions.market import MOVERS_PERIODS
+
+    log = logging.getLogger(__name__)
+    mode = (mode or "gainers").strip().lower()
+    if mode not in ("gainers", "losers", "movers", "gappers"):
+        raise HTTPException(status_code=400, detail="mode must be gainers|losers|movers|gappers")
+    period_key = (period or "today").strip().lower()
+    period_tuple = MOVERS_PERIODS.get(period_key)
+    if period_tuple is None and mode != "gappers":
+        raise HTTPException(
+            status_code=400,
+            detail=f"unknown period {period_key!r} (try today, 1h, 1d, 1w, 1mo)",
+        )
+    try:
+        symbols = await asyncio.to_thread(sources.get_index_universe, universe) or []
+    except Exception as exc:
+        raise HTTPException(status_code=500, detail=str(exc))
+    if not symbols:
+        return JSONResponse({"mode": mode, "universe": universe, "period": period_key, "rows": []})
+    exchange = sources.universe_exchange(universe)
+    deadline = float(os.getenv("SCREENER_API_TIMEOUT", "15")) + 1.5
+    started = asyncio.get_event_loop().time()
+
+    def _scan_one(symbol: str) -> dict | None:
+        try:
+            if mode == "gappers":
+                move = sources.get_gap_change(exchange, symbol)
+                if not move:
+                    return None
+                return {
+                    "symbol": symbol,
+                    "price": move.get("price"),
+                    "gap_pct": move.get("gap_pct"),
+                    "move_from_open_pct": move.get("move_from_open_pct"),
+                    "change_pct": move.get("gap_pct"),
+                    "name": move.get("name") or symbol,
+                }
+            from corporate_actions.market import fetch_period_change
+
+            move = fetch_period_change(symbol, period_tuple, exchange)
+            if not move:
+                return None
+            return {
+                "symbol": symbol,
+                "price": move.get("price"),
+                "change_pct": move.get("change_pct"),
+                "change_pct_today": move.get("change_pct_today"),
+                "name": move.get("name") or symbol,
+            }
+        except Exception:
+            return None
+
+    try:
+        rows = await asyncio.to_thread(
+            lambda: _scan_symbols(symbols, _scan_one, deadline, started)
+        )
+    except Exception as exc:
+        log.exception("/api/movers scan failed: %s", exc)
+        raise HTTPException(status_code=500, detail=str(exc))
+
+    rows = [r for r in rows if r and r.get("change_pct") is not None]
+    if mode == "gainers":
+        rows.sort(key=lambda r: r["change_pct"], reverse=True)
+    elif mode == "losers":
+        rows.sort(key=lambda r: r["change_pct"])
+    else:
+        rows.sort(key=lambda r: abs(r["change_pct"]), reverse=True)
+    top = rows[:limit]
+
+    # Enrich with the cached screener rows (valuation/momentum context).
+    def _enrich(row: dict) -> dict:
+        try:
+            extra = screener_service._get_cached_row(row["symbol"])
+        except Exception:
+            extra = {}
+        merged = dict(row)
+        for field in ("company", "sector", "pe", "roe", "roce", "market_cap",
+                      "div_yield", "rsi14", "macd_bull", "above_ema200"):
+            if merged.get(field) is None and (extra or {}).get(field) is not None:
+                merged[field] = extra[field]
+        if not merged.get("company"):
+            merged["company"] = merged.get("name") or merged["symbol"]
+        return merged
+
+    try:
+        top = await asyncio.to_thread(lambda: list(map(_enrich, top)))
+    except Exception:
+        pass
+    return JSONResponse({
+        "mode": mode, "universe": universe, "period": period_key,
+        "count": len(top), "rows": top,
+    })
+
+
+def _scan_symbols(symbols: list[str], worker, deadline: float, started: float) -> list[dict]:
+    """Bounded thread-pool fan-out shared by /api/movers (sync helper)."""
+    import time as _time
+
+    from concurrent.futures import ThreadPoolExecutor, as_completed
+
+    from corporate_actions import config as _config
+
+    out: list[dict] = []
+    max_workers = max(1, int(getattr(_config, "SCREENER_MAX_WORKERS", 12)))
+    with ThreadPoolExecutor(max_workers=max_workers) as pool:
+        futures = {pool.submit(worker, symbol): symbol for symbol in symbols}
+        for future in as_completed(futures):
+            if _time.time() - started > deadline:
+                for pending in futures:
+                    pending.cancel()
+                break
+            try:
+                row = future.result()
+            except Exception:
+                continue
+            if row:
+                out.append(row)
+    return out
+
+
+@app.get("/api/checklist")
+async def api_checklist(symbol: str | None = Query(None), market: str = Query("in")):
+    """32-point investment scorecard (bot /checklist parity).
+
+    Reuses the bot's own pure formatter; lines are Telegram-HTML (<b>,
+    <code>) which browsers render as-is. Returns {"lines": [...]}.
+    """
+    if not symbol:
+        raise HTTPException(status_code=400, detail="symbol is required")
+    key = symbol.strip().upper().removesuffix(".NS").removesuffix(".BO")
+    force_us = (market or "in").strip().lower() in ("us", "usa", "nasdaq", "nyse")
+    try:
+        from corporate_actions.formatting.checklist import format_checklist
+
+        if force_us:
+            quote = await asyncio.to_thread(lambda: sources.get_quote("US", key) or {}) or {}
+            fund = await asyncio.to_thread(sources.get_us_fundamentals, key) or {}
+            currency = "USD"
+        else:
+            try:
+                quote = await asyncio.to_thread(sources.get_best_quote, "NSE", key) or {}
+            except Exception:
+                quote = await asyncio.to_thread(
+                    lambda: sources.get_quote("NSE", key) or sources.get_quote("BSE", key) or {}
+                ) or {}
+            currency = "INR"
+            is_us = quote.get("price") is None
+            if is_us:
+                probe = await asyncio.to_thread(lambda: sources.get_quote("US", key) or {}) or {}
+                if probe.get("price") is not None or probe.get("name"):
+                    quote, fund, currency = probe, await asyncio.to_thread(
+                        sources.get_us_fundamentals, key) or {}, "USD"
+                else:
+                    fund = await asyncio.to_thread(sources.get_fundamentals, key, True) or {}
+            else:
+                fund = await asyncio.to_thread(sources.get_fundamentals, key, True) or {}
+                try:
+                    fund = sources.normalise_fundamentals(key, dict(fund or {}), quote or {})
+                except Exception:
+                    pass
+        if (quote.get("price") is None) and not fund:
+            raise HTTPException(status_code=404, detail=f"no data for {key}")
+        lines = await asyncio.to_thread(format_checklist, key, quote, fund, currency)
+        return JSONResponse({"symbol": key, "currency": currency, "lines": lines})
+    except HTTPException:
+        raise
+    except Exception as exc:
+        raise HTTPException(status_code=500, detail=str(exc))
+
+
+@app.get("/api/indicator")
+async def api_indicator(symbol: str | None = Query(None), name: str | None = Query(None)):
+    """Technical indicator deep-dive or full card (bot /indicator parity).
+
+    ?name=RSI → one-indicator report; omitted → full all-indicators card
+    (needs ~220 daily candles, otherwise 400 with a hint).
+    """
+    if not symbol:
+        raise HTTPException(status_code=400, detail="symbol is required")
+    key = symbol.strip().upper()
+    try:
+        from corporate_actions.scanner.indicator_report import (
+            available_indicator_names,
+            build_indicator_report,
+            match_indicator,
+        )
+
+        ohlc = None
+        exchange = None
+        for candidate in ("NSE", "BSE", "US"):
+            try:
+                data = await asyncio.to_thread(sources.get_ohlc, candidate, key, "1d")
+            except Exception:
+                data = None
+            if data and data.get("close") and len(data["close"]) >= 30:
+                ohlc, exchange = data, candidate
+                break
+        if not ohlc:
+            raise HTTPException(status_code=404, detail=f"no price history for {key}")
+        if name:
+            matched = match_indicator(name)
+            if matched is None:
+                raise HTTPException(
+                    status_code=400,
+                    detail=f"unknown indicator {name!r} (try: {available_indicator_names()})",
+                )
+            price = ohlc["close"][-1]
+            open_price = (ohlc.get("open") or [None])[-1]
+            change_pct = ((price / open_price) - 1.0) * 100.0 if open_price else None
+            company = ohlc.get("name") or key
+            currency = "$" if exchange == "US" else "\u20b9"
+            lines = await asyncio.to_thread(
+                build_indicator_report, key, company, price, change_pct, ohlc, matched, currency
+            )
+            return JSONResponse({"symbol": key, "indicator": matched, "lines": lines})
+        if len(ohlc["close"]) < 220:
+            raise HTTPException(
+                status_code=400,
+                detail=f"{key} has only {len(ohlc['close'])} daily candles — "
+                "the full card needs ~220; try ?name=RSI instead",
+            )
+        try:
+            import corporate_actions.scanner as scanner
+        except Exception as exc:
+            raise HTTPException(status_code=500, detail=f"scanner unavailable: {exc}")
+        finding = await asyncio.to_thread(scanner.scan_stock, ohlc, None)
+        if finding is None:
+            raise HTTPException(status_code=500, detail=f"could not compute indicators for {key}")
+        finding = await asyncio.to_thread(scanner.build_plan, finding)
+        score, breakdown = await asyncio.to_thread(scanner.score_stock, finding)
+        from corporate_actions.scanner.report import _detail_card_lines
+
+        lines = await asyncio.to_thread(_detail_card_lines, finding, score, breakdown)
+        return JSONResponse({"symbol": key, "score": score, "lines": lines})
+    except HTTPException:
+        raise
+    except Exception as exc:
+        raise HTTPException(status_code=500, detail=str(exc))
+
+
+@app.get("/api/harmonic")
+async def api_harmonic(symbol: str | None = Query(None), timeframe: str = Query("1d")):
+    """Harmonic-pattern report for one symbol (bot /harmonicpatterns parity)."""
+    if not symbol:
+        raise HTTPException(status_code=400, detail="symbol is required")
+    key = symbol.strip().upper().removesuffix(".NS").removesuffix(".BO")
+    tf = (timeframe or "1d").strip().lower()
+    try:
+        from corporate_actions import harmonic as harmonic_mod
+
+        result = None
+        for candidate in ("NSE", "BSE", "US"):
+            try:
+                result = await asyncio.to_thread(
+                    harmonic_mod.analyze, candidate, key, tf, None, False
+                )
+            except Exception:
+                result = None
+            if result:
+                break
+        if not result:
+            raise HTTPException(status_code=404, detail=f"no harmonic data for {key}")
+        try:
+            lines = harmonic_mod.format_report(result)
+        except Exception:
+            lines = [str(result)]
+        return JSONResponse({"symbol": key, "timeframe": tf, "lines": lines})
+    except HTTPException:
+        raise
+    except Exception as exc:
+        raise HTTPException(status_code=500, detail=str(exc))
+
+
 @app.get("/api/fundamentals")
-async def api_fundamentals(symbol: str | None = Query(None), refresh: bool = Query(False)):
+async def api_fundamentals(symbol: str | None = Query(None), refresh: bool = Query(False), market: str = Query("in")):
     """Deep fundamentals for one symbol — the same dataset the Telegram bot's
     /fundamentalreport shows. Runs the bot's own sync fetch in a worker thread
     WITHOUT a timeout: a partial report helps nobody, and results are cached
     by the source layer anyway (first cold fetch can take ~20-30s while the
-    screener.in tables are scraped; ?refresh=1 bypasses the cache)."""
+    screener.in tables are scraped; ?refresh=1 bypasses the cache).
+    ?market=us serves a US ticker (/usstock parity): USD units, no screener.in.
+    """
     if not symbol:
         raise HTTPException(status_code=400, detail="symbol is required")
     key = symbol.strip().upper().removesuffix(".NS").removesuffix(".BO")
     log = logging.getLogger(__name__)
+    want_us = (market or "in").strip().lower() in ("us", "usa", "nasdaq", "nyse")
     try:
-        if refresh:
+        if refresh and not want_us:
             try:
                 from corporate_actions.sources import fundamentals as fund_source
                 fund_source._fund_cache.pop((key, True), None)
@@ -566,6 +893,12 @@ async def api_fundamentals(symbol: str | None = Query(None), refresh: bool = Que
                 log.info("/api/fundamentals: cache cleared for %s (refresh=1)", key)
             except Exception:
                 pass
+        if want_us:
+            fund = await asyncio.to_thread(sources.get_us_fundamentals, key) or {}
+            quote = await asyncio.to_thread(
+                lambda: sources.get_quote("US", key) or {}
+            )
+            return JSONResponse({"symbol": key, "market": "us", "fund": fund, "quote": quote or {}})
         fund = await asyncio.to_thread(sources.get_fundamentals, key, True) or {}
         try:
             quote = await asyncio.to_thread(sources.get_best_quote, "NSE", key)
@@ -582,7 +915,7 @@ async def api_fundamentals(symbol: str | None = Query(None), refresh: bool = Que
             fund = sources.normalise_fundamentals(key, dict(fund or {}), quote or {})
         except Exception:
             pass
-        return JSONResponse({"symbol": key, "fund": fund, "quote": quote or {}})
+        return JSONResponse({"symbol": key, "market": "in", "fund": fund, "quote": quote or {}})
     except Exception as e:
         log.exception("/api/fundamentals failed: %s", e)
         raise HTTPException(status_code=500, detail=str(e))
@@ -681,6 +1014,31 @@ async def api_corporate_actions_csv(symbol: str | None = Query(None)):
 @app.get("/market", response_class=HTMLResponse)
 async def market_page(request: Request):
     return templates.TemplateResponse(request, "market.html")
+
+
+@app.get("/movers", response_class=HTMLResponse)
+async def movers_page(request: Request):
+    return templates.TemplateResponse(request, "movers.html")
+
+
+@app.get("/forecast", response_class=HTMLResponse)
+async def forecast_page(request: Request):
+    return templates.TemplateResponse(request, "forecast.html")
+
+
+@app.get("/checklist", response_class=HTMLResponse)
+async def checklist_page(request: Request):
+    return templates.TemplateResponse(request, "checklist.html")
+
+
+@app.get("/indicator", response_class=HTMLResponse)
+async def indicator_page(request: Request):
+    return templates.TemplateResponse(request, "indicator.html")
+
+
+@app.get("/news", response_class=HTMLResponse)
+async def news_page(request: Request):
+    return templates.TemplateResponse(request, "news.html")
 
 
 @app.get("/fundamentals", response_class=HTMLResponse)

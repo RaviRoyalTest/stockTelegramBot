@@ -29,6 +29,7 @@ from . import (
     movers_commands,
     scanner_commands,
     schedule_commands,
+    screen_commands,
     settings_commands,
     status as status_commands,
     us_commands,
@@ -211,6 +212,10 @@ def handle_command(chat_id, text):
 
     if command == "/scan500":
         scanner_commands.handle_scan500(chat_id, parts)
+        return
+
+    if command in ("/screen", "/screener", "/filterstocks"):
+        screen_commands.handle_screen(chat_id, parts)
         return
 
     if command in ("/ind", "/indicator", "/tech", "/technical"):

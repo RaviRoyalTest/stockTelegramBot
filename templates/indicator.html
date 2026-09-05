@@ -1,0 +1,95 @@
+{% extends "base.html" %}
+{% block title %}Indicator · Royal Stock{% endblock %}
+{% block content %}
+  <div class="page-header">
+    <h1>Technical indicator</h1>
+    <p class="sub">One-indicator deep-dive or the full all-indicators card — the web twin of the bot's /indicator.</p>
+  </div>
+
+  <section class="card" aria-labelledby="lookupHeading">
+    <h2 id="lookupHeading">Analyse a stock</h2>
+    <form id="lookupForm" class="form-row">
+      <div class="field" style="flex:1; min-width:200px;">
+        <label for="symbol">Symbol</label>
+        <input id="symbol" required placeholder="e.g. RELIANCE or AAPL" autocomplete="off" style="text-transform:uppercase" />
+      </div>
+      <div class="field" style="flex:1; min-width:200px;">
+        <label for="iname">Indicator <span class="muted">(blank = full card)</span></label>
+        <input id="iname" placeholder="e.g. RSI, MACD, Bollinger" autocomplete="off" list="indList" />
+        <datalist id="indList">
+          <option value="RSI"></option>
+          <option value="MACD"></option>
+          <option value="Stochastic"></option>
+          <option value="Bollinger"></option>
+          <option value="CCI"></option>
+          <option value="ADX"></option>
+          <option value="Aroon"></option>
+          <option value="PSAR"></option>
+          <option value="Supertrend"></option>
+          <option value="EMA"></option>
+          <option value="SMA"></option>
+          <option value="GMMA"></option>
+          <option value="VWAP"></option>
+          <option value="ATR"></option>
+          <option value="Donchian"></option>
+          <option value="Squeeze"></option>
+          <option value="CMF"></option>
+          <option value="MFI"></option>
+          <option value="OBV"></option>
+        </datalist>
+      </div>
+      <button class="btn btn-primary" type="submit" id="go">📈 Analyse</button>
+    </form>
+    <p class="note" style="margin-bottom:0;">The full card needs ~220 daily candles (about a year of history).</p>
+  </section>
+
+  <div id="report" class="card section" hidden>
+    <h2 id="rTitle">—</h2>
+    <div id="rBody" class="table-scroll"></div>
+  </div>
+
+  <div id="placeholder" class="card section">
+    <p class="muted" style="margin:0;">Enter a symbol above and press <strong>Analyse</strong>.</p>
+  </div>
+{% endblock %}
+
+{% block scripts %}
+  <script>
+    (function () {
+      'use strict';
+
+      async function load(symbol, name) {
+        var report = document.getElementById('report');
+        var placeholder = document.getElementById('placeholder');
+        var go = document.getElementById('go');
+        placeholder.hidden = true;
+        report.hidden = false;
+        go.disabled = true;
+        document.getElementById('rTitle').textContent = name ? symbol + ' · ' + name.toUpperCase() : symbol + ' · full card';
+        document.getElementById('rBody').innerHTML = '<p class="muted"><span class="skeleton" style="display:block;width:100%"></span></p>';
+        try {
+          var url = '/api/indicator?symbol=' + encodeURIComponent(symbol) + (name ? '&name=' + encodeURIComponent(name) : '');
+          var res = await fetch(url);
+          var data = await res.json().catch(function () { return {}; });
+          if (!res.ok) throw new Error((data && data.detail) || ('HTTP ' + res.status));
+          var lines = data.lines || [];
+          document.getElementById('rBody').innerHTML = lines.length
+            ? lines.map(function (l) { return '<p style="margin:0 0 6px;">' + l + '</p>'; }).join('')
+            : '<p class="muted">No indicator data available.</p>';
+        } catch (err) {
+          RS.toast('Indicator failed for ' + symbol + ': ' + err.message, 'err');
+          placeholder.hidden = false;
+          report.hidden = true;
+        } finally {
+          go.disabled = false;
+        }
+      }
+
+      document.getElementById('lookupForm').addEventListener('submit', function (event) {
+        event.preventDefault();
+        var symbol = document.getElementById('symbol').value.trim().toUpperCase().replace(/\.NS$|\.BO$|\.US$/, '');
+        if (symbol) load(symbol, document.getElementById('iname').value.trim());
+      });
+    })();
+  </script>
+{% endblock %}

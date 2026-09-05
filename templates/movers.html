@@ -1,0 +1,137 @@
+{% extends "base.html" %}
+{% block title %}Movers · Royal Stock{% endblock %}
+{% block content %}
+  <div class="page-header">
+    <h1>Market movers</h1>
+    <p class="sub">Top gainers, losers and overnight gaps — the web twin of the bot's /topmovers, /topgainers, /toplosers and /gappers.</p>
+  </div>
+
+  <section class="card" aria-labelledby="screenHeading">
+    <h2 id="screenHeading">Screen</h2>
+    <form id="screenForm" class="form-row">
+      <div class="field">
+        <label for="mode">Mode</label>
+        <select id="mode">
+          <option value="gainers" selected>Top gainers</option>
+          <option value="losers">Top losers</option>
+          <option value="movers">Biggest moves (both)</option>
+          <option value="gappers">Overnight gaps</option>
+        </select>
+      </div>
+      <div class="field">
+        <label for="universe">Universe</label>
+        <select id="universe">
+          <option value="nifty500" selected>NIFTY 500</option>
+          <option value="nifty100">NIFTY 100</option>
+          <option value="nasdaq100">NASDAQ 100</option>
+          <option value="sp500">S&amp;P 500</option>
+        </select>
+      </div>
+      <div class="field">
+        <label for="period">Period</label>
+        <select id="period">
+          <option value="today" selected>Today</option>
+          <option value="5m">5m</option>
+          <option value="15m">15m</option>
+          <option value="30m">30m</option>
+          <option value="1h">1h</option>
+          <option value="2h">2h</option>
+          <option value="4h">4h</option>
+          <option value="1d">1 day</option>
+          <option value="5d">5 days</option>
+          <option value="1w">1 week</option>
+          <option value="1mo">1 month</option>
+        </select>
+      </div>
+      <div class="field">
+        <label for="limit">Rows</label>
+        <select id="limit">
+          <option value="10">10</option>
+          <option value="20" selected>20</option>
+          <option value="30">30</option>
+          <option value="50">50</option>
+        </select>
+      </div>
+      <button class="btn btn-primary" type="submit">▶️ Run screen</button>
+    </form>
+    <p class="note" style="margin-bottom:0;">A full-universe scan takes a few seconds; rows arrive enriched with P/E, ROE, market cap and RSI.</p>
+  </section>
+
+  <section class="card section" aria-labelledby="resultsHeading">
+    <div style="display:flex; justify-content:space-between; align-items:center; gap:12px; flex-wrap:wrap;">
+      <h2 id="resultsHeading" style="margin-bottom:0;">Results <span class="pill" id="resCount">0</span></h2>
+      <span class="muted" id="meta" aria-live="polite"></span>
+    </div>
+    <div class="table-scroll" style="margin-top:12px;">
+      <table>
+        <caption class="visually-hidden">Market movers</caption>
+        <thead>
+          <tr><th scope="col">Symbol</th><th scope="col">Company</th><th scope="col" class="num">Price</th><th scope="col" class="num">Move</th><th scope="col" class="num">P/E</th><th scope="col" class="num">ROE</th><th scope="col" class="num">Mkt cap</th><th scope="col" class="num">RSI</th></tr>
+        </thead>
+        <tbody id="tbody">
+          <tr><td colspan="8" class="empty">Pick a screen and press <strong>Run screen</strong>.</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </section>
+{% endblock %}
+
+{% block scripts %}
+  <script>
+    (function () {
+      'use strict';
+      var fmtNum = RS.fmtNum, esc = RS.escapeHtml;
+
+      // Deep-link: /movers?mode=gappers
+      var initial = new URLSearchParams(window.location.search).get('mode');
+      if (initial && document.getElementById('mode').querySelector('option[value="' + initial + '"]')) {
+        document.getElementById('mode').value = initial;
+      }
+
+      async function load() {
+        var tbody = document.getElementById('tbody');
+        var mode = document.getElementById('mode').value;
+        var moveLabel = mode === 'gappers' ? 'Gap' : 'Move';
+        document.querySelectorAll('thead th')[3].textContent = moveLabel;
+        tbody.innerHTML = '<tr><td colspan="8" class="empty"><span class="skeleton" style="display:block;width:100%"></span></td></tr>';
+        try {
+          var params = new URLSearchParams({
+            mode: mode,
+            universe: document.getElementById('universe').value,
+            period: document.getElementById('period').value,
+            limit: document.getElementById('limit').value
+          });
+          var res = await fetch('/api/movers?' + params.toString());
+          if (!res.ok) throw new Error('API ' + res.status);
+          var data = await res.json();
+          var rows = data.rows || [];
+          document.getElementById('resCount').textContent = String(rows.length) + ' rows';
+          document.getElementById('meta').textContent = (data.universe || '') + ' · ' + (data.period || '');
+          tbody.innerHTML = rows.length ? rows.map(function (r) {
+            var chg = r.change_pct;
+            var chgClass = chg == null ? '' : (Number(chg) >= 0 ? 'pos' : 'neg');
+            return '<tr>' +
+              '<td><a href="/fundamentals?symbol=' + encodeURIComponent(r.symbol || '') + '"><strong>' + esc(r.symbol) + '</strong></a></td>' +
+              '<td>' + esc(r.company || r.name || '−') + '</td>' +
+              '<td class="num">' + (r.price != null ? '₹' + fmtNum(r.price) : '−') + '</td>' +
+              '<td class="num ' + chgClass + '">' + RS.fmtPct(chg) + '</td>' +
+              '<td class="num">' + fmtNum(r.pe) + '</td>' +
+              '<td class="num">' + fmtNum(r.roe) + '</td>' +
+              '<td class="num">' + (r.market_cap != null ? '₹' + fmtNum(r.market_cap, 0) + ' Cr' : '−') + '</td>' +
+              '<td class="num">' + fmtNum(r.rsi14, 1) + '</td>' +
+            '</tr>';
+          }).join('') : '<tr><td colspan="8" class="empty">No movers found for this screen.</td></tr>';
+        } catch (err) {
+          tbody.innerHTML = '<tr><td colspan="8" class="empty">Unable to load movers. Please try again.</td></tr>';
+          RS.toast('Movers failed: ' + err.message, 'err');
+        }
+      }
+
+      document.getElementById('screenForm').addEventListener('submit', function (event) {
+        event.preventDefault();
+        load();
+      });
+      load();
+    })();
+  </script>
+{% endblock %}

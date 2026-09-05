@@ -16,11 +16,48 @@ from ..core.text import escape, split_messages
 from ..formatting.stock_india import _fund_report_lines, _stock_summary_lines
 from ..formatting.stock_common import _DIVIDER
 from ..formatting.stock_us import _us_stock_lines
-from ..sources import get_fundamentals, get_quote, get_us_fundamentals
+from ..sources import (
+    get_best_quote,
+    get_fundamentals,
+    get_quote,
+    get_us_fundamentals,
+    normalise_fundamentals,
+)
 from .helpers import MAX_FUND_BATCH, MAX_STOCK_BATCH, reply_suggestions
 from .reply import reply, reply_messages
 
 log = logging.getLogger(__name__)
+
+
+def _resolve_quote(raw_symbol: str) -> tuple[dict, bool]:
+    """Best-effort live quote with free-API fallbacks (Yahoo -> NSE -> Stooq).
+
+    Returns (quote, is_us). The US probe is kept exactly as before so an
+    Indian symbol never misroutes to the US renderer.
+    """
+    try:
+        quote = get_best_quote("NSE", raw_symbol) or {}
+    except Exception:
+        quote = get_quote("NSE", raw_symbol) or get_quote("BSE", raw_symbol) or {}
+    is_us = False
+    if quote.get("price") is None:
+        us_quote = get_quote("US", raw_symbol) or {}
+        if us_quote.get("price") is not None or us_quote.get("name"):
+            quote = us_quote
+            is_us = True
+    return quote, is_us
+
+
+def _resolve_fund(raw_symbol: str, is_us: bool, quote: dict) -> dict:
+    """Deep fundamentals, normalised so renderers never see alias gaps."""
+    fund = (get_us_fundamentals(raw_symbol) if is_us
+            else get_fundamentals(raw_symbol, with_screener=True)) or {}
+    if not is_us:
+        try:
+            fund = normalise_fundamentals(raw_symbol, dict(fund), quote or {})
+        except Exception:
+            pass
+    return fund
 
 
 def parse_stock_range(argument: str):
@@ -75,15 +112,8 @@ def handle_single_stock_analysis(chat_id, parts) -> None:
     started_at = monotonic()
     log.info("handle_single_stock: fetching full details for %s for chat %s", raw_symbol, chat_id)
 
-    quote = get_quote("NSE", raw_symbol) or get_quote("BSE", raw_symbol) or {}
-    is_us = False
-    if quote.get("price") is None:
-        us_quote = get_quote("US", raw_symbol) or {}
-        if us_quote.get("price") is not None or us_quote.get("name"):
-            quote = us_quote
-            is_us = True
-    fund = (get_us_fundamentals(raw_symbol) if is_us
-            else get_fundamentals(raw_symbol, with_screener=True)) or {}
+    quote, is_us = _resolve_quote(raw_symbol)
+    fund = _resolve_fund(raw_symbol, is_us, quote)
 
     if quote.get("price") is None and not fund:
         reply_suggestions(chat_id, raw_symbol, "fundamentalanalyze")
@@ -110,7 +140,24 @@ def _batch_fund(item: dict) -> dict:
     """Fetch fundamentals for one watchlist item, honouring its exchange."""
     if item.get("exchange", "").upper() == "US":
         return get_us_fundamentals(item["symbol"]) or {}
-    return get_fundamentals(item["symbol"], with_screener=True) or {}
+    fund = get_fundamentals(item["symbol"], with_screener=True) or {}
+    try:
+        quote = get_best_quote(item.get("exchange", "NSE"), item["symbol"]) or {}
+        fund = normalise_fundamentals(item["symbol"], dict(fund), quote)
+    except Exception:
+        pass
+    return fund
+
+
+def _batch_quote(item: dict) -> dict:
+    """Best-effort quote for one watchlist item (free-API fallbacks)."""
+    try:
+        quote = get_best_quote(item.get("exchange", "NSE"), item["symbol"]) or {}
+        if quote.get("price") is not None:
+            return quote
+    except Exception:
+        pass
+    return get_quote(item["exchange"], item["symbol"]) or {}
 
 
 def build_stock_batch(chat_id, command: str, range, deep: bool) -> tuple[list[str], int | None]:
@@ -139,8 +186,8 @@ def build_stock_batch(chat_id, command: str, range, deep: bool) -> tuple[list[st
     )
 
     with ThreadPoolExecutor(max_workers=max(1, min(8, len(work)))) as executor:
-        quotes = list(executor.map(lambda item: get_quote(item["exchange"], item["symbol"]) or {}, work))
-        funds = list(executor.map(lambda item: _batch_fund(item), work))
+        quotes = list(executor.map(_batch_quote, work))
+        funds = list(executor.map(_batch_fund, work))
 
     body = []
     for positive_flow, (item, quote, fund) in enumerate(zip(work, quotes, funds), start=start):
@@ -215,15 +262,8 @@ def handle_fund_analysis(chat_id, parts) -> None:
     started_at = monotonic()
     log.info("handle_fund: deep fundamentals for %s (chat %s)", raw_symbol, chat_id)
 
-    quote = get_quote("NSE", raw_symbol) or get_quote("BSE", raw_symbol) or {}
-    is_us = False
-    if quote.get("price") is None:
-        us_quote = get_quote("US", raw_symbol) or {}
-        if us_quote.get("price") is not None or us_quote.get("name"):
-            quote = us_quote
-            is_us = True
-    fund = (get_us_fundamentals(raw_symbol) if is_us
-            else get_fundamentals(raw_symbol, with_screener=True)) or {}
+    quote, is_us = _resolve_quote(raw_symbol)
+    fund = _resolve_fund(raw_symbol, is_us, quote)
 
     if quote.get("price") is None and not fund:
         reply_suggestions(chat_id, raw_symbol, "fundamentalreport")

@@ -1,0 +1,99 @@
+{% extends "base.html" %}
+{% block title %}News · Royal Stock{% endblock %}
+{% block content %}
+  <div class="page-header">
+    <h1>Market news</h1>
+    <p class="sub">Latest headlines for your watchlist — the web twin of the bot's /news. Pick a stock or load everything.</p>
+  </div>
+
+  <section class="card" aria-labelledby="lookupHeading">
+    <h2 id="lookupHeading">Headlines</h2>
+    <form id="lookupForm" class="form-row">
+      <div class="field" style="flex:1; min-width:220px;">
+        <label for="symbol">Symbol <span class="muted">(blank = whole watchlist)</span></label>
+        <input id="symbol" placeholder="e.g. RELIANCE" autocomplete="off" style="text-transform:uppercase" />
+      </div>
+      <div class="field">
+        <label for="limit">Per stock</label>
+        <select id="limit">
+          <option value="3" selected>3</option>
+          <option value="5">5</option>
+          <option value="10">10</option>
+        </select>
+      </div>
+      <button class="btn btn-primary" type="submit" id="go">📰 Load news</button>
+    </form>
+  </section>
+
+  <div id="results" class="section"></div>
+{% endblock %}
+
+{% block scripts %}
+  <script>
+    (function () {
+      'use strict';
+      var esc = RS.escapeHtml;
+
+      function newsList(items) {
+        if (!items || !items.length) return '<p class="muted">No recent headlines found.</p>';
+        return '<ul style="margin:0;padding-left:18px;">' + items.map(function (n) {
+          var t = esc(n.title || 'Untitled');
+          var link = n.link
+            ? '<a href="' + esc(n.link) + '" target="_blank" rel="noopener">' + t + '</a>'
+            : t;
+          return '<li>' + link + (n.publisher ? ' <span class="muted">· ' + esc(n.publisher) + '</span>' : '') + '</li>';
+        }).join('') + '</ul>';
+      }
+
+      async function loadFor(symbol, limit) {
+        var res = await fetch('/api/news?symbol=' + encodeURIComponent(symbol) + '&limit=' + limit);
+        if (!res.ok) throw new Error('API ' + res.status);
+        var data = await res.json();
+        return { symbol: symbol, news: data.news || [] };
+      }
+
+      async function load() {
+        var container = document.getElementById('results');
+        var go = document.getElementById('go');
+        var single = document.getElementById('symbol').value.trim().toUpperCase().replace(/\.NS$|\.BO$/, '');
+        var limit = document.getElementById('limit').value || '3';
+        go.disabled = true;
+        container.innerHTML = '<div class="card"><p class="muted"><span class="skeleton" style="display:block;width:100%"></span></p></div>';
+        try {
+          var symbols = [];
+          if (single) {
+            symbols = [single];
+          } else {
+            var wl = await fetch('/api/watchlist');
+            if (!wl.ok) throw new Error('API ' + wl.status);
+            var items = await wl.json();
+            symbols = (items || []).map(function (it) { return String(it.symbol || '').toUpperCase(); }).filter(Boolean);
+            if (!symbols.length) {
+              container.innerHTML = '<div class="card"><p class="muted" style="margin:0;">Watchlist is empty — add stocks on the <a href="/watchlist">Watchlist</a> page first, or look up one symbol above.</p></div>';
+              return;
+            }
+          }
+          var settled = await Promise.all(symbols.map(function (s) {
+            return loadFor(s, limit).catch(function (err) { return { symbol: s, news: [], error: String(err) }; });
+          }));
+          container.innerHTML = settled.map(function (entry) {
+            return '<section class="card section"><h2><a href="/fundamentals?symbol=' +
+              encodeURIComponent(entry.symbol) + '">' + esc(entry.symbol) + '</a></h2>' +
+              newsList(entry.news) + '</section>';
+          }).join('');
+        } catch (err) {
+          container.innerHTML = '<div class="card"><p class="muted">Unable to load news.</p></div>';
+          RS.toast('News failed: ' + err.message, 'err');
+        } finally {
+          go.disabled = false;
+        }
+      }
+
+      document.getElementById('lookupForm').addEventListener('submit', function (event) {
+        event.preventDefault();
+        load();
+      });
+      load();
+    })();
+  </script>
+{% endblock %}

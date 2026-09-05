@@ -15,7 +15,13 @@ from concurrent.futures import ThreadPoolExecutor
 from .. import storage
 from ..core.text import escape, split_messages
 from ..formatting.checklist import format_checklist
-from ..sources import get_fundamentals, get_quote, get_us_fundamentals
+from ..sources import (
+    get_best_quote,
+    get_fundamentals,
+    get_quote,
+    get_us_fundamentals,
+    normalise_fundamentals,
+)
 from .fundamentals_commands import parse_stock_range
 from .helpers import reply_suggestions
 from .reply import reply, reply_messages
@@ -42,8 +48,18 @@ def _fetch_stock(symbol: str, exchange: str = "") -> tuple[dict, dict, str]:
     where currency is 'INR' or 'USD'.
     """
     exchange = (exchange or "").upper()
-    quote = get_quote(exchange, symbol) if exchange in ("NSE", "BSE", "US") else \
-        (get_quote("NSE", symbol) or get_quote("BSE", symbol) or {})
+    if exchange in ("NSE", "BSE", "US"):
+        try:
+            quote = get_best_quote(exchange, symbol) or {}
+        except Exception:
+            quote = get_quote(exchange, symbol) or {}
+        if not quote:
+            quote = get_quote(exchange, symbol) or {}
+    else:
+        try:
+            quote = get_best_quote("NSE", symbol) or {}
+        except Exception:
+            quote = get_quote("NSE", symbol) or get_quote("BSE", symbol) or {}
     currency = "INR"
     if exchange != "US" and quote.get("price") is None:
         us_quote = get_quote("US", symbol) or {}
@@ -56,6 +72,10 @@ def _fetch_stock(symbol: str, exchange: str = "") -> tuple[dict, dict, str]:
         fund = get_us_fundamentals(symbol) or {}
     else:
         fund = get_fundamentals(symbol, with_screener=True) or {}
+        try:
+            fund = normalise_fundamentals(symbol, dict(fund), quote or {})
+        except Exception:
+            pass
     return quote, fund, currency
 
 

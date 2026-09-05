@@ -179,7 +179,7 @@ def _tech_indicator_lines(fund: dict, price=None) -> list[str]:
     MACD(12,26,9) line/signal/histogram plus crossover direction, and the
     50d/200d simple moving averages with price position vs each.
     """
-    rsi_tag = _rsi_signal(fund.get("rsi"))
+    rsi_tag = _rsi_signal(fund.get("rsi") if fund.get("rsi") is not None else fund.get("rsi14"))
     line, signal, hist = fund.get("macd_line"), fund.get("macd_signal"), fund.get("macd_hist")
     macd_bits = []
     if line is not None:

@@ -10,6 +10,14 @@ from __future__ import annotations
 
 from ..core.numbers import format_money
 from ..core.text import escape
+from .report_extras import (
+    company_name,
+    mcap_cr_value,
+    peers_lines,
+    quote_source_tag,
+    rsi_value,
+    sources_footer_lines,
+)
 from .stock_common import (
     _GREEN,
     _RED,
@@ -87,13 +95,18 @@ def _stock_summary_lines(raw_symbol, quote, fund, include_tip=True, label="") ->
     quote = quote or {}
     fund = fund or {}
     price = quote.get("price")
-    company_name = quote.get("name") or raw_symbol
+    company_name_str = company_name(raw_symbol, quote, fund)
     label_prefix = f"{label} " if label else ""
 
     lines = []
-    lines.append(f"\U0001F4CA {label_prefix}<b>{escape(company_name.upper())}</b>")
+    lines.append(f"\U0001F4CA {label_prefix}<b>{escape(company_name_str.upper())}</b>")
     lines.append(f"(<code>{escape(raw_symbol)}</code>)")
-    lines.append(f"Sector: <b>{escape(fund.get('sector') or 'Indian Equity')}</b>")
+    sector_text = escape(fund.get("sector") or "Indian Equity")
+    industry_text = (fund.get("industry") or "").strip()
+    if industry_text and industry_text != (fund.get("sector") or ""):
+        lines.append(f"Sector: <b>{sector_text}</b>  \u00b7  {escape(industry_text)}")
+    else:
+        lines.append(f"Sector: <b>{sector_text}</b>")
     lines.append("")
 
     # PRICE & MOVEMENT
@@ -102,13 +115,13 @@ def _stock_summary_lines(raw_symbol, quote, fund, include_tip=True, label="") ->
         price is not None
         or (fund.get("wk52_high") is not None and fund.get("wk52_low") is not None)
         or position
-        or fund.get("rsi") is not None
+        or rsi_value(fund) is not None
         or fund.get("macd_line") is not None
     ):
         lines.extend(_section("\U0001F4B0", "PRICE & MOVEMENT"))
         price_line = _price_move_line(quote)
         if price_line:
-            lines.append(price_line)
+            lines.append(price_line + quote_source_tag(quote))
         if fund.get("wk52_high") is not None and fund.get("wk52_low") is not None:
             low, high = fund["wk52_low"], fund["wk52_high"]
             lines.append(f"52W Range: <b>\u20b9{_inr_group(low)} \u2013 \u20b9{_inr_group(high)}</b>")
@@ -123,7 +136,7 @@ def _stock_summary_lines(raw_symbol, quote, fund, include_tip=True, label="") ->
                     pass
         if position:
             lines.append(f"Technicals: <b>{position}</b>")
-        rsi_tag = _rsi_short(fund.get("rsi"))
+        rsi_tag = _rsi_short(rsi_value(fund))
         if rsi_tag:
             lines.append(f"RSI(14): {rsi_tag}")
         macd_tag = _macd_short(fund.get("macd_line"), fund.get("macd_signal"))

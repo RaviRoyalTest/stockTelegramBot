@@ -8,6 +8,7 @@ from __future__ import annotations
 
 from ..core.numbers import format_money
 from ..core.text import escape
+from .report_extras import mcap_cr_value, rsi_value
 from .stock_common import _macd_tag, _rsi_signal, _wk52_signal
 
 
@@ -21,7 +22,7 @@ def _fundamentals_lines(fund: dict | None, price=None) -> list[str]:
         return formatted.rstrip("0").rstrip(".") if "." in formatted else formatted
 
     sig_emoji, range_tag = _wk52_signal(price, fund)
-    rsi_tag = _rsi_signal(fund.get("rsi"))
+    rsi_tag = _rsi_signal(rsi_value(fund))
     macd_tag = _macd_tag(fund)
 
     lines = []
@@ -45,8 +46,9 @@ def _fundamentals_lines(fund: dict | None, price=None) -> list[str]:
         l2_parts.append("P/E N/A (Loss)")
     if fund.get("sector_pe"):
         l2_parts.append(f"Sec P/E {_num(fund['sector_pe'], 1)}")
-    if fund.get("market_cap") is not None:
-        l2_parts.append(f"MCap \u20b9{fund['market_cap']:,.0f}Cr")
+    mcap = mcap_cr_value(fund)
+    if mcap is not None:
+        l2_parts.append(f"MCap \u20b9{mcap:,.0f}Cr")
     if fund.get("debt_to_equity") is not None:
         l2_parts.append(f"D/E {_num(fund['debt_to_equity'], 2)}")
     if l2_parts:

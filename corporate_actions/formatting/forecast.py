@@ -10,6 +10,7 @@ from __future__ import annotations
 
 from ..core.numbers import format_money
 from ..core.text import escape
+from .report_extras import company_name, sources_footer_lines
 from .stock_common import (
     _executive_lines,
     _ratings_text,
@@ -28,7 +29,7 @@ def build_forecast_lines(raw_symbol: str, quote: dict, fund: dict,
     price = quote.get("price")
     currency = "USD" if us else "INR"
     lines = []
-    company = quote.get("name") or raw_symbol
+    company = company_name(raw_symbol, quote, fund)
     lines.append(f"\U0001F4CA <b>{escape(str(company).upper())}</b> (<code>{escape(raw_symbol)}</code>)")
     if price is not None:
         move = ""
@@ -97,4 +98,8 @@ def build_forecast_lines(raw_symbol: str, quote: dict, fund: dict,
 
     lines.append(f"\U0001F4A1 <i>Tip: /fundamentalreport {escape(raw_symbol)} for the full "
                  f"deep report \u00b7 /indicator {escape(raw_symbol)} for technicals.</i>")
+    sources_lines = sources_footer_lines(quote, fund)
+    if sources_lines:
+        lines.append("")
+        lines.extend(sources_lines)
     return lines

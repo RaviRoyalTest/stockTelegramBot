@@ -74,7 +74,7 @@ def _us_movers_lines(fund: dict | None, price=None) -> list[str]:
         return formatted.rstrip("0").rstrip(".") if "." in formatted else formatted
 
     sig_emoji, range_tag = _wk52_signal(price, fund)
-    rsi_tag = _rsi_signal(fund.get("rsi"))
+    rsi_tag = _rsi_signal(fund.get("rsi") if fund.get("rsi") is not None else fund.get("rsi14"))
     macd_tag = _macd_tag(fund)
     lines = []
 

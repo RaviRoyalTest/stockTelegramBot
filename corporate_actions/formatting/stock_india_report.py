@@ -13,6 +13,14 @@ import re
 
 from ..core.numbers import format_money
 from ..core.text import escape
+from .report_extras import (
+    company_name,
+    financial_health_lines,
+    peers_lines,
+    quote_source_tag,
+    rsi_value,
+    sources_footer_lines,
+)
 from .stock_common import (
     _DIVIDER,
     _GREEN,
@@ -167,7 +175,7 @@ def _cmp_line(quote: dict) -> str | None:
 
 def _technical_lines(fund: dict, price) -> list[str]:
     """RSI / MACD / SMA 50-200 detail block."""
-    rsi = fund.get("rsi")
+    rsi = rsi_value(fund)
     line, signal, hist = fund.get("macd_line"), fund.get("macd_signal"), fund.get("macd_hist")
     sma_50, sma_200 = fund.get("sma_50"), fund.get("sma_200")
     if (rsi is None and line is None and hist is None
@@ -252,10 +260,23 @@ def _per_share_lines(fund: dict) -> list[str]:
         out.append(f"EPS (Forward): <b>{format_money(fund['forward_eps'])}</b>")
     if fund.get("revenue_per_share") is not None:
         out.append(f"Revenue/Share: <b>{format_money(fund['revenue_per_share'])}</b>")
+    if fund.get("cash_per_share") is not None:
+        out.append(f"Cash/Share: <b>{format_money(fund['cash_per_share'])}</b>")
     if fund.get("book_value") is not None:
         out.append(f"Book Value: <b>{format_money(fund['book_value'])}</b>")
     if fund.get("shares_outstanding") is not None:
         out.append(f"Shares Outstanding: <b>{fund['shares_outstanding'] / 1e7:,.2f} Cr</b>")
+    if fund.get("float_shares") is not None:
+        out.append(f"Float Shares: <b>{fund['float_shares'] / 1e7:,.2f} Cr</b>")
+    if fund.get("total_cash") is not None:
+        out.append(f"Total Cash: <b>{_cr_cr(fund['total_cash'] / 1e7)}</b>")
+    if fund.get("total_debt") is not None:
+        out.append(f"Total Debt: <b>{_cr_cr(fund['total_debt'] / 1e7)}</b>")
+    if fund.get("employees") is not None:
+        try:
+            out.append(f"Employees: <b>{int(fund['employees']):,}</b>")
+        except (TypeError, ValueError):
+            pass
     return out
 
 
@@ -667,7 +688,9 @@ def _fund_report_lines(raw_symbol, quote, fund, include_tip=True, label="") -> l
     quote = quote or {}
     fund = fund or {}
     price = quote.get("price")
-    company_name = quote.get("name") or raw_symbol
+    if price is None:
+        price = fund.get("price")
+    company_name_str = company_name(raw_symbol, quote, fund)
 
     lines = []
     label_prefix = f"{label} " if label else ""
@@ -676,7 +699,12 @@ def _fund_report_lines(raw_symbol, quote, fund, include_tip=True, label="") -> l
     lines.append(_DIVIDER)
     lines.append("\U0001F4CA <b>FUNDAMENTAL REPORT</b>")
     lines.append(_DIVIDER)
-    lines.append(f"{label_prefix}<b>{escape(company_name.upper())}</b>")
+    lines.append(f"{label_prefix}<b>{escape(company_name_str.upper())}</b>")
+    sector_text = (fund.get("sector") or "").strip()
+    industry_text = (fund.get("industry") or "").strip()
+    if sector_text or industry_text:
+        identity = "  \u00b7  ".join(part for part in (sector_text, industry_text) if part)
+        lines.append(escape(identity))
 
     # Section 1: Price & movement
     position_label = _position_label(price, fund)
@@ -686,7 +714,7 @@ def _fund_report_lines(raw_symbol, quote, fund, include_tip=True, label="") -> l
         lines.extend(_section("\U0001F4B0", "PRICE & MOVEMENT"))
         cmp_line = _cmp_line(quote)
         if cmp_line:
-            lines.append(cmp_line)
+            lines.append(cmp_line + quote_source_tag(quote))
         if fund.get("wk52_low") is not None:
             lines.append(f"52W Low: <b>{format_money(fund['wk52_low'])}</b>")
         if fund.get("wk52_high") is not None:
@@ -723,6 +751,12 @@ def _fund_report_lines(raw_symbol, quote, fund, include_tip=True, label="") -> l
     # Balance sheet
     lines.extend(_balance_sheet_lines(fund))
     lines.append("")
+
+    # Financial health (liquidity + leverage + cash generation)
+    health_lines = financial_health_lines(fund)
+    if health_lines:
+        lines.extend(health_lines)
+        lines.append("")
 
     # Cash flow
     cf_lines = _cash_flow_lines(fund)
@@ -768,6 +802,12 @@ def _fund_report_lines(raw_symbol, quote, fund, include_tip=True, label="") -> l
     mgmt_lines = _management_lines(fund)
     if mgmt_lines:
         lines.extend(mgmt_lines)
+        lines.append("")
+
+    # Top competitors (screener.in peers)
+    peer_lines = peers_lines(fund)
+    if peer_lines:
+        lines.extend(peer_lines)
         lines.append("")
 
     # Fundamental snapshot
@@ -863,6 +903,11 @@ def _fund_report_lines(raw_symbol, quote, fund, include_tip=True, label="") -> l
 
     if include_tip:
         lines.append(f"\U0001F4A1 <i>Tip: Track this stock with /addstock {raw_symbol} NSE</i>")
+        lines.append("")
+
+    sources_lines = sources_footer_lines(quote, fund)
+    if sources_lines:
+        lines.extend(sources_lines)
         lines.append("")
 
     lines.append(_DIVIDER)

@@ -329,6 +329,14 @@ COMMAND_USAGE = {
         "/checklist 5-10      \u2192 watchlist positions #5-#10\n"
         "Aliases: /investcheck, /scorecard, /qualitycheck"
     ),
+    "/screen": (
+        "<b>/screen</b> - fundamental stock screener (web Screener parity)\n"
+        "/screen pe&lt;25 roe&gt;15  \u2192 value screen, top 10 by market cap\n"
+        "/screen div&gt;1.5 pe&lt;25   \u2192 dividend screen\n"
+        "/screen rsi 50-70 macd      \u2192 momentum (RSI band + MACD bullish)\n"
+        "/screen sector bank n 15    \u2192 15 banking stocks\n"
+        "Aliases: /screener, /filterstocks"
+    ),
     "/indicator": (
         "<b>/indicator</b> - clear deep-dive for ONE indicator\n"
         "/indicator RELIANCE RSI  \u2192 value, signal, trend &amp; how to read it\n"
@@ -456,6 +464,7 @@ COMMAND_EXAMPLES = {
     "/toplosers": ["/toplosers", "/toplosers 1h 10", "/toplosers 2d", "/toplosers 100", "/toplosers 12-08-2026"],
     "/gappers": ["/gappers", "/gappers 1d", "/gappers 2d", "/gappers window 3d", "/gappers 12-08-2026", "/gappers up", "/gappers all", "/gappers GODREJCP"],
     "/checklist": ["/checklist RELIANCE", "/checklist mylist"],
+    "/screen": ["/screen pe<25 roe>15", "/screen div>1.5", "/screen rsi 50-70 macd"],
     "/indicator": ["/indicator RELIANCE RSI", "/indicator AAPL MACD", "/indicator RELIANCE"],
     "/forecast": ["/forecast RELIANCE", "/forecast AAPL", "/forecast GODREJCP"],
     "/learn": ["/learn", "/learn stocks", "/learn schedule"],
@@ -508,6 +517,12 @@ DESCRIBE_AND_RUN = {
         "Supertrend, GMMA, VWAP &amp; Mansfield RS, then a full indicator card for "
         "each of the TOP 10. Takes ~1-2 min - starting it now.",
         lambda chat_id: scanner_commands.handle_scan500(chat_id, ["/scan500"]),
+    ),
+    "/screen": (
+        "\U0001F50D <b>/screen</b> - fundamental stock screener (same engine as "
+        "the web Screener page): valuation, quality, yield &amp; momentum filters. "
+        "Try <code>/screen pe&lt;25 roe&gt;15</code>.",
+        lambda chat_id: screen_commands.handle_screen(chat_id, ["/screen"]),
     ),
     "/checknow": (
         "\u26A1 <b>/checknow</b> - force-runs an alert check now and re-sends "
@@ -620,6 +635,7 @@ def register_commands() -> bool:
         {"command": "indicator", "description": "One-indicator deep-dive: /indicator RELIANCE RSI (US works too)"},
         {"command": "forecast", "description": "Analyst forecast + executives + competitors: /forecast RELIANCE"},
         {"command": "scan500", "description": "NIFTY 500 CNC/MIS technical scanner"},
+        {"command": "screen", "description": "Fundamental screener: /screen pe<25 roe>15"},
         {"command": "topmovers", "description": "Top gainers AND losers with fundamentals"},
         {"command": "topgainers", "description": "Top rising stocks with fundamentals"},
         {"command": "toplosers", "description": "Top falling stocks with fundamentals"},
