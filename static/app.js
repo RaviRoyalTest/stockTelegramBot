@@ -229,6 +229,16 @@
     return (n >= 0 ? '+' : '') + n.toFixed(2) + '%';
   };
 
+  // '2026-09-04' -> '04 Sep 2026' (returns the input unchanged if not ISO)
+  window.RS.fmtDate = function (value) {
+    var s = String(value || '');
+    var m = s.match(/^(\d{4})-(\d{2})-(\d{2})/);
+    if (!m) return s;
+    var months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun',
+                  'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+    return m[3] + ' ' + months[Number(m[2]) - 1] + ' ' + m[1];
+  };
+
   window.RS.toast = function (message, kind) {
     var stack = document.querySelector('.toast-stack');
     if (!stack) return;

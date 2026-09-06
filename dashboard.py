@@ -720,13 +720,19 @@ async def api_movers(
     universe: str = Query("nifty500"),
     period: str = Query("today"),
     limit: int = Query(20, ge=1, le=100),
+    date: str = Query(""),
+    date_from: str = Query(""),
+    date_to: str = Query(""),
 ):
     """Market screens (bot /topmovers /topgainers /toplosers /gappers parity).
 
     mode: gainers | losers | movers (both, ranked by |move|) | gappers.
     period: 5m 15m 30m 1h 2h 4h today 1d 2d 5d 1w 2w 1mo 3mo 6mo 1y.
-    Top rows are enriched with the screener row (pe/roe/mcap/rsi/...) so the
-    table never shows bare numbers without context.
+    date=YYYY-MM-DD screens ONE historical session (its full-day move / its
+    opening gap); date_from + date_to screen a whole range (best single-day
+    move per stock inside the range). Top rows are enriched with the
+    screener row (pe/roe/mcap/rsi/...) so the table never shows bare
+    numbers without context.
     """
     from corporate_actions import screener_service
     from corporate_actions.market import MOVERS_PERIODS
@@ -735,9 +741,35 @@ async def api_movers(
     mode = (mode or "gainers").strip().lower()
     if mode not in ("gainers", "losers", "movers", "gappers"):
         raise HTTPException(status_code=400, detail="mode must be gainers|losers|movers|gappers")
+
+    # ---- historical date support (bot /toplosers 12-08-2026 parity) ----
+    import datetime as _dt
+    from corporate_actions.core.dates import parse_date_token
+
+    def _clean_date(value: str):
+        value = (value or "").strip()
+        if not value:
+            return None
+        parsed = parse_date_token(value)
+        if parsed is None:
+            raise HTTPException(status_code=400, detail=f"bad date {value!r} (use YYYY-MM-DD)")
+        return parsed
+
+    target_date = _clean_date(date)
+    range_from = _clean_date(date_from)
+    range_to = _clean_date(date_to)
+    if range_from and range_to and range_to < range_from:
+        raise HTTPException(status_code=400, detail="date_to is before date_from")
+    today = _dt.date.today()
+    for named, d in (("date", target_date), ("date_to", range_to)):
+        if d and d > today:
+            raise HTTPException(status_code=400, detail=f"{named} is in the future")
+    if target_date and (range_from or range_to):
+        raise HTTPException(status_code=400, detail="use either date= or date_from/date_to, not both")
+
     period_key = (period or "today").strip().lower()
     period_tuple = MOVERS_PERIODS.get(period_key)
-    if period_tuple is None and mode != "gappers":
+    if period_tuple is None and mode != "gappers" and not (target_date or range_from):
         raise HTTPException(
             status_code=400,
             detail=f"unknown period {period_key!r} (try today, 1h, 1d, 1w, 1mo)",
@@ -749,12 +781,36 @@ async def api_movers(
     if not symbols:
         return JSONResponse({"mode": mode, "universe": universe, "period": period_key, "rows": []})
     exchange = sources.universe_exchange(universe)
+    # Historical scans fetch a wider chart window per symbol, and one
+    # transient Yahoo miss must not silently blank the whole screen — give
+    # 1y windows (and range scans, which hit the deadline twice) more room.
+    days_span = period_tuple[1] if (period_tuple and period_tuple[0] == "days") else 0
+    if target_date:
+        days_span = max(1, (today - target_date).days)
+    elif range_from:
+        days_span = max(1, (today - range_from).days)
     deadline = float(os.getenv("SCREENER_API_TIMEOUT", "15")) + 1.5
+    # Date screens are slower (per-day history) and a range scan can hit the
+    # deadline twice - give them real room so they don't come back half-empty.
+    if days_span > 300:
+        deadline += 20
+    if target_date:
+        deadline += 10
+    if range_from:
+        deadline += 30
+    # Scale with the universe so NIFTY 500 scans are not cut off after the
+    # first ~200 symbols (capped to keep the API responsive).
+    try:
+        deadline += min(30.0, len(symbols) / 50.0)
+    except Exception:
+        pass
     started = asyncio.get_event_loop().time()
 
-    def _scan_one(symbol: str) -> dict | None:
+    def _scan_one(symbol: str, _retries: int = 2) -> dict | None:
+        from corporate_actions.market import fetch_period_change
+
         try:
-            if mode == "gappers":
+            if mode == "gappers" and not (target_date or range_from):
                 move = sources.get_gap_change(exchange, symbol)
                 if not move:
                     return None
@@ -766,9 +822,79 @@ async def api_movers(
                     "change_pct": move.get("gap_pct"),
                     "name": move.get("name") or symbol,
                 }
-            from corporate_actions.market import fetch_period_change
+            if target_date or range_from:
+                # Historical screen: best single-session move per stock. A
+                # range reuses ONE gap-history fetch per symbol (every
+                # session's open/close/prev_close/gap) instead of one fetch
+                # per day, which made week-long scans take minutes.
+                if range_from:
+                    from corporate_actions.sources import get_gap_history
 
-            move = fetch_period_change(symbol, period_tuple, exchange)
+                    history = get_gap_history(
+                        exchange, symbol,
+                        days=max(3, (range_to - range_from).days + 2),
+                    ) or []
+                    lo_iso, hi_iso = range_from.isoformat(), range_to.isoformat()
+                    best, best_mag = None, 0.0
+                    for row in history:
+                        day_iso = str(row.get("date") or "")
+                        if day_iso < lo_iso or day_iso > hi_iso:
+                            continue
+                        if mode == "gappers":
+                            pct = row.get("gap_pct")
+                        else:
+                            close, prev = row.get("close"), row.get("prev_close")
+                            pct = ((close / prev) - 1.0) * 100.0 if (close and prev) else None
+                        if pct is None:
+                            continue
+                        mag = abs(pct)
+                        if best is None or mag > best_mag:
+                            best_mag = mag
+                            best = {"price": row.get("close"), "change_pct": pct, "date": day_iso}
+                            if mag > 15 and mode != "movers":
+                                break  # good enough for this stock; keep the scan fast
+                    if not best:
+                        return None
+                    out = {
+                        "symbol": symbol,
+                        "price": best.get("price"),
+                        "change_pct": best.get("change_pct"),
+                        "move_date": best.get("date"),
+                        "name": symbol,
+                    }
+                    if mode == "gappers":
+                        out["gap_pct"] = best.get("change_pct")
+                    return out
+                # Single historical date: dedicated per-date helpers.
+                from corporate_actions.sources import (
+                    get_daily_change_on_date as _day_move,
+                    get_gap_change_on_date as _gap_move,
+                )
+
+                move = (_gap_move if mode == "gappers" else _day_move)(exchange, symbol, target_date)
+                if not move:
+                    return None
+                out = {
+                    "symbol": symbol,
+                    "price": move.get("price") or move.get("close"),
+                    "change_pct": move.get("change_pct"),
+                    "name": move.get("name") or symbol,
+                }
+                if move.get("date"):
+                    out["move_date"] = str(move["date"])
+                if move.get("gap_pct") is not None:
+                    out["gap_pct"] = move.get("gap_pct")
+                    out["change_pct"] = move.get("gap_pct")
+                return out
+            # Live screens: one retry pass on a None (transient Yahoo 429s
+            # were silently blanking whole scans), with a tiny backoff.
+            move = None
+            for attempt in range(_retries + 1):
+                move = fetch_period_change(symbol, period_tuple, exchange)
+                if move:
+                    break
+                import time as _t
+                _t.sleep(0.25 * (attempt + 1))
             if not move:
                 return None
             return {
@@ -819,6 +945,9 @@ async def api_movers(
         pass
     return JSONResponse({
         "mode": mode, "universe": universe, "period": period_key,
+        "date": target_date.isoformat() if target_date else None,
+        "date_from": range_from.isoformat() if range_from else None,
+        "date_to": range_to.isoformat() if range_to else None,
         "count": len(top), "rows": top,
     })
 
@@ -831,12 +960,18 @@ def _scan_symbols(symbols: list[str], worker, deadline: float, started: float) -
 
     from corporate_actions import config as _config
 
+    # `deadline` is a duration; anchor it to THIS clock. The caller's
+    # `started` uses the event-loop's monotonic clock while the old check
+    # compared it against wall time - that always overflowed the deadline
+    # and cut every movers scan to its first completed symbol (~0 rows).
+    end_at = _time.time() + max(5.0, float(deadline))
+
     out: list[dict] = []
     max_workers = max(1, int(getattr(_config, "SCREENER_MAX_WORKERS", 12)))
     with ThreadPoolExecutor(max_workers=max_workers) as pool:
         futures = {pool.submit(worker, symbol): symbol for symbol in symbols}
         for future in as_completed(futures):
-            if _time.time() - started > deadline:
+            if _time.time() > end_at:
                 for pending in futures:
                     pending.cancel()
                 break
