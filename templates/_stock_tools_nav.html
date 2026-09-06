@@ -1,0 +1,7 @@
+<nav class="tool-tabs" aria-label="Stock tool sections">
+  <a href="/invest/stocks/average" {% if active == 'average' %}class="active" aria-current="page"{% endif %}>🧮 Average</a>
+  <a href="/invest/stocks/profit" {% if active == 'profit' %}class="active" aria-current="page"{% endif %}>💹 Profit %</a>
+  <a href="/invest/stocks/recovery" {% if active == 'recovery' %}class="active" aria-current="page"{% endif %}>📉 Loss recovery</a>
+  <a href="/invest/stocks/pnl" {% if active == 'pnl' %}class="active" aria-current="page"{% endif %}>📊 Holdings P&amp;L</a>
+  <a href="/invest/stocks/checklist" {% if active == 'checklist' %}class="active" aria-current="page"{% endif %}>✅ Checklist</a>
+</nav>

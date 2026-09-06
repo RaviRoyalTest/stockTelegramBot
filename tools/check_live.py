@@ -30,6 +30,11 @@ PAGES = {
     "/news": "Market news",
     "/invest": "Investment tools",
     "/invest/stocks": "Stock tools",
+    "/invest/stocks/average": "Stock average calculator",
+    "/invest/stocks/profit": "Stock profit calculator",
+    "/invest/stocks/recovery": "Loss recovery table",
+    "/invest/stocks/pnl": "Holdings P&amp;L analysis",
+    "/invest/stocks/checklist": "Stock investment checklist",
     "/invest/mutual-funds": "Mutual Fund Calculator",
     "/invest/bonds": "Bonds",
     "/invest/commodities": "Gold vs Silver",
@@ -82,6 +87,13 @@ def main() -> int:
         print(("  OK  " if ok else "  FAIL"), f"GET {path} -> {status}")
         if not ok:
             failures.append(f"api {path} ({status})")
+
+    # the indicator page accepts ?symbol=&name= (deep link that auto-runs)
+    status, body = get("/indicator?symbol=RELIANCE&name=RSI")
+    ok = status == 200 and "Technical indicator" in body
+    print(("  OK  " if ok else "  FAIL"), f"GET /indicator?symbol=… -> {status}")
+    if not ok:
+        failures.append(f"indicator deep link ({status})")
 
     status, home = get("/")
     for marker in NAV_MARKERS:

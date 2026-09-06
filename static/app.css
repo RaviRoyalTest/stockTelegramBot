@@ -623,6 +623,108 @@ td strong { letter-spacing: 0.01em; }
   color: var(--muted);
 }
 
+/* ---------- tool sub-nav (per-functionality sub-pages) ---------- */
+.tool-tabs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin: 0 0 18px;
+}
+
+.tool-tabs a {
+  display: inline-flex;
+  align-items: center;
+  padding: 8px 14px;
+  border-radius: 999px;
+  border: 1px solid var(--line);
+  background: var(--panel-strong);
+  color: var(--muted);
+  text-decoration: none;
+  font-size: 0.86rem;
+  font-weight: 700;
+  transition: color 0.12s ease, background 0.12s ease, border-color 0.12s ease;
+}
+
+.tool-tabs a:hover { color: var(--text); background: var(--accent-soft); }
+
+.tool-tabs a.active {
+  color: var(--accent-contrast);
+  background: var(--accent);
+  border-color: var(--accent);
+}
+
+/* ---------- chips (quick picks) ---------- */
+.chip-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 14px;
+}
+
+.chip {
+  appearance: none;
+  padding: 6px 13px;
+  border-radius: 999px;
+  border: 1px solid var(--line);
+  background: var(--accent-soft);
+  color: var(--text);
+  font: inherit;
+  font-size: 0.82rem;
+  font-weight: 700;
+  cursor: pointer;
+  transition: color 0.12s ease, background 0.12s ease, border-color 0.12s ease;
+}
+
+.chip:hover { border-color: var(--accent); color: var(--accent); }
+.chip-on { background: var(--accent); border-color: var(--accent); color: var(--accent-contrast); }
+
+.link-btn {
+  appearance: none;
+  border: 0;
+  background: none;
+  padding: 0;
+  color: var(--accent);
+  font: inherit;
+  font-weight: 700;
+  text-decoration: underline;
+  cursor: pointer;
+}
+
+/* ---------- indicator page ---------- */
+.indicator-form {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  align-items: flex-end;
+}
+
+.indicator-field-sym { flex: 1 1 220px; }
+.indicator-field-name { flex: 2 1 260px; }
+
+.indicator-report-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: 12px;
+  flex-wrap: wrap;
+  margin-bottom: 12px;
+}
+
+.indicator-report-head h2 { margin: 0; font-size: 1.2rem; }
+
+.indicator-body {
+  background: var(--panel);
+  border: 1px solid var(--line-soft);
+  border-radius: var(--radius-sm);
+  padding: 14px 16px;
+  font-variant-numeric: tabular-nums;
+}
+
+.indicator-empty {
+  text-align: center;
+  padding: 36px 18px;
+}
+
 /* ---------- footer links ---------- */
 .foot-links { display: inline-flex; gap: 14px; flex-wrap: wrap; }
 .foot-links a { color: var(--muted); text-decoration: none; font-weight: 600; }

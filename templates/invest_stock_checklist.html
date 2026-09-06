@@ -1,0 +1,205 @@
+{% extends "base.html" %}
+{% block title %}Stock Checklist · Royal Stock{% endblock %}
+{% block content %}
+  <div class="page-header">
+    <h1>✅ Stock investment checklist</h1>
+    <p class="sub">32-point systematic evaluation — personal criteria plus AI financial-health, valuation, quality and risk. Saved on this device. <a href="/invest/stocks">← All stock tools</a></p>
+  </div>
+  {% set active = 'checklist' %}
+  {% include "_stock_tools_nav.html" %}
+
+  <section class="card" aria-labelledby="hCheck">
+    <h2 id="hCheck">Evaluation checklist</h2>
+    <div class="form-row">
+      <div class="field"><label for="evalName">Evaluating (stock name)</label><input id="evalName" placeholder="e.g. Go Fashion (India) Ltd" /></div>
+      <div class="field"><label for="evalSym">Symbol (optional — links the report)</label><input id="evalSym" placeholder="e.g. GOCOLORS" style="text-transform:uppercase" /></div>
+      <div class="field"><label for="evalCat">Verdict</label>
+        <select id="evalCat"><option>Check Stock</option><option>Good Stock</option><option>Avoid Stock</option></select>
+      </div>
+      <button class="btn btn-sm" type="button" id="checkCopyAll">📋 Copy All</button>
+      <button class="btn btn-sm" type="button" id="checkResetAll">Reset All</button>
+    </div>
+    <p><span class="pill">AI — AI-recommended criteria</span> <span class="pill">mine — Personal investment criteria</span></p>
+    <div id="evalBanner"></div>
+    <div id="checkGroups"></div>
+  </section>
+{% endblock %}
+
+{% block scripts %}
+  <script>
+    (function () {
+      'use strict';
+      var esc = RS.escapeHtml;
+
+      var GROUPS = [
+        { title: 'Personal — First Principles (10)', cat: 'mine', copy: 'Personal Criteria', items: [
+          'Low debt-to-equity ratio (<1.0)',
+          'Decreasing debt over the past 3 years',
+          'Increasing year-on-year sales',
+          'Positive net profit in last 5 years',
+          'Return on Equity (ROE) > 20%',
+          'Increasing net profit year-on-year',
+          'Consistent revenue growth (>10% YoY)',
+          'Less PE (<10)',
+          'Less price to book',
+          'Lower PE and lower Price to Book is for sure better stock',
+        ]},
+        { title: 'AI — Financial Health', cat: 'AI', copy: null, items: [
+          'Strong profit margins (>15%)',
+          'Positive Free Cash Flow (FCF)',
+          'Return on Equity (ROE) > 15% consistently',
+          'Return on Capital (ROCE/ROIC) > 15%',
+          'Interest coverage ratio > 4x–5x (EBIT / Interest)',
+          'Current ratio > 1.5 (short-term liquidity)',
+        ]},
+        { title: 'AI — Valuation', cat: 'AI', copy: null, items: [
+          'Reasonable P/E ratio — in-line with 5-year historical average',
+          'PEG ratio < 1.5 (not overpaying for growth)',
+          'Price-to-Free-Cash-Flow (P/FCF) < 20',
+          'EV/EBITDA reasonable vs. direct sector peers',
+          'Consistent dividends or steady share buybacks',
+        ]},
+        { title: 'AI — Business Quality', cat: 'AI', copy: null, items: [
+          'Strong economic moat (brand, network effect, switching cost)',
+          'Can raise prices during inflation without losing customers',
+          'Transparent, capable and shareholder-friendly management',
+          'No single customer accounts for >10% of revenue',
+          'Adequate R&D investment to stay ahead of competition',
+          'Clear growth strategy & addressable market',
+        ]},
+        { title: 'AI — Risk & Stability', cat: 'AI', copy: null, items: [
+          'No frequent auditor changes or accounting red flags',
+          'Promoter pledged shares < 5% (ideally zero)',
+          'Outstanding shares are stable — no excessive dilution',
+          'Not overly vulnerable to sudden regulatory changes',
+          'Business can survive recession or high interest rate cycles',
+        ]},
+      ];
+      var LS_KEY = 'investStockChecklist';
+      var saved = {};
+      try { saved = JSON.parse(localStorage.getItem(LS_KEY) || '{}'); } catch (e) { saved = {}; }
+      var evalState = { name: '', sym: '', cat: 'Check Stock' };
+      try { Object.assign(evalState, JSON.parse(localStorage.getItem(LS_KEY + ':eval') || '{}')); } catch (e) {}
+      document.getElementById('evalName').value = evalState.name || '';
+      document.getElementById('evalSym').value = evalState.sym || '';
+      document.getElementById('evalCat').value = evalState.cat || 'Check Stock';
+      var total = 0;
+      document.getElementById('checkGroups').innerHTML = GROUPS.map(function (g, gi) {
+        return '<h3 style="font-size:0.95rem; margin:12px 0 6px;">' + esc(g.title) +
+          ' <button class="btn btn-sm" type="button" data-gcopy="' + gi + '">📋 Copy</button>' +
+          ' <button class="btn btn-sm" type="button" data-greset="' + gi + '">Reset</button></h3>' +
+          '<div class="note" data-gprog="' + gi + '"></div>' +
+          g.items.map(function (label, ii) {
+            var id = gi + '-' + ii;
+            total++;
+            var on = !!saved[id];
+            return '<label style="display:flex; gap:8px; align-items:flex-start; padding:6px 0; border-bottom:1px solid var(--line-soft); cursor:pointer;">' +
+              '<input type="checkbox" data-id="' + id + '"' + (on ? ' checked' : '') + ' style="width:auto; margin-top:4px;" />' +
+              '<span>' + esc(label) + ' <span class="pill">' + esc(g.cat) + '</span></span></label>';
+          }).join('');
+      }).join('');
+      function persist() {
+        var state = {};
+        document.querySelectorAll('#checkGroups input').forEach(function (box) {
+          if (box.checked) state[box.dataset.id] = true;
+        });
+        try { localStorage.setItem(LS_KEY, JSON.stringify(state)); } catch (e) {}
+      }
+      function checkCount() {
+        var all = document.querySelectorAll('#checkGroups input');
+        var n = document.querySelectorAll('#checkGroups input:checked').length;
+        GROUPS.forEach(function (g, gi) {
+          var boxes = [], c = 0;
+          document.querySelectorAll('#checkGroups input').forEach(function (box) {
+            if (box.dataset.id.indexOf(gi + '-') === 0) { boxes.push(box); if (box.checked) c++; }
+          });
+          var el = document.querySelector('[data-gprog="' + gi + '"]');
+          if (el) el.innerHTML = '<span class="pill">' + c + ' / ' + boxes.length + '</span>';
+        });
+        renderEval(n, all.length);
+      }
+      function groupItems(gi) {
+        var out = [];
+        document.querySelectorAll('#checkGroups input').forEach(function (box) {
+          if (box.dataset.id.indexOf(gi + '-') === 0) {
+            out.push({ checked: box.checked, label: box.parentElement.textContent.trim().replace(/\s+(mine|AI)$/, '') });
+          }
+        });
+        return out;
+      }
+      function copyText(title, sections) {
+        var lines = [title + (evalState.name ? ' — Evaluating: ' + evalState.name : '')];
+        var tc = 0, tt = 0;
+        sections.forEach(function (s) {
+          var c = s.items.filter(function (i) { return i.checked; }).length;
+          tc += c; tt += s.items.length;
+          lines.push('');
+          lines.push(s.name + ' (' + c + '/' + s.items.length + '):');
+          s.items.forEach(function (i) { lines.push((i.checked ? '[x] ' : '[ ] ') + i.label); });
+        });
+        lines.push('');
+        lines.push('Total: ' + tc + '/' + tt);
+        return lines.join('\n');
+      }
+      function renderEval(n, t) {
+        var banner = document.getElementById('evalBanner');
+        var link = evalState.sym ? ' <a href="/fundamentals?symbol=' + encodeURIComponent(evalState.sym) + '">Open report →</a>' : '';
+        var badge = evalState.cat === 'Good Stock' ? 'pill-ok' : evalState.cat === 'Avoid Stock' ? 'pill-bad' : 'pill-warn';
+        banner.innerHTML = (evalState.name || evalState.sym)
+          ? '<p>Evaluating: <strong>' + esc(evalState.name || evalState.sym) + '</strong> ' +
+            '<span class="pill ' + badge + '">' + esc(evalState.cat) + '</span>' + link +
+            ' <span class="pill">' + n + ' / ' + t + ' checks</span></p>' : '';
+      }
+      ['evalName', 'evalSym', 'evalCat'].forEach(function (id) {
+        document.getElementById(id).addEventListener('input', function () {
+          evalState = { name: document.getElementById('evalName').value.trim(), sym: document.getElementById('evalSym').value.trim().toUpperCase(), cat: document.getElementById('evalCat').value };
+          try { localStorage.setItem(LS_KEY + ':eval', JSON.stringify(evalState)); } catch (e) {}
+          checkCount();
+        });
+        document.getElementById(id).addEventListener('change', function () {
+          evalState = { name: document.getElementById('evalName').value.trim(), sym: document.getElementById('evalSym').value.trim().toUpperCase(), cat: document.getElementById('evalCat').value };
+          try { localStorage.setItem(LS_KEY + ':eval', JSON.stringify(evalState)); } catch (e) {}
+          checkCount();
+        });
+      });
+      document.getElementById('checkGroups').addEventListener('change', function () { persist(); checkCount(); });
+      document.getElementById('checkGroups').addEventListener('click', function (e) {
+        var gc = e.target.closest('[data-gcopy]');
+        var gr = e.target.closest('[data-greset]');
+        if (gc) {
+          var gi = Number(gc.dataset.gcopy);
+          var items = groupItems(gi);
+          var text = copyText('Stock Investment Checklist — ' + GROUPS[gi].title, [{ name: GROUPS[gi].title, items: items }]);
+          if (navigator.clipboard) navigator.clipboard.writeText(text).then(
+            function () { RS.toast('Category copied', 'ok'); },
+            function () { RS.toast('Copy failed', 'err'); });
+        }
+        if (gr) {
+          var gj = Number(gr.dataset.greset);
+          document.querySelectorAll('#checkGroups input').forEach(function (box) {
+            if (box.dataset.id.indexOf(gj + '-') === 0) box.checked = false;
+          });
+          persist(); checkCount();
+        }
+      });
+      document.getElementById('checkCopyAll').addEventListener('click', function () {
+        var personal = groupItems(0);
+        var ai = [];
+        for (var gi = 1; gi < GROUPS.length; gi++) ai = ai.concat(groupItems(gi));
+        var text = copyText('Stock Investment Checklist', [
+          { name: 'Personal Criteria', items: personal },
+          { name: 'AI Criteria', items: ai },
+        ]);
+        if (navigator.clipboard) navigator.clipboard.writeText(text).then(
+          function () { RS.toast('Checklist copied', 'ok'); },
+          function () { RS.toast('Copy failed', 'err'); });
+      });
+      document.getElementById('checkResetAll').addEventListener('click', function () {
+        document.querySelectorAll('#checkGroups input').forEach(function (box) { box.checked = false; });
+        try { localStorage.removeItem(LS_KEY); } catch (e) {}
+        checkCount();
+      });
+      checkCount();
+    })();
+  </script>
+{% endblock %}

@@ -1,0 +1,171 @@
+{% extends "base.html" %}
+{% block title %}Stock Average Calculator · Royal Stock{% endblock %}
+{% block content %}
+  <div class="page-header">
+    <h1>🧮 Stock average calculator</h1>
+    <p class="sub">New average price when accumulating — or the buy quantity needed to hit a target average. <a href="/invest/stocks">← All stock tools</a></p>
+  </div>
+  {% set active = 'average' %}
+  {% include "_stock_tools_nav.html" %}
+
+  <section class="card" aria-labelledby="hAvg">
+    <h2 id="hAvg">Average calculator</h2>
+    <div style="display:flex; justify-content:space-between; align-items:center; gap:12px; flex-wrap:wrap;">
+      <h3 style="font-size:0.95rem; margin:0;">Current Holdings</h3>
+      <div class="form-row">
+        <button class="btn btn-sm avgCurMode btn-primary" data-m="price" type="button">Price</button>
+        <button class="btn btn-sm avgCurMode" data-m="total" type="button">Total</button>
+      </div>
+    </div>
+    <div class="form-row" style="margin-top:8px;">
+      <div class="field"><label for="avgCQ">Current Holding Quantity</label><input id="avgCQ" type="number" min="0" step="any" placeholder="e.g., 100" /></div>
+      <div class="field" id="avgCurPriceWrap"><label for="avgCP">Current Average Price (₹)</label><input id="avgCP" type="number" min="0" step="any" placeholder="e.g., 150.50" /></div>
+      <div class="field" id="avgCurTotalWrap" hidden><label for="avgCT">Total Amount Invested (₹)</label><input id="avgCT" type="number" min="0" step="any" placeholder="e.g., 15050.00" /></div>
+    </div>
+    <div style="display:flex; justify-content:space-between; align-items:center; gap:12px; flex-wrap:wrap; margin-top:12px; padding-top:12px; border-top:1px solid var(--line-soft);">
+      <h3 style="font-size:0.95rem; margin:0;" id="avgModeTitle">New Purchase Details</h3>
+      <div class="form-row">
+        <button class="btn btn-sm avgCalcMode btn-primary" data-m="purchase" type="button">Purchase</button>
+        <button class="btn btn-sm avgCalcMode" data-m="target" type="button">Target</button>
+      </div>
+    </div>
+    <div id="avgPurchasePane" style="margin-top:8px;">
+      <p class="muted">Enter your purchase details</p>
+      <div class="form-row">
+        <button class="btn btn-sm avgBuyMode btn-primary" data-m="price" type="button">Price</button>
+        <button class="btn btn-sm avgBuyMode" data-m="total" type="button">Total</button>
+      </div>
+      <div class="form-row" style="margin-top:8px;">
+        <div class="field"><label for="avgBQ">Quantity to Buy</label><input id="avgBQ" type="number" min="0" step="any" placeholder="e.g., 50" /></div>
+        <div class="field" id="avgBuyPriceWrap"><label for="avgBP">Purchase Average Price (₹)</label><input id="avgBP" type="number" min="0" step="any" placeholder="e.g., 140.00" /></div>
+        <div class="field" id="avgBuyTotalWrap" hidden><label for="avgBT">Total Amount to Invest (₹)</label><input id="avgBT" type="number" min="0" step="any" placeholder="e.g., 7000.00" /></div>
+      </div>
+    </div>
+    <div id="avgTargetPane" style="margin-top:8px;" hidden>
+      <p class="muted">Enter target average price and current market price to calculate quantity needed</p>
+      <div class="form-row">
+        <div class="field"><label for="avgMP">Current Market Price Per Share (₹)</label><input id="avgMP" type="number" min="0" step="any" placeholder="e.g., 140.00" /></div>
+        <div class="field"><label for="avgTP">Target Average Price (₹)</label><input id="avgTP" type="number" min="0" step="any" placeholder="e.g., 145.00" /></div>
+      </div>
+    </div>
+    <div class="form-row" style="margin-top:12px;">
+      <button class="btn" type="button" id="avgReset">Reset</button>
+    </div>
+    <div id="avgOut" style="margin-top:12px;"></div>
+    <div class="card" style="box-shadow:none; margin-top:12px;">
+      <strong>💡 How it works</strong>
+      <p class="muted">New Average Price = (Current Quantity × Current Avg Price + Buy Quantity × Buy Price) ÷ (Current Quantity + Buy Quantity)</p>
+      <p class="muted" style="margin:0;"><strong>Tip:</strong> Toggle between “Price” and “Total” mode to enter data based on average price per share or total amount invested.</p>
+    </div>
+  </section>
+{% endblock %}
+
+{% block scripts %}
+  <script>
+    (function () {
+      'use strict';
+      var fmtNum = RS.fmtNum;
+      function num(v, dflt) { var n = Number(v); return isFinite(n) ? n : (dflt == null ? 0 : dflt); }
+      function inr(v, d) { return v == null || !isFinite(v) ? '−' : '₹' + fmtNum(v, d == null ? 2 : d); }
+
+      var avgMode = 'purchase', avgCurM = 'price', avgBuyM = 'price';
+      function avgBindMode(cls, fn) {
+        document.querySelectorAll('.' + cls).forEach(function (b) {
+          b.addEventListener('click', function () {
+            document.querySelectorAll('.' + cls).forEach(function (x) { x.classList.remove('btn-primary'); });
+            b.classList.add('btn-primary');
+            fn(b.dataset.m);
+          });
+        });
+      }
+      avgBindMode('avgCalcMode', function (m) {
+        avgMode = m;
+        document.getElementById('avgModeTitle').textContent = m === 'purchase' ? 'New Purchase Details' : 'Target Average Price';
+        document.getElementById('avgPurchasePane').hidden = m !== 'purchase';
+        document.getElementById('avgTargetPane').hidden = m !== 'target';
+        renderAvg();
+      });
+      avgBindMode('avgCurMode', function (m) {
+        avgCurM = m;
+        document.getElementById('avgCurPriceWrap').hidden = m !== 'price';
+        document.getElementById('avgCurTotalWrap').hidden = m !== 'total';
+        renderAvg();
+      });
+      avgBindMode('avgBuyMode', function (m) {
+        avgBuyM = m;
+        document.getElementById('avgBuyPriceWrap').hidden = m !== 'price';
+        document.getElementById('avgBuyTotalWrap').hidden = m !== 'total';
+        renderAvg();
+      });
+      function avgVals() {
+        var cq = num(document.getElementById('avgCQ').value);
+        var cp = avgCurM === 'price' ? num(document.getElementById('avgCP').value)
+          : (cq > 0 ? num(document.getElementById('avgCT').value) / cq : 0);
+        return { cq: cq, cp: cp };
+      }
+      function renderAvg() {
+        var box = document.getElementById('avgOut');
+        var cur = avgVals();
+        var hasCur = (avgCurM === 'price' ? document.getElementById('avgCQ').value && document.getElementById('avgCP').value
+          : document.getElementById('avgCQ').value && document.getElementById('avgCT').value);
+        if (avgMode === 'purchase') {
+          var bq = num(document.getElementById('avgBQ').value);
+          var bp = avgBuyM === 'price' ? num(document.getElementById('avgBP').value)
+            : (bq > 0 ? num(document.getElementById('avgBT').value) / bq : 0);
+          var hasBuy = (avgBuyM === 'price' ? document.getElementById('avgBQ').value && document.getElementById('avgBP').value
+            : document.getElementById('avgBQ').value && document.getElementById('avgBT').value);
+          if (!(hasCur && hasBuy && cur.cq >= 0 && cur.cp >= 0 && bq > 0 && bp > 0)) {
+            box.innerHTML = '<p class="muted">Enter current holdings and purchase details — the new average appears automatically.</p>';
+            return;
+          }
+          var totalCost = cur.cq * cur.cp + bq * bp, totalQty = cur.cq + bq, avg = totalQty > 0 ? totalCost / totalQty : 0;
+          var newAmt = avgBuyM === 'price' ? bq * bp : num(document.getElementById('avgBT').value);
+          box.innerHTML =
+            '<div class="grid grid-4">' +
+            '<div class="card stat" style="box-shadow:none;"><div class="label">Total Quantity</div><div class="value">' + fmtNum(totalQty, 0) + '</div></div>' +
+            '<div class="card stat" style="box-shadow:none;"><div class="label">Total Investment</div><div class="value">' + inr(totalCost) + '</div></div>' +
+            '<div class="card stat" style="box-shadow:none;"><div class="label">New Purchase Amount</div><div class="value">' + inr(newAmt) + '</div></div>' +
+            '<div class="card stat" style="box-shadow:none;"><div class="label">New Average Price</div><div class="value pos">' + inr(avg) + '</div></div></div>' +
+            '<p style="margin-top:10px;">After buying <strong>' + fmtNum(bq, 0) + '</strong> shares for ' + inr(newAmt) +
+            ', your new average price will be <strong class="pos">' + inr(avg) + '</strong> for a total of <strong>' + fmtNum(totalQty, 0) + '</strong> shares.</p>';
+        } else {
+          var tgt = num(document.getElementById('avgTP').value);
+          var mp = num(document.getElementById('avgMP').value);
+          var hasT = hasCur && document.getElementById('avgTP').value && document.getElementById('avgMP').value &&
+            cur.cq >= 0 && cur.cp >= 0 && tgt > 0 && mp > 0;
+          if (!hasT) {
+            box.innerHTML = '<p class="muted">Enter holdings, market price and target average — the required quantity appears automatically.</p>';
+            return;
+          }
+          var denom = tgt - mp, req = null;
+          if (Math.abs(denom) > 0.01) {
+            var q = cur.cq * (cur.cp - tgt) / denom;
+            if (q > 0) req = q;
+          }
+          if (req == null) {
+            box.innerHTML = '<p class="muted">Target is not reachable by buying at the market price (target must be between market price and current average).</p>';
+            return;
+          }
+          var tQty = cur.cq + req, tInv = cur.cq * cur.cp + req * mp;
+          box.innerHTML =
+            '<div class="card stat" style="box-shadow:none; text-align:center;"><div class="label">Quantity to Buy</div>' +
+            '<div class="value pos" style="font-size:2rem;">' + fmtNum(req, 0) + ' shares</div>' +
+            '<div class="muted">This is the number of shares you need to buy to reach your target average.</div></div>' +
+            '<div class="grid grid-4" style="margin-top:10px;">' +
+            '<div class="card stat" style="box-shadow:none;"><div class="label">Total Quantity</div><div class="value">' + fmtNum(tQty, 0) + '</div></div>' +
+            '<div class="card stat" style="box-shadow:none;"><div class="label">Total Investment</div><div class="value">' + inr(tInv) + '</div></div>' +
+            '<div class="card stat" style="box-shadow:none;"><div class="label">New Purchase Amount</div><div class="value">' + inr(req * mp) + '</div></div>' +
+            '<div class="card stat" style="box-shadow:none;"><div class="label">New Average Price</div><div class="value pos">' + inr(tgt) + '</div></div></div>';
+        }
+      }
+      ['avgCQ', 'avgCP', 'avgCT', 'avgBQ', 'avgBP', 'avgBT', 'avgMP', 'avgTP'].forEach(function (id) {
+        document.getElementById(id).addEventListener('input', renderAvg);
+      });
+      document.getElementById('avgReset').addEventListener('click', function () {
+        ['avgCQ', 'avgCP', 'avgCT', 'avgBQ', 'avgBP', 'avgBT', 'avgMP', 'avgTP'].forEach(function (id) { document.getElementById(id).value = ''; });
+        renderAvg();
+      });
+      renderAvg();
+    })();
+  </script>
+{% endblock %}

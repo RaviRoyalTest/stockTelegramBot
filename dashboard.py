@@ -1081,6 +1081,41 @@ async def invest_stocks_page(request: Request):
     return templates.TemplateResponse(request, "invest_stocks.html")
 
 
+@app.get("/invest/stocks/average", response_class=HTMLResponse)
+async def invest_stock_average_page(request: Request):
+    return templates.TemplateResponse(
+        request, "invest_stock_average.html", context={"active": "average"}
+    )
+
+
+@app.get("/invest/stocks/profit", response_class=HTMLResponse)
+async def invest_stock_profit_page(request: Request):
+    return templates.TemplateResponse(
+        request, "invest_stock_profit.html", context={"active": "profit"}
+    )
+
+
+@app.get("/invest/stocks/recovery", response_class=HTMLResponse)
+async def invest_stock_recovery_page(request: Request):
+    return templates.TemplateResponse(
+        request, "invest_stock_recovery.html", context={"active": "recovery"}
+    )
+
+
+@app.get("/invest/stocks/pnl", response_class=HTMLResponse)
+async def invest_stock_pnl_page(request: Request):
+    return templates.TemplateResponse(
+        request, "invest_stock_pnl.html", context={"active": "pnl"}
+    )
+
+
+@app.get("/invest/stocks/checklist", response_class=HTMLResponse)
+async def invest_stock_checklist_page(request: Request):
+    return templates.TemplateResponse(
+        request, "invest_stock_checklist.html", context={"active": "checklist"}
+    )
+
+
 @app.get("/invest/mutual-funds", response_class=HTMLResponse)
 async def invest_mutual_page(request: Request):
     return templates.TemplateResponse(request, "invest_mutual.html")

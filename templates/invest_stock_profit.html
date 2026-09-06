@@ -1,0 +1,243 @@
+{% extends "base.html" %}
+{% block title %}Stock Profit Calculator · Royal Stock{% endblock %}
+{% block content %}
+  <div class="page-header">
+    <h1>💹 Stock profit calculator</h1>
+    <p class="sub">Profit %, annualized return and XIRR across multiple purchase groups — plus a what-if simulator. <a href="/invest/stocks">← All stock tools</a></p>
+  </div>
+  {% set active = 'profit' %}
+  {% include "_stock_tools_nav.html" %}
+
+  <section class="card" aria-labelledby="hProfit">
+    <h2 id="hProfit">Profit percentage calculator</h2>
+    <p class="muted">Add multiple stock groups to track different purchases.</p>
+    <div id="profitGroups"></div>
+    <div class="form-row" style="margin-top:12px;">
+      <button class="btn btn-primary btn-sm" type="button" id="profitAdd">➕ Add Another Stock Group</button>
+    </div>
+    <div id="profitOverall" style="margin-top:12px;"></div>
+    <div class="card" style="box-shadow:none; margin-top:12px;">
+      <strong>💡 How it works</strong>
+      <p class="muted"><strong>Profit Percentage</strong> = (Total Profit ÷ Total Invested) × 100</p>
+      <p class="muted"><strong>Annualized Return</strong> = [(1 + Total Return)^(1/Years) − 1] × 100 (shown when age is entered)</p>
+      <p class="muted" style="margin:0;"><strong>Example:</strong> If you bought 100 stocks at ₹250 each (₹25,000 invested) and made a profit of ₹5,000, your profit percentage is 20%. <strong>Tip:</strong> Add multiple stock groups and enter the holding period to see annualized returns and overall XIRR.</p>
+    </div>
+  </section>
+
+  <!-- simulator modal -->
+  <div id="simModal" hidden style="position:fixed; inset:0; z-index:90; display:flex; align-items:center; justify-content:center; background:rgba(2,8,23,0.5); padding:16px;">
+    <div class="card" style="max-width:480px; width:100%;">
+      <div style="display:flex; justify-content:space-between; align-items:center;">
+        <h2 style="margin:0;">Profit Simulator</h2>
+        <button class="btn btn-sm" type="button" id="simClose">✕</button>
+      </div>
+      <div class="form-row" style="margin-top:12px;">
+        <button class="btn btn-sm simMode btn-primary" data-m="amount" type="button">By Amount</button>
+        <button class="btn btn-sm simMode" data-m="quantity" type="button">By Quantity</button>
+      </div>
+      <div class="field" style="margin-top:10px;">
+        <label for="simVal" id="simValLabel">Enter amount (₹)</label>
+        <input id="simVal" type="number" min="0" step="any" placeholder="Enter amount (₹)" />
+      </div>
+      <p class="note" id="simMeta"></p>
+      <table class="kv" style="margin-top:8px;"><tbody id="simOut"></tbody></table>
+    </div>
+  </div>
+{% endblock %}
+
+{% block scripts %}
+  <script>
+    (function () {
+      'use strict';
+      var fmtNum = RS.fmtNum;
+      function num(v, dflt) { var n = Number(v); return isFinite(n) ? n : (dflt == null ? 0 : dflt); }
+      function inr(v, d) { return v == null || !isFinite(v) ? '−' : '₹' + fmtNum(v, d == null ? 2 : d); }
+      function kv(pairs) {
+        return pairs.map(function (p) {
+          return '<tr><th scope="row">' + RS.escapeHtml(p[0]) + '</th><td>' + p[1] + '</td></tr>';
+        }).join('');
+      }
+      function signed(v, suffix) {
+        if (v == null || !isFinite(v)) return '−';
+        return '<span class="' + (v >= 0 ? 'pos' : 'neg') + '">' + (v >= 0 ? '+' : '') + fmtNum(v) + (suffix || '') + '</span>';
+      }
+
+      var pgSeq = 0;
+      function profitGroup() {
+        pgSeq++;
+        var div = document.createElement('div');
+        div.className = 'card';
+        div.style.boxShadow = 'none';
+        div.style.marginTop = '8px';
+        div.innerHTML =
+          '<div style="display:flex; justify-content:space-between; align-items:center;"><strong>📊 Stock Group <span class="gnum"></span></strong>' +
+          '<span><button class="btn btn-sm simBtn" type="button" title="Simulate Profit">Simulate Profit</button> ' +
+          '<button class="btn btn-sm btn-danger rmBtn" type="button">Remove</button></span></div>' +
+          '<div class="form-row" style="margin-top:8px;">' +
+          '<div class="field"><label>Number of Stocks Purchased</label><input type="number" min="0" step="any" class="fQ" placeholder="e.g., 100" /></div>' +
+          '<div class="field"><label>Average Price per Stock (₹)</label><input type="number" min="0" step="any" class="fP" placeholder="e.g., 250.50" /></div>' +
+          '<div class="field"><label>Age</label><input type="number" min="0" step="any" class="fA" placeholder="e.g., 365" /></div>' +
+          '<div class="field"><label>Unit</label><select class="fU"><option value="days">Days</option><option value="months">Months</option></select></div></div>' +
+          '<div class="field" style="margin-top:8px;"><label>Profit Input</label><div class="form-row">' +
+          '<button class="btn btn-sm ptBtn btn-primary" data-t="total" type="button">Total Profit (₹)</button>' +
+          '<button class="btn btn-sm ptBtn" data-t="perShare" type="button">Profit per Share (₹)</button>' +
+          '<button class="btn btn-sm ptBtn" data-t="currentPrice" type="button">Current Price per Share (₹)</button></div>' +
+          '<input type="number" step="any" class="fV" style="margin-top:8px;" placeholder="e.g., 5000" /></div>' +
+          '<table class="kv" style="margin-top:8px;"><tbody class="fOut"><tr><td class="empty">Enter group details.</td></tr></tbody></table>';
+        div.querySelector('.rmBtn').addEventListener('click', function () { div.remove(); renumber(); renderProfit(); });
+        div.querySelectorAll('input, select').forEach(function (el) { el.addEventListener('input', renderProfit); el.addEventListener('change', renderProfit); });
+        div.querySelectorAll('.ptBtn').forEach(function (b) {
+          b.addEventListener('click', function () {
+            div.querySelectorAll('.ptBtn').forEach(function (x) { x.classList.remove('btn-primary'); });
+            b.classList.add('btn-primary');
+            div.querySelector('.fV').placeholder = b.dataset.t === 'total' ? 'e.g., 5000' : b.dataset.t === 'perShare' ? 'e.g., 50' : 'e.g., 405.80';
+            renderProfit();
+          });
+        });
+        div.querySelector('.simBtn').addEventListener('click', function () { openSim(div); });
+        return div;
+      }
+      function renumber() {
+        document.querySelectorAll('#profitGroups .card').forEach(function (g, i) {
+          g.querySelector('.gnum').textContent = '#' + (i + 1);
+        });
+      }
+      function groupCalc(g) {
+        var q = num(g.querySelector('.fQ').value), p = num(g.querySelector('.fP').value);
+        var t = (g.querySelector('.ptBtn.btn-primary') || {}).dataset
+          ? g.querySelector('.ptBtn.btn-primary').dataset.t : 'total';
+        var v = num(g.querySelector('.fV').value);
+        var age = num(g.querySelector('.fA').value), unit = g.querySelector('.fU').value;
+        var profit = 0;
+        if (t === 'currentPrice' && v > 0) profit = (v - p) * q;
+        else if (t === 'total' && v !== 0) profit = v;
+        else if (t === 'perShare' && v !== 0) profit = v * q;
+        var invested = q * p;
+        var pct = invested > 0 ? profit / invested * 100 : 0;
+        var ann = null;
+        if (age > 0 && invested > 0) {
+          var yrs = unit === 'days' ? age / 365 : age / 12;
+          if (yrs > 0) ann = (Math.pow(1 + profit / invested, 1 / yrs) - 1) * 100;
+        }
+        return { q: q, p: p, t: t, v: v, age: age, unit: unit, profit: profit, invested: invested, pct: pct, ann: ann, valid: q > 0 && p > 0 };
+      }
+      function xirr(groups) {
+        var flows = [];
+        groups.forEach(function (r) {
+          if (r.invested > 0 && r.age > 0) {
+            var yrs = r.unit === 'days' ? r.age / 365 : r.age / 12;
+            flows.push({ a: -r.invested, y: 0 });
+            flows.push({ a: r.invested + r.profit, y: yrs });
+          }
+        });
+        if (!flows.length) return null;
+        if (!flows.some(function (f) { return f.a < 0; }) || !flows.some(function (f) { return f.a > 0; })) return null;
+        function npv(rate) {
+          var s = 0;
+          for (var i = 0; i < flows.length; i++) s += flows[i].a / Math.pow(1 + rate, flows[i].y);
+          return s;
+        }
+        var lo = -0.9999, hi = 10, fLo = npv(lo), fHi = npv(hi), att = 0;
+        if (!isFinite(fLo) || !isFinite(fHi) || isNaN(fLo) || isNaN(fHi)) return null;
+        while (fLo * fHi > 0 && att < 50) { hi *= 2; fHi = npv(hi); att++; if (!isFinite(fHi)) return null; }
+        if (fLo * fHi > 0) return null;
+        var mid = 0;
+        for (var i = 0; i < 100; i++) {
+          mid = (lo + hi) / 2;
+          var fM = npv(mid);
+          if (Math.abs(fM) < 1e-12) break;
+          if (fLo * fM <= 0) { hi = mid; fHi = fM; } else { lo = mid; fLo = fM; }
+        }
+        return mid * 100;
+      }
+      function renderProfit() {
+        var groups = [];
+        document.querySelectorAll('#profitGroups .card').forEach(function (g) {
+          var r = groupCalc(g);
+          groups.push(r);
+          g.querySelector('.fOut').innerHTML = !r.valid ? '<tr><td class="empty">Enter quantity and price.</td></tr>' : kv([
+            ['Total Invested', inr(r.invested)],
+            ['Total Profit', signed(r.profit)],
+            ['Profit Percentage', signed(r.pct, '%')],
+            ['Annualized Return', r.ann == null ? '––' : signed(r.ann, '%')],
+          ]);
+        });
+        var box = document.getElementById('profitOverall');
+        var valid = groups.filter(function (r) { return r.valid; });
+        if (valid.length < 2) { box.innerHTML = ''; return; }
+        var ti = valid.reduce(function (s, r) { return s + r.invested; }, 0);
+        var tp = valid.reduce(function (s, r) { return s + r.profit; }, 0);
+        var xr = xirr(valid);
+        box.innerHTML = '<div class="card" style="box-shadow:none;"><h3 style="margin-top:0;">📈 Overall Summary</h3>' +
+          '<div class="grid grid-4">' +
+          '<div class="card stat" style="box-shadow:none;"><div class="label">Total Invested (All Groups)</div><div class="value">' + inr(ti) + '</div></div>' +
+          '<div class="card stat" style="box-shadow:none;"><div class="label">Total Profit (All Groups)</div><div class="value">' + signed(tp) + '</div></div>' +
+          '<div class="card stat" style="box-shadow:none;"><div class="label">Overall Profit %</div><div class="value">' + signed(ti ? tp / ti * 100 : 0, '%') + '</div></div>' +
+          '<div class="card stat" style="box-shadow:none;"><div class="label">Overall XIRR</div><div class="value">' + (xr == null ? '––' : signed(xr, '%')) + '</div></div>' +
+          '</div></div>';
+      }
+      document.getElementById('profitAdd').addEventListener('click', function () {
+        document.getElementById('profitGroups').appendChild(profitGroup());
+        renumber(); renderProfit();
+      });
+      document.getElementById('profitGroups').appendChild(profitGroup());
+      renumber(); renderProfit();
+
+      /* simulator */
+      var simPrice = 0, simPPS = 0, simMode = 'amount';
+      function openSim(g) {
+        var r = groupCalc(g);
+        simPrice = r.p > 0 ? r.p : 0;
+        simPPS = r.q > 0 ? r.profit / r.q : 0;
+        document.getElementById('simVal').value = '';
+        document.getElementById('simValLabel').textContent = 'Enter amount (₹)';
+        document.getElementById('simVal').placeholder = 'Enter amount (₹)';
+        document.getElementById('simMeta').textContent =
+          'Buy price ₹' + fmtNum(simPrice) + ' · profit/share ₹' + fmtNum(simPPS);
+        document.querySelectorAll('.simMode').forEach(function (b) {
+          b.classList.toggle('btn-primary', b.dataset.m === 'amount');
+        });
+        simMode = 'amount';
+        renderSim();
+        document.getElementById('simModal').hidden = false;
+      }
+      document.getElementById('simClose').addEventListener('click', function () {
+        document.getElementById('simModal').hidden = true;
+      });
+      document.getElementById('simModal').addEventListener('click', function (e) {
+        if (e.target === this) this.hidden = true;
+      });
+      document.querySelectorAll('.simMode').forEach(function (b) {
+        b.addEventListener('click', function () {
+          simMode = b.dataset.m;
+          document.querySelectorAll('.simMode').forEach(function (x) { x.classList.remove('btn-primary'); });
+          b.classList.add('btn-primary');
+          document.getElementById('simVal').value = '';
+          document.getElementById('simValLabel').textContent = simMode === 'amount' ? 'Enter amount (₹)' : 'Enter quantity';
+          document.getElementById('simVal').placeholder = simMode === 'amount' ? 'Enter amount (₹)' : 'Enter quantity';
+          renderSim();
+        });
+      });
+      document.getElementById('simVal').addEventListener('input', renderSim);
+      function renderSim() {
+        var qty = 0, used = 0, unused = 0;
+        var raw = num(document.getElementById('simVal').value);
+        if (simMode === 'amount') {
+          qty = simPrice > 0 ? Math.floor(raw / simPrice) : 0;
+          used = qty * simPrice;
+          unused = raw - used;
+        } else {
+          qty = Math.floor(raw);
+          used = qty * simPrice;
+        }
+        var profit = qty * simPPS;
+        document.getElementById('simOut').innerHTML = !qty ? '<tr><td class="empty">Enter a value to simulate.</td></tr>' : kv([
+          ['Stocks to buy', fmtNum(qty, 0)],
+          ['Total Invested', inr(used)],
+          ['Estimated Profit', signed(profit)],
+        ]) + (simMode === 'amount' && unused > 0.01
+          ? '<tr><td colspan="2" class="note">Only ' + inr(used) + ' used, ' + inr(unused) + ' left unused.</td></tr>' : '');
+      }
+    })();
+  </script>
+{% endblock %}

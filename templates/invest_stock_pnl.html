@@ -1,0 +1,294 @@
+{% extends "base.html" %}
+{% block title %}Holdings P&L · Royal Stock{% endblock %}
+{% block content %}
+  <div class="page-header">
+    <h1>📊 Holdings P&amp;L analysis</h1>
+    <p class="sub">Upload your Zerodha P&amp;L sheet (or CSV) — live prices, realized/unrealized P&amp;L and break-evens, all sortable. <a href="/invest/stocks">← All stock tools</a></p>
+  </div>
+  {% set active = 'pnl' %}
+  {% include "_stock_tools_nav.html" %}
+
+  <section class="card" aria-labelledby="hPnl">
+    <h2 id="hPnl">Holdings table</h2>
+    <div class="form-row">
+      <div class="field"><label for="pnlFile">Upload Excel (.xlsx) or CSV</label><input id="pnlFile" type="file" accept=".xlsx,.xls,.csv" /></div>
+      <button class="btn btn-sm" type="button" id="pnlAdd">➕ Add Row</button>
+      <button class="btn btn-primary btn-sm" type="button" id="pnlGo">📊 Fetch live prices</button>
+      <button class="btn btn-sm" type="button" id="pnlSample">Load sample row</button>
+    </div>
+    <p class="note">Excel columns: Symbol, Quantity, Buy Value, Sell Value, Realized P&amp;L, Previous Closing Price, Open Quantity, Open Quantity Type, Open Value, Unrealized P&amp;L. (.xlsx needs internet once for the parser library.)</p>
+    <div id="pnlEditor"></div>
+    <div class="table-scroll" style="margin-top:12px;">
+      <table class="table-mini">
+        <thead><tr id="pnlHead"></tr></thead>
+        <tbody id="pnlBody"><tr><td class="empty">Upload a file or add rows, then fetch live prices.</td></tr></tbody>
+        <tfoot id="pnlFoot"></tfoot>
+      </table>
+    </div>
+  </section>
+{% endblock %}
+
+{% block scripts %}
+  <script src="https://cdn.sheetjs.com/xlsx-0.20.3/package/dist/xlsx.full.min.js"></script>
+  <script>
+    (function () {
+      'use strict';
+      var esc = RS.escapeHtml, fmtNum = RS.fmtNum;
+      function inr(v, d) { return v == null || !isFinite(v) ? '−' : '₹' + fmtNum(v, d == null ? 2 : d); }
+      function signed(v, suffix) {
+        if (v == null || !isFinite(v)) return '−';
+        return '<span class="' + (v >= 0 ? 'pos' : 'neg') + '">' + (v >= 0 ? '+' : '') + fmtNum(v) + (suffix || '') + '</span>';
+      }
+
+      var COLS = [
+        { k: 'Symbol', label: 'Symbol', align: '' },
+        { k: '52W High', label: '52W High', align: 'num', live: 'fiftyTwoWeekHigh' },
+        { k: '52W Low', label: '52W Low', align: 'num', live: 'fiftyTwoWeekLow' },
+        { k: 'Near 52W Low', label: 'Near 52W Low', align: '', derived: 'nearLow' },
+        { k: 'Current Price', label: 'Current Price', align: 'num', live: 'price' },
+        { k: 'Current Holding Price', label: 'Current Holding Price', align: 'num', derived: 'openPerUnit' },
+        { k: 'Realized Price vs Value', label: 'Realized Price vs Value', align: 'num', derived: 'realVsVal' },
+        { k: 'Unrealized Price to Cmp', label: 'Unrealized Price to Cmp', align: 'num', derived: 'unrealVsCmp' },
+        { k: 'Custom Realised Stock Value', label: 'Custom Realised Stock Value', align: 'num', derived: 'customReal' },
+        { k: 'Custom Unrealised Stock Value', label: 'Custom Unrealised Stock Value', align: 'num', derived: 'customUnreal' },
+        { k: 'Realized P&L', label: 'Realized P&L', align: 'num', sum: true },
+        { k: 'Unrealized P&L', label: 'Unrealized P&L', align: 'num', sum: true },
+        { k: 'Buy Value Per Stock', label: 'Buy Value Per Stock', align: 'num', derived: 'buyPer' },
+        { k: 'Sell Value Per Stock', label: 'Sell Value Per Stock', align: 'num', derived: 'sellPer' },
+        { k: 'Quantity', label: 'Quantity', align: 'num', sum: true },
+        { k: 'Buy Value', label: 'Buy Value', align: 'num', sum: true },
+        { k: 'Sell Value', label: 'Sell Value', align: 'num', sum: true },
+        { k: 'Realized P&L Pct.', label: 'Realized P&L %', align: 'num' },
+        { k: 'Previous Closing Price', label: 'Previous Close', align: 'num' },
+        { k: 'Open Quantity', label: 'Open Quantity', align: 'num', sum: true },
+        { k: 'Open Qty Type', label: 'Open Qty Type', align: '' },
+        { k: 'Open Value', label: 'Open Value', align: 'num' },
+        { k: 'Unrealized P&L Pct.', label: 'Unrealized P&L %', align: 'num' },
+      ];
+      var pnlRows = [];
+      var pnlSortK = null, pnlSortD = 'asc';
+      var liveMap = {};
+
+      function blankRow() {
+        return { 'Symbol': '', 'Quantity': '', 'Buy Value': '', 'Sell Value': '', 'Realized P&L': '', 'Previous Closing Price': '', 'Open Quantity': '', 'Open Qty Type': '', 'Open Value': '', 'Unrealized P&L': '' };
+      }
+      function renderEditor() {
+        var ed = document.getElementById('pnlEditor');
+        ed.innerHTML = pnlRows.map(function (r, i) {
+          return '<div class="form-row" style="margin-top:8px;">' +
+            '<div class="field"><label>Symbol</label><input data-i="' + i + '" data-k="Symbol" value="' + esc(r.Symbol) + '" style="text-transform:uppercase" placeholder="RELIANCE" /></div>' +
+            '<div class="field"><label>Quantity</label><input data-i="' + i + '" data-k="Quantity" type="number" step="any" value="' + esc(r.Quantity) + '" /></div>' +
+            '<div class="field"><label>Buy Value</label><input data-i="' + i + '" data-k="Buy Value" type="number" step="any" value="' + esc(r.BuyValue) + '" /></div>' +
+            '<div class="field"><label>Sell Value</label><input data-i="' + i + '" data-k="Sell Value" type="number" step="any" value="' + esc(r['Sell Value']) + '" /></div>' +
+            '<div class="field"><label>Realized P&L</label><input data-i="' + i + '" data-k="Realized P&L" type="number" step="any" value="' + esc(r['Realized P&L']) + '" /></div>' +
+            '<div class="field"><label>Open Qty</label><input data-i="' + i + '" data-k="Open Quantity" type="number" step="any" value="' + esc(r['Open Quantity']) + '" /></div>' +
+            '<div class="field"><label>Open Value</label><input data-i="' + i + '" data-k="Open Value" type="number" step="any" value="' + esc(r['Open Value']) + '" /></div>' +
+            '<button class="btn btn-sm btn-danger" type="button" data-rm="' + i + '">Remove</button></div>';
+        }).join('');
+        ed.querySelectorAll('input').forEach(function (inp) {
+          inp.addEventListener('input', function () {
+            pnlRows[Number(inp.dataset.i)][inp.dataset.k] = inp.value;
+          });
+        });
+        ed.querySelectorAll('[data-rm]').forEach(function (b) {
+          b.addEventListener('click', function () { pnlRows.splice(Number(b.dataset.rm), 1); renderEditor(); });
+        });
+      }
+      function fnum(v) { var n = Number(v); return isFinite(n) ? n : 0; }
+      function enrich(r) {
+        var out = {};
+        COLS.forEach(function (c) { out[c.k] = r[c.k] != null && r[c.k] !== '' ? r[c.k] : null; });
+        var sym = String(r.Symbol || '').toUpperCase().replace(/\.NS$|\.BO$/, '');
+        out.Symbol = sym;
+        var live = liveMap[sym] || {};
+        COLS.forEach(function (c) {
+          if (c.live && live[c.live] != null) out[c.k] = live[c.live];
+        });
+        var qty = fnum(r.Quantity) || 1, buyV = fnum(r.BuyValue);
+        var buyPer = buyV / qty;
+        var sellPer = fnum(r.SellValue) / qty;
+        var realPL = fnum(r['Realized P&L']);
+        var oq = fnum(r['Open Quantity']) || 1, ov = fnum(r.OpenValue);
+        var openPer = ov / oq;
+        var cmp = out['Current Price'] != null ? Number(out['Current Price']) : NaN;
+        var potPer = isFinite(cmp) ? cmp - openPer : NaN;
+        out['Buy Value Per Stock'] = +buyPer.toFixed(2);
+        out['Sell Value Per Stock'] = +sellPer.toFixed(2);
+        out['Custom Realised Stock Value'] = +(buyPer - realPL / qty).toFixed(2);
+        out['Custom Unrealised Stock Value'] = isFinite(potPer) ? +(openPer - potPer).toFixed(2) : null;
+        out['Current Holding Price'] = +openPer.toFixed(2);
+        out['Realized Price vs Value'] = realPL ? +(buyPer - realPL / qty).toFixed(2) : null;
+        out['Unrealized Price to Cmp'] = isFinite(potPer) ? +(openPer - potPer).toFixed(2) : null;
+        var hi = out['52W High'], lo = out['52W Low'];
+        out['Near 52W Low'] = (hi != null && lo != null && isFinite(cmp) && hi > lo)
+          ? (((cmp - lo) / (hi - lo) <= 0.15) ? '✅ Near low' : '—') : null;
+        return out;
+      }
+      function renderTable() {
+        var head = document.getElementById('pnlHead');
+        head.innerHTML = COLS.map(function (c) {
+          var arrow = pnlSortK === c.k ? (pnlSortD === 'asc' ? ' ↑' : ' ↓') : '';
+          return '<th scope="col" class="' + c.align + '"><button class="sort" data-col="' + esc(c.k) + '">' + esc(c.label) + arrow + '</button></th>';
+        }).join('');
+        head.querySelectorAll('button.sort').forEach(function (b) {
+          b.addEventListener('click', function () {
+            var k = b.dataset.col;
+            if (pnlSortK === k) pnlSortD = pnlSortD === 'asc' ? 'desc' : 'asc';
+            else { pnlSortK = k; pnlSortD = 'asc'; }
+            renderTable();
+          });
+        });
+        var rows = pnlRows.map(enrich);
+        if (pnlSortK) {
+          rows.sort(function (a, b) {
+            var av = a[pnlSortK], bv = b[pnlSortK];
+            if (av == null && bv == null) return 0;
+            if (av == null) return pnlSortD === 'asc' ? 1 : -1;
+            if (bv == null) return pnlSortD === 'asc' ? -1 : 1;
+            var c = (typeof av === 'number' && typeof bv === 'number') ? av - bv
+              : String(av).localeCompare(String(bv));
+            return pnlSortD === 'asc' ? c : -c;
+          });
+        }
+        document.getElementById('pnlBody').innerHTML = rows.length ? rows.map(function (r) {
+          return '<tr>' + COLS.map(function (c) {
+            var v = r[c.k];
+            var txt = v == null || v === '' ? '−'
+              : (typeof v === 'number' ? (c.k.indexOf('P&L') >= 0 && c.k.indexOf('%') < 0 ? signed(v) : fmtNum(v)) : esc(v));
+            if (c.k === 'Symbol' && v) txt = '<a href="/fundamentals?symbol=' + encodeURIComponent(v) + '"><strong>' + esc(v) + '</strong></a>';
+            return '<td class="' + c.align + '">' + txt + '</td>';
+          }).join('') + '</tr>';
+        }).join('') : '<tr><td colspan="' + COLS.length + '" class="empty">Upload a file or add rows, then fetch live prices.</td></tr>';
+        var sums = { 'Quantity': 0, 'Buy Value': 0, 'Sell Value': 0, 'Realized P&L': 0, 'Unrealized P&L': 0, 'Open Quantity': 0 };
+        rows.forEach(function (r) {
+          Object.keys(sums).forEach(function (k) { sums[k] += fnum(r[k]); });
+        });
+        var totBuy = sums['Buy Value'];
+        var realPct = totBuy > 0 && sums['Realized P&L'] ? sums['Realized P&L'] / totBuy * 100 : null;
+        document.getElementById('pnlFoot').innerHTML = rows.length ?
+          '<tr><td><strong>Total</strong></td><td colspan="10"></td>' +
+          '<td class="num"><strong>' + signed(sums['Realized P&L']) + '</strong></td>' +
+          '<td class="num"><strong>' + signed(sums['Unrealized P&L']) + '</strong></td>' +
+          '<td colspan="4"></td><td class="num"><strong>' + fmtNum(sums.Quantity, 0) + '</strong></td>' +
+          '<td class="num"><strong>' + inr(sums['Buy Value']) + '</strong></td>' +
+          '<td class="num"><strong>' + inr(sums['Sell Value']) + '</strong></td>' +
+          '<td class="num"><strong>' + (realPct == null ? '−' : signed(realPct, '%')) + '</strong></td>' +
+          '<td colspan="4"></td></tr>' : '';
+      }
+      document.getElementById('pnlAdd').addEventListener('click', function () {
+        pnlRows.push(blankRow());
+        renderEditor();
+      });
+      document.getElementById('pnlSample').addEventListener('click', function () {
+        pnlRows.push({ 'Symbol': 'RELIANCE', 'Quantity': '10', 'Buy Value': '24000', 'Sell Value': '', 'Realized P&L': '', 'Previous Closing Price': '', 'Open Quantity': '10', 'Open Qty Type': 'CNC', 'Open Value': '24000', 'Unrealized P&L': '' });
+        renderEditor();
+        renderTable();
+      });
+      function parseCSV(text) {
+        var lines = text.split(/\r?\n/).filter(function (l) { return l.trim() !== ''; });
+        if (!lines.length) return [];
+        function splitRow(line) {
+          var out = [], cur = '', q = false;
+          for (var i = 0; i < line.length; i++) {
+            var ch = line[i];
+            if (ch === '"') { q = !q; continue; }
+            if (ch === ',' && !q) { out.push(cur); cur = ''; continue; }
+            cur += ch;
+          }
+          out.push(cur);
+          return out.map(function (s) { return s.trim(); });
+        }
+        var headers = splitRow(lines[0]);
+        var symIdx = headers.findIndex(function (h) { return h.toLowerCase() === 'symbol'; });
+        if (symIdx < 0) throw new Error('No “Symbol” header column found');
+        return lines.slice(1).map(function (line) {
+          var cells = splitRow(line), obj = blankRow();
+          headers.forEach(function (h, i) {
+            if (h in obj) obj[h] = cells[i] || '';
+            else if (h === 'ISIN' || h === 'Previous Closing Price' || h === 'Realized P&L Pct.' || h === 'Unrealized P&L Pct.' || h === 'Open Quantity Type') obj[h] = cells[i] || '';
+          });
+          return obj;
+        }).filter(function (o) { return o.Symbol; });
+      }
+      document.getElementById('pnlFile').addEventListener('change', function (e) {
+        var f = e.target.files && e.target.files[0];
+        if (!f) return;
+        var reader = new FileReader();
+        reader.onload = function () {
+          try {
+            var name = (f.name || '').toLowerCase();
+            if (name.endsWith('.csv')) {
+              var rows = parseCSV(String(reader.result || ''));
+              if (!rows.length) throw new Error('No data rows found');
+              pnlRows = rows;
+            } else if (typeof XLSX !== 'undefined') {
+              var wb = XLSX.read(reader.result, { type: 'array' });
+              var sh = wb.Sheets['Equity'];
+              if (!sh) throw new Error('“Equity” sheet not found in Excel file');
+              var aoa = XLSX.utils.sheet_to_json(sh, { header: 1, raw: false, defval: null, blankrows: false });
+              var hi = aoa.findIndex(function (r) { return Array.isArray(r) && r.length && String(r[0]).trim() === 'Symbol'; });
+              if (hi < 0) throw new Error('No header row starting with “Symbol” found');
+              var headers = aoa[hi].map(function (h) { return String(h).trim(); });
+              pnlRows = aoa.slice(hi + 1).filter(function (r) { return r && r.length && r[0]; }).map(function (r) {
+                var obj = blankRow();
+                headers.forEach(function (h, i) { obj[h] = r[i] != null ? String(r[i]) : ''; });
+                if (!obj.Symbol) obj.Symbol = '';
+                return obj;
+              }).filter(function (o) { return o.Symbol; });
+            } else {
+              throw new Error('Excel parser library still loading (needs internet once) — try CSV meanwhile.');
+            }
+            renderEditor();
+            renderTable();
+            RS.toast('Loaded ' + pnlRows.length + ' holdings — press “Fetch live prices”.', 'ok');
+          } catch (err) {
+            RS.toast('Could not parse file: ' + err.message, 'err');
+          }
+          e.target.value = '';
+        };
+        if (f.name.toLowerCase().endsWith('.csv')) reader.readAsText(f);
+        else reader.readAsArrayBuffer(f);
+      });
+      document.getElementById('pnlGo').addEventListener('click', async function () {
+        var syms = pnlRows.map(function (r) { return String(r.Symbol || '').toUpperCase().replace(/\.NS$|\.BO$/, ''); }).filter(Boolean);
+        syms = syms.filter(function (s, i) { return syms.indexOf(s) === i; });
+        if (!syms.length) { RS.toast('Add holdings first', 'err'); return; }
+        RS.toast('Fetching live prices…');
+        liveMap = {};
+        await Promise.all(syms.map(async function (s) {
+          try {
+            var res = await fetch('/api/quote?symbol=' + encodeURIComponent(s));
+            if (!res.ok) return;
+            var j = await res.json();
+            var q = j.quote || {};
+            liveMap[s] = { price: q.price, fiftyTwoWeekHigh: q.wk52_high != null ? q.wk52_high : (liveMap[s] || {}).fiftyTwoWeekHigh, fiftyTwoWeekLow: q.wk52_low };
+            if (liveMap[s].fiftyTwoWeekHigh == null) {
+              try {
+                var f2 = await fetch('/api/fundamentals?symbol=' + encodeURIComponent(s));
+                if (f2.ok) {
+                  var fj = await f2.json();
+                  var ff = fj.fund || {};
+                  if (liveMap[s].price == null) liveMap[s].price = ff.price;
+                  liveMap[s].fiftyTwoWeekHigh = ff.wk52_high;
+                  liveMap[s].fiftyTwoWeekLow = ff.wk52_low;
+                }
+              } catch (e2) { /* best-effort */ }
+            }
+          } catch (e) { /* best-effort per row */ }
+        }));
+        pnlRows.forEach(function (r) {
+          var s = String(r.Symbol || '').toUpperCase().replace(/\.NS$|\.BO$/, '');
+          var live = liveMap[s];
+          var oq = fnum(r['Open Quantity']), ov = fnum(r['Open Value']);
+          if (live && live.price != null && oq > 0) {
+            r['Unrealized P&L'] = String(+((live.price * oq - ov).toFixed(2)));
+          }
+        });
+        renderTable();
+        RS.toast('Live prices updated', 'ok');
+      });
+      renderEditor();
+      renderTable();
+    })();
+  </script>
+{% endblock %}

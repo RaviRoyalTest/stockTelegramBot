@@ -1,0 +1,133 @@
+{% extends "base.html" %}
+{% block title %}Loss Recovery Table · Royal Stock{% endblock %}
+{% block content %}
+  <div class="page-header">
+    <h1>📉 Loss recovery table</h1>
+    <p class="sub">How much gain a stock needs after a drop to get back to its original value. <a href="/invest/stocks">← All stock tools</a></p>
+  </div>
+  {% set active = 'recovery' %}
+  {% include "_stock_tools_nav.html" %}
+
+  <section class="card" aria-labelledby="hRec">
+    <h2 id="hRec">Recovery gain needed</h2>
+    <div class="card" style="box-shadow:none;">
+      <strong>💡 The Math Behind It</strong>
+      <p class="muted" style="margin:6px 0;">If a stock falls by d%, the new price is (1 − d/100) of the original. To reach the original price again, the gain needed is:</p>
+      <p><code>Recovery % = [1 ÷ (1 − d/100) − 1] × 100</code></p>
+      <p class="muted" style="margin:0;">A 50% drop needs a 100% gain; a 90% drop needs a massive 900% gain!</p>
+    </div>
+    <h3 style="font-size:0.95rem; margin-top:12px;">🔢 Custom Drop Calculator</h3>
+    <div class="form-row">
+      <div class="field"><label for="recDrop">Drop Percentage (%)</label><input id="recDrop" type="number" min="0" step="any" placeholder="e.g. 35.5" /></div>
+      <button class="btn btn-primary" type="button" id="recGo">Calculate Recovery</button>
+    </div>
+    <p id="recCustom" class="note" aria-live="polite"></p>
+    <h3 style="font-size:0.95rem;">Filter &amp; Sort</h3>
+    <div class="form-row">
+      <div class="field"><label for="recMin">Min Drop (%)</label><input id="recMin" type="number" value="1" min="1" max="100" /></div>
+      <div class="field"><label for="recMax">Max Drop (%)</label><input id="recMax" type="number" value="100" min="1" max="100" /></div>
+      <div class="field"><label for="recSev">Filter by Severity</label>
+        <select id="recSev"><option>All</option><option>Minor</option><option>Moderate</option><option>Major</option><option>Severe</option><option>Catastrophic</option></select>
+      </div>
+      <button class="btn btn-sm" type="button" id="recReset">✕ Reset all</button>
+    </div>
+    <div class="table-scroll" style="margin-top:12px; max-height:420px; overflow-y:auto;">
+      <table class="table-mini">
+        <thead><tr>
+          <th scope="col">#</th>
+          <th scope="col" data-k="drop"><button class="sort">Drop (%)</button></th>
+          <th scope="col" data-k="recovery"><button class="sort">Recovery Gain (%)</button></th>
+          <th scope="col" data-k="severity"><button class="sort">Severity</button></th>
+          <th scope="col">Insight</th>
+        </tr></thead>
+        <tbody id="recBody"></tbody>
+      </table>
+    </div>
+    <p class="note">The recovery percentage is calculated from the new lower price, not the original price. This illustrates why avoiding large losses is critical — recovering from deep drawdowns requires disproportionately large gains.</p>
+  </section>
+{% endblock %}
+
+{% block scripts %}
+  <script>
+    (function () {
+      'use strict';
+      var fmtNum = RS.fmtNum;
+      function num(v, dflt) { var n = Number(v); return isFinite(n) ? n : (dflt == null ? 0 : dflt); }
+
+      function recGain(drop) {
+        if (drop >= 100) return Infinity;
+        return (1 / (1 - drop / 100) - 1) * 100;
+      }
+      function recSev(drop) {
+        if (drop >= 90) return { label: 'Catastrophic', cls: 'pill-bad' };
+        if (drop >= 70) return { label: 'Severe', cls: 'pill-warn' };
+        if (drop >= 50) return { label: 'Major', cls: 'pill-warn' };
+        if (drop >= 20) return { label: 'Moderate', cls: '' };
+        return { label: 'Minor', cls: 'pill-ok' };
+      }
+      function recInsight(drop, gain) {
+        if (!isFinite(gain)) return 'Complete loss — unrecoverable';
+        if (drop === 50) return '50% drop = 100% gain needed!';
+        if (drop >= 90) return 'Needs ' + gain.toFixed(0) + '× original investment';
+        if (drop >= 75) return 'Needs ' + gain.toFixed(0) + '% gain to break even';
+        return 'Needs ' + gain.toFixed(2) + '% gain to break even';
+      }
+      var recSortK = 'drop', recSortD = 'asc';
+      function renderRec() {
+        var min = Math.max(1, parseInt(document.getElementById('recMin').value, 10) || 1);
+        var max = Math.min(100, parseInt(document.getElementById('recMax').value, 10) || 100);
+        var sevF = document.getElementById('recSev').value;
+        var rows = [];
+        for (var d = 1; d <= 100; d++) {
+          var g = recGain(d), s = recSev(d);
+          if (d < min || d > max) continue;
+          if (sevF !== 'All' && s.label !== sevF) continue;
+          rows.push({ drop: d, gain: g, sev: s });
+        }
+        var order = { Catastrophic: 5, Severe: 4, Major: 3, Moderate: 2, Minor: 1 };
+        rows.sort(function (a, b) {
+          var c = 0;
+          if (recSortK === 'drop') c = a.drop - b.drop;
+          else if (recSortK === 'recovery') c = (isFinite(a.gain) ? a.gain : 1e12) - (isFinite(b.gain) ? b.gain : 1e12);
+          else c = order[a.sev.label] - order[b.sev.label];
+          return recSortD === 'asc' ? c : -c;
+        });
+        document.getElementById('recBody').innerHTML = rows.length ? rows.map(function (r, i) {
+          return '<tr><td>' + (i + 1) + '</td><td class="num">' + r.drop + '%</td>' +
+            '<td class="num">' + (isFinite(r.gain) ? fmtNum(r.gain) + '%' : '∞') + '</td>' +
+            '<td><span class="pill ' + r.sev.cls + '">' + r.sev.label + '</span></td>' +
+            '<td>' + RS.escapeHtml(recInsight(r.drop, r.gain)) + '</td></tr>';
+        }).join('') : '<tr><td colspan="5" class="empty">No rows match your filters.</td></tr>';
+      }
+      document.querySelectorAll('th[data-k] button.sort').forEach(function (btn) {
+        btn.addEventListener('click', function () {
+          var k = btn.closest('th').dataset.k;
+          if (k !== 'drop' && k !== 'recovery' && k !== 'severity') return;
+          if (recSortK === k) recSortD = recSortD === 'asc' ? 'desc' : 'asc';
+          else { recSortK = k; recSortD = 'asc'; }
+          renderRec();
+        });
+      });
+      ['recMin', 'recMax', 'recSev'].forEach(function (id) {
+        document.getElementById(id).addEventListener('input', renderRec);
+      });
+      document.getElementById('recReset').addEventListener('click', function () {
+        document.getElementById('recMin').value = '1';
+        document.getElementById('recMax').value = '100';
+        document.getElementById('recSev').value = 'All';
+        recSortK = 'drop'; recSortD = 'asc';
+        renderRec();
+      });
+      document.getElementById('recGo').addEventListener('click', function () {
+        var d = num(document.getElementById('recDrop').value, null);
+        var el = document.getElementById('recCustom');
+        if (d == null || d <= 0) { el.textContent = 'Please enter a valid positive number.'; return; }
+        if (d >= 100) { el.textContent = 'A 100% or more drop means the value reaches zero — no recovery possible.'; return; }
+        var g = recGain(d);
+        el.innerHTML = 'Drop entered: <strong>' + fmtNum(d) + '%</strong> → Recovery gain needed: <strong>' +
+          fmtNum(g) + '%</strong> <span class="muted">(' + RS.escapeHtml(recInsight(d, g)) + ')</span>';
+      });
+      renderRec();
+    })();
+  </script>
+{% endblock %}

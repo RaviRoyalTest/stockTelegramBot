@@ -87,22 +87,42 @@ print("== new web routes ==")
 for must in ["/api/movers", "/api/analysis", "/api/checklist", "/api/indicator",
              "/api/harmonic", "/api/metals", "/api/dividends", "/movers", "/forecast", "/checklist",
              "/indicator", "/news", "/invest", "/invest/stocks",
+             "/invest/stocks/average", "/invest/stocks/profit", "/invest/stocks/recovery",
+             "/invest/stocks/pnl", "/invest/stocks/checklist",
              "/invest/mutual-funds", "/invest/bonds", "/invest/commodities"]:
     print(("OK  " if must in paths else "MISS"), must)
 
 print("== new web templates ==")
 for name in ["movers.html", "forecast.html", "checklist.html",
              "indicator.html", "news.html", "invest.html",
-             "invest_stocks.html", "invest_mutual.html", "invest_bonds.html",
+             "invest_stocks.html", "invest_stock_average.html",
+             "invest_stock_profit.html", "invest_stock_recovery.html",
+             "invest_stock_pnl.html", "invest_stock_checklist.html",
+             "invest_mutual.html", "invest_bonds.html",
              "invest_commodities.html"]:
     p = pathlib.Path("templates") / name
     print(("OK  " if p.exists() else "MISS"), name)
 
 print("== invest content ==")
 stocks = pathlib.Path("templates/invest_stocks.html").read_text(encoding="utf-8")
-for needle in ["avgCalcMode", "ptBtn", "overallXIRR" if False else "Overall XIRR", "simModal", "Custom Realised Stock Value",
-               "Equity", "Copy All", "Recovery % = [1", "Annualized Return"]:
-    print(("OK  " if needle in stocks else "MISS"), "stocks:" + needle)
+for needle in ["/invest/stocks/average", "/invest/stocks/profit", "/invest/stocks/recovery",
+               "/invest/stocks/pnl", "/invest/stocks/checklist"]:
+    print(("OK  " if needle in stocks else "MISS"), "stocks-hub:" + needle)
+avg = pathlib.Path("templates/invest_stock_average.html").read_text(encoding="utf-8")
+for needle in ["avgCalcMode", "avgCurMode", "avgBuyMode", "avgTargetPane", "_stock_tools_nav.html"]:
+    print(("OK  " if needle in avg else "MISS"), "average:" + needle)
+profit = pathlib.Path("templates/invest_stock_profit.html").read_text(encoding="utf-8")
+for needle in ["ptBtn", "Overall XIRR", "simModal", "Annualized Return"]:
+    print(("OK  " if needle in profit else "MISS"), "profit:" + needle)
+rec = pathlib.Path("templates/invest_stock_recovery.html").read_text(encoding="utf-8")
+for needle in ["Recovery % = [1", "recSev", "Catastrophic"]:
+    print(("OK  " if needle in rec else "MISS"), "recovery:" + needle)
+pnl = pathlib.Path("templates/invest_stock_pnl.html").read_text(encoding="utf-8")
+for needle in ["Custom Realised Stock Value", "Equity", "/api/quote"]:
+    print(("OK  " if needle in pnl else "MISS"), "pnl:" + needle)
+check = pathlib.Path("templates/invest_stock_checklist.html").read_text(encoding="utf-8")
+for needle in ["Copy All", "investStockChecklist", "Personal — First Principles"]:
+    print(("OK  " if needle in check else "MISS"), "checklist:" + needle)
 mf = pathlib.Path("templates/invest_mutual.html").read_text(encoding="utf-8")
 for needle in ["itype", "swpYrs", "istart", "Jump to SWP Start", "Value at Term End",
                "viewBtn", "mfChecks", "Sharpe ratio"]:

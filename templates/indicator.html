@@ -1,22 +1,23 @@
 {% extends "base.html" %}
-{% block title %}Indicator · Royal Stock{% endblock %}
+{% block title %}Technical indicator · Royal Stock{% endblock %}
 {% block content %}
   <div class="page-header">
-    <h1>Technical indicator</h1>
-    <p class="sub">One-indicator deep-dive or the full all-indicators card — the web twin of the bot's /indicator.</p>
+    <h1>📈 Technical indicator</h1>
+    <p class="sub">Deep-dive on one indicator or the full all-indicators card — RSI, MACD, Bollinger, Supertrend and 15+ more, free.</p>
   </div>
 
-  <section class="card" aria-labelledby="lookupHeading">
-    <h2 id="lookupHeading">Analyse a stock</h2>
-    <form id="lookupForm" class="form-row">
-      <div class="field" style="flex:1; min-width:200px;">
+  <!-- ============ HERO LOOKUP ============ -->
+  <section class="card indicator-hero" aria-labelledby="lookupHeading">
+    <form id="lookupForm" class="indicator-form" aria-labelledby="lookupHeading">
+      <h2 id="lookupHeading" class="visually-hidden">Analyse a stock</h2>
+      <div class="field indicator-field-sym">
         <label for="symbol">Symbol</label>
-        <input id="symbol" required placeholder="e.g. RELIANCE or AAPL" autocomplete="off" style="text-transform:uppercase" list="symbolList" />
+        <input id="symbol" required placeholder="RELIANCE, AAPL…" autocomplete="off" style="text-transform:uppercase" list="symbolList" />
         <datalist id="symbolList"></datalist>
       </div>
-      <div class="field" style="flex:1; min-width:200px;">
+      <div class="field indicator-field-name">
         <label for="iname">Indicator <span class="muted">(blank = full card)</span></label>
-        <input id="iname" placeholder="e.g. RSI, MACD, Bollinger" autocomplete="off" list="indList" />
+        <input id="iname" placeholder="Pick a chip below or type…" autocomplete="off" list="indList" />
         <datalist id="indList">
           <option value="RSI"></option>
           <option value="MACD"></option>
@@ -41,16 +42,37 @@
       </div>
       <button class="btn btn-primary" type="submit" id="go">📈 Analyse</button>
     </form>
-    <p class="note" style="margin-bottom:0;">The full card needs ~220 daily candles (about a year of history).</p>
+
+    <div class="chip-row" id="indChips" aria-label="Quick indicator picks">
+      <button class="chip" type="button" data-ind="RSI">RSI</button>
+      <button class="chip" type="button" data-ind="MACD">MACD</button>
+      <button class="chip" type="button" data-ind="Bollinger">Bollinger</button>
+      <button class="chip" type="button" data-ind="Supertrend">Supertrend</button>
+      <button class="chip" type="button" data-ind="EMA">EMA</button>
+      <button class="chip" type="button" data-ind="VWAP">VWAP</button>
+      <button class="chip" type="button" data-ind="ATR">ATR</button>
+      <button class="chip" type="button" data-ind="MFI">MFI</button>
+      <button class="chip" type="button" data-ind="">Full card</button>
+    </div>
+    <p class="note" style="margin:10px 0 0;">The full card needs ~220 daily candles (about a year of history).</p>
   </section>
 
-  <div id="report" class="card section" hidden>
-    <h2 id="rTitle">—</h2>
-    <div id="rBody" class="table-scroll"></div>
+  <!-- ============ RESULT ============ -->
+  <div id="report" class="card section indicator-report" hidden>
+    <div class="indicator-report-head">
+      <h2 id="rTitle">—</h2>
+      <a class="btn btn-sm" id="rFundLink" href="#">💹 Full stock report</a>
+    </div>
+    <div id="rBody" class="indicator-body" aria-live="polite"></div>
   </div>
 
-  <div id="placeholder" class="card section">
-    <p class="muted" style="margin:0;">Enter a symbol above and press <strong>Analyse</strong>.</p>
+  <!-- ============ EMPTY STATE ============ -->
+  <div id="placeholder" class="card section indicator-empty">
+    <div style="font-size:2rem;">🔎</div>
+    <p><strong>Pick a symbol and press Analyse.</strong></p>
+    <p class="muted" style="margin:0;">Try <button class="link-btn" type="button" data-eg="RELIANCE">RELIANCE</button>,
+      <button class="link-btn" type="button" data-eg="TCS">TCS</button> or
+      <button class="link-btn" type="button" data-eg="AAPL">AAPL</button>.</p>
   </div>
 {% endblock %}
 
@@ -59,30 +81,43 @@
     (function () {
       'use strict';
 
-      async function load(symbol, name) {
+      function load(symbol, name) {
         var report = document.getElementById('report');
         var placeholder = document.getElementById('placeholder');
         var go = document.getElementById('go');
+        var body = document.getElementById('rBody');
         placeholder.hidden = true;
         report.hidden = false;
         go.disabled = true;
-        document.getElementById('rTitle').textContent = name ? symbol + ' · ' + name.toUpperCase() : symbol + ' · full card';
-        document.getElementById('rBody').innerHTML = '<p class="muted"><span class="skeleton" style="display:block;width:100%"></span></p>';
+        go.textContent = 'Analysing…';
+        document.getElementById('rTitle').textContent =
+          symbol + (name ? ' · ' + name.toUpperCase() : ' · full card');
+        document.getElementById('rFundLink').href = '/fundamentals?symbol=' + encodeURIComponent(symbol);
+        body.innerHTML = '<span class="skeleton" style="display:block;width:100%"></span>';
         try {
           var url = '/api/indicator?symbol=' + encodeURIComponent(symbol) + (name ? '&name=' + encodeURIComponent(name) : '');
-          var res = await fetch(url);
-          var data = await res.json().catch(function () { return {}; });
-          if (!res.ok) throw new Error((data && data.detail) || ('HTTP ' + res.status));
-          var lines = data.lines || [];
-          document.getElementById('rBody').innerHTML = lines.length
-            ? lines.map(function (l) { return '<p style="margin:0 0 6px;">' + l + '</p>'; }).join('')
-            : '<p class="muted">No indicator data available.</p>';
+          return fetch(url)
+            .then(function (res) {
+              return res.json().catch(function () { return {}; }).then(function (data) {
+                if (!res.ok) throw new Error((data && data.detail) || ('HTTP ' + res.status));
+                var lines = data.lines || [];
+                body.innerHTML = lines.length
+                  ? lines.map(function (l) { return '<p style="margin:0 0 6px;">' + l + '</p>'; }).join('')
+                  : '<p class="muted">No indicator data available.</p>';
+              });
+            })
+            .catch(function (err) {
+              body.innerHTML = '<p class="muted">Could not load the indicator report: ' + RS.escapeHtml(err.message) + '</p>';
+              RS.toast('Indicator failed for ' + symbol + ': ' + err.message, 'err');
+            })
+            .finally(function () {
+              go.disabled = false;
+              go.textContent = '📈 Analyse';
+            });
         } catch (err) {
-          RS.toast('Indicator failed for ' + symbol + ': ' + err.message, 'err');
-          placeholder.hidden = false;
-          report.hidden = true;
-        } finally {
           go.disabled = false;
+          go.textContent = '📈 Analyse';
+          RS.toast('Indicator failed: ' + err.message, 'err');
         }
       }
 
@@ -91,6 +126,39 @@
         var symbol = document.getElementById('symbol').value.trim().toUpperCase().replace(/\.NS$|\.BO$|\.US$/, '');
         if (symbol) load(symbol, document.getElementById('iname').value.trim());
       });
+
+      // indicator chips: fill + submit in one tap
+      document.getElementById('indChips').addEventListener('click', function (e) {
+        var chip = e.target.closest('.chip');
+        if (!chip) return;
+        document.querySelectorAll('#indChips .chip').forEach(function (c) { c.classList.remove('chip-on'); });
+        chip.classList.add('chip-on');
+        document.getElementById('iname').value = chip.dataset.ind;
+        var symbol = document.getElementById('symbol').value.trim().toUpperCase().replace(/\.NS$|\.BO$|\.US$/, '');
+        if (symbol) load(symbol, chip.dataset.ind);
+        else document.getElementById('symbol').focus();
+      });
+
+      // example buttons
+      document.querySelectorAll('.link-btn').forEach(function (b) {
+        b.addEventListener('click', function () {
+          document.getElementById('symbol').value = b.dataset.eg;
+          load(b.dataset.eg, document.getElementById('iname').value.trim());
+        });
+      });
+
+      // deep link: /indicator?symbol=X&name=RSI
+      (function () {
+        var params = new URLSearchParams(window.location.search);
+        var sym = (params.get('symbol') || '').toUpperCase().replace(/\.NS$|\.BO$|\.US$/, '');
+        var ind = params.get('name') || '';
+        if (sym) {
+          document.getElementById('symbol').value = sym;
+          document.getElementById('iname').value = ind;
+          load(sym, ind);
+        }
+      })();
+
       RS.attachSymbolAutocomplete('symbol', 'symbolList');
     })();
   </script>
