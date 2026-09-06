@@ -242,7 +242,7 @@ print("OK   deep_report" if not missing else f"FAIL deep_report missing {missing
 
 print("== grouped nav ==")
 nb2 = pathlib.Path("templates/base.html").read_text(encoding="utf-8")
-for needle in ["nav-group", "nav-drop", "nav-menu", 'href="/invest/stocks"',
+for needle in ["nav-group", "nav-drop", "nav-menu", 'href="/invest/stocks',
                'href="/invest/mutual-funds"', 'href="/invest/bonds"',
                'href="/invest/commodities"', "foot-links"]:
     print(("OK  " if needle in nb2 else "MISS"), "nav:" + needle)

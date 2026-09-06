@@ -41,34 +41,51 @@
           <a href="/">🏠 Dashboard</a>
 
           <div class="nav-group">
-            <button class="nav-drop" type="button" aria-expanded="false" aria-haspopup="true">📈 Stocks ▾</button>
-            <div class="nav-menu" role="menu" aria-label="Stocks">
-              <a href="/watchlist" role="menuitem">📌 Watchlist</a>
-              <a href="/fundamentals" role="menuitem">💹 Fundamentals</a>
-              <a href="/forecast" role="menuitem">🔭 Forecast</a>
-              <a href="/checklist" role="menuitem">✅ Checklist</a>
-              <a href="/indicator" role="menuitem">📈 Indicator</a>
-              <a href="/news" role="menuitem">📰 News</a>
+            <button class="nav-drop" type="button" aria-expanded="false" aria-haspopup="true">📈 Stocks</button>
+            <div class="nav-menu nav-menu-wide" role="menu" aria-label="Stocks">
+              <div class="nav-col" role="none">
+                <p class="nav-col-title" role="presentation">Research</p>
+                <a href="/fundamentals" role="menuitem"><span class="nav-ico">💹</span><span class="nav-item-text"><strong>Stock report</strong><small>Full fundamentals deep-dive</small></span></a>
+                <a href="/forecast" role="menuitem"><span class="nav-ico">🔭</span><span class="nav-item-text"><strong>Forecast</strong><small>Target prices &amp; analyst view</small></span></a>
+                <a href="/indicator" role="menuitem"><span class="nav-ico">📈</span><span class="nav-item-text"><strong>Technical indicator</strong><small>RSI, MACD, moving averages</small></span></a>
+                <a href="/news" role="menuitem"><span class="nav-ico">📰</span><span class="nav-item-text"><strong>News</strong><small>Latest market headlines</small></span></a>
+              </div>
+              <div class="nav-col" role="none">
+                <p class="nav-col-title" role="presentation">Track &amp; decide</p>
+                <a href="/watchlist" role="menuitem"><span class="nav-ico">📌</span><span class="nav-item-text"><strong>Watchlist</strong><small>Your favourite stocks</small></span></a>
+                <a href="/checklist" role="menuitem"><span class="nav-ico">✅</span><span class="nav-item-text"><strong>Checklist</strong><small>32-point scorecard</small></span></a>
+              </div>
             </div>
           </div>
 
           <div class="nav-group">
-            <button class="nav-drop" type="button" aria-expanded="false" aria-haspopup="true">🔍 Screens ▾</button>
+            <button class="nav-drop" type="button" aria-expanded="false" aria-haspopup="true">🔍 Screens</button>
             <div class="nav-menu" role="menu" aria-label="Screens">
-              <a href="/market" role="menuitem">📊 Screener</a>
-              <a href="/movers" role="menuitem">🚀 Movers</a>
-              <a href="/exdates" role="menuitem">📋 Corporate actions</a>
+              <a href="/market" role="menuitem"><span class="nav-ico">📊</span><span class="nav-item-text"><strong>Screener</strong><small>Filter the NIFTY 500</small></span></a>
+              <a href="/movers" role="menuitem"><span class="nav-ico">🚀</span><span class="nav-item-text"><strong>Movers</strong><small>Top gainers &amp; losers</small></span></a>
+              <a href="/exdates" role="menuitem"><span class="nav-ico">📋</span><span class="nav-item-text"><strong>Corporate actions</strong><small>Dividends, splits, bonuses</small></span></a>
             </div>
           </div>
 
           <div class="nav-group">
-            <button class="nav-drop" type="button" aria-expanded="false" aria-haspopup="true">💰 Invest ▾</button>
-            <div class="nav-menu" role="menu" aria-label="Invest">
-              <a href="/invest" role="menuitem">💰 Overview</a>
-              <a href="/invest/stocks" role="menuitem">📈 Stock tools</a>
-              <a href="/invest/mutual-funds" role="menuitem">🏦 Mutual funds</a>
-              <a href="/invest/bonds" role="menuitem">🧾 Bonds</a>
-              <a href="/invest/commodities" role="menuitem">🥇 Commodities</a>
+            <button class="nav-drop" type="button" aria-expanded="false" aria-haspopup="true">💰 Invest</button>
+            <div class="nav-menu nav-menu-wide" role="menu" aria-label="Invest">
+              <div class="nav-col" role="none">
+                <p class="nav-col-title" role="presentation">Calculators &amp; tools</p>
+                <a href="/invest/stocks#average-calculator" role="menuitem"><span class="nav-ico">🧮</span><span class="nav-item-text"><strong>Stock tools</strong><small>Average, profit %, P&amp;L, recovery</small></span></a>
+                <a href="/invest/mutual-funds" role="menuitem"><span class="nav-ico">🏦</span><span class="nav-item-text"><strong>Mutual funds</strong><small>SIP, lumpsum, SWP planner</small></span></a>
+                <a href="/invest/commodities" role="menuitem"><span class="nav-ico">🥇</span><span class="nav-item-text"><strong>Commodities</strong><small>Gold–silver ratio, live prices</small></span></a>
+              </div>
+              <div class="nav-col" role="none">
+                <p class="nav-col-title" role="presentation">Checklists &amp; learning</p>
+                <a href="/invest/stocks#stock-checklist" role="menuitem"><span class="nav-ico">✅</span><span class="nav-item-text"><strong>Stock checklist</strong><small>32-point evaluation</small></span></a>
+                <a href="/invest/mutual-funds#mf-checklist" role="menuitem"><span class="nav-ico">📋</span><span class="nav-item-text"><strong>MF checklist</strong><small>18-point fund evaluation</small></span></a>
+                <a href="/invest/bonds" role="menuitem"><span class="nav-ico">🧾</span><span class="nav-item-text"><strong>Bonds &amp; fixed income</strong><small>Basics + 2 checklists</small></span></a>
+              </div>
+              <div class="nav-col nav-col-cta" role="none">
+                <p class="nav-col-title" role="presentation">Start here</p>
+                <a class="nav-cta" href="/invest" role="menuitem"><span class="nav-ico">💰</span><span class="nav-item-text"><strong>Invest hub</strong><small>Everything in one place</small></span></a>
+              </div>
             </div>
           </div>
 

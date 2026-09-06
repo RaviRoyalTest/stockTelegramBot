@@ -31,12 +31,13 @@
       });
     }
 
-    var navToggle2 = document.getElementById('navToggle');
-    if (navToggle2) {
-      navToggle2.addEventListener('click', function () {
-        document.querySelector('.nav')?.classList.toggle('open');
-        var open = document.querySelector('.nav')?.classList.contains('open');
-        navToggle2.setAttribute('aria-expanded', String(!!open));
+    var navToggle = document.getElementById('navToggle');
+    if (navToggle) {
+      navToggle.addEventListener('click', function () {
+        var nav = document.querySelector('.nav');
+        if (!nav) return;
+        var open = nav.classList.toggle('open');
+        navToggle.setAttribute('aria-expanded', String(open));
       });
     }
 
@@ -55,6 +56,114 @@
       if (actives.length > 1) {
         actives.sort(function (a, b) {
           return (b.getAttribute('href') || '').length - (a.getAttribute('href') || '').length;
+        });
+        actives.slice(1).forEach(function (link) { link.classList.remove('active'); });
+      }
+    })();
+
+    // grouped dropdown menus: click toggles, Esc / outside-click closes,
+    // desktop hover opens them too, arrow keys walk the menu items
+    function closeGroups(except) {
+      document.querySelectorAll('.nav-group.open').forEach(function (group) {
+        if (group !== except) {
+          group.classList.remove('open');
+          var btn = group.querySelector('.nav-drop');
+          if (btn) btn.setAttribute('aria-expanded', 'false');
+        }
+      });
+    }
+    document.querySelectorAll('.nav-group').forEach(function (group) {
+      var button = group.querySelector('.nav-drop');
+      if (!button) return;
+      var menu = group.querySelector('.nav-menu');
+      var hoverTimer = null;
+      var canHover = window.matchMedia('(hover: hover) and (min-width: 1181px)');
+
+      button.addEventListener('click', function (event) {
+        event.stopPropagation();
+        var willOpen = !group.classList.contains('open');
+        closeGroups(group);
+        group.classList.toggle('open', willOpen);
+        button.setAttribute('aria-expanded', String(willOpen));
+      });
+
+      // keyboard: open with Enter/Space/ArrowDown, walk items, Esc closes
+      button.addEventListener('keydown', function (event) {
+        if (event.key === 'ArrowDown' || event.key === 'Enter' || event.key === ' ') {
+          event.preventDefault();
+          if (!group.classList.contains('open')) {
+            closeGroups(group);
+            group.classList.add('open');
+            button.setAttribute('aria-expanded', 'true');
+          }
+          var first = menu && menu.querySelector('a');
+          if (first) first.focus();
+        }
+      });
+      if (menu) {
+        menu.addEventListener('keydown', function (event) {
+          var items = Array.prototype.slice.call(menu.querySelectorAll('a'));
+          var idx = items.indexOf(document.activeElement);
+          if (event.key === 'ArrowDown') {
+            event.preventDefault();
+            (items[idx + 1] || items[0]).focus();
+          } else if (event.key === 'ArrowUp') {
+            event.preventDefault();
+            (items[idx - 1] || items[items.length - 1]).focus();
+          } else if (event.key === 'Escape') {
+            closeGroups(null);
+            button.focus();
+          }
+        });
+      }
+
+      // hover-to-open on pointer devices only (touch + small screens keep click)
+      group.addEventListener('mouseenter', function () {
+        if (!canHover.matches) return;
+        clearTimeout(hoverTimer);
+        closeGroups(group);
+        group.classList.add('open');
+        button.setAttribute('aria-expanded', 'true');
+      });
+      group.addEventListener('mouseleave', function () {
+        if (!canHover.matches) return;
+        hoverTimer = setTimeout(function () {
+          group.classList.remove('open');
+          button.setAttribute('aria-expanded', 'false');
+        }, 180);
+      });
+    });
+    document.addEventListener('click', function () { closeGroups(null); });
+    document.addEventListener('keydown', function (event) {
+      if (event.key === 'Escape') closeGroups(null);
+    });
+
+    // close any open dropdown when a menu item is chosen (mobile flows through here)
+    document.querySelectorAll('.nav-menu a').forEach(function (link) {
+      link.addEventListener('click', function () { closeGroups(null); });
+    });
+
+    // propagate the active page up to its group button
+    document.querySelectorAll('.nav-menu a.active').forEach(function (link) {
+      var button = link.closest('.nav-group')?.querySelector('.nav-drop');
+      if (button) button.classList.add('active');
+    });
+
+    // breadcrumb eyebrow derived from the nav structure (no per-page edits)
+    (function () {
+      var active = document.querySelector('.nav-menu a.active') || document.querySelector('.nav > a.active');
+      if (!active) return;
+      var strong = active.querySelector('strong');
+      var page = (strong ? strong.textContent : active.textContent).trim();
+      var groupEl = active.closest('.nav-group')?.querySelector('.nav-drop');
+      var crumb = groupEl ? groupEl.textContent.replace(/▾/g, '').trim() + '  ·  ' + page : page;
+      var header = document.querySelector('.page-header');
+      var p = document.createElement('p');
+      p.className = 'crumbs';
+      p.textContent = crumb;
+      if (header) header.insertBefore(p, header.firstChild);
+    })();
+
     // global topbar search: autocomplete + Enter jumps to the stock report.
     // "/" focuses it from anywhere (unless already typing).
     (function () {
@@ -76,7 +185,7 @@
         event.preventDefault();
         input.focus();
       });
-    });
+    })();
 
     // recently viewed symbols (written by the fundamentals page, read anywhere)
     window.RS.pushRecent = function (symbol, market) {
@@ -93,55 +202,6 @@
       try { return JSON.parse(localStorage.getItem('recentSymbols') || '[]'); }
       catch (e) { return []; }
     };
-  });
-        actives.slice(1).forEach(function (link) { link.classList.remove('active'); });
-      }
-    })();
-
-    // grouped dropdown menus: click toggles, Esc / outside-click closes
-    function closeGroups(except) {
-      document.querySelectorAll('.nav-group.open').forEach(function (group) {
-        if (group !== except) {
-          group.classList.remove('open');
-          var btn = group.querySelector('.nav-drop');
-          if (btn) btn.setAttribute('aria-expanded', 'false');
-        }
-      });
-    }
-    document.querySelectorAll('.nav-drop').forEach(function (button) {
-      button.addEventListener('click', function (event) {
-        event.stopPropagation();
-        var group = button.closest('.nav-group');
-        var willOpen = !group.classList.contains('open');
-        closeGroups(group);
-        group.classList.toggle('open', willOpen);
-        button.setAttribute('aria-expanded', String(willOpen));
-      });
-    });
-    document.addEventListener('click', function () { closeGroups(null); });
-    document.addEventListener('keydown', function (event) {
-      if (event.key === 'Escape') closeGroups(null);
-    });
-
-    // propagate the active page up to its group button
-    document.querySelectorAll('.nav-menu a.active').forEach(function (link) {
-      var button = link.closest('.nav-group')?.querySelector('.nav-drop');
-      if (button) button.classList.add('active');
-    });
-
-    // breadcrumb eyebrow derived from the nav structure (no per-page edits)
-    (function () {
-      var active = document.querySelector('.nav-menu a.active') || document.querySelector('.nav > a.active');
-      if (!active) return;
-      var page = active.textContent.trim();
-      var groupEl = active.closest('.nav-group')?.querySelector('.nav-drop');
-      var crumb = groupEl ? groupEl.textContent.replace(/▾/g, '').trim() + '  ·  ' + page : page;
-      var header = document.querySelector('.page-header');
-      var p = document.createElement('p');
-      p.className = 'crumbs';
-      p.textContent = crumb;
-      if (header) header.insertBefore(p, header.firstChild);
-    })();
   });
 
   window.RS = window.RS || {};

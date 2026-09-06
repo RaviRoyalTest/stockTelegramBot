@@ -9,65 +9,114 @@
   <div class="grid grid-4">
     <div class="card stat">
       <div class="label">Investment types</div>
-      <div class="value">5</div>
-    </div>
-    <div class="card stat">
-      <div class="label">Stock tools</div>
-      <div class="value">8</div>
+      <div class="value">4</div>
     </div>
     <div class="card stat">
       <div class="label">Calculators</div>
-      <div class="value">7</div>
+      <div class="value">8</div>
     </div>
     <div class="card stat">
       <div class="label">Checklists</div>
-      <div class="value">4</div>
+      <div class="value">5</div>
+    </div>
+    <div class="card stat">
+      <div class="label">Live analyses</div>
+      <div class="value">3</div>
     </div>
   </div>
 
-  <div class="section-grid section">
-    <section class="card" aria-labelledby="hStocks">
-      <h2 id="hStocks">📈 Stocks</h2>
-      <p class="muted">Average calculator, profit calculator + simulator, loss-recovery table, portfolio P&amp;L with live prices — plus live details, movers, watchlist and the auto-scorecard.</p>
-      <div class="pill-row">
-        <span class="pill">Average</span><span class="pill">Profit %</span><span class="pill">Recovery</span><span class="pill">Portfolio P&amp;L</span>
+  <!-- ============ CALCULATORS & TOOLS ============ -->
+  <h2 class="hub-heading">🧮 Calculators &amp; tools</h2>
+  <div class="section-grid">
+    <section class="card hub-card" aria-labelledby="hStocks">
+      <h2 id="hStocks">📈 Stock tools</h2>
+      <p class="muted">Everything for analysing and planning a stock position.</p>
+      <div class="hub-links">
+        <a href="/invest/stocks#average-calculator">🧮 Stock average calculator<span class="hub-go">→</span></a>
+        <a href="/invest/stocks#profit-calculator">💹 Profit % + XIRR + simulator<span class="hub-go">→</span></a>
+        <a href="/invest/stocks#loss-recovery">📉 Loss recovery table<span class="hub-go">→</span></a>
+        <a href="/invest/stocks#holdings-pnl">📊 Holdings P&amp;L (Zerodha sheet)<span class="hub-go">→</span></a>
       </div>
-      <p style="margin:12px 0 0;"><a class="btn btn-primary" href="/invest/stocks">Explore Stocks</a></p>
     </section>
 
-    <section class="card" aria-labelledby="hMF">
-      <h2 id="hMF">🏦 Mutual Funds</h2>
-      <p class="muted">SIP and lumpsum returns, SWP duration, sustainable withdrawal, yearly breakdown — and the 18-point fund checklist.</p>
-      <div class="pill-row">
-        <span class="pill">SIP</span><span class="pill">Lumpsum</span><span class="pill">SWP</span><span class="pill">Checklist</span>
+    <section class="card hub-card" aria-labelledby="hMF">
+      <h2 id="hMF">🏦 Mutual funds</h2>
+      <p class="muted">Plan SIP / lumpsum growth and withdrawals.</p>
+      <div class="hub-links">
+        <a href="/invest/mutual-funds">💰 SIP &amp; lumpsum returns<span class="hub-go">→</span></a>
+        <a href="/invest/mutual-funds">💸 SWP sustainability<span class="hub-go">→</span></a>
+        <a href="/invest/mutual-funds">📊 Period-by-period breakdown<span class="hub-go">→</span></a>
       </div>
-      <p style="margin:12px 0 0;"><a class="btn btn-primary" href="/invest/mutual-funds">Explore Mutual Funds</a></p>
     </section>
 
-    <section class="card" aria-labelledby="hBonds">
-      <h2 id="hBonds">🧾 Bonds &amp; Fixed Income</h2>
-      <p class="muted">Bond basics, the before-starting primer and the bond evaluation checklist.</p>
-      <div class="pill-row">
-        <span class="pill">Basics</span><span class="pill">Primer</span><span class="pill">Checklist</span>
-      </div>
-      <p style="margin:12px 0 0;"><a class="btn btn-primary" href="/invest/bonds">Learn Bonds</a></p>
-    </section>
-
-    <section class="card" aria-labelledby="hComm">
+    <section class="card hub-card" aria-labelledby="hComm">
       <h2 id="hComm">🥇 Commodities</h2>
-      <p class="muted">Gold–silver ratio with live prices, recommendation, historical context and guidelines.</p>
-      <div class="pill-row">
-        <span class="pill">Live prices</span><span class="pill">Ratio</span><span class="pill">Signal</span>
+      <p class="muted">Gold–silver ratio with live prices and signals.</p>
+      <div class="hub-links">
+        <a href="/invest/commodities">⚖️ Gold vs silver ratio<span class="hub-go">→</span></a>
+        <a href="/invest/commodities">🔄 Live metal prices<span class="hub-go">→</span></a>
+        <a href="/invest/commodities">📚 Ratio history &amp; guidelines<span class="hub-go">→</span></a>
       </div>
-      <p style="margin:12px 0 0;"><a class="btn btn-primary" href="/invest/commodities">Explore Commodities</a></p>
     </section>
   </div>
 
+  <!-- ============ CHECKLISTS ============ -->
+  <h2 class="hub-heading">✅ Checklists <span class="muted" style="font-weight:400;">(saved on this device)</span></h2>
+  <div class="section-grid">
+    <section class="card hub-card" aria-labelledby="hCheckStock">
+      <h2 id="hCheckStock">📈 Stocks</h2>
+      <p class="muted">32-point evaluation — personal criteria plus AI financial-health, valuation, quality and risk.</p>
+      <div class="hub-links">
+        <a href="/invest/stocks#stock-checklist">✅ Stock investment checklist<span class="hub-go">→</span></a>
+      </div>
+    </section>
+
+    <section class="card hub-card" aria-labelledby="hCheckMF">
+      <h2 id="hCheckMF">🏦 Mutual funds</h2>
+      <p class="muted">18-point fund scorecard — Sharpe, alpha, expense ratio, AUM, ratings and more.</p>
+      <div class="hub-links">
+        <a href="/invest/mutual-funds#mf-checklist">📋 Mutual fund checklist<span class="hub-go">→</span></a>
+      </div>
+    </section>
+
+    <section class="card hub-card" aria-labelledby="hCheckBonds">
+      <h2 id="hCheckBonds">🧾 Bonds</h2>
+      <p class="muted">Before-starting primer plus the bond evaluation checklist.</p>
+      <div class="hub-links">
+        <a href="/invest/bonds">🎓 Before-starting checklist<span class="hub-go">→</span></a>
+        <a href="/invest/bonds">🧾 Bond evaluation checklist<span class="hub-go">→</span></a>
+      </div>
+    </section>
+  </div>
+
+  <!-- ============ LEARN ============ -->
+  <h2 class="hub-heading">🎓 Learn</h2>
+  <div class="section-grid">
+    <section class="card hub-card" aria-labelledby="hLearnBonds">
+      <h2 id="hLearnBonds">🧾 Bonds &amp; fixed income</h2>
+      <p class="muted">What bonds are, key terms, why hold them and the watch-outs.</p>
+      <div class="hub-links">
+        <a href="/invest/bonds">📖 Bond basics<span class="hub-go">→</span></a>
+      </div>
+    </section>
+
+    <section class="card hub-card" aria-labelledby="hLearnComm">
+      <h2 id="hLearnComm">🥇 Commodities</h2>
+      <p class="muted">How the gold–silver ratio works and how investors use it.</p>
+      <div class="hub-links">
+        <a href="/invest/commodities">📖 Understanding the ratio<span class="hub-go">→</span></a>
+      </div>
+    </section>
+  </div>
+
+  <!-- ============ LIVE ANALYSIS ============ -->
   <section class="card section" aria-labelledby="hLive">
-    <h2 id="hLive">Already live on this app</h2>
+    <h2 id="hLive">⚡ Already live on this app</h2>
+    <p class="muted">Pair the calculators with real market data — these pages fetch live prices for free.</p>
     <div class="form-row">
       <a class="btn" href="/fundamentals">💹 Current stock details</a>
       <a class="btn" href="/movers">🚀 Top losers &amp; gainers</a>
+      <a class="btn" href="/market">📊 Screener</a>
       <a class="btn" href="/watchlist">📌 My favourite stocks</a>
       <a class="btn" href="/checklist">✅ Auto scorecard</a>
       <a class="btn" href="/forecast">🔭 Forecast</a>
