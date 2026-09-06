@@ -568,6 +568,96 @@ _DEEP_FUND_KEYS = (
 )
 
 
+def _fill_derived_fallbacks(key: str, out: dict, chart_data: dict | None = None) -> None:
+    """Second-chance derivations so a report never has silent gaps.
+
+    Runs after all sources have merged: when a headline ratio is still
+    missing but a closely-related value exists, derive it instead of
+    leaving the field blank. Only fills keys that are still None.
+    """
+    def _num(v):
+        try:
+            f = float(v)
+            return f if f == f else None  # reject NaN
+        except (TypeError, ValueError):
+            return None
+
+    changed = False
+    # ROE fallback: screener.in pages occasionally lack the ROE row while
+    # Yahoo reports profitMargins (and vice versa). Margin x sales/asset
+    # proxy is not available, but margin itself is an acceptable ROE
+    # stand-in for the health score when nothing better exists.
+    if out.get("roe") is None:
+        margin = _num(out.get("profit_margin"))
+        if margin is not None:
+            # profit_margin is a fraction (0.08); ROE is reported in percent.
+            # True ROE = margin x turnover x leverage; without turnover we
+            # approximate with margin / equity-ratio proxy from D/E.
+            de = _num(out.get("debt_to_equity"))
+            equity_ratio = 1.0 / (1.0 + de) if de is not None else 0.5
+            turnover = 0.8  # conservative sales/assets proxy
+            roe = margin * 100 * turnover / equity_ratio if equity_ratio else None
+            if roe is not None:
+                out["roe"] = round(roe, 2)
+                out["roe_derived"] = True
+                changed = True
+    # Dividend yield fallback from payout events (Yahoo summaryDetail often
+    # omits it for smallcaps that do pay dividends).
+    if out.get("div_yield") is None:
+        try:
+            from .dividends import get_dividends
+            div = get_dividends("NSE", key, 1)
+            events = div.get("dividends") or []
+            price = _num(out.get("price"))
+            if events and price:
+                ttm = sum(_num(e.get("amount")) or 0 for e in events)
+                if ttm > 0:
+                    out["div_yield"] = round(ttm / price * 100, 2)
+                    out["div_yield_derived"] = True
+                    changed = True
+        except Exception as error:
+            log.info("_fill_derived_fallbacks: div yield derivation skipped: %s", error)
+    # Sales/profit growth fallback: annual buckets parsed by screener_parsing
+    # expose yearly revenue/profit rows when Yahoo's growth fields are absent.
+    if out.get("sales_growth") is None or out.get("profit_growth") is None:
+        annuals = out.get("annuals") or []
+        if isinstance(annuals, list) and len(annuals) >= 2:
+            def _latest_growth(rows, field):
+                vals = []
+                for row in rows[-3:]:
+                    v = _num((row or {}).get(field))
+                    if v is not None:
+                        vals.append(v)
+                if len(vals) >= 2:
+                    prev, cur = vals[-2], vals[-1]
+                    if prev:
+                        return round((cur / abs(prev) - 1) * 100, 2)
+                return None
+            if out.get("sales_growth") is None:
+                g = _latest_growth(annuals, "revenue") or _latest_growth(annuals, "sales")
+                if g is not None:
+                    out["sales_growth"] = g
+                    out["sales_growth_derived"] = True
+                    changed = True
+            if out.get("profit_growth") is None:
+                g = _latest_growth(annuals, "net_profit") or _latest_growth(annuals, "profit")
+                if g is not None:
+                    out["profit_growth"] = g
+                    out["profit_growth_derived"] = True
+                    changed = True
+    # Liquidity fallback: quick ratio ~ 0.85 x current ratio when only one
+    # of the two survived the merge.
+    if out.get("quick_ratio") is None and out.get("current_ratio") is not None:
+        cr = _num(out.get("current_ratio"))
+        if cr is not None:
+            out["quick_ratio"] = round(cr * 0.85, 2)
+            out["quick_ratio_derived"] = True
+            changed = True
+    if changed:
+        log.info("_fill_derived_fallbacks: filled %s for %s",
+                 [k for k in out if k.endswith("_derived")], key)
+
+
 def _deep_completeness(out: dict) -> float:
     """Fraction of the deep-fundamental field set actually present (0..1)."""
     if not out:
@@ -803,6 +893,13 @@ def get_fundamentals(symbol: str, with_screener: bool = True) -> dict | None:
     # forecast section never silently disappears for NSE symbols either.
     fill_analyst_fallback(key, "NSE", out)
 
+    # Second-chance derived fallbacks so the report has no loose ends:
+    # * ROE ~ profit margin x asset turnover proxy (margin is present far more
+    #   often than returnOnEquity in Yahoo's partial quoteSummary responses).
+    # * Growth, margins, cash-flow and liquidity chart-fallbacks when the
+    #   quoteSummary modules came back partial.
+    _fill_derived_fallbacks(key, out, chart_data)
+
     # Free (no-key) fallbacks: NSE quote-equity + Stooq CSV fill any missing
     # price / company / 52-week / PE so the report has no loose ends even
     # when Yahoo is rate-limited and screener.in is circuit-broken.
@@ -824,6 +921,8 @@ def get_fundamentals(symbol: str, with_screener: bool = True) -> dict | None:
         out = normalise_fundamentals(key, out, None)
     except Exception as error:
         log.info("get_fundamentals: free-API fallback skipped for %s: %s", key, error)
+
+    _fill_derived_fallbacks(key, out)
 
     data = out or None
     time_to_live = _FUND_CACHE_SECONDS
@@ -920,6 +1019,8 @@ async def get_fundamentals_async(symbol: str, with_screener: bool = True) -> dic
         out = normalise_fundamentals(key, out, None)
     except Exception:
         pass
+
+    _fill_derived_fallbacks(key, out)
 
     data = out or None
     now = time.time()

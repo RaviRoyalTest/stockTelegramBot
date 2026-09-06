@@ -469,36 +469,54 @@ async def api_quote(symbol: str | None = Query(None), exchange: str = Query("NSE
 async def api_history(
     symbol: str | None = Query(None),
     exchange: str = Query("NSE"),
-    timeframe: str = Query("1d"),
+    timeframe: str = Query(""),
+    range: str = Query(""),
 ):
     """OHLCV history for the customizable price chart (Yahoo -> Stooq fallback).
 
-    Timeframes: 5m, 15m, 30m, 1h, 4h, 1d, 1w, 1mo (get_ohlc); the stooq
-    fallback only serves daily bars. Returns {'symbol','timeframe','bars':
-    {timestamp,open,high,low,close,volume,...},'source','downsampled'} with
-    at most ~260 bars, downsampled server-side so the canvas chart stays
-    fast.
+    Range mode (chart toolbar): range=1d|5d|1mo|6mo|1y|5y|max — e.g. 1mo is
+    one month of hourly bars (not yearly monthly candles). Timeframe mode
+    (scanner timeframes): timeframe=5m..1mo. Returns {'symbol','range',
+    'timeframe','bars':{timestamp,open,high,low,close,volume,...},'source',
+    'downsampled'} with at most ~260 bars, downsampled server-side so the
+    canvas chart stays fast.
     """
     if not symbol:
         raise HTTPException(status_code=400, detail="symbol is required")
     key = symbol.strip().upper().removesuffix(".NS").removesuffix(".BO")
     ex = (exchange or "NSE").strip().upper()
-    tf = (timeframe or "1d").strip().lower()
-    if tf not in ("5m", "15m", "30m", "1h", "4h", "1d", "1w", "1mo"):
+    range_key = (range or "").strip().lower()
+    tf = (timeframe or "").strip().lower()
+    if range_key not in ("1d", "5d", "1mo", "6mo", "1y", "5y", "max"):
+        range_key = ""
+    if not range_key and tf not in ("5m", "15m", "30m", "1h", "4h", "1d", "1w", "1mo"):
         tf = "1d"
     try:
-        bars = await asyncio.to_thread(sources.get_ohlc, ex, key, tf)
+        bars = None
         source = "yahoo"
+        used_range = range_key
+        if range_key:
+            bars = await asyncio.to_thread(sources.get_chart_ohlc, ex, key, range_key)
+        else:
+            bars = await asyncio.to_thread(sources.get_ohlc, ex, key, tf)
         if not bars or not bars.get("close"):
-            if tf != "1d":
-                return JSONResponse({"symbol": key, "timeframe": tf, "bars": None, "source": "none"})
-            try:
-                bars = await asyncio.to_thread(sources.get_stooq_history, key, ex)
-                source = "stooq"
-            except Exception:
-                bars = None
-        if not bars:
-            return JSONResponse({"symbol": key, "timeframe": tf, "bars": None, "source": "none"})
+            # Fallback ladder: chart-range miss -> nearest scanner timeframe;
+            # both miss and daily wanted -> stooq daily CSV (no intraday).
+            ladder = {
+                "1d": "5m", "5d": "15m", "1mo": "1h", "6mo": "1d",
+                "1y": "1d", "5y": "1w", "max": "1mo",
+            }
+            fallback_tf = ladder.get(range_key) or tf or "1d"
+            if fallback_tf != "1d" and range_key:
+                bars = await asyncio.to_thread(sources.get_ohlc, ex, key, fallback_tf)
+            if (not bars or not bars.get("close")) and (range_key in ("", "6mo", "1y", "5y", "max") or tf == "1d"):
+                try:
+                    bars = await asyncio.to_thread(sources.get_stooq_history, key, ex)
+                    source = "stooq"
+                except Exception:
+                    bars = None
+            if not bars:
+                return JSONResponse({"symbol": key, "range": range_key or None, "timeframe": tf or None, "bars": None, "source": "none"})
         # Downsample to <= 260 points so the canvas chart stays fast.
         closes = bars.get("close") or []
         downsampled = len(closes) > 260
@@ -510,7 +528,8 @@ async def api_history(
         bars["source"] = bars.get("source") or source
         return JSONResponse({
             "symbol": key,
-            "timeframe": tf,
+            "range": used_range or None,
+            "timeframe": tf or None,
             "bars": bars,
             "source": bars.get("source"),
             "downsampled": downsampled,

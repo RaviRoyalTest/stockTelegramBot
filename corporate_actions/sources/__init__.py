@@ -27,7 +27,7 @@ from .nse import (
     get_nse_stock_list_cached,
     search_stocks,
 )
-from .ohlc import OHLC_TIMEFRAMES, _HIGHER_TIMEFRAME_LADDER, get_index_ohlc, get_ohlc
+from .ohlc import OHLC_TIMEFRAMES, _HIGHER_TIMEFRAME_LADDER, get_chart_ohlc, get_index_ohlc, get_ohlc
 from .providers import get_company_profile, search_market_data
 from .quotes import get_quote
 from .rights import RIGHTS_OFFER_WINDOWS, attach_rights_windows

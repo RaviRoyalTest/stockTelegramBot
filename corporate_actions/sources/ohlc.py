@@ -119,6 +119,64 @@ _index_ohlc_cache: dict = {}
 _INDEX_OHLC_CACHE_SECONDS = 180  # seconds
 
 
+_chart_range_cache: dict = {}
+_CHART_RANGE_CACHE_SECONDS = 120  # seconds
+
+# Chart-friendly range/interval combos (Groww-style toolbar).
+# Keys are 'range' values served by /api/history; values are
+# (yahoo_interval, yahoo_range) pairs.
+CHART_RANGES = {
+    "1d": ("5m", "1d"),
+    "5d": ("15m", "5d"),
+    "1mo": ("1h", "1mo"),
+    "6mo": ("1d", "6mo"),
+    "1y": ("1d", "1y"),
+    "5y": ("1wk", "5y"),
+    "max": ("1mo", "max"),
+}
+
+
+def get_chart_ohlc(exchange: str, symbol: str, range_key: str) -> dict | None:
+    """OHLC bars for a dashboard-chart range (e.g. '1y' = daily bars, 1y).
+
+    Unlike get_ohlc (scanner timeframes that couple interval to a fixed
+    lookback), this takes explicit chart ranges so '1mo' means one month of
+    hourly bars instead of ten years of monthly candles. Same return shape
+    and caching pattern as get_ohlc.
+    """
+    range_key = (range_key or "1d").lower()
+    combo = CHART_RANGES.get(range_key)
+    if not combo:
+        log.info("chart ohlc: unknown range %r for %s:%s", range_key, exchange, symbol)
+        return None
+    interval, range_ = combo
+    key = (exchange.upper(), symbol.upper(), interval, range_)
+    now = time.time()
+    cached = _chart_range_cache.get(key)
+    if cached and now - cached["timestamp"] < _CHART_RANGE_CACHE_SECONDS:
+        return cached["data"]
+    suffix = "" if exchange.upper() == "US" else (".BO" if exchange.upper() == "BSE" else ".NS")
+    url = (
+        f"https://query1.finance.yahoo.com/v8/finance/chart/{symbol}{suffix}"
+        f"?range={range_}&interval={interval}&includePrePost=false"
+    )
+    data = None
+    try:
+        _throttle_chart_req()
+        response = _quote_session().get(url, timeout=config.HTTP_TIMEOUT)
+        response.raise_for_status()
+        result = response.json()["chart"]["result"][0]
+        meta = result.get("meta") or {}
+        name = meta.get("longName") or meta.get("shortName") or symbol
+        data = _bars_from_response(result, name, exchange, symbol, interval, range_)
+        if data:
+            log.info("chart ohlc: %d %s/%s bars for %s:%s", len(data["timestamp"]), interval, range_, exchange, symbol)
+    except Exception as error:
+        log.info("chart ohlc failed for %s:%s (%s/%s) - %s", exchange, symbol, interval, range_, error)
+    _chart_range_cache[key] = {"timestamp": now, "data": data}
+    return data
+
+
 def get_index_ohlc(index_symbol: str, range_: str = "6mo",
                    interval: str = "1d") -> dict | None:
     """Return OHLC bars for a Yahoo index symbol (e.g. ^NSEI, ^INDIAVIX).

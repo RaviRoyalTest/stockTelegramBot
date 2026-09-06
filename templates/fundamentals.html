@@ -184,15 +184,14 @@
         <div class="chart-summary" id="rChartStats" aria-live="polite"></div>
       </div>
       <div class="chart-toolbar" role="toolbar" aria-label="Chart customization">
-        <div class="radio-pills" role="radiogroup" aria-label="Timeframe" id="chartTF">
-          <label><input type="radio" name="chartTF" value="5m" /> 5m</label>
-          <label><input type="radio" name="chartTF" value="15m" /> 15m</label>
-          <label><input type="radio" name="chartTF" value="30m" /> 30m</label>
-          <label><input type="radio" name="chartTF" value="1h" /> 1h</label>
-          <label><input type="radio" name="chartTF" value="4h" /> 4h</label>
-          <label><input type="radio" name="chartTF" value="1d" checked /> 1D</label>
-          <label><input type="radio" name="chartTF" value="1w" /> 1W</label>
-          <label><input type="radio" name="chartTF" value="1mo" /> 1M</label>
+        <div class="radio-pills" role="radiogroup" aria-label="Time range" id="chartTF">
+          <label><input type="radio" name="chartTF" value="1d" /> 1D</label>
+          <label><input type="radio" name="chartTF" value="5d" /> 5D</label>
+          <label><input type="radio" name="chartTF" value="1mo" checked /> 1M</label>
+          <label><input type="radio" name="chartTF" value="6mo" /> 6M</label>
+          <label><input type="radio" name="chartTF" value="1y" /> 1Y</label>
+          <label><input type="radio" name="chartTF" value="5y" /> 5Y</label>
+          <label><input type="radio" name="chartTF" value="max" /> MAX</label>
         </div>
         <div class="chart-toolbar-right">
           <div class="radio-pills" role="radiogroup" aria-label="Chart type" id="chartType">
@@ -349,7 +348,8 @@
       }
 
       // ---- customizable price chart ----
-      var chartState = { symbol: null, tf: '1d', type: 'line', sma: false, vol: false, bars: null };
+      var chartState = { symbol: null, tf: '1mo', type: 'line', sma: false, vol: false, bars: null };
+      var CHART_RANGES = { '1d': '1D', '5d': '5D', '1mo': '1M', '6mo': '6M', '1y': '1Y', '5y': '5Y', 'max': 'MAX' };
       try {
         var savedPrefs = JSON.parse(localStorage.getItem('RS.chartPrefs') || '{}');
         if (savedPrefs.tf && document.querySelector('#chartTF input[value="' + savedPrefs.tf + '"]')) chartState.tf = savedPrefs.tf;
@@ -398,13 +398,22 @@
         var d = new Date(ts * 1000);
         if (isNaN(d)) return '';
         try {
-          if (tf === '5m' || tf === '15m' || tf === '30m' || tf === '1h') {
-            return d.toLocaleString(undefined, { weekday: 'short', hour: '2-digit', minute: '2-digit' });
-          }
-          if (tf === '4h') return d.toLocaleDateString(undefined, { day: 'numeric', month: 'short' });
-          if (tf === '1d') return d.toLocaleDateString(undefined, { day: 'numeric', month: 'short' });
+          if (tf === '1d') return d.toLocaleString(undefined, { hour: '2-digit', minute: '2-digit' });
+          if (tf === '5d') return d.toLocaleString(undefined, { weekday: 'short', hour: '2-digit', minute: '2-digit' });
+          if (tf === '1mo' || tf === '6mo' || tf === '1y') return d.toLocaleDateString(undefined, { day: 'numeric', month: 'short' });
           return d.toLocaleDateString(undefined, { month: 'short', year: '2-digit' });
         } catch (e) { return d.toLocaleDateString(); }
+      }
+
+      function fmtFullTime(ts, tf) {
+        var d = new Date(ts * 1000);
+        if (isNaN(d)) return '';
+        try {
+          if (tf === '1d' || tf === '5d') {
+            return d.toLocaleString(undefined, { weekday: 'short', day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' });
+          }
+          return d.toLocaleDateString(undefined, { weekday: 'short', day: 'numeric', month: 'short', year: 'numeric' });
+        } catch (e) { return d.toLocaleString(); }
       }
 
       function renderChart() {
@@ -577,7 +586,8 @@
         // window stats
         var first = closes[0], lastC = closes[n - 1];
         var chg = (first && lastC) ? ((lastC / first - 1) * 100) : null;
-        var stats = n + ' ' + (chartState.tf === '1d' ? 'sessions' : 'bars') + ' · ' +
+        // stats strip uses the browser-side window change, not the axis label
+        var stats = n + ' ' + (chartState.tf === '1d' || chartState.tf === '5d' ? 'bars' : 'sessions') + ' · ' +
           (chg == null ? '' : (chg >= 0 ? '+' : '') + chg.toFixed(1) + '% over the window');
         if (chartState.sma && smas.length) {
           var s50 = smas[1].data[n - 1];
@@ -586,11 +596,116 @@
         document.getElementById('rChartStats').innerHTML = stats;
       }
 
+      // ---- Groww-style crosshair: price + date tooltip tracking the cursor ----
+      var crosshair = null; // {x, y, i} in CSS pixels
+
+      function chartIndexAt(cssX) {
+        var bars = chartState.bars;
+        if (!bars || !bars.close || bars.close.length < 2) return -1;
+        var W = document.getElementById('rChart').clientWidth;
+        var padL = 8, padR = 62;
+        var plotW = W - padL - padR;
+        var frac = (cssX - padL) / plotW;
+        var i = Math.round(frac * (bars.close.length - 1));
+        return Math.max(0, Math.min(bars.close.length - 1, i));
+      }
+
+      function drawCrosshair() {
+        renderChart();
+        if (!crosshair) return;
+        var bars = chartState.bars;
+        var canvas = document.getElementById('rChart');
+        if (!bars || !bars.close) return;
+        var ctx = canvas.getContext('2d');
+        var dpr = window.devicePixelRatio || 1;
+        var W = canvas.clientWidth, H = canvas.clientHeight;
+        ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+        var c = chartColors();
+        var padL = 8, padR = 62, padT = 12, padB = 22;
+        var plotW = W - padL - padR, plotH = H - padT - padB;
+        var i = crosshair.i;
+        var px = padL + plotW * (bars.close.length === 1 ? 0.5 : i / (bars.close.length - 1));
+        var css = getComputedStyle(document.documentElement);
+        function v(name, fb) { return css.getPropertyValue(name).trim() || fb; }
+        // vertical line
+        ctx.strokeStyle = v('--muted', '#64748b');
+        ctx.setLineDash([3, 3]); ctx.lineWidth = 1;
+        ctx.beginPath(); ctx.moveTo(px, padT); ctx.lineTo(px, padT + plotH); ctx.stroke();
+        ctx.setLineDash([]);
+        // axis date chip
+        var label = fmtFullTime(bars.timestamp && bars.timestamp[i], chartState.tf);
+        ctx.font = 'bold 10px Inter, sans-serif';
+        var tw = ctx.measureText(label).width;
+        var chipY = padT + plotH + 2;
+        ctx.fillStyle = v('--text', '#0f172a');
+        ctx.fillRect(Math.min(Math.max(px - tw / 2 - 5, padL), W - padR - tw - 10), chipY, tw + 10, 15);
+        ctx.fillStyle = v('--card', '#fff');
+        ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+        ctx.fillText(label, Math.min(Math.max(px, padL + tw / 2 + 5), W - padR - tw / 2 - 5), chipY + 8);
+      }
+
+      function showCrosshairInfo(i) {
+        var bars = chartState.bars;
+        if (!bars || !bars.close) return;
+        var el = document.getElementById('rChartStats');
+        var ts = bars.timestamp && bars.timestamp[i];
+        var parts = ['<strong>' + fmtFullTime(ts, chartState.tf) + '</strong>'];
+        var o = bars.open && bars.open[i], h = bars.high && bars.high[i],
+            l = bars.low && bars.low[i], cl = bars.close[i], vol = bars.volume && bars.volume[i];
+        if (o != null) parts.push('O ' + fmt(o));
+        if (h != null) parts.push('H ' + fmt(h));
+        if (l != null) parts.push('L ' + fmt(l));
+        if (cl != null) parts.push('C <strong>' + fmt(cl) + '</strong>');
+        if (vol) parts.push('Vol ' + (vol >= 1e7 ? (vol / 1e7).toFixed(1) + 'Cr' : vol >= 1e5 ? (vol / 1e5).toFixed(1) + 'L' : vol >= 1e3 ? (vol / 1e3).toFixed(1) + 'K' : vol));
+        el.innerHTML = parts.join(' · ');
+      }
+
+      function hideCrosshairInfo() {
+        var bars = chartState.bars;
+        if (!bars || !bars.close) return;
+        var n = bars.close.length, first = bars.close[0], lastC = bars.close[n - 1];
+        var chg = (first && lastC) ? ((lastC / first - 1) * 100) : null;
+        var stats = n + ' ' + (chartState.tf === '1d' || chartState.tf === '5d' ? 'bars' : 'sessions') + ' · ' +
+          (chg == null ? '' : (chg >= 0 ? '+' : '') + chg.toFixed(1) + '% over the window');
+        if (chartState.sma) {
+          var s50 = smaSeries(bars.close, 50)[n - 1];
+          if (s50 != null) stats += ' · vs SMA50 ' + (lastC >= s50 ? '<span class="pos">above</span>' : '<span class="neg">below</span>');
+        }
+        document.getElementById('rChartStats').innerHTML = stats;
+      }
+
+      (function initCrosshair() {
+        var canvas = document.getElementById('rChart');
+        if (!canvas) return;
+        canvas.addEventListener('mousemove', function (ev) {
+          var rect = canvas.getBoundingClientRect();
+          var i = chartIndexAt(ev.clientX - rect.left);
+          if (i < 0) return;
+          crosshair = { i: i };
+          drawCrosshair();
+          showCrosshairInfo(i);
+        });
+        canvas.addEventListener('mouseleave', function () {
+          crosshair = null;
+          drawCrosshair();
+          hideCrosshairInfo();
+        });
+        canvas.addEventListener('touchstart', function (ev) {
+          if (!ev.touches.length) return;
+          var rect = canvas.getBoundingClientRect();
+          var i = chartIndexAt(ev.touches[0].clientX - rect.left);
+          if (i < 0) return;
+          crosshair = { i: i };
+          drawCrosshair();
+          showCrosshairInfo(i);
+        }, { passive: true });
+      })();
+
       function loadChart(symbol) {
         chartState.symbol = symbol;
         document.getElementById('rChartNote').textContent = 'Loading price history…';
         document.getElementById('rChartStats').textContent = '';
-        fetch('/api/history?symbol=' + encodeURIComponent(symbol) + '&timeframe=' + encodeURIComponent(chartState.tf))
+        fetch('/api/history?symbol=' + encodeURIComponent(symbol) + '&range=' + encodeURIComponent(chartState.tf))
           .then(function (r) { return r.ok ? r.json() : null; })
           .then(function (hj) {
             if (!hj || chartState.symbol !== symbol) return;
@@ -601,12 +716,12 @@
               renderChart();
               document.getElementById('rChartNote').textContent =
                 (hj.downsampled ? 'Downsampled — ' : '') +
-                (({ '5m': '5-minute', '15m': '15-minute', '30m': '30-minute', '1h': 'hourly', '4h': '4-hour', '1d': 'daily', '1w': 'weekly', '1mo': 'monthly' })[chartState.tf] || '') +
-                ' candles from free sources.';
+                (CHART_RANGES[chartState.tf] || chartState.tf) + ' range · ' +
+                'from free sources.';
             } else {
               chartState.bars = null;
               document.getElementById('rChartNote').textContent =
-                'No ' + chartState.tf + ' history from free sources right now — try 1D.';
+                'No ' + (CHART_RANGES[chartState.tf] || chartState.tf) + ' history from free sources right now.';
             }
           })
           .catch(function () { /* chart is best-effort */ });
@@ -806,10 +921,17 @@
         var keyFields = ['price', 'pe', 'forward_pe', 'price_to_book', 'div_yield', 'roe', 'roce',
           'debt_to_equity', 'mcap_cr', 'wk52_high', 'rsi', 'sma_50', 'promoter_pct', 'sector_pe',
           'target_mean', 'current_ratio', 'free_cashflow', 'ebitda', 'book_value'];
-        var have = keyFields.filter(function (k) { return f[k] != null || q[k] != null; }).length;
+        var fieldLabels = { price: 'Price', pe: 'P/E', forward_pe: 'Fwd P/E', price_to_book: 'P/B',
+          div_yield: 'Div yield', roe: 'ROE', roce: 'ROCE', debt_to_equity: 'D/E', mcap_cr: 'Mkt cap',
+          wk52_high: '52W high', rsi: 'RSI', sma_50: 'SMA 50', promoter_pct: 'Promoter', sector_pe: 'Sector P/E',
+          target_mean: 'Target', current_ratio: 'Current ratio', free_cashflow: 'FCF', ebitda: 'EBITDA', book_value: 'Book value' };
+        var missing = keyFields.filter(function (k) { return f[k] == null && q[k] == null; });
+        var have = keyFields.length - missing.length;
         var comp = document.getElementById('rCompleteness');
         comp.innerHTML = 'Coverage <strong>' + have + '/' + keyFields.length + '</strong> key fields' +
-          (have < keyFields.length ? ' <span class="muted">— missing fields mean every free source was down, try ♻️ Refresh in a bit.</span>' : ' <span class="pos">— complete.</span>');
+          (have === keyFields.length ? ' <span class="pos">— complete.</span>' :
+            ' <span class="muted">— not in free sources:</span> ' +
+            missing.map(function (k) { return '<span class="pill" title="Try ♻️ Refresh — sources are retried sooner when something is missing.">' + esc(fieldLabels[k] || k) + '</span>'; }).join(' '));
 
         // ---- price & movement ----
         var posVs50 = (f.sma_50 != null && price != null) ? (price >= f.sma_50 ? '<span class="pos">Above</span>' : '<span class="neg">Below</span>') : null;
