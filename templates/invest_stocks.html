@@ -57,4 +57,20 @@
       </div>
     </section>
   </div>
+
+  <script>
+    // Legacy deep links: old bookmarks like /invest/stocks#average-calculator
+    // now route to the tool's own page.
+    (function () {
+      var map = {
+        'average-calculator': '/invest/stocks/average',
+        'profit-calculator': '/invest/stocks/profit',
+        'loss-recovery': '/invest/stocks/recovery',
+        'holdings-pnl': '/invest/stocks/pnl',
+        'stock-checklist': '/invest/stocks/checklist'
+      };
+      var h = (location.hash || '').replace('#', '');
+      if (map[h]) location.replace(map[h]);
+    })();
+  </script>
 {% endblock %}
