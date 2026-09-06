@@ -177,6 +177,16 @@
       </section>
     </div>
 
+    <!-- investment checklist: full width -->
+    <section class="card section" aria-labelledby="hCheck">
+      <div class="chart-head">
+        <h2 id="hCheck">✅ Investment checklist <span class="muted">· 32-point scorecard</span></h2>
+        <a class="btn btn-sm" id="rCheckLink" href="#">Open full checklist →</a>
+      </div>
+      <div class="stat-strip" id="rCheckStats" hidden></div>
+      <div id="rCheckBody" aria-live="polite"><p class="muted">Loading scorecard…</p></div>
+    </section>
+
     <!-- price chart: full width, customizable -->
     <section class="card section" aria-labelledby="hChart">
       <div class="chart-head">
@@ -826,6 +836,46 @@
               }).join('') + '</ul>' : '<p class="muted">No corporate actions found for ' + esc(symbol) + '.</p>';
           }
         } catch (e) { /* actions are best-effort */ }
+        // Investment checklist (32-point scorecard) — same data as /checklist.
+        try {
+          var ckr = await fetch('/api/checklist?symbol=' + encodeURIComponent(symbol) + '&market=' + encodeURIComponent(market || 'in'));
+          var ckOk = ckr.ok;
+          var ckd = ckOk ? await ckr.json() : {};
+          var ckLines = ckd.lines || [];
+          var ckBody = document.getElementById('rCheckBody');
+          var ckStats = document.getElementById('rCheckStats');
+          document.getElementById('rCheckLink').href = '/checklist?symbol=' + encodeURIComponent(symbol);
+          if (!ckOk || !ckLines.length) {
+            ckStats.hidden = true;
+            ckBody.innerHTML = '<p class="muted">Checklist unavailable for ' + esc(symbol) + ' right now.</p>';
+          } else {
+            var pass = 0, fail = 0, manual = 0;
+            ckLines.forEach(function (l) {
+              var s = String(l || '').trim();
+              if (s.indexOf(' — ') < 0) return;
+              if (/^[✅🟢]/u.test(s)) pass++;
+              else if (/^[❌🔴]/u.test(s)) fail++;
+              else if (/^[⚪🟡]/u.test(s)) manual++;
+            });
+            if (pass + fail > 0) {
+              var total = pass + fail;
+              var pct = Math.round(pass / total * 100);
+              var tone = pct >= 60 ? 'pos' : pct >= 40 ? '' : 'neg';
+              ckStats.hidden = false;
+              ckStats.innerHTML =
+                '<div class="stat-chip"><span class="k">Score</span><span class="v ' + tone + '">' + pass + '/' + total + '</span></div>' +
+                '<div class="stat-chip"><span class="k">Pass</span><span class="v pos">' + pass + '</span></div>' +
+                '<div class="stat-chip"><span class="k">Fail</span><span class="v neg">' + fail + '</span></div>' +
+                '<div class="stat-chip"><span class="k">Manual review</span><span class="v">' + manual + '</span></div>' +
+                '<div class="stat-chip"><span class="k">Quality</span><span class="v ' + tone + '">' + pct + '%</span></div>';
+            } else { ckStats.hidden = true; }
+            ckBody.innerHTML = RS.renderReportLines(ckLines);
+          }
+        } catch (e) {
+          try {
+            document.getElementById('rCheckBody').innerHTML = '<p class="muted">Checklist unavailable right now.</p>';
+          } catch (e2) {}
+        }
         try {
           loadChart(symbol);
         } catch (e) { /* chart is best-effort */ }
