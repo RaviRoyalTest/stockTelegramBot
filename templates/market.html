@@ -6,7 +6,7 @@
     <p class="sub">Filter the full index universe by valuation, quality, yield and momentum — every filter maps to a free-data field, so no screen ends in blanks. Click a column header to sort.</p>
   </div>
 
-  <section class="card" aria-labelledby="presetsHeading">
+  <section class="card lookup-hero" aria-labelledby="presetsHeading">
     <h2 id="presetsHeading">One-tap strategies</h2>
     <div class="form-row" id="presetRow">
       <button class="btn" data-preset="value">💎 Value (P/E&lt;20 · ROE&gt;15)</button>
@@ -27,80 +27,68 @@
         <button class="btn btn-sm" type="button" id="loadFilters">📂 Load saved</button>
       </div>
     </div>
-    <form id="filtersForm" class="form-row" style="margin-top:12px;">
-      <div class="field">
-        <label for="universe">Universe</label>
-        <select id="universe">
-          <option value="nifty500" selected>NIFTY 500</option>
-          <option value="nifty100">NIFTY 100</option>
-          <option value="nasdaq100">NASDAQ 100</option>
-          <option value="sp500">S&amp;P 500</option>
-        </select>
+    <form id="filtersForm" style="margin-top:12px;">
+      <div class="form-row" style="margin-bottom:12px;">
+        <div class="field" style="min-width:180px;">
+          <label for="universe">Universe</label>
+          <select id="universe">
+            <option value="nifty500" selected>NIFTY 500</option>
+            <option value="nifty100">NIFTY 100</option>
+            <option value="nasdaq100">NASDAQ 100</option>
+            <option value="sp500">S&amp;P 500</option>
+          </select>
+        </div>
+        <div class="field" style="min-width:120px;">
+          <label for="limit">Rows</label>
+          <select id="limit">
+            <option value="25" selected>25</option>
+            <option value="50">50</option>
+            <option value="100">100</option>
+            <option value="250">250</option>
+          </select>
+        </div>
       </div>
-      <div class="field">
-        <label for="peMin">P/E min</label>
-        <input id="peMin" type="number" inputmode="decimal" min="0" step="any" placeholder="e.g. 5" />
-      </div>
-      <div class="field">
-        <label for="peMax">P/E max</label>
-        <input id="peMax" type="number" inputmode="decimal" min="0" step="any" placeholder="e.g. 25" />
-      </div>
-      <div class="field">
-        <label for="roeMin">Min ROE %</label>
-        <input id="roeMin" type="number" inputmode="decimal" step="any" placeholder="e.g. 15" />
-      </div>
-      <div class="field">
-        <label for="roeMax">Max ROE %</label>
-        <input id="roeMax" type="number" inputmode="decimal" step="any" placeholder="e.g. 60" />
-      </div>
-      <div class="field">
-        <label for="roceMin">Min ROCE %</label>
-        <input id="roceMin" type="number" inputmode="decimal" step="any" placeholder="e.g. 15" />
-      </div>
-      <div class="field">
-        <label for="divMin">Min div yield %</label>
-        <input id="divMin" type="number" inputmode="decimal" min="0" step="any" placeholder="e.g. 1.5" />
-      </div>
-      <div class="field">
-        <label for="debtMax">Max D/E</label>
-        <input id="debtMax" type="number" inputmode="decimal" min="0" step="any" placeholder="e.g. 0.5" />
-      </div>
-      <div class="field">
-        <label for="mcapMin">Min mkt cap (₹ Cr)</label>
-        <input id="mcapMin" type="number" inputmode="decimal" min="0" step="any" placeholder="e.g. 5000" />
-      </div>
-      <div class="field">
-        <label for="mcapMax">Max mkt cap (₹ Cr)</label>
-        <input id="mcapMax" type="number" inputmode="decimal" min="0" step="any" placeholder="e.g. 100000" />
-      </div>
-      <div class="field">
-        <label for="priceMin">Min price ₹</label>
-        <input id="priceMin" type="number" inputmode="decimal" min="0" step="any" placeholder="e.g. 100" />
-      </div>
-      <div class="field">
-        <label for="priceMax">Max price ₹</label>
-        <input id="priceMax" type="number" inputmode="decimal" min="0" step="any" placeholder="e.g. 5000" />
-      </div>
-      <div class="field">
-        <label for="rsiMin">RSI min</label>
-        <input id="rsiMin" type="number" inputmode="decimal" min="0" max="100" step="any" placeholder="e.g. 50" />
-      </div>
-      <div class="field">
-        <label for="rsiMax">RSI max</label>
-        <input id="rsiMax" type="number" inputmode="decimal" min="0" max="100" step="any" placeholder="e.g. 75" />
-      </div>
-      <div class="field">
-        <label for="chgMin">Day change min %</label>
-        <input id="chgMin" type="number" inputmode="decimal" step="any" placeholder="e.g. -2" />
-      </div>
-      <div class="field">
-        <label for="chgMax">Day change max %</label>
-        <input id="chgMax" type="number" inputmode="decimal" step="any" placeholder="e.g. 5" />
-      </div>
-      <div class="field">
-        <label for="sector">Sector contains</label>
-        <input id="sector" type="text" placeholder="e.g. Bank" autocomplete="off" list="sectorList" />
-        <datalist id="sectorList">
+      <div class="form-row">
+        <fieldset class="filter-group">
+          <legend>Valuation &amp; quality</legend>
+          <div class="form-row">
+            <div class="field"><label for="peMin">P/E min</label><input id="peMin" type="number" inputmode="decimal" min="0" step="any" placeholder="e.g. 5" /></div>
+            <div class="field"><label for="peMax">P/E max</label><input id="peMax" type="number" inputmode="decimal" min="0" step="any" placeholder="e.g. 25" /></div>
+            <div class="field"><label for="roeMin">Min ROE %</label><input id="roeMin" type="number" inputmode="decimal" step="any" placeholder="e.g. 15" /></div>
+            <div class="field"><label for="roeMax">Max ROE %</label><input id="roeMax" type="number" inputmode="decimal" step="any" placeholder="e.g. 60" /></div>
+            <div class="field"><label for="roceMin">Min ROCE %</label><input id="roceMin" type="number" inputmode="decimal" step="any" placeholder="e.g. 15" /></div>
+            <div class="field"><label for="debtMax">Max D/E</label><input id="debtMax" type="number" inputmode="decimal" min="0" step="any" placeholder="e.g. 0.5" /></div>
+          </div>
+        </fieldset>
+        <fieldset class="filter-group">
+          <legend>Size, yield &amp; price</legend>
+          <div class="form-row">
+            <div class="field"><label for="divMin">Min div yield %</label><input id="divMin" type="number" inputmode="decimal" min="0" step="any" placeholder="e.g. 1.5" /></div>
+            <div class="field"><label for="mcapMin">Min mkt cap (₹ Cr)</label><input id="mcapMin" type="number" inputmode="decimal" min="0" step="any" placeholder="e.g. 5000" /></div>
+            <div class="field"><label for="mcapMax">Max mkt cap (₹ Cr)</label><input id="mcapMax" type="number" inputmode="decimal" min="0" step="any" placeholder="e.g. 100000" /></div>
+            <div class="field"><label for="priceMin">Min price ₹</label><input id="priceMin" type="number" inputmode="decimal" min="0" step="any" placeholder="e.g. 100" /></div>
+            <div class="field"><label for="priceMax">Max price ₹</label><input id="priceMax" type="number" inputmode="decimal" min="0" step="any" placeholder="e.g. 5000" /></div>
+          </div>
+        </fieldset>
+        <fieldset class="filter-group">
+          <legend>Momentum</legend>
+          <div class="form-row">
+            <div class="field"><label for="rsiMin">RSI min</label><input id="rsiMin" type="number" inputmode="decimal" min="0" max="100" step="any" placeholder="e.g. 50" /></div>
+            <div class="field"><label for="rsiMax">RSI max</label><input id="rsiMax" type="number" inputmode="decimal" min="0" max="100" step="any" placeholder="e.g. 75" /></div>
+            <div class="field"><label for="chgMin">Day change min %</label><input id="chgMin" type="number" inputmode="decimal" step="any" placeholder="e.g. -2" /></div>
+            <div class="field"><label for="chgMax">Day change max %</label><input id="chgMax" type="number" inputmode="decimal" step="any" placeholder="e.g. 5" /></div>
+            <div class="field" style="flex-direction:row; align-items:center; gap:16px; padding:8px 0;">
+              <label style="display:flex; align-items:center; gap:6px; font-weight:600;"><input id="macdBull" type="checkbox" style="width:auto;" /> MACD bullish</label>
+              <label style="display:flex; align-items:center; gap:6px; font-weight:600;"><input id="aboveEma" type="checkbox" style="width:auto;" /> Above 200-DMA</label>
+            </div>
+          </div>
+        </fieldset>
+        <fieldset class="filter-group">
+          <legend>Name filters</legend>
+          <div class="form-row">
+            <div class="field"><label for="sector">Sector contains</label>
+            <input id="sector" type="text" placeholder="e.g. Bank" autocomplete="off" list="sectorList" />
+            <datalist id="sectorList">
           <option value="Bank"></option>
           <option value="Financial Services"></option>
           <option value="Information Technology"></option>
@@ -126,36 +114,18 @@
           <option value="Infrastructure"></option>
           <option value="Technology"></option>
           <option value="Energy"></option>
-        </datalist>
+            </datalist>
+            </div>
+            <div class="field"><label for="symContains">Symbol contains</label><input id="symContains" type="text" placeholder="e.g. HDFC" autocomplete="off" style="text-transform:uppercase" /></div>
+            <div class="field"><label for="nameContains">Company contains</label><input id="nameContains" type="text" placeholder="e.g. Reliance" autocomplete="off" /></div>
+          </div>
+        </fieldset>
       </div>
-      <div class="field">
-        <label for="symContains">Symbol contains</label>
-        <input id="symContains" type="text" placeholder="e.g. HDFC" autocomplete="off" style="text-transform:uppercase" />
+      <div class="form-row">
+        <button class="btn btn-primary" type="submit">▶️ Run screener</button>
+        <button class="btn" type="button" id="resetFilters">↺ Reset</button>
+        <a class="btn" href="#" id="downloadCsv">⬇️ CSV</a>
       </div>
-      <div class="field">
-        <label for="nameContains">Company contains</label>
-        <input id="nameContains" type="text" placeholder="e.g. Reliance" autocomplete="off" />
-      </div>
-      <div class="field">
-        <label for="limit">Rows</label>
-        <select id="limit">
-          <option value="25" selected>25</option>
-          <option value="50">50</option>
-          <option value="100">100</option>
-          <option value="250">250</option>
-        </select>
-      </div>
-      <div class="field" style="flex-direction:row; align-items:center; gap:8px;">
-        <label style="display:flex; align-items:center; gap:6px; font-weight:600;">
-          <input id="macdBull" type="checkbox" style="width:auto;" /> MACD bullish
-        </label>
-        <label style="display:flex; align-items:center; gap:6px; font-weight:600;">
-          <input id="aboveEma" type="checkbox" style="width:auto;" /> Above 200-DMA
-        </label>
-      </div>
-      <button class="btn btn-primary" type="submit">▶️ Run screener</button>
-      <button class="btn" type="button" id="resetFilters">↺ Reset</button>
-      <a class="btn" href="#" id="downloadCsv">⬇️ CSV</a>
     </form>
   </section>
 

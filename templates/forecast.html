@@ -6,10 +6,10 @@
     <p class="sub">Consensus rating, price targets, top executives and peers — the web twin of the bot's /forecast.</p>
   </div>
 
-  <section class="card" aria-labelledby="lookupHeading">
-    <h2 id="lookupHeading">Look up a stock</h2>
-    <form id="lookupForm" class="form-row">
-      <div class="field" style="flex:1; min-width:220px;">
+  <section class="card lookup-hero" aria-labelledby="lookupHeading">
+    <h2 id="lookupHeading" class="visually-hidden">Look up a stock</h2>
+    <form id="lookupForm" class="lookup-form">
+      <div class="field field-sym">
         <label for="symbol">Symbol</label>
         <input id="symbol" required placeholder="e.g. RELIANCE or AAPL" autocomplete="off" style="text-transform:uppercase" list="symbolList" />
         <datalist id="symbolList"></datalist>
@@ -33,6 +33,7 @@
         <span class="chg" id="rChg"></span>
       </div>
       <div class="pill-row" style="margin-top:10px;" id="rBadges"></div>
+      <div class="stat-strip section" id="rStats" hidden></div>
     </section>
 
     <div class="section-grid section">
@@ -60,8 +61,10 @@
     </section>
   </div>
 
-  <div id="placeholder" class="card section">
-    <p class="muted" style="margin:0;">Enter a symbol above and press <strong>Get forecast</strong>.</p>
+  <div id="placeholder" class="card section indicator-empty">
+    <div style="font-size:2rem;">🔭</div>
+    <p><strong>Pick a symbol and press Get forecast.</strong></p>
+    <p class="muted" style="margin:0;">Consensus rating, price targets, rating trend, peers and top management — from free sources.</p>
   </div>
 {% endblock %}
 
@@ -120,6 +123,22 @@
 
           var upside = (f.target_mean != null && price != null && price > 0)
             ? signed((f.target_mean - price) / price * 100, 1) : null;
+          var statsEl = document.getElementById('rStats');
+          if (f.rec_key || f.target_mean != null || f.num_analysts != null) {
+            var upVal = (f.target_mean != null && price != null && price > 0)
+              ? ((f.target_mean - price) / price * 100) : null;
+            statsEl.hidden = false;
+            statsEl.innerHTML = [
+              f.rec_key ? { k: 'Consensus', v: String(f.rec_key).toUpperCase(), cls: /buy/i.test(f.rec_key) ? 'pos' : /sell/i.test(f.rec_key) ? 'neg' : '' } : null,
+              f.target_mean != null ? { k: 'Mean target', v: cr(f.target_mean) } : null,
+              upVal != null ? { k: 'Upside', v: (upVal >= 0 ? '+' : '') + upVal.toFixed(1) + '%', cls: upVal >= 0 ? 'pos' : 'neg' } : null,
+              f.num_analysts != null ? { k: 'Analysts', v: fmt(f.num_analysts, 0) } : null,
+            ].filter(Boolean).map(function (s) {
+              return '<div class="stat-chip"><span class="k">' + esc(s.k) + '</span><span class="v ' + (s.cls || '') + '">' + s.v + '</span></div>';
+            }).join('');
+          } else {
+            statsEl.hidden = true;
+          }
           document.getElementById('rAnalyst').innerHTML = rows([
             ['Consensus', f.rec_key ? String(f.rec_key).toUpperCase() : null],
             ['Mean rating (1=buy, 5=sell)', f.rec_mean != null ? fmt(f.rec_mean) : null],

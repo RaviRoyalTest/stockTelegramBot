@@ -248,6 +248,129 @@
   window.RS.getPreferredTheme = getPreferredTheme;
 
   /**
+   * Turn Telegram-formatted report lines into structured, readable HTML.
+   *
+   * The bot's formatters emit lines like:
+   *   "FUNDAMENTAL SNAPSHOT"           -> section heading
+   *   "Price: 1,234.5"                 -> definition row
+   *   "• Value: 55.1"                  -> bullet
+   *   "VERDICT: Buy"                   -> callout (verdict-ish)
+   *   anything else                    -> standalone note line
+   *
+   * Inline <b>/<code> markup from the server is preserved as-is.
+   * @param {string[]} lines
+   * @returns {string} html
+   */
+  window.RS.renderReportLines = function (lines) {
+    if (!Array.isArray(lines) || !lines.length) {
+      return '<p class="muted">No data available.</p>';
+    }
+    var esc = window.RS.escapeHtml;
+    var out = [];
+    var rows = [];
+    var bullets = [];
+    var notes = [];
+
+    var statuses = [];
+
+    function flushRows() {
+      if (!rows.length) return;
+      out.push('<div class="report-rows">' + rows.join('') + '</div>');
+      rows = [];
+    }
+    function flushBullets() {
+      if (!bullets.length) return;
+      out.push('<ul class="report-list">' + bullets.join('') + '</ul>');
+      bullets = [];
+    }
+    function flushNotes() {
+      if (!notes.length) return;
+      out.push('<p class="report-note">' + notes.join(' ') + '</p>');
+      notes = [];
+    }
+    function flushStatuses() {
+      if (!statuses.length) return;
+      out.push('<ul class="report-status">' + statuses.join('') + '</ul>');
+      statuses = [];
+    }
+    function flushAll() { flushRows(); flushBullets(); flushStatuses(); flushNotes(); }
+
+    var HEADING_RE = /^[A-Z0-9][A-Z0-9 &+\-\u2013\u2014()\u20b9%\.,'\/]{2,60}$/;
+    var EMOJI_LEAD = /^[^A-Za-z0-9\s<]/;
+
+    lines.forEach(function (raw) {
+      var line = String(raw == null ? '' : raw).trim();
+      if (!line) return;
+      var plain = line.replace(/<[^>]+>/g, '').trim();
+
+      // status items: ✅ pass, ❌ fail, ⚪/🟡 manual-review lines (checklists)
+      // (the u flag matters: without it, astral emoji share surrogate code units
+      //  and e.g. 💡 would match [🟢])
+      // verdict lines ("🔴 Weak - only 47% of checked items passed.") look like
+      // status items but are the final takeaway — they must reach the callout
+      // branch below, so detect and skip them here.
+      var isVerdict = /(Strong candidate|Decent|Weak)\s*-\s*(only\s*)?\d+% of checked/i.test(plain);
+      if (!isVerdict &&
+          (/^[✅🟢]/u.test(line) || /^[❌🔴]/u.test(line) || /^[⚪🟡]/u.test(line))) {
+        flushRows(); flushBullets(); flushNotes();
+        var stCls = /^[✅🟢]/u.test(line) ? 'st-ok' : /^[❌🔴]/u.test(line) ? 'st-bad' : 'st-man';
+        statuses.push('<li class="' + stCls + '">' + line + '</li>');
+        return;
+      }
+
+      // callouts: verdict / summary / explicit tips (keep raw markup)
+      if (/^(VERDICT|OVERALL VIEW|Main Question|RESULT|SUMMARY|⚠️ WARNING|TOTAL:)/.test(plain) ||
+          /^💡 .*(Tip|Note)/i.test(plain) ||
+          /(candidate|Decent|Weak)\s*<b>-|<b>(Strong candidate|Decent|Weak)<\/b>/i.test(line) ||
+          /(Strong candidate|Decent|Weak)\s*-\s*\d+% of checked/i.test(plain)) {
+        flushAll();
+        var cls = 'report-callout';
+        if (/^(VERDICT|OVERALL VIEW)/i.test(line)) cls += ' report-callout-verdict';
+        else if (/⚠️|WARNING|🔴/.test(line)) cls += ' report-callout-warn';
+        else cls += ' report-callout-tip';
+        out.push('<div class="' + cls + '">' + line + '</div>');
+        return;
+      }
+
+      // bullets
+      if (/^[•\u2022\u25aa\u25cf]\s*/.test(line)) {
+        flushRows(); flushStatuses(); flushNotes();
+        bullets.push('<li>' + line.replace(/^[•\u2022\u25aa\u25cf]\s*/, '') + '</li>');
+        return;
+      }
+
+      // definition row: "Label: value"
+      var m = line.match(/^([^:<]{2,42}):\s*(.+)$/);
+      if (m) {
+        flushBullets(); flushStatuses(); flushNotes();
+        rows.push('<div class="report-row"><span class="report-k">' + m[1] + '</span><span class="report-v">' + m[2] + '</span></div>');
+        return;
+      }
+
+      // section heading: SHORT UPPERCASE line, or a short emoji-led line ("💡 What it means")
+      var stripped = plain.replace(/^[^A-Za-z0-9]+/, '');
+      var capsHeading = HEADING_RE.test(stripped) && !/:$/.test(stripped) && !/^END OF/i.test(stripped);
+      var emojiHeading = EMOJI_LEAD.test(line) && plain.indexOf(':') < 0 && plain.length <= 52;
+      if (capsHeading || emojiHeading) {
+        flushAll();
+        out.push('<h3 class="report-heading">' + line + '</h3>');
+        return;
+      }
+
+      // subtitle: longer emoji-led line without a colon ("🔌 RSI (14) — … Neutral 🟡")
+      if (EMOJI_LEAD.test(line) && plain.indexOf(':') < 0 && plain.length <= 95) {
+        flushAll();
+        out.push('<p class="report-subtitle">' + line + '</p>');
+        return;
+      }
+
+      notes.push('<span>' + line + '</span>');
+    });
+    flushAll();
+    return out.join('') || '<p class="muted">No data available.</p>';
+  };
+
+  /**
    * Symbol autocomplete: debounced /api/search -> <datalist> options.
    * @param {string} inputId id of the text input
    * @param {string} [listId] id of the <datalist>; created when omitted

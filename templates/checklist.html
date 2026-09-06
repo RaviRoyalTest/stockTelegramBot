@@ -6,10 +6,10 @@
     <p class="sub">The 32-point scorecard (10 personal + 22 AI criteria) — the web twin of the bot's /checklist.</p>
   </div>
 
-  <section class="card" aria-labelledby="lookupHeading">
-    <h2 id="lookupHeading">Score a stock</h2>
-    <form id="lookupForm" class="form-row">
-      <div class="field" style="flex:1; min-width:220px;">
+  <section class="card lookup-hero" aria-labelledby="lookupHeading">
+    <form id="lookupForm" class="lookup-form" aria-labelledby="lookupHeading">
+      <h2 id="lookupHeading" class="visually-hidden">Score a stock</h2>
+      <div class="field field-sym">
         <label for="symbol">Symbol</label>
         <input id="symbol" required placeholder="e.g. RELIANCE or AAPL" autocomplete="off" style="text-transform:uppercase" list="symbolList" />
         <datalist id="symbolList"></datalist>
@@ -26,12 +26,18 @@
   </section>
 
   <div id="report" class="card section" hidden>
-    <h2 id="rTitle">—</h2>
-    <div id="rBody" class="table-scroll"></div>
+    <div class="indicator-report-head">
+      <h2 id="rTitle">—</h2>
+      <a class="btn btn-sm" id="rFundLink" href="#">💹 Full stock report</a>
+    </div>
+    <div class="stat-strip" id="rStats" hidden></div>
+    <div id="rBody" aria-live="polite"></div>
   </div>
 
-  <div id="placeholder" class="card section">
-    <p class="muted" style="margin:0;">Enter a symbol above and press <strong>Run checklist</strong>.</p>
+  <div id="placeholder" class="card section indicator-empty">
+    <div style="font-size:2rem;">✅</div>
+    <p><strong>Pick a symbol and press Run checklist.</strong></p>
+    <p class="muted" style="margin:0;">32 checks across personal criteria, financial health, valuation, business quality and risk.</p>
   </div>
 {% endblock %}
 
@@ -39,35 +45,68 @@
   <script>
     (function () {
       'use strict';
-      var esc = RS.escapeHtml;
 
-      async function load(symbol, market) {
+      // Count pass/fail/manual marks for the stat strip.
+      // Only real checklist items count: they start with a marker AND carry an
+      // em-dash detail ("✅ criterion — detail"). This keeps verdict lines like
+      // "🔴 Weak - only 47%…" and "⚪ items need manual review…" out of the count.
+      // The u flag prevents astral-emoji surrogate false positives (💡 vs 🟢).
+      function summarise(lines) {
+        var pass = 0, fail = 0, manual = 0;
+        lines.forEach(function (l) {
+          var s = String(l || '').trim();
+          if (s.indexOf(' — ') < 0) return;
+          if (/^[✅🟢]/u.test(s)) pass++;
+          else if (/^[❌🔴]/u.test(s)) fail++;
+          else if (/^[⚪🟡]/u.test(s)) manual++;
+        });
+        return { pass: pass, fail: fail, manual: manual };
+      }
+
+      function load(symbol, market) {
         var report = document.getElementById('report');
         var placeholder = document.getElementById('placeholder');
         var go = document.getElementById('go');
+        var body = document.getElementById('rBody');
+        var statsEl = document.getElementById('rStats');
         placeholder.hidden = true;
-        report.hidden = false;
         go.disabled = true;
-        document.getElementById('rTitle').textContent = symbol;
-        document.getElementById('rBody').innerHTML = '<p class="muted"><span class="skeleton" style="display:block;width:100%"></span></p>';
-        try {
-          var res = await fetch('/api/checklist?symbol=' + encodeURIComponent(symbol) + '&market=' + encodeURIComponent(market));
-          if (!res.ok) throw new Error('HTTP ' + res.status);
-          var data = await res.json();
-          var lines = data.lines || [];
-          document.getElementById('rTitle').textContent = symbol + ' · scorecard (' + (data.currency || '') + ')';
-          // Lines are server-rendered HTML (<b>/<code>) from the bot's own
-          // formatter, so they render as-is; escape nothing here.
-          document.getElementById('rBody').innerHTML = lines.length
-            ? lines.map(function (l) { return '<p style="margin:0 0 6px;">' + l + '</p>'; }).join('')
-            : '<p class="muted">No checklist available.</p>';
-        } catch (err) {
-          RS.toast('Checklist failed for ' + symbol + ': ' + err.message, 'err');
-          placeholder.hidden = false;
-          report.hidden = true;
-        } finally {
-          go.disabled = false;
-        }
+        go.textContent = 'Scoring…';
+        fetch('/api/checklist?symbol=' + encodeURIComponent(symbol) + '&market=' + encodeURIComponent(market))
+          .then(function (res) {
+            return res.json().catch(function () { return {}; }).then(function (data) {
+              if (!res.ok) throw new Error((data && data.detail) || ('HTTP ' + res.status));
+              var lines = data.lines || [];
+              document.getElementById('rTitle').textContent = symbol;
+              document.getElementById('rFundLink').href = '/fundamentals?symbol=' + encodeURIComponent(symbol);
+              var sum = summarise(lines);
+              if (sum.pass + sum.fail > 0) {
+                var total = sum.pass + sum.fail;
+                var pct = Math.round(sum.pass / total * 100);
+                var tone = pct >= 60 ? 'pos' : pct >= 40 ? '' : 'neg';
+                statsEl.hidden = false;
+                statsEl.innerHTML =
+                  '<div class="stat-chip"><span class="k">Score</span><span class="v ' + tone + '">' + sum.pass + '/' + total + '</span></div>' +
+                  '<div class="stat-chip"><span class="k">Pass</span><span class="v pos">' + sum.pass + '</span></div>' +
+                  '<div class="stat-chip"><span class="k">Fail</span><span class="v neg">' + sum.fail + '</span></div>' +
+                  '<div class="stat-chip"><span class="k">Manual review</span><span class="v">' + sum.manual + '</span></div>' +
+                  '<div class="stat-chip"><span class="k">Quality</span><span class="v ' + tone + '">' + pct + '%</span></div>';
+              } else {
+                statsEl.hidden = true;
+              }
+              body.innerHTML = RS.renderReportLines(lines);
+              report.hidden = false;
+            });
+          })
+          .catch(function (err) {
+            body.innerHTML = '<p class="muted">Could not load the scorecard: ' + RS.escapeHtml(err.message) + '</p>';
+            RS.toast('Checklist failed for ' + symbol + ': ' + err.message, 'err');
+            report.hidden = false;
+          })
+          .finally(function () {
+            go.disabled = false;
+            go.textContent = '✅ Run checklist';
+          });
       }
 
       var searchTimer = null;
@@ -80,7 +119,7 @@
             return r.ok ? r.json() : { results: [] };
           }).then(function (j) {
             document.getElementById('symbolList').innerHTML = (j.results || []).map(function (r) {
-              return '<option value="' + esc(String(r.symbol || '').toUpperCase()) + '">' + esc(r.name || '') + '</option>';
+              return '<option value="' + RS.escapeHtml(String(r.symbol || '').toUpperCase()) + '">' + RS.escapeHtml(r.name || '') + '</option>';
             }).join('');
           }).catch(function () {});
         }, 250);
@@ -88,9 +127,18 @@
 
       document.getElementById('lookupForm').addEventListener('submit', function (event) {
         event.preventDefault();
-        var symbol = document.getElementById('symbol').value.trim().toUpperCase().replace(/\.NS$|\.BO$|\.US$/, '');
+        var symbol = document.getElementById('symbol').value.trim().toUpperCase().replace(/\\.NS$|\\.BO$|\\.US$/, '');
         if (symbol) load(symbol, document.getElementById('market').value);
       });
+
+      // deep link: /checklist?symbol=X
+      (function () {
+        var sym = (new URLSearchParams(window.location.search).get('symbol') || '').toUpperCase().replace(/\\.NS$|\\.BO$|\\.US$/, '');
+        if (sym) {
+          document.getElementById('symbol').value = sym;
+          load(sym, document.getElementById('market').value);
+        }
+      })();
     })();
   </script>
 {% endblock %}

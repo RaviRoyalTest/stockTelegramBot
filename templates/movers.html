@@ -6,17 +6,17 @@
     <p class="sub">Top gainers, losers and overnight gaps — the web twin of the bot's /topmovers, /topgainers, /toplosers and /gappers.</p>
   </div>
 
-  <section class="card" aria-labelledby="screenHeading">
+  <section class="card lookup-hero" aria-labelledby="screenHeading">
     <h2 id="screenHeading">Screen</h2>
     <form id="screenForm" class="form-row">
-      <div class="field">
-        <label for="mode">Mode</label>
-        <select id="mode">
-          <option value="gainers" selected>Top gainers</option>
-          <option value="losers">Top losers</option>
-          <option value="movers">Biggest moves (both)</option>
-          <option value="gappers">Overnight gaps</option>
-        </select>
+      <div class="field" style="flex:1 1 100%;">
+        <label>Mode</label>
+        <div class="radio-pills" role="radiogroup" aria-label="Screen mode">
+          <label><input type="radio" name="mode" value="gainers" checked /> 🚀 Top gainers</label>
+          <label><input type="radio" name="mode" value="losers" /> 📉 Top losers</label>
+          <label><input type="radio" name="mode" value="movers" /> ⚡ Biggest moves</label>
+          <label><input type="radio" name="mode" value="gappers" /> 🌅 Overnight gaps</label>
+        </div>
       </div>
       <div class="field">
         <label for="universe">Universe</label>
@@ -84,13 +84,18 @@
 
       // Deep-link: /movers?mode=gappers
       var initial = new URLSearchParams(window.location.search).get('mode');
-      if (initial && document.getElementById('mode').querySelector('option[value="' + initial + '"]')) {
-        document.getElementById('mode').value = initial;
+      if (initial && document.querySelector('input[name="mode"][value="' + initial + '"]')) {
+        document.querySelector('input[name="mode"][value="' + initial + '"]').checked = true;
+      }
+
+      function currentMode() {
+        var checked = document.querySelector('input[name="mode"]:checked');
+        return checked ? checked.value : 'gainers';
       }
 
       async function load() {
         var tbody = document.getElementById('tbody');
-        var mode = document.getElementById('mode').value;
+        var mode = currentMode();
         var moveLabel = mode === 'gappers' ? 'Gap' : 'Move';
         document.querySelectorAll('thead th')[3].textContent = moveLabel;
         tbody.innerHTML = '<tr><td colspan="8" class="empty"><span class="skeleton" style="display:block;width:100%"></span></td></tr>';
@@ -130,6 +135,9 @@
       document.getElementById('screenForm').addEventListener('submit', function (event) {
         event.preventDefault();
         load();
+      });
+      document.querySelectorAll('input[name="mode"]').forEach(function (r) {
+        r.addEventListener('change', load);
       });
       load();
     })();

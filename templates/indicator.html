@@ -7,15 +7,15 @@
   </div>
 
   <!-- ============ HERO LOOKUP ============ -->
-  <section class="card indicator-hero" aria-labelledby="lookupHeading">
-    <form id="lookupForm" class="indicator-form" aria-labelledby="lookupHeading">
+  <section class="card lookup-hero" aria-labelledby="lookupHeading">
+    <form id="lookupForm" class="lookup-form" aria-labelledby="lookupHeading">
       <h2 id="lookupHeading" class="visually-hidden">Analyse a stock</h2>
-      <div class="field indicator-field-sym">
+      <div class="field field-sym">
         <label for="symbol">Symbol</label>
         <input id="symbol" required placeholder="RELIANCE, AAPL…" autocomplete="off" style="text-transform:uppercase" list="symbolList" />
         <datalist id="symbolList"></datalist>
       </div>
-      <div class="field indicator-field-name">
+      <div class="field field-grow">
         <label for="iname">Indicator <span class="muted">(blank = full card)</span></label>
         <input id="iname" placeholder="Pick a chip below or type…" autocomplete="off" list="indList" />
         <datalist id="indList">
@@ -54,7 +54,7 @@
       <button class="chip" type="button" data-ind="MFI">MFI</button>
       <button class="chip" type="button" data-ind="">Full card</button>
     </div>
-    <p class="note" style="margin:10px 0 0;">The full card needs ~220 daily candles (about a year of history).</p>
+    <p class="note lookup-hint">The full card needs ~220 daily candles (about a year of history).</p>
   </section>
 
   <!-- ============ RESULT ============ -->
@@ -63,7 +63,8 @@
       <h2 id="rTitle">—</h2>
       <a class="btn btn-sm" id="rFundLink" href="#">💹 Full stock report</a>
     </div>
-    <div id="rBody" class="indicator-body" aria-live="polite"></div>
+    <div class="stat-strip" id="rStats" hidden></div>
+    <div id="rBody" aria-live="polite"></div>
   </div>
 
   <!-- ============ EMPTY STATE ============ -->
@@ -81,49 +82,72 @@
     (function () {
       'use strict';
 
+      // Pull key numbers out of the report lines for the stat strip:
+      // e.g. "Price: <b>₹1,322.00</b>  🟢▲ +1.37%  ·  Daily candles"
+      function extractStats(lines) {
+        var stats = [];
+        var has = function (k) { return stats.some(function (x) { return x.k === k; }); };
+        lines.forEach(function (l) {
+          var s = String(l || '');
+          var plain = s.replace(/<[^>]+>/g, '');
+          var pm = plain.match(/Price\s*[:\uFF1A]?\s*([₹$][\d,]+(?:\.\d+)?)/i);
+          if (pm && !has('Price')) stats.push({ k: 'Price', v: pm[1] });
+          var ch = plain.match(/([+-]\d+(?:\.\d+)?)\s*%/);
+          if (ch && !has('Move')) {
+            stats.push({ k: 'Move', v: ch[1] + '%', cls: ch[1].indexOf('-') === 0 ? 'neg' : 'pos' });
+          }
+          var vm = plain.match(/(?:Value|Reading|Score)\s*[:\uFF1A]?\s*(-?\d+(?:\.\d+)?)/i);
+          if (vm && !has('Value')) stats.push({ k: 'Value', v: vm[1] });
+        });
+        return stats.slice(0, 4);
+      }
+
       function load(symbol, name) {
         var report = document.getElementById('report');
         var placeholder = document.getElementById('placeholder');
         var go = document.getElementById('go');
         var body = document.getElementById('rBody');
+        var statsEl = document.getElementById('rStats');
         placeholder.hidden = true;
-        report.hidden = false;
+        report.hidden = true;
         go.disabled = true;
         go.textContent = 'Analysing…';
-        document.getElementById('rTitle').textContent =
-          symbol + (name ? ' · ' + name.toUpperCase() : ' · full card');
-        document.getElementById('rFundLink').href = '/fundamentals?symbol=' + encodeURIComponent(symbol);
-        body.innerHTML = '<span class="skeleton" style="display:block;width:100%"></span>';
-        try {
-          var url = '/api/indicator?symbol=' + encodeURIComponent(symbol) + (name ? '&name=' + encodeURIComponent(name) : '');
-          return fetch(url)
-            .then(function (res) {
-              return res.json().catch(function () { return {}; }).then(function (data) {
-                if (!res.ok) throw new Error((data && data.detail) || ('HTTP ' + res.status));
-                var lines = data.lines || [];
-                body.innerHTML = lines.length
-                  ? lines.map(function (l) { return '<p style="margin:0 0 6px;">' + l + '</p>'; }).join('')
-                  : '<p class="muted">No indicator data available.</p>';
-              });
-            })
-            .catch(function (err) {
-              body.innerHTML = '<p class="muted">Could not load the indicator report: ' + RS.escapeHtml(err.message) + '</p>';
-              RS.toast('Indicator failed for ' + symbol + ': ' + err.message, 'err');
-            })
-            .finally(function () {
-              go.disabled = false;
-              go.textContent = '📈 Analyse';
+        fetch('/api/indicator?symbol=' + encodeURIComponent(symbol) + (name ? '&name=' + encodeURIComponent(name) : ''))
+          .then(function (res) {
+            return res.json().catch(function () { return {}; }).then(function (data) {
+              if (!res.ok) throw new Error((data && data.detail) || ('HTTP ' + res.status));
+              var lines = data.lines || [];
+              document.getElementById('rTitle').textContent =
+                symbol + (name ? ' · ' + name.toUpperCase() : ' · full card');
+              document.getElementById('rFundLink').href = '/fundamentals?symbol=' + encodeURIComponent(symbol);
+              var stats = extractStats(lines);
+              if (stats.length) {
+                statsEl.hidden = false;
+                statsEl.innerHTML = stats.map(function (s) {
+                  return '<div class="stat-chip"><span class="k">' + RS.escapeHtml(s.k) + '</span>' +
+                    '<span class="v ' + (s.cls || '') + '">' + RS.escapeHtml(s.v) + '</span></div>';
+                }).join('');
+              } else {
+                statsEl.hidden = true;
+              }
+              body.innerHTML = RS.renderReportLines(lines);
+              report.hidden = false;
             });
-        } catch (err) {
-          go.disabled = false;
-          go.textContent = '📈 Analyse';
-          RS.toast('Indicator failed: ' + err.message, 'err');
-        }
+          })
+          .catch(function (err) {
+            body.innerHTML = '<p class="muted">Could not load the indicator report: ' + RS.escapeHtml(err.message) + '</p>';
+            RS.toast('Indicator failed for ' + symbol + ': ' + err.message, 'err');
+            report.hidden = false;
+          })
+          .finally(function () {
+            go.disabled = false;
+            go.textContent = '📈 Analyse';
+          });
       }
 
       document.getElementById('lookupForm').addEventListener('submit', function (event) {
         event.preventDefault();
-        var symbol = document.getElementById('symbol').value.trim().toUpperCase().replace(/\.NS$|\.BO$|\.US$/, '');
+        var symbol = document.getElementById('symbol').value.trim().toUpperCase().replace(/\\.NS$|\\.BO$|\\.US$/, '');
         if (symbol) load(symbol, document.getElementById('iname').value.trim());
       });
 
@@ -134,7 +158,7 @@
         document.querySelectorAll('#indChips .chip').forEach(function (c) { c.classList.remove('chip-on'); });
         chip.classList.add('chip-on');
         document.getElementById('iname').value = chip.dataset.ind;
-        var symbol = document.getElementById('symbol').value.trim().toUpperCase().replace(/\.NS$|\.BO$|\.US$/, '');
+        var symbol = document.getElementById('symbol').value.trim().toUpperCase().replace(/\\.NS$|\\.BO$|\\.US$/, '');
         if (symbol) load(symbol, chip.dataset.ind);
         else document.getElementById('symbol').focus();
       });
@@ -150,7 +174,7 @@
       // deep link: /indicator?symbol=X&name=RSI
       (function () {
         var params = new URLSearchParams(window.location.search);
-        var sym = (params.get('symbol') || '').toUpperCase().replace(/\.NS$|\.BO$|\.US$/, '');
+        var sym = (params.get('symbol') || '').toUpperCase().replace(/\\.NS$|\\.BO$|\\.US$/, '');
         var ind = params.get('name') || '';
         if (sym) {
           document.getElementById('symbol').value = sym;

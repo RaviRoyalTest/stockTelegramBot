@@ -6,10 +6,10 @@
     <p class="sub">Latest headlines for your watchlist — the web twin of the bot's /news. Pick a stock or load everything.</p>
   </div>
 
-  <section class="card" aria-labelledby="lookupHeading">
-    <h2 id="lookupHeading">Headlines</h2>
-    <form id="lookupForm" class="form-row">
-      <div class="field" style="flex:1; min-width:220px;">
+  <section class="card lookup-hero" aria-labelledby="lookupHeading">
+    <h2 id="lookupHeading" class="visually-hidden">Headlines</h2>
+    <form id="lookupForm" class="lookup-form">
+      <div class="field field-sym">
         <label for="symbol">Symbol <span class="muted">(blank = whole watchlist)</span></label>
         <input id="symbol" placeholder="e.g. RELIANCE" autocomplete="off" style="text-transform:uppercase" list="symbolList" />
         <datalist id="symbolList"></datalist>
@@ -37,12 +37,12 @@
 
       function newsList(items) {
         if (!items || !items.length) return '<p class="muted">No recent headlines found.</p>';
-        return '<ul style="margin:0;padding-left:18px;">' + items.map(function (n) {
+        return '<ul>' + items.map(function (n) {
           var t = esc(n.title || 'Untitled');
           var link = n.link
-            ? '<a href="' + esc(n.link) + '" target="_blank" rel="noopener">' + t + '</a>'
+            ? '<a href="' + esc(n.link) + '" target="_blank" rel="noopener">' + t + ' ↗</a>'
             : t;
-          return '<li>' + link + (n.publisher ? ' <span class="muted">· ' + esc(n.publisher) + '</span>' : '') + '</li>';
+          return '<li>' + link + (n.publisher ? ' <span class="publisher">· ' + esc(n.publisher) + '</span>' : '') + '</li>';
         }).join('') + '</ul>';
       }
 
@@ -77,11 +77,12 @@
           var settled = await Promise.all(symbols.map(function (s) {
             return loadFor(s, limit).catch(function (err) { return { symbol: s, news: [], error: String(err) }; });
           }));
-          container.innerHTML = settled.map(function (entry) {
-            return '<section class="card section"><h2><a href="/fundamentals?symbol=' +
-              encodeURIComponent(entry.symbol) + '">' + esc(entry.symbol) + '</a></h2>' +
+          container.innerHTML = '<div class="section-grid">' + settled.map(function (entry) {
+            return '<section class="card news-card"><h2 style="margin-bottom:0;"><a href="/fundamentals?symbol=' +
+              encodeURIComponent(entry.symbol) + '">' + esc(entry.symbol) + '</a> <span class="pill">' +
+              (entry.news || []).length + ' headlines</span></h2>' +
               newsList(entry.news) + '</section>';
-          }).join('');
+          }).join('') + '</div>';
         } catch (err) {
           container.innerHTML = '<div class="card"><p class="muted">Unable to load news.</p></div>';
           RS.toast('News failed: ' + err.message, 'err');

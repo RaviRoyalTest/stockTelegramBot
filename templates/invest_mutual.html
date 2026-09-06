@@ -11,10 +11,10 @@
       <h2 id="hIn">💰 Investment Details</h2>
       <div class="field">
         <label>Investment Type</label>
-        <div class="form-row" role="radiogroup" aria-label="Investment type">
-          <label style="display:flex; gap:6px; align-items:center;"><input type="radio" name="itype" value="sip" checked style="width:auto;" /> SIP (Monthly)</label>
-          <label style="display:flex; gap:6px; align-items:center;"><input type="radio" name="itype" value="yearly-sip" style="width:auto;" /> SIP (Yearly)</label>
-          <label style="display:flex; gap:6px; align-items:center;"><input type="radio" name="itype" value="lumpsum" style="width:auto;" /> Lumpsum</label>
+        <div class="radio-pills" role="radiogroup" aria-label="Investment type">
+          <label><input type="radio" name="itype" value="sip" checked /> 💵 SIP (Monthly)</label>
+          <label><input type="radio" name="itype" value="yearly-sip" /> 📅 SIP (Yearly)</label>
+          <label><input type="radio" name="itype" value="lumpsum" /> 💰 Lumpsum</label>
         </div>
       </div>
       <div class="field" id="amtWrap" style="margin-top:10px;">
@@ -39,9 +39,9 @@
         <div class="form-row" style="margin-top:10px;">
           <div class="field"><label for="infl">📊 Inflation Rate (%) — Optional</label><input id="infl" type="number" min="0" step="any" placeholder="e.g., 6" /><span class="note">SWP amount will increase annually by this rate</span></div>
           <div class="field"><label>Inflation Calculation Start From</label>
-            <div class="form-row" role="radiogroup" aria-label="Inflation start">
-              <label style="display:flex; gap:6px; align-items:center;"><input type="radio" name="istart" value="current-year" checked style="width:auto;" /> Current Year (SWP Start)</label>
-              <label style="display:flex; gap:6px; align-items:center;"><input type="radio" name="istart" value="sip-start" style="width:auto;" /> SIP Start Year</label>
+            <div class="radio-pills" role="radiogroup" aria-label="Inflation start">
+              <label><input type="radio" name="istart" value="current-year" checked /> Current Year (SWP Start)</label>
+              <label><input type="radio" name="istart" value="sip-start" /> SIP Start Year</label>
             </div>
             <span class="note">From when SWP begins, or from when SIP investment started</span>
           </div>
