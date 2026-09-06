@@ -39,16 +39,39 @@
 
         <nav id="primaryNav" class="nav" aria-label="Primary">
           <a href="/">🏠 Dashboard</a>
-          <a href="/watchlist">📌 Watchlist</a>
-          <a href="/fundamentals">💹 Fundamentals</a>
-          <a href="/market">📊 Screener</a>
-          <a href="/movers">🚀 Movers</a>
-          <a href="/forecast">🔭 Forecast</a>
-          <a href="/checklist">✅ Checklist</a>
-          <a href="/indicator">📈 Indicator</a>
-          <a href="/news">📰 News</a>
-          <a href="/invest">💰 Invest</a>
-          <a href="/exdates">📋 Corporate actions</a>
+
+          <div class="nav-group">
+            <button class="nav-drop" type="button" aria-expanded="false" aria-haspopup="true">📈 Stocks ▾</button>
+            <div class="nav-menu" role="menu" aria-label="Stocks">
+              <a href="/watchlist" role="menuitem">📌 Watchlist</a>
+              <a href="/fundamentals" role="menuitem">💹 Fundamentals</a>
+              <a href="/forecast" role="menuitem">🔭 Forecast</a>
+              <a href="/checklist" role="menuitem">✅ Checklist</a>
+              <a href="/indicator" role="menuitem">📈 Indicator</a>
+              <a href="/news" role="menuitem">📰 News</a>
+            </div>
+          </div>
+
+          <div class="nav-group">
+            <button class="nav-drop" type="button" aria-expanded="false" aria-haspopup="true">🔍 Screens ▾</button>
+            <div class="nav-menu" role="menu" aria-label="Screens">
+              <a href="/market" role="menuitem">📊 Screener</a>
+              <a href="/movers" role="menuitem">🚀 Movers</a>
+              <a href="/exdates" role="menuitem">📋 Corporate actions</a>
+            </div>
+          </div>
+
+          <div class="nav-group">
+            <button class="nav-drop" type="button" aria-expanded="false" aria-haspopup="true">💰 Invest ▾</button>
+            <div class="nav-menu" role="menu" aria-label="Invest">
+              <a href="/invest" role="menuitem">💰 Overview</a>
+              <a href="/invest/stocks" role="menuitem">📈 Stock tools</a>
+              <a href="/invest/mutual-funds" role="menuitem">🏦 Mutual funds</a>
+              <a href="/invest/bonds" role="menuitem">🧾 Bonds</a>
+              <a href="/invest/commodities" role="menuitem">🥇 Commodities</a>
+            </div>
+          </div>
+
           <a href="/system">⚙️ System</a>
         </nav>
 
@@ -64,7 +87,13 @@
 
     <footer class="footer">
       <span>Royal Stock · NSE &amp; BSE · Telegram bot</span>
-      <span><a href="/health">/health</a></span>
+      <nav class="foot-links" aria-label="Footer">
+        <a href="/market">Screener</a>
+        <a href="/movers">Movers</a>
+        <a href="/invest">Invest tools</a>
+        <a href="/system">System</a>
+        <a href="/health">/health</a>
+      </nav>
     </footer>
 
     <script src="/static/app.js"></script>

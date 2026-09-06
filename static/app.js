@@ -48,6 +48,62 @@
       var isSection = href !== '/' && (path === href || path.indexOf(href + '/') === 0);
       if (isHome || isSection) link.classList.add('active');
     });
+    // when parent + child both match (e.g. /invest and /invest/stocks),
+    // keep only the longest href so one page is highlighted
+    (function () {
+      var actives = Array.prototype.slice.call(document.querySelectorAll('.nav a.active'));
+      if (actives.length > 1) {
+        actives.sort(function (a, b) {
+          return (b.getAttribute('href') || '').length - (a.getAttribute('href') || '').length;
+        });
+        actives.slice(1).forEach(function (link) { link.classList.remove('active'); });
+      }
+    })();
+
+    // grouped dropdown menus: click toggles, Esc / outside-click closes
+    function closeGroups(except) {
+      document.querySelectorAll('.nav-group.open').forEach(function (group) {
+        if (group !== except) {
+          group.classList.remove('open');
+          var btn = group.querySelector('.nav-drop');
+          if (btn) btn.setAttribute('aria-expanded', 'false');
+        }
+      });
+    }
+    document.querySelectorAll('.nav-drop').forEach(function (button) {
+      button.addEventListener('click', function (event) {
+        event.stopPropagation();
+        var group = button.closest('.nav-group');
+        var willOpen = !group.classList.contains('open');
+        closeGroups(group);
+        group.classList.toggle('open', willOpen);
+        button.setAttribute('aria-expanded', String(willOpen));
+      });
+    });
+    document.addEventListener('click', function () { closeGroups(null); });
+    document.addEventListener('keydown', function (event) {
+      if (event.key === 'Escape') closeGroups(null);
+    });
+
+    // propagate the active page up to its group button
+    document.querySelectorAll('.nav-menu a.active').forEach(function (link) {
+      var button = link.closest('.nav-group')?.querySelector('.nav-drop');
+      if (button) button.classList.add('active');
+    });
+
+    // breadcrumb eyebrow derived from the nav structure (no per-page edits)
+    (function () {
+      var active = document.querySelector('.nav-menu a.active') || document.querySelector('.nav > a.active');
+      if (!active) return;
+      var page = active.textContent.trim();
+      var groupEl = active.closest('.nav-group')?.querySelector('.nav-drop');
+      var crumb = groupEl ? groupEl.textContent.replace(/▾/g, '').trim() + '  ·  ' + page : page;
+      var header = document.querySelector('.page-header');
+      var p = document.createElement('p');
+      p.className = 'crumbs';
+      p.textContent = crumb;
+      if (header) header.insertBefore(p, header.firstChild);
+    })();
   });
 
   window.RS = window.RS || {};

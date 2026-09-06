@@ -232,4 +232,17 @@ must_add = ["FINANCIAL HEALTH", "TOP COMPETITORS", "Data:"]
 missing = [m for m in must_keep + must_add if m not in text]
 print("OK   deep_report" if not missing else f"FAIL deep_report missing {missing}")
 
+print("== grouped nav ==")
+nb2 = pathlib.Path("templates/base.html").read_text(encoding="utf-8")
+for needle in ["nav-group", "nav-drop", "nav-menu", 'href="/invest/stocks"',
+               'href="/invest/mutual-funds"', 'href="/invest/bonds"',
+               'href="/invest/commodities"', "foot-links"]:
+    print(("OK  " if needle in nb2 else "MISS"), "nav:" + needle)
+css = pathlib.Path("static/app.css").read_text(encoding="utf-8")
+for needle in [".nav-group", ".nav-drop", ".nav-menu", ".crumbs", ".foot-links"]:
+    print(("OK  " if needle in css else "MISS"), "css:" + needle)
+js = pathlib.Path("static/app.js").read_text(encoding="utf-8")
+for needle in ["nav-drop", "closeGroups", "crumbs"]:
+    print(("OK  " if needle in js else "MISS"), "js:" + needle)
+
 print("DONE")

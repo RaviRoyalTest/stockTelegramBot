@@ -46,22 +46,34 @@
     <section class="card" aria-labelledby="apiHeading">
       <h2 id="apiHeading">API endpoints</h2>
       <p class="muted">Every tab's data source — click to verify it returns JSON:</p>
+      <h3 style="font-size:0.9rem; margin:12px 0 6px;">📈 Stocks</h3>
       <div class="pill-row">
-        <a class="pill" href="/api/status">status</a>
-        <a class="pill" href="/api/universe?universe=nifty500">universe</a>
+        <a class="pill" href="/api/watchlist?enrich=1">watchlist</a>
         <a class="pill" href="/api/quote?symbol=RELIANCE">quote</a>
         <a class="pill" href="/api/history?symbol=RELIANCE">history</a>
-        <a class="pill" href="/api/news?symbol=RELIANCE">news</a>
-        <a class="pill" href="/api/search?q=reliance">search</a>
-        <a class="pill" href="/api/screener?limit=3">screener</a>
-        <a class="pill" href="/api/movers?mode=gainers&limit=3">movers</a>
         <a class="pill" href="/api/fundamentals?symbol=RELIANCE">fundamentals</a>
         <a class="pill" href="/api/analysis?symbol=RELIANCE">analysis</a>
         <a class="pill" href="/api/checklist?symbol=RELIANCE">checklist</a>
         <a class="pill" href="/api/indicator?symbol=RELIANCE&name=RSI">indicator</a>
         <a class="pill" href="/api/harmonic?symbol=RELIANCE">harmonic</a>
-        <a class="pill" href="/api/metals">metals</a>
+        <a class="pill" href="/api/news?symbol=RELIANCE">news</a>
+      </div>
+      <h3 style="font-size:0.9rem; margin:12px 0 6px;">🔍 Screens</h3>
+      <div class="pill-row">
+        <a class="pill" href="/api/screener?limit=3">screener</a>
+        <a class="pill" href="/api/movers?mode=gainers&limit=3">movers</a>
+        <a class="pill" href="/api/universe?universe=nifty500">universe</a>
+        <a class="pill" href="/api/search?q=reliance">search</a>
         <a class="pill" href="/api/corporate_actions?symbol=RELIANCE">actions</a>
+      </div>
+      <h3 style="font-size:0.9rem; margin:12px 0 6px;">💰 Invest</h3>
+      <div class="pill-row">
+        <a class="pill" href="/api/metals">metals</a>
+        <a class="pill" href="/api/dividends?symbol=RELIANCE">dividends</a>
+      </div>
+      <h3 style="font-size:0.9rem; margin:12px 0 6px;">⚙️ System</h3>
+      <div class="pill-row">
+        <a class="pill" href="/api/status">status</a>
         <a class="pill" href="/health">health</a>
       </div>
     </section>
