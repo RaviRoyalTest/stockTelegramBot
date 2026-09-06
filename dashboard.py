@@ -883,6 +883,23 @@ async def api_metals():
         raise HTTPException(status_code=500, detail=str(exc))
 
 
+@app.get("/api/dividends")
+async def api_dividends(symbol: str | None = Query(None), years: int = Query(5, ge=1, le=10)):
+    """Cash-dividend history from Yahoo chart events (Dividend History parity).
+
+    Returns per-payout events plus annual totals — the same source the
+    reference app uses. Empty list (never an error) when Yahoo has nothing.
+    """
+    if not symbol:
+        raise HTTPException(status_code=400, detail="symbol is required")
+    key = symbol.strip().upper().removesuffix(".NS").removesuffix(".BO")
+    try:
+        data = await asyncio.to_thread(sources.get_dividends, "NSE", key, years)
+        return JSONResponse({"symbol": key, **data})
+    except Exception as exc:
+        raise HTTPException(status_code=500, detail=str(exc))
+
+
 @app.get("/api/fundamentals")
 async def api_fundamentals(symbol: str | None = Query(None), refresh: bool = Query(False), market: str = Query("in")):
     """Deep fundamentals for one symbol — the same dataset the Telegram bot's

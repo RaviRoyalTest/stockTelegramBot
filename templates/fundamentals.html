@@ -42,6 +42,13 @@
       <div class="note" id="rCompleteness" style="margin-top:6px;" aria-live="polite"></div>
     </section>
 
+    <!-- about the business -->
+    <section class="card section" id="rAboutCard" aria-labelledby="hAbout" hidden>
+      <h2 id="hAbout">🏢 About</h2>
+      <p id="rAbout" style="margin:0 0 8px;"></p>
+      <p style="margin:0;"><a id="rWebsite" href="#" target="_blank" rel="noopener">🌐 Company website</a></p>
+    </section>
+
     <!-- snapshot & verdict (same rules as the Telegram deep report) -->
     <section class="card section" aria-labelledby="hSnap">
       <h2 id="hSnap">🧠 Snapshot &amp; verdict</h2>
@@ -113,6 +120,18 @@
       <section class="card" aria-labelledby="hRet">
         <h2 id="hRet">🎯 Returns</h2>
         <table class="kv"><tbody id="rRet"></tbody></table>
+      </section>
+
+      <!-- financial health rating (0-100 gauge) -->
+      <section class="card" aria-labelledby="hScore">
+        <h2 id="hScore">💯 Financial Health Rating</h2>
+        <div id="rScore"></div>
+      </section>
+
+      <!-- dividend history -->
+      <section class="card" aria-labelledby="hDiv">
+        <h2 id="hDiv">💰 Dividend History</h2>
+        <div id="rDiv"><p class="muted">Loading…</p></div>
       </section>
 
       <!-- shareholding -->
@@ -226,6 +245,77 @@
         return '<span class="' + (n >= 0 ? 'pos' : 'neg') + '">' + (n >= 0 ? '+' : '') + fmt(n, d) + '%</span>';
       }
 
+      // Financial Health Rating: 100-point algorithm over 5 checkpoints
+      // (ROE 25 + ROCE-via-ROE 20 + D/E 25 + sales growth 15 + profit growth 15).
+      // fund.roe is already in percent units; growth fields are fractions.
+      function healthScore(f) {
+        var score = 0, reasons = [];
+        var roe = (f.roe != null && isFinite(Number(f.roe))) ? Number(f.roe) : null;
+        if (roe != null) {
+          if (roe > 20) { score += 25; reasons.push('High Return on Equity (ROE > 20%) shows exceptional profitability.'); }
+          else if (roe >= 15) { score += 20; reasons.push('Healthy Return on Equity (ROE 15-20%) shows solid returns.'); }
+          else if (roe >= 10) { score += 15; reasons.push('Moderate Return on Equity (ROE 10-15%).'); }
+          else { score += 5; reasons.push('Low Return on Equity (ROE < 10%) suggests suboptimal asset utilization.'); }
+        } else { score += 12; reasons.push('ROE data not available.'); }
+        if (roe != null) {
+          if (roe > 15) { score += 20; reasons.push('Excellent estimated capital returns (using ROE fallback > 15%).'); }
+          else if (roe >= 10) { score += 15; reasons.push('Adequate estimated capital returns (using ROE fallback).'); }
+          else { score += 10; reasons.push('Weak estimated capital returns (using ROE fallback).'); }
+        } else { score += 10; reasons.push('ROCE / Capital return data not available.'); }
+        var de = (f.debt_to_equity != null && isFinite(Number(f.debt_to_equity))) ? Number(f.debt_to_equity) : null;
+        if (de != null) {
+          if (de < 0.5) { score += 25; reasons.push('Low leverage (Debt/Equity of ' + de.toFixed(2) + ') indicates very low solvency risk.'); }
+          else if (de <= 1.0) { score += 15; reasons.push('Manageable leverage (Debt/Equity of ' + de.toFixed(2) + ').'); }
+          else if (de <= 1.5) { score += 5; reasons.push('High leverage (Debt/Equity of ' + de.toFixed(2) + ') increases financial risk.'); }
+          else { reasons.push('Very high leverage (Debt/Equity of ' + de.toFixed(2) + ') is a potential concern.'); }
+        } else { score += 15; reasons.push('Debt/Equity ratio not available.'); }
+        function growth(val, sales) {
+          if (val == null || !isFinite(Number(val))) return null;
+          return Number(val) * 100;
+        }
+        var sg = growth(f.revenue_growth), pg = growth(f.earnings_growth);
+        if (sg != null) {
+          if (sg > 15) { score += 15; reasons.push('Robust quarterly sales growth of ' + sg.toFixed(1) + '% YoY.'); }
+          else if (sg >= 5) { score += 10; reasons.push('Steady quarterly sales growth of ' + sg.toFixed(1) + '% YoY.'); }
+          else if (sg >= 0) { score += 5; reasons.push('Flat quarterly sales growth of ' + sg.toFixed(1) + '% YoY.'); }
+          else { reasons.push('Declining sales growth of ' + sg.toFixed(1) + '% YoY.'); }
+        } else { score += 8; reasons.push('Revenue growth data not available.'); }
+        if (pg != null) {
+          if (pg > 15) { score += 15; reasons.push('Outstanding earnings growth of ' + pg.toFixed(1) + '% YoY.'); }
+          else if (pg >= 5) { score += 10; reasons.push('Stable earnings growth of ' + pg.toFixed(1) + '% YoY.'); }
+          else if (pg >= 0) { score += 5; reasons.push('Modest earnings growth of ' + pg.toFixed(1) + '% YoY.'); }
+          else { reasons.push('Earnings contraction of ' + pg.toFixed(1) + '% YoY.'); }
+        } else { score += 8; reasons.push('Earnings growth data not available.'); }
+        var rating = score >= 80 ? 'Excellent' : score >= 60 ? 'Good' : score >= 40 ? 'Average' : 'Weak';
+        var desc = {
+          Excellent: 'The company exhibits outstanding financial strength, high profitability, and low leverage risk.',
+          Good: 'The company is financially robust with stable sales and profit numbers, though with minor items to watch.',
+          Average: 'The company shows moderate performance, showing stress in either profit growth or higher debt load.',
+          Weak: 'The company shows high risk, negative/stagnant earnings growth, or high leverage that demands caution.',
+        }[rating];
+        return { score: score, rating: rating, desc: desc, reasons: reasons };
+      }
+
+      function healthScoreHtml(f) {
+        var s = healthScore(f);
+        var color = s.score >= 80 ? 'var(--green)' : s.score >= 60 ? 'var(--accent)' : s.score >= 40 ? 'var(--amber)' : 'var(--red)';
+        var circ = 2 * Math.PI * 38, off = circ * (1 - Math.max(0, Math.min(100, s.score)) / 100);
+        return '<div style="display:flex; gap:16px; align-items:center; flex-wrap:wrap;">' +
+          '<svg viewBox="0 0 100 100" style="width:120px; height:120px;">' +
+          '<circle cx="50" cy="50" r="38" stroke="var(--line)" stroke-width="9" fill="none" />' +
+          '<circle cx="50" cy="50" r="38" stroke="' + color + '" stroke-width="9" fill="none" stroke-linecap="round" ' +
+          'stroke-dasharray="' + circ.toFixed(2) + '" stroke-dashoffset="' + off.toFixed(2) + '" transform="rotate(-90 50 50)" />' +
+          '<text x="50" y="52" text-anchor="middle" style="font-size:22px; font-weight:800; fill:var(--text);">' + s.score + '</text>' +
+          '<text x="50" y="68" text-anchor="middle" style="font-size:10px; font-weight:700; fill:var(--muted);">/100</text></svg>' +
+          '<div style="flex:1; min-width:220px;"><p style="margin:0 0 4px;"><span class="pill">' + esc(s.rating) + '</span></p>' +
+          '<p class="muted" style="margin:0 0 8px;">' + esc(s.desc) + '</p>' +
+          '<ul style="margin:0; padding-left:18px;">' + s.reasons.map(function (r) { return '<li>' + esc(r) + '</li>'; }).join('') + '</ul>' +
+          '<details style="margin-top:8px;"><summary class="note" style="cursor:pointer;">How is this score calculated?</summary>' +
+          '<p class="note">100 points over 5 checkpoints: ROE (25 pts: &gt;20%=25 | 15–20%=20 | 10–15%=15 | &lt;10%=5), ' +
+          'ROCE via ROE fallback (20 pts: &gt;15%=20 | 10–15%=15 | &lt;10%=10), Debt/Equity (25 pts: &lt;0.5=25 | 0.5–1.0=15 | 1.0–1.5=5 | &gt;1.5=0), ' +
+          'Sales growth YoY (15 pts), Profit growth YoY (15 pts). Missing data scores partial credit.</p></details></div></div>';
+      }
+
       function drawChart(canvas, closes) {
         var ctx = canvas.getContext('2d');
         var W = canvas.width = canvas.clientWidth * 2;
@@ -251,6 +341,26 @@
       }
 
       async function loadExtras(symbol, market) {
+        // Dividend history (Yahoo payout events + annual totals).
+        try {
+          var dr = await fetch('/api/dividends?symbol=' + encodeURIComponent(symbol));
+          if (dr.ok) {
+            var dj = await dr.json();
+            var annual = dj.annual || [], evts = dj.dividends || [];
+            var html = '';
+            if (annual.length) {
+              html += '<table class="table-mini"><thead><tr><th>Year</th><th class="num">Total dividend / share</th></tr></thead><tbody>' +
+                annual.map(function (a) { return '<tr><th scope="row">' + esc(String(a.year)) + '</th><td class="num">' + CUR + fmt(a.total, 2) + '</td></tr>'; }).join('') +
+                '</tbody></table>';
+            }
+            if (evts.length) {
+              html += '<h3 style="font-size:0.9rem; margin:10px 0 6px;">Recent payouts</h3><ul style="margin:0;padding-left:18px;">' +
+                evts.slice(0, 8).map(function (e) { return '<li>' + esc(e.date) + ' — <strong>' + CUR + fmt(e.amount, 2) + '</strong></li>'; }).join('') + '</ul>';
+            }
+            document.getElementById('rDiv').innerHTML = html ||
+              '<p class="muted">No dividend payouts in the last 5 years.</p>';
+          }
+        } catch (e) { document.getElementById('rDiv').innerHTML = '<p class="muted">Dividend data unavailable.</p>'; }
         // Snapshot & verdict (same rules as the Telegram deep report).
         try {
           var ar = await fetch('/api/analysis?symbol=' + encodeURIComponent(symbol) + '&market=' + encodeURIComponent(market || 'in'));
@@ -338,6 +448,7 @@
         document.getElementById('rPositives').innerHTML = '<p class="muted">Loading…</p>';
         document.getElementById('rConcerns').innerHTML = '<p class="muted">Loading…</p>';
         document.getElementById('rQuestion').textContent = '';
+        document.getElementById('rDiv').innerHTML = '<p class="muted">Loading…</p>';
         document.querySelectorAll('#report tbody, #rTrend, #rPeers, #rMgmt, #r5yHead, #r5yBody, #rQHead, #rQBody').forEach(function (el) {
           el.innerHTML = '<tr><td colspan="6" class="empty"><span class="skeleton" style="display:block;width:100%"></span></td></tr>';
         });
@@ -386,6 +497,23 @@
         if (q.source && q.source !== 'none' && srcList.indexOf(q.source) === -1) srcList.push(q.source);
         document.getElementById('rSources').textContent =
           srcList.length ? 'Sources: ' + srcList.join(' · ') : 'Sources: cache';
+
+        // ---- about ----
+        var aboutCard = document.getElementById('rAboutCard');
+        if (f.business_summary) {
+          aboutCard.hidden = false;
+          document.getElementById('rAbout').textContent = f.business_summary;
+          var ws = document.getElementById('rWebsite');
+          if (f.website) {
+            ws.hidden = false;
+            var href = /^https?:\/\//i.test(f.website) ? f.website : 'https://' + f.website;
+            ws.href = href;
+            ws.textContent = '🌐 ' + f.website;
+          } else { ws.hidden = true; }
+        } else { aboutCard.hidden = true; }
+
+        // ---- financial health rating (same 100-point algorithm as the React app) ----
+        document.getElementById('rScore').innerHTML = healthScoreHtml(f);
 
         // Completeness: fraction of key fields present (no more mystery blanks).
         var keyFields = ['price', 'pe', 'forward_pe', 'price_to_book', 'div_yield', 'roe', 'roce',

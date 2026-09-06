@@ -122,6 +122,20 @@ def _consensus(values: list[float]) -> float | None:
     return (clean[1] + clean[2]) / 2.0
 
 
+def _usd_inr() -> tuple[float | None, str]:
+    """USD→INR from exchangerate-api (free, no key), else currency-api."""
+    try:
+        resp = _quote_session().get("https://api.exchangerate-api.com/v4/latest/USD",
+                                    timeout=config.HTTP_TIMEOUT)
+        if resp.ok:
+            rate = _safe_float((resp.json().get("rates") or {}).get("INR"))
+            if rate:
+                return rate, "ExchangeRate-API"
+    except Exception as error:
+        log.info("metals: exchangerate-api failed: %s", error)
+    return None, ""
+
+
 def get_metals() -> dict:
     """Consensus gold/silver USD prices + per-source table + USD/INR.
 
@@ -136,12 +150,16 @@ def get_metals() -> dict:
     results = [entry for entry in (_coinpaprika(), _currency_api(), _coingecko()) if entry]
     gold = _consensus([entry["gold"] for entry in results])
     silver = _consensus([entry["silver"] for entry in results])
-    usd_inr = next((entry["usd_inr"] for entry in results if entry.get("usd_inr")), None)
+    usd_inr, fx_source = _usd_inr()
+    if usd_inr is None:
+        usd_inr = next((entry["usd_inr"] for entry in results if entry.get("usd_inr")), None)
+        fx_source = "CurrencyAPI" if usd_inr else ""
     data = {
         "gold": round(gold, 2) if gold else None,
         "silver": round(silver, 2) if silver else None,
         "ratio": round(gold / silver, 2) if gold and silver else None,
         "usd_inr": round(usd_inr, 2) if usd_inr else None,
+        "fx_source": fx_source,
         "sources": [
             {"source": entry["source"], "gold": round(entry["gold"], 2),
              "silver": round(entry["silver"], 2), "time": entry.get("time") or ""}

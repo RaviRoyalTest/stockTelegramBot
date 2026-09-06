@@ -2,67 +2,79 @@
 {% block title %}Mutual Funds · Royal Stock{% endblock %}
 {% block content %}
   <div class="page-header">
-    <h1>🏦 Mutual fund tools</h1>
-    <p class="sub">SIP / lumpsum returns, SWP duration, sustainable withdrawal and the 18-point fund checklist. <a href="/invest">← All investment tools</a></p>
+    <h1>🏦 Mutual Fund Calculator</h1>
+    <p class="sub">Calculate SIP/Lumpsum returns and SWP sustainability. <a href="/invest">← All investment tools</a></p>
   </div>
 
-  <section class="card" aria-labelledby="hCalc">
-    <h2 id="hCalc">Mutual Fund Calculator</h2>
-    <div class="form-row" role="tablist" aria-label="Calculator mode">
-      <button class="btn btn-sm modeBtn btn-primary" data-mode="sip" type="button">SIP Returns</button>
-      <button class="btn btn-sm modeBtn" data-mode="lumpsum" type="button">Lumpsum Returns</button>
-      <button class="btn btn-sm modeBtn" data-mode="swp" type="button">SWP Duration</button>
-      <button class="btn btn-sm modeBtn" data-mode="sus" type="button">Sustainable SWP</button>
-    </div>
+  <div class="section-grid">
+    <section class="card" aria-labelledby="hIn">
+      <h2 id="hIn">💰 Investment Details</h2>
+      <div class="field">
+        <label>Investment Type</label>
+        <div class="form-row" role="radiogroup" aria-label="Investment type">
+          <label style="display:flex; gap:6px; align-items:center;"><input type="radio" name="itype" value="sip" checked style="width:auto;" /> SIP (Monthly)</label>
+          <label style="display:flex; gap:6px; align-items:center;"><input type="radio" name="itype" value="yearly-sip" style="width:auto;" /> SIP (Yearly)</label>
+          <label style="display:flex; gap:6px; align-items:center;"><input type="radio" name="itype" value="lumpsum" style="width:auto;" /> Lumpsum</label>
+        </div>
+      </div>
+      <div class="field" id="amtWrap" style="margin-top:10px;">
+        <label for="amt" id="amtLabel">💵 Monthly SIP Amount (₹)</label>
+        <input id="amt" type="number" min="0" step="any" placeholder="e.g., 10000" />
+      </div>
+      <div class="form-row" style="margin-top:10px;">
+        <div class="field"><label for="ret">📈 Expected Annual Return (%)</label><input id="ret" type="number" min="0" step="any" placeholder="e.g., 12" /></div>
+        <div class="field"><label for="yrs">⏱️ Investment Period (Years)</label><input id="yrs" type="number" min="0" step="any" placeholder="e.g., 10" /></div>
+      </div>
+      <div class="form-row" style="margin-top:10px;">
+        <div class="field"><label for="hold">Post-Investment Holding Period (Years)</label><input id="hold" type="number" min="0" step="any" placeholder="e.g., 3" /><span class="note">Corpus keeps growing, no withdrawals</span></div>
+        <div class="field"><label for="oneW">One-Time Withdrawal (₹)</label><input id="oneW" type="number" min="0" step="any" placeholder="e.g., 100000" /></div>
+      </div>
+      <div class="card" style="box-shadow:none; margin-top:12px;">
+        <h3 style="font-size:0.95rem; margin-top:0;">💸 Systematic Withdrawal Plan (SWP) — Optional</h3>
+        <p class="note">Set up regular monthly withdrawals after holding period</p>
+        <div class="form-row">
+          <div class="field"><label for="swp">Monthly SWP Amount (₹)</label><input id="swp" type="number" min="0" step="any" placeholder="e.g., 20000" /></div>
+          <div class="field"><label for="swpYrs">SWP Duration (Years)</label><input id="swpYrs" type="number" min="0" step="any" placeholder="e.g., 20" /><span class="note">How many years to continue monthly withdrawals</span></div>
+        </div>
+        <div class="form-row" style="margin-top:10px;">
+          <div class="field"><label for="infl">📊 Inflation Rate (%) — Optional</label><input id="infl" type="number" min="0" step="any" placeholder="e.g., 6" /><span class="note">SWP amount will increase annually by this rate</span></div>
+          <div class="field"><label>Inflation Calculation Start From</label>
+            <div class="form-row" role="radiogroup" aria-label="Inflation start">
+              <label style="display:flex; gap:6px; align-items:center;"><input type="radio" name="istart" value="current-year" checked style="width:auto;" /> Current Year (SWP Start)</label>
+              <label style="display:flex; gap:6px; align-items:center;"><input type="radio" name="istart" value="sip-start" style="width:auto;" /> SIP Start Year</label>
+            </div>
+            <span class="note">From when SWP begins, or from when SIP investment started</span>
+          </div>
+        </div>
+      </div>
+      <div class="form-row" style="margin-top:12px;">
+        <button class="btn" type="button" id="mfReset">🔄 Reset All</button>
+      </div>
+    </section>
 
-    <div id="pane-sip" class="modePane" style="margin-top:12px;">
-      <p class="muted">Systematic Investment Plan — regular monthly investments (annuity-due).</p>
+    <section class="card" aria-labelledby="hRes">
+      <h2 id="hRes">📊 Calculation Results</h2>
+      <div id="mfResults"><p class="muted">Enter investment details — results appear automatically.</p></div>
+    </section>
+  </div>
+
+  <section class="card section" id="bdCard" aria-labelledby="hBd" hidden>
+    <div style="display:flex; justify-content:space-between; align-items:center; gap:12px; flex-wrap:wrap;">
+      <h2 id="hBd" style="margin-bottom:0;">Period-by-Period Breakdown</h2>
       <div class="form-row">
-        <div class="field"><label for="sipAmt">Monthly Investment (₹)</label><input id="sipAmt" type="number" min="0" step="any" placeholder="e.g., 5000" /></div>
-        <div class="field"><label for="sipYears">Investment Duration (Years)</label><input id="sipYears" type="number" min="0" step="any" placeholder="e.g., 10" /></div>
-        <div class="field"><label for="sipRate">Expected Return Rate (%)</label><input id="sipRate" type="number" min="0" step="any" placeholder="e.g., 12" /></div>
+        <button class="btn btn-sm" type="button" id="jumpSwp" hidden>⏭ Jump to SWP Start</button>
+        <button class="btn btn-sm viewBtn" data-v="monthly" type="button">Monthly</button>
+        <button class="btn btn-sm viewBtn" data-v="quarterly" type="button">Quarterly</button>
+        <button class="btn btn-sm viewBtn btn-primary" data-v="yearly" type="button">Yearly</button>
       </div>
     </div>
-
-    <div id="pane-lumpsum" class="modePane" style="margin-top:12px;" hidden>
-      <p class="muted">One-time investment compounding annually.</p>
-      <div class="form-row">
-        <div class="field"><label for="lumAmt">Investment Amount (₹)</label><input id="lumAmt" type="number" min="0" step="any" placeholder="e.g., 100000" /></div>
-        <div class="field"><label for="lumYears">Investment Duration (Years)</label><input id="lumYears" type="number" min="0" step="any" placeholder="e.g., 10" /></div>
-        <div class="field"><label for="lumRate">Expected Return Rate (%)</label><input id="lumRate" type="number" min="0" step="any" placeholder="e.g., 12" /></div>
-      </div>
-    </div>
-
-    <div id="pane-swp" class="modePane" style="margin-top:12px;" hidden>
-      <p class="muted">Systematic Withdrawal Plan — how long does the corpus last with monthly withdrawals?</p>
-      <div class="form-row">
-        <div class="field"><label for="swpCorpus">Corpus Amount (₹)</label><input id="swpCorpus" type="number" min="0" step="any" placeholder="e.g., 1000000" /></div>
-        <div class="field"><label for="swpW">Monthly Withdrawal (₹)</label><input id="swpW" type="number" min="0" step="any" placeholder="e.g., 10000" /></div>
-        <div class="field"><label for="swpRate">Expected Return Rate (%)</label><input id="swpRate" type="number" min="0" step="any" placeholder="e.g., 8" /></div>
-        <div class="field"><label for="swpInfl">Yearly inflation on withdrawal (%)</label><input id="swpInfl" type="number" min="0" step="any" placeholder="0" value="0" /></div>
-      </div>
-    </div>
-
-    <div id="pane-sus" class="modePane" style="margin-top:12px;" hidden>
-      <p class="muted">What fixed monthly withdrawal exactly exhausts the corpus over the chosen duration?</p>
-      <div class="form-row">
-        <div class="field"><label for="susCorpus">Corpus Amount (₹)</label><input id="susCorpus" type="number" min="0" step="any" placeholder="e.g., 1000000" /></div>
-        <div class="field"><label for="susYears">Withdrawal Duration (Years)</label><input id="susYears" type="number" min="0" step="any" placeholder="e.g., 20" /></div>
-        <div class="field"><label for="susRate">Expected Return Rate (%)</label><input id="susRate" type="number" min="0" step="any" placeholder="e.g., 8" /></div>
-      </div>
-    </div>
-
-    <div class="form-row" style="margin-top:12px;">
-      <button class="btn btn-primary" type="button" id="mfGo">Calculate</button>
-      <button class="btn" type="button" id="mfReset">Reset</button>
-    </div>
-    <table class="kv" style="margin-top:12px;"><tbody id="mfOut"><tr><td class="empty">Pick a mode, enter values, then Calculate.</td></tr></tbody></table>
-    <div id="mfTableWrap" class="table-scroll" style="margin-top:12px;" hidden>
+    <div class="table-scroll" style="margin-top:12px; max-height:500px; overflow-y:auto;">
       <table class="table-mini">
-        <thead><tr><th>Year</th><th class="num">Invested (₹)</th><th class="num">Value (₹)</th><th class="num">Gains (₹)</th></tr></thead>
-        <tbody id="mfTable"></tbody>
+        <thead><tr id="bdHead"></tr></thead>
+        <tbody id="bdBody"></tbody>
       </table>
     </div>
+    <p class="note" id="bdLegend" style="margin-bottom:0;"></p>
   </section>
 
   <section class="card section" aria-labelledby="hCheck">
@@ -81,101 +93,311 @@
     (function () {
       'use strict';
       var esc = RS.escapeHtml, fmtNum = RS.fmtNum;
-      function num(v) { var n = Number(v); return isFinite(n) ? n : null; }
-      function inr(v) { return v == null ? '−' : '₹' + fmtNum(v == null ? 0 : v, 0); }
+      function num(v) { var n = Number(v); return isFinite(n) ? n : 0; }
+      function inr(v) { return '₹' + fmtNum(v == null || !isFinite(v) ? 0 : v, 0); }
+      function inr2(v) { return '₹' + fmtNum(v == null || !isFinite(v) ? 0 : v, 2); }
+
+      var itype = 'sip', view = 'yearly';
+
+      function sipFVMonthly(p, annual, years) {
+        var r = annual / 1200, n = Math.round(years * 12);
+        if (r <= 0) return p * n;
+        return p * ((Math.pow(1 + r, n) - 1) / r) * (1 + r);
+      }
+      function sipFVYearly(p, annual, years) {
+        var r = annual / 100, n = years;
+        if (r <= 0) return p * n;
+        return p * ((Math.pow(1 + r, n) - 1) / r) * (1 + r);
+      }
+
+      function monthsToZero(bal, w, annual, infl, applyYears) {
+        if (w <= 0) return null;
+        var mr = annual / 1200, air = infl / 100, m = 0, cw = w;
+        if (applyYears > 0 && infl > 0) cw = w * Math.pow(1 + air, applyYears);
+        while (bal > 0 && m < 1200) {
+          if (infl > 0 && m > 12 && (m - 1) % 12 === 0) cw = cw * (1 + air);
+          bal = bal + bal * mr - cw;
+          m++;
+          if (bal <= 0) break;
+        }
+        if (m >= 1200) return null;
+        return { years: Math.floor(m / 12), months: m % 12 };
+      }
+
+      function compute() {
+        var amt = num(document.getElementById('amt').value);
+        var ret = num(document.getElementById('ret').value);
+        var yrs = num(document.getElementById('yrs').value);
+        var hold = num(document.getElementById('hold').value);
+        var oneW = num(document.getElementById('oneW').value);
+        var swp = num(document.getElementById('swp').value);
+        var swpY = num(document.getElementById('swpYrs').value);
+        var infl = num(document.getElementById('infl').value);
+        var istart = (document.querySelector('input[name="istart"]:checked') || {}).value || 'current-year';
+        if (!(ret >= 0 && yrs > 0 && amt > 0)) return null;
+
+        var corpus = 0, invested = 0;
+        if (itype === 'sip') { corpus = sipFVMonthly(amt, ret, yrs); invested = amt * yrs * 12; }
+        else if (itype === 'yearly-sip') { corpus = sipFVYearly(amt, ret, yrs); invested = amt * yrs; }
+        else { corpus = amt * Math.pow(1 + ret / 100, yrs); invested = amt; }
+
+        var bal = corpus;
+        if (hold > 0) bal = bal * Math.pow(1 + ret / 100, hold);
+        var afterHolding = bal;
+        if (oneW > 0) bal = Math.max(0, bal - oneW);
+        var forSwp = bal;
+        var minSWP = forSwp > 0 ? forSwp * ret / 1200 : 0;
+
+        var toZero = null;
+        if (swp > 0 && forSwp > 0) {
+          var fromStart = istart === 'sip-start' ? yrs + hold : 0;
+          var initial = swp;
+          if (istart === 'sip-start' && fromStart > 0 && infl > 0) initial = swp * Math.pow(1 + infl / 100, fromStart);
+          if (initial > minSWP || infl > 0) toZero = monthsToZero(forSwp, swp, ret, infl, fromStart);
+        }
+
+        var fin = bal;
+        if (swp > 0 && swpY > 0 && bal > 0) {
+          var mr = ret / 1200, air = infl / 100, n = Math.min(Math.round(swpY * 12), 600);
+          var fromS = istart === 'sip-start' ? yrs + hold : 0, cw = swp;
+          if (istart === 'sip-start' && fromS > 0 && infl > 0) cw = swp * Math.pow(1 + air, fromS);
+          for (var m = 1; m <= n; m++) {
+            if (infl > 0 && m > 12 && (m - 1) % 12 === 0) cw = cw * (1 + air);
+            fin = fin + fin * mr - cw;
+            if (fin <= 0) { fin = 0; break; }
+          }
+        }
+        return { corpus: Math.max(0, corpus), afterHolding: Math.max(0, afterHolding), fin: Math.max(0, fin),
+          invested: Math.max(0, invested), returns: corpus - invested, toZero: toZero, minSWP: Math.max(0, minSWP),
+          hold: hold, swp: swp, swpY: swpY, infl: infl, istart: istart, yrs: yrs, ret: ret };
+      }
+
+      function breakdown() {
+        var amt = num(document.getElementById('amt').value);
+        var ret = num(document.getElementById('ret').value);
+        var yrs = num(document.getElementById('yrs').value);
+        var hold = num(document.getElementById('hold').value);
+        var oneW = num(document.getElementById('oneW').value);
+        var swp = num(document.getElementById('swp').value);
+        var swpY = num(document.getElementById('swpYrs').value);
+        var infl = num(document.getElementById('infl').value);
+        var istart = (document.querySelector('input[name="istart"]:checked') || {}).value || 'current-year';
+        if (!(ret >= 0 && yrs > 0 && amt > 0)) return [];
+        var mr = ret / 1200;
+        var mpp = view === 'monthly' ? 1 : view === 'quarterly' ? 3 : 12;
+        var ppy = 12 / mpp, maxP = Math.floor(600 / mpp);
+        var rows = [], bal = 0, invested = 0, cumInt = 0, pc = 1;
+        if (itype === 'sip') {
+          var totalP = Math.round(yrs * ppy);
+          for (var i = 1; i <= totalP; i++) {
+            var open = bal, start = bal, pinv = 0;
+            for (var mo = 1; mo <= mpp; mo++) { bal = bal + amt; invested += amt; pinv += amt; bal = bal + bal * mr; }
+            var pint = bal - start - pinv;
+            cumInt += pint;
+            rows.push({ n: pc++, open: open, pinv: pinv, pint: pint, wd: null, close: bal, inv: invested, cum: cumInt, phase: 'invest' });
+          }
+        } else if (itype === 'yearly-sip') {
+          (function () {
+            var totalP = Math.round(yrs * ppy);
+            for (var i = 1; i <= totalP; i++) {
+              var open = bal, start = bal, pinv = 0;
+              if ((i - 1) % ppy === 0) { bal += amt; invested += amt; pinv = amt; }
+              for (var mo = 1; mo <= mpp; mo++) { bal = bal * (1 + mr); }
+              var pint = bal - start - pinv;
+              cumInt += pint;
+              rows.push({ n: pc++, open: open, pinv: pinv, pint: pint, wd: null, close: bal, inv: invested, cum: cumInt, phase: 'invest' });
+            }
+          })();
+        } else {
+          bal = amt; invested = amt;
+          (function () {
+            var open = 0, start = bal;
+            for (var mo = 1; mo <= mpp; mo++) { bal = bal * (1 + mr); }
+            var pint = bal - start;
+            cumInt += pint;
+            rows.push({ n: pc++, open: open, pinv: invested, pint: pint, wd: null, close: bal, inv: invested, cum: cumInt, phase: 'invest' });
+            var rest = Math.round((yrs - 1) * ppy);
+            for (var i = 1; i <= rest; i++) {
+              var o2 = bal, s2 = bal;
+              for (var m2 = 1; m2 <= mpp; m2++) { bal = bal * (1 + mr); }
+              var pi2 = bal - s2;
+              cumInt += pi2;
+              rows.push({ n: pc++, open: o2, pinv: 0, pint: pi2, wd: null, close: bal, inv: invested, cum: cumInt, phase: 'invest' });
+            }
+          })();
+        }
+        if (hold > 0) {
+          var hp = Math.round(hold * ppy);
+          for (var h = 1; h <= hp; h++) {
+            var ho = bal, hs = bal;
+            for (var hm = 1; hm <= mpp; hm++) { bal = bal * (1 + mr); }
+            var hi = bal - hs;
+            cumInt += hi;
+            rows.push({ n: pc++, open: ho, pinv: 0, pint: hi, wd: null, close: bal, inv: invested, cum: cumInt, phase: 'hold' });
+          }
+        }
+        if (oneW > 0) {
+          var wo = bal;
+          bal = Math.max(0, bal - oneW);
+          rows.push({ n: pc++, open: wo, pinv: 0, pint: 0, wd: oneW, close: bal, inv: invested, cum: cumInt, phase: 'withdraw' });
+        }
+        if (swp > 0 && swpY > 0 && bal > 0) {
+          var air = infl / 100, fromS = istart === 'sip-start' ? yrs + hold : 0, cw = swp;
+          if (istart === 'sip-start' && fromS > 0 && infl > 0) cw = swp * Math.pow(1 + air, fromS);
+          var totalSP = Math.min(Math.round(swpY * ppy), maxP - rows.length);
+          for (var s = 1; s <= totalSP; s++) {
+            if (infl > 0 && s > 1 && (s - 1) % ppy === 0) cw = cw * (1 + air);
+            var so = bal, ss = bal, pwd = 0;
+            for (var sm = 1; sm <= mpp; sm++) {
+              bal = bal * (1 + mr) - cw;
+              pwd += cw;
+              if (bal <= 0) { bal = 0; break; }
+            }
+            var spi = bal - ss + pwd;
+            cumInt += spi;
+            rows.push({ n: pc++, open: so, pinv: 0, pint: spi, wd: pwd, close: bal, inv: invested, cum: cumInt, phase: 'swp' });
+            if (bal <= 0) break;
+          }
+        }
+        return rows;
+      }
+
+      function render() {
+        var r = compute();
+        var box = document.getElementById('mfResults');
+        var bdCard = document.getElementById('bdCard');
+        if (!r) {
+          box.innerHTML = '<p class="muted">Enter investment details — results appear automatically.</p>';
+          bdCard.hidden = true;
+          return;
+        }
+        var h = '<table class="kv"><tbody>' + kv([
+          ['💵 Total Invested', inr(r.invested)],
+          ['📈 Total Returns', inr(r.returns)],
+          ['🎯 Corpus After Investment', inr(r.corpus)],
+        ]) + '</tbody></table>';
+        if (r.hold > 0) h += '<p class="note">🕐 Corpus After Holding Period: <strong>' + inr(compute().afterHolding) + '</strong> — amount after ' + r.hold + ' years of holding (compounded growth)</p>';
+        if (r.swp > 0 && r.swpY > 0) h += '<p class="note">💰 Final Balance (After SWP): <strong>' + inr(r.fin) + '</strong> — balance remaining after ' + r.swpY + ' years of withdrawals</p>';
+
+        // SWP analysis
+        if (r.swp > 0) {
+          h += '<h3 style="font-size:0.95rem; margin-top:12px;">SWP Analysis</h3>';
+          if (r.infl > 0) {
+            var fromS = r.istart === 'sip-start' ? r.yrs + r.hold : 0;
+            var initial = r.swp, air = r.infl / 100;
+            if (r.istart === 'sip-start' && fromS > 0) initial = r.swp * Math.pow(1 + air, fromS);
+            var final = initial * Math.pow(1 + air, Math.max(r.swpY - 1, 0));
+            h += '<p class="note">Inflation Applied: <strong>' + r.infl + '% annually</strong> — SWP amount increases each year, starting from ' +
+              (r.istart === 'sip-start' ? 'SIP start year' : 'when SWP begins') + '.</p>';
+            if (r.istart === 'sip-start' && fromS > 0) {
+              var sustToday = r.minSWP / Math.pow(1 + air, fromS);
+              var over = r.swp > sustToday;
+              h += '<p class="note">💡 Your input ' + inr2(r.swp) + '/month is in <strong>today\'s money</strong> — after ' + fromS +
+                ' years of inflation it equals <strong>' + inr2(initial) + '/month</strong> when SWP begins. ' +
+                (over ? '⚠️ <strong>Exceeds sustainable by ' + inr2(r.swp - sustToday) + '</strong> (max ' + inr2(sustToday) + ' to sustain forever).'
+                  : '✅ <strong>Sustainable entry</strong> (max ' + inr2(sustToday) + ' in today\'s money).') + '</p>';
+            }
+            h += '<p class="note">Initial monthly withdrawal: <strong>' + inr2(initial) + '</strong> · Final monthly withdrawal (Year ' + r.swpY + '): <strong>' + inr2(final) + '</strong></p>';
+            if (r.istart === 'sip-start') {
+              var sustT = r.minSWP / Math.pow(1 + air, fromS);
+              h += '<p class="note">📝 To sustain forever, enter approximately <strong>' + inr2(sustT) + '</strong> in “Monthly SWP Amount”.</p>';
+            } else {
+              h += '<p class="note">⚠️ With ' + r.infl + '% inflation: sustainable starting amount ≈ <strong>' + inr2(r.minSWP * (1 - r.infl / 100)) + '</strong>/month — starting at ' + inr2(r.minSWP) + ' with inflation slowly depletes the corpus.</p>';
+            }
+          }
+          if (r.toZero) h += '<p>⏳ Time Until Balance Reaches Zero: <strong>' + r.toZero.years + ' years ' + r.toZero.months + ' months</strong></p>';
+          else h += '<p><span class="pos">Balance will never reach zero! 🎉</span></p>';
+          h += '<p class="note">Minimum Monthly SWP (To Sustain Forever): <strong>' + inr2(r.minSWP) + '</strong> — ' +
+            (r.infl > 0 ? 'the maximum initial monthly withdrawal that keeps your corpus stable (interest = withdrawal).'
+              : 'the maximum amount you can withdraw monthly without depleting your principal.') + '</p>';
+          if (r.toZero) h += '<p class="note">⚠️ Warning: your current SWP' + (r.infl > 0 ? ' (with inflation adjustments)' : '') + ' exceeds the sustainable amount. Balance reaches zero in ' + r.toZero.years + ' years ' + r.toZero.months + ' months.</p>';
+          else h += '<p class="note">✅ Sustainable Plan: your SWP' + (r.infl > 0 ? ' (even with inflation adjustments)' : '') + ' is within sustainable limits.</p>';
+        }
+        box.innerHTML = h;
+
+        // breakdown
+        var rows = breakdown();
+        bdCard.hidden = !rows.length;
+        if (rows.length) {
+          var investPeriods = Math.round(r.yrs * (view === 'monthly' ? 12 : view === 'quarterly' ? 4 : 1));
+          var holdPeriods = Math.round(r.hold * (view === 'monthly' ? 12 : view === 'quarterly' ? 4 : 1));
+          var hasWd = rows.some(function (x) { return x.wd; });
+          var periodName = view === 'monthly' ? 'Month' : view === 'quarterly' ? 'Quarter' : 'Year';
+          document.getElementById('bdHead').innerHTML = '<th>' + periodName + '</th><th class="num">Opening</th><th class="num">Invested</th>' +
+            '<th class="num">Interest</th>' + (hasWd ? '<th class="num">Withdrawal</th>' : '') +
+            '<th class="num">Closing</th><th class="num">Total Invested</th><th class="num">Total Interest</th><th class="num">Value at Term End</th>';
+          var swpIdx = -1;
+          for (var i = 0; i < rows.length; i++) { if (rows[i].phase === 'swp') { swpIdx = i; break; } }
+          document.getElementById('jumpSwp').hidden = swpIdx < 0;
+          var mpp = view === 'monthly' ? 1 : view === 'quarterly' ? 3 : 12;
+          var totalIP = Math.round(r.yrs * (12 / mpp));
+          document.getElementById('bdBody').innerHTML = rows.map(function (row, idx) {
+            var tag = row.phase === 'swp' ? ' <span class="pill">SWP</span>' : row.phase === 'hold' ? ' <span class="muted">(Holding)</span>' : (row.wd && row.phase !== 'swp' ? ' <span class="muted">(Withdrawal)</span>' : '');
+            var vte = '−';
+            if (row.pinv > 0 && row.phase !== 'swp') {
+              var remP = Math.max(0, totalIP - (idx + 1)), remM = remP * mpp;
+              vte = inr(row.pinv * Math.pow(1 + r.ret / 1200, remM));
+            }
+            return '<tr' + (idx === swpIdx ? ' id="swpStartRow"' : '') + '><td>' + row.n + tag + '</td>' +
+              '<td class="num">' + inr(row.open) + '</td>' +
+              '<td class="num">' + (row.pinv > 0 ? inr(row.pinv) : '−') + '</td>' +
+              '<td class="num">' + inr(row.pint) + '</td>' +
+              (hasWd ? '<td class="num">' + (row.wd ? inr(row.wd) : '−') + '</td>' : '') +
+              '<td class="num"><strong>' + inr(row.close) + '</strong></td>' +
+              '<td class="num">' + inr(row.inv) + '</td>' +
+              '<td class="num">' + inr(row.cum) + '</td>' +
+              '<td class="num">' + vte + '</td></tr>';
+          }).join('');
+          var totW = rows.reduce(function (s, x) { return s + (x.wd || 0); }, 0);
+          var last = rows[rows.length - 1];
+          document.getElementById('bdLegend').textContent =
+            'Investment rows · Holding rows · SWP rows — totals: invested ' + inr(last.inv) +
+            ', interest ' + inr(last.cum) + ', value ' + inr(last.close) +
+            (totW ? ', withdrawn ' + inr(totW) : '');
+        }
+      }
+
       function kv(pairs) {
         return pairs.map(function (p) {
           return '<tr><th scope="row">' + esc(p[0]) + '</th><td>' + p[1] + '</td></tr>';
         }).join('');
       }
 
-      var mode = 'sip';
-      document.querySelectorAll('.modeBtn').forEach(function (btn) {
-        btn.addEventListener('click', function () {
-          mode = btn.dataset.mode;
-          document.querySelectorAll('.modeBtn').forEach(function (b) { b.classList.remove('btn-primary'); });
-          btn.classList.add('btn-primary');
-          document.querySelectorAll('.modePane').forEach(function (p) { p.hidden = true; });
-          document.getElementById('pane-' + mode).hidden = false;
+      document.querySelectorAll('input[name="itype"]').forEach(function (el) {
+        el.addEventListener('change', function () {
+          var cur = document.getElementById('amt').value;
+          var prev = itype;
+          itype = el.value;
+          document.getElementById('amtLabel').textContent =
+            itype === 'sip' ? '💵 Monthly SIP Amount (₹)' : itype === 'yearly-sip' ? '💵 Yearly SIP Amount (₹)' : '💰 Lumpsum Amount (₹)';
+          document.getElementById('amt').placeholder =
+            itype === 'sip' ? 'e.g., 10000' : itype === 'yearly-sip' ? 'e.g., 120000' : 'e.g., 100000';
+          if (cur && !document.getElementById('amt').value) document.getElementById('amt').value = cur;
+          render();
         });
       });
-
-      function sipFV(monthly, annualRate, years) {
-        var r = annualRate / 1200, n = Math.round(years * 12);
-        if (r <= 0) return monthly * n;
-        return monthly * ((Math.pow(1 + r, n) - 1) / r) * (1 + r);
-      }
-
-      document.getElementById('mfReset').addEventListener('click', function () {
-        document.querySelectorAll('.modePane input').forEach(function (el) { if (el.id !== 'swpInfl') el.value = ''; });
-        document.getElementById('mfOut').innerHTML = '<tr><td class="empty">Pick a mode, enter values, then Calculate.</td></tr>';
-        document.getElementById('mfTableWrap').hidden = true;
+      document.querySelectorAll('.viewBtn').forEach(function (btn) {
+        btn.addEventListener('click', function () {
+          view = btn.dataset.v;
+          document.querySelectorAll('.viewBtn').forEach(function (b) { b.classList.remove('btn-primary'); });
+          btn.classList.add('btn-primary');
+          render();
+        });
       });
-
-      document.getElementById('mfGo').addEventListener('click', function () {
-        var out = [], table = '';
-        document.getElementById('mfTableWrap').hidden = true;
-        if (mode === 'sip') {
-          var m = num(document.getElementById('sipAmt').value);
-          var y = num(document.getElementById('sipYears').value);
-          var r = num(document.getElementById('sipRate').value);
-          if (m == null || y == null || r == null || m < 100 || y < 1) { RS.toast('Monthly ≥ ₹100 and duration ≥ 1 year', 'err'); return; }
-          var invested = m * 12 * y, fv = sipFV(m, r, y);
-          out = [['Total Invested', inr(invested)], ['Maturity Value', inr(fv)], ['Capital Gains', inr(fv - invested)]];
-          var rows = '';
-          for (var yr = 1; yr <= Math.min(Math.round(y), 40); yr++) {
-            var inv = m * 12 * yr, val = sipFV(m, r, yr);
-            rows += '<tr><td>' + yr + '</td><td class="num">' + inr(inv) + '</td><td class="num">' + inr(val) + '</td><td class="num">' + inr(val - inv) + '</td></tr>';
-          }
-          document.getElementById('mfTable').innerHTML = rows;
-          document.getElementById('mfTableWrap').hidden = false;
-        } else if (mode === 'lumpsum') {
-          var p = num(document.getElementById('lumAmt').value);
-          var ly = num(document.getElementById('lumYears').value);
-          var lr = num(document.getElementById('lumRate').value);
-          if (p == null || ly == null || lr == null || p < 100 || ly < 1) { RS.toast('Amount ≥ ₹100 and duration ≥ 1 year', 'err'); return; }
-          var mat = p * Math.pow(1 + lr / 100, ly);
-          out = [['Total Invested', inr(p)], ['Maturity Value', inr(mat)], ['Capital Gains', inr(mat - p)]];
-          var lrows = '';
-          for (var y2 = 1; y2 <= Math.min(Math.round(ly), 40); y2++) {
-            var v2 = p * Math.pow(1 + lr / 100, y2);
-            lrows += '<tr><td>' + y2 + '</td><td class="num">' + inr(p) + '</td><td class="num">' + inr(v2) + '</td><td class="num">' + inr(v2 - p) + '</td></tr>';
-          }
-          document.getElementById('mfTable').innerHTML = lrows;
-          document.getElementById('mfTableWrap').hidden = false;
-        } else if (mode === 'swp') {
-          var c = num(document.getElementById('swpCorpus').value);
-          var w = num(document.getElementById('swpW').value);
-          var sr = num(document.getElementById('swpRate').value);
-          var infl = num(document.getElementById('swpInfl').value) || 0;
-          if (c == null || w == null || sr == null || c <= 0 || w <= 0) { RS.toast('Enter corpus, withdrawal and return', 'err'); return; }
-          var mr = sr / 1200, bal = c, mo = 0, cw = w, air = infl / 100;
-          while (bal > 0 && mo < 1200) {
-            if (infl > 0 && mo > 12 && (mo - 1) % 12 === 0) cw = cw * (1 + air);
-            bal = bal + bal * mr - cw;
-            mo++;
-            if (bal <= 0) break;
-          }
-          if (mo >= 1200) {
-            var forever = c * mr;
-            out = [['Withdrawal Duration', 'Beyond 100 years — withdrawals are covered by returns'],
-              ['Interest-only (forever) withdrawal', inr(forever) + ' / month']];
-          } else {
-            out = [['Withdrawal Duration', Math.floor(mo / 12) + ' years ' + (mo % 12) + ' months (' + mo + ' months)']];
-          }
-        } else {
-          var sc = num(document.getElementById('susCorpus').value);
-          var sy = num(document.getElementById('susYears').value);
-          var srate = num(document.getElementById('susRate').value);
-          if (sc == null || sy == null || srate == null || sc <= 0 || sy <= 0) { RS.toast('Enter corpus, duration and return', 'err'); return; }
-          var smr = srate / 1200, n = Math.round(sy * 12), sus;
-          if (smr <= 0) sus = sc / n;
-          else sus = sc * smr / (1 - Math.pow(1 + smr, -n));
-          out = [['Sustainable Monthly Withdrawal', inr(sus)],
-            ['Total withdrawn over ' + sy + ' years', inr(sus * n)],
-            ['Interest-only (never touch principal)', inr(sc * smr) + ' / month']];
-        }
-        document.getElementById('mfOut').innerHTML = kv(out);
+      document.querySelectorAll('#amt, #ret, #yrs, #hold, #oneW, #swp, #swpYrs, #infl').forEach(function (el) {
+        el.addEventListener('input', render);
+      });
+      document.querySelectorAll('input[name="istart"]').forEach(function (el) {
+        el.addEventListener('change', render);
+      });
+      document.getElementById('jumpSwp').addEventListener('click', function () {
+        var row = document.getElementById('swpStartRow');
+        if (row) row.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      });
+      document.getElementById('mfReset').addEventListener('click', function () {
+        ['amt', 'ret', 'yrs', 'hold', 'oneW', 'swp', 'swpYrs', 'infl'].forEach(function (id) { document.getElementById(id).value = ''; });
+        document.querySelector('input[name="istart"][value="current-year"]').checked = true;
+        render();
       });
 
       /* ---------- MF CHECKLIST (18 items + info, same set as the React app) ---------- */
@@ -232,6 +454,8 @@
           function () { RS.toast('Copy failed', 'err'); });
       });
       mfCount();
+
+      render();
     })();
   </script>
 {% endblock %}

@@ -37,7 +37,7 @@ FUND_MAX_ROWS = 40  # rows enriched with the slow screener.in part per command
 # fields). Old entries (e.g. fetched before the analyst-forecast extraction
 # existed) are then treated as stale and refetched instead of serving a
 # forecast-less report for up to 24h.
-_FUND_CACHE_SCHEMA = 4
+_FUND_CACHE_SCHEMA = 5
 
 # Disk-persisted session + cache (gitignored .cache/ dir). The always-on bot
 # restarts often (Render sleep/wake), and every restart used to throw away
@@ -660,6 +660,12 @@ def _extract_quote_summary(payload: dict, currency: str = "inr") -> dict:
         extras["industry"] = asset_profile["industry"]
     if asset_profile.get("fullTimeEmployees"):
         extras["employees"] = asset_profile["fullTimeEmployees"]
+    business_summary = (asset_profile.get("longBusinessSummary") or "").strip()
+    if business_summary:
+        extras["business_summary"] = business_summary
+    website = (asset_profile.get("website") or "").strip()
+    if website:
+        extras["website"] = website
     out.update(extras)
 
     # Top executives (assetProfile.companyOfficers) - shared by IN + US paths.

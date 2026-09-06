@@ -17,6 +17,7 @@ from .free_api import (
     normalise_fundamentals,
 )
 from .metals import get_metals
+from .dividends import get_dividends
 from .us_fundamentals import get_us_fundamentals
 from .us_search import search_us_tickers
 from .news import get_stock_news
@@ -103,6 +104,7 @@ __all__ = [
     "get_stooq_history",
     "normalise_fundamentals",
     "get_metals",
+    "get_dividends",
     "get_quote_async",
     "get_nse_stock_list_async",
     "get_nse_corporate_actions_async",

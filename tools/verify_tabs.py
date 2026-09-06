@@ -85,7 +85,7 @@ finally:
 
 print("== new web routes ==")
 for must in ["/api/movers", "/api/analysis", "/api/checklist", "/api/indicator",
-             "/api/harmonic", "/api/metals", "/movers", "/forecast", "/checklist",
+             "/api/harmonic", "/api/metals", "/api/dividends", "/movers", "/forecast", "/checklist",
              "/indicator", "/news", "/invest", "/invest/stocks",
              "/invest/mutual-funds", "/invest/bonds", "/invest/commodities"]:
     print(("OK  " if must in paths else "MISS"), must)
@@ -100,11 +100,12 @@ for name in ["movers.html", "forecast.html", "checklist.html",
 
 print("== invest content ==")
 stocks = pathlib.Path("templates/invest_stocks.html").read_text(encoding="utf-8")
-for needle in ["avgGo", "profitGo", "simGo", "recBody", "pnlGo", "checkGroups",
-               "Recovery % = [1", "Annualized Return"]:
+for needle in ["avgCalcMode", "ptBtn", "overallXIRR" if False else "Overall XIRR", "simModal", "Custom Realised Stock Value",
+               "Equity", "Copy All", "Recovery % = [1", "Annualized Return"]:
     print(("OK  " if needle in stocks else "MISS"), "stocks:" + needle)
 mf = pathlib.Path("templates/invest_mutual.html").read_text(encoding="utf-8")
-for needle in ["pane-sip", "pane-swp", "mfTable", "mfChecks", "Sharpe ratio"]:
+for needle in ["itype", "swpYrs", "istart", "Jump to SWP Start", "Value at Term End",
+               "viewBtn", "mfChecks", "Sharpe ratio"]:
     print(("OK  " if needle in mf else "MISS"), "mutual:" + needle)
 bonds = pathlib.Path("templates/invest_bonds.html").read_text(encoding="utf-8")
 for needle in ["beforeChecks", "bondChecks", "Investment grade credit rating"]:
@@ -123,6 +124,12 @@ checks = [
     _consensus([2000.0, 2005.0, 2100.0]) == 2002.5,
 ]
 print("OK   metals_consensus" if all(checks) else f"FAIL metals_consensus {checks}")
+
+print("== fundamentals extras ==")
+fx = pathlib.Path("templates/fundamentals.html").read_text(encoding="utf-8")
+for needle in ["rAboutCard", "rDiv", "/api/dividends", "rScore", "How is this score calculated?",
+               "business_summary", "healthScore"]:
+    print(("OK  " if needle in fx else "MISS"), "fundamentals:" + needle)
 
 print("== nav links ==")
 nb = pathlib.Path("templates/base.html").read_text(encoding="utf-8")

@@ -74,10 +74,10 @@
         if (ratio == null || !isFinite(ratio) || ratio <= 0) return null;
         if (ratio >= 90) return { rec: '🥈 Buy Silver', str: 'Strong', msg: 'Silver is extremely undervalued relative to gold. Strong buy signal for silver.' };
         if (ratio >= 80) return { rec: '🥈 Buy Silver', str: 'Moderate', msg: 'Silver is significantly undervalued. Consider accumulating silver positions.' };
-        if (ratio > 70) return { rec: '🥈 Buy Silver', str: 'Weak', msg: 'Silver is moderately undervalued. Potential opportunity to buy silver.' };
-        if (ratio >= 50) return { rec: '⚖️ Neutral / Hold', str: '—', msg: 'Ratio is near historical average. Monitor both metals for better entry points.' };
-        if (ratio >= 40) return { rec: '🥇 Buy Gold', str: 'Weak', msg: 'Gold is starting to look relatively undervalued. Consider building gold positions.' };
-        if (ratio >= 30) return { rec: '🥇 Buy Gold', str: 'Moderate', msg: 'Gold is significantly undervalued. Good opportunity to accumulate gold.' };
+        if (ratio >= 70) return { rec: '🥈 Buy Silver', str: 'Weak', msg: 'Silver is moderately undervalued. Potential opportunity to buy silver.' };
+        if (ratio >= 60) return { rec: '⚖️ Neutral / Hold', str: 'Weak', msg: 'Ratio is near historical average. Monitor both metals for better entry points.' };
+        if (ratio >= 50) return { rec: '🥇 Buy Gold', str: 'Weak', msg: 'Gold is starting to look relatively undervalued. Consider building gold positions.' };
+        if (ratio >= 40) return { rec: '🥇 Buy Gold', str: 'Moderate', msg: 'Gold is significantly undervalued. Good opportunity to accumulate gold.' };
         return { rec: '🥇 Buy Gold', str: 'Strong', msg: 'Gold is extremely undervalued relative to silver. Strong buy signal for gold.' };
       }
 
