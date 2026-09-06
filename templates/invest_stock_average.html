@@ -10,30 +10,33 @@
 
   <section class="card" aria-labelledby="hAvg">
     <h2 id="hAvg">Average calculator</h2>
-    <div style="display:flex; justify-content:space-between; align-items:center; gap:12px; flex-wrap:wrap;">
-      <h3 style="font-size:0.95rem; margin:0;">Current Holdings</h3>
-      <div class="form-row">
-        <button class="btn btn-sm avgCurMode btn-primary" data-m="price" type="button">Price</button>
-        <button class="btn btn-sm avgCurMode" data-m="total" type="button">Total</button>
+    <div class="row-head">
+      <div class="seg-toggle seg-blue" role="group" aria-label="Current holdings input mode">
+        <button class="seg-btn active avgCurMode" data-m="price" type="button" aria-pressed="true">Price</button>
+        <button class="seg-btn avgCurMode" data-m="total" type="button" aria-pressed="false">Total</button>
       </div>
+      <h3 style="font-size:0.95rem; margin:0;">Current Holdings</h3>
     </div>
     <div class="form-row" style="margin-top:8px;">
       <div class="field"><label for="avgCQ">Current Holding Quantity</label><input id="avgCQ" type="number" min="0" step="any" placeholder="e.g., 100" /></div>
       <div class="field" id="avgCurPriceWrap"><label for="avgCP">Current Average Price (₹)</label><input id="avgCP" type="number" min="0" step="any" placeholder="e.g., 150.50" /></div>
       <div class="field" id="avgCurTotalWrap" hidden><label for="avgCT">Total Amount Invested (₹)</label><input id="avgCT" type="number" min="0" step="any" placeholder="e.g., 15050.00" /></div>
     </div>
-    <div style="display:flex; justify-content:space-between; align-items:center; gap:12px; flex-wrap:wrap; margin-top:12px; padding-top:12px; border-top:1px solid var(--line-soft);">
-      <h3 style="font-size:0.95rem; margin:0;" id="avgModeTitle">New Purchase Details</h3>
-      <div class="form-row">
-        <button class="btn btn-sm avgCalcMode btn-primary" data-m="purchase" type="button">Purchase</button>
-        <button class="btn btn-sm avgCalcMode" data-m="target" type="button">Target</button>
+    <div style="margin-top:12px; padding-top:12px; border-top:1px solid var(--line-soft);">
+      <div class="row-head">
+        <div class="seg-toggle seg-green" role="group" aria-label="Calculator mode">
+          <button class="seg-btn active avgCalcMode" data-m="purchase" type="button" aria-pressed="true">Purchase</button>
+          <button class="seg-btn avgCalcMode" data-m="target" type="button" aria-pressed="false">Target</button>
+        </div>
+        <h3 style="font-size:0.95rem; margin:0;" id="avgModeTitle">New Purchase Details</h3>
       </div>
-    </div>
     <div id="avgPurchasePane" style="margin-top:8px;">
       <p class="muted">Enter your purchase details</p>
-      <div class="form-row">
-        <button class="btn btn-sm avgBuyMode btn-primary" data-m="price" type="button">Price</button>
-        <button class="btn btn-sm avgBuyMode" data-m="total" type="button">Total</button>
+      <div class="row-head">
+        <div class="seg-toggle seg-amber" role="group" aria-label="Purchase input mode">
+          <button class="seg-btn active avgBuyMode" data-m="price" type="button" aria-pressed="true">Price</button>
+          <button class="seg-btn avgBuyMode" data-m="total" type="button" aria-pressed="false">Total</button>
+        </div>
       </div>
       <div class="form-row" style="margin-top:8px;">
         <div class="field"><label for="avgBQ">Quantity to Buy</label><input id="avgBQ" type="number" min="0" step="any" placeholder="e.g., 50" /></div>
@@ -47,6 +50,7 @@
         <div class="field"><label for="avgMP">Current Market Price Per Share (₹)</label><input id="avgMP" type="number" min="0" step="any" placeholder="e.g., 140.00" /></div>
         <div class="field"><label for="avgTP">Target Average Price (₹)</label><input id="avgTP" type="number" min="0" step="any" placeholder="e.g., 145.00" /></div>
       </div>
+    </div>
     </div>
     <div class="form-row" style="margin-top:12px;">
       <button class="btn" type="button" id="avgReset">Reset</button>
@@ -70,10 +74,15 @@
 
       var avgMode = 'purchase', avgCurM = 'price', avgBuyM = 'price';
       function avgBindMode(cls, fn) {
-        document.querySelectorAll('.' + cls).forEach(function (b) {
+        var btns = document.querySelectorAll('.' + cls);
+        btns.forEach(function (b) {
           b.addEventListener('click', function () {
-            document.querySelectorAll('.' + cls).forEach(function (x) { x.classList.remove('btn-primary'); });
-            b.classList.add('btn-primary');
+            btns.forEach(function (x) {
+              x.classList.remove('active');
+              x.setAttribute('aria-pressed', 'false');
+            });
+            b.classList.add('active');
+            b.setAttribute('aria-pressed', 'true');
             fn(b.dataset.m);
           });
         });

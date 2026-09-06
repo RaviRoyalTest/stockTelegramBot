@@ -892,6 +892,43 @@ ul.report-status li.st-man { border-left-color: var(--amber); background: rgba(1
 .news-card .publisher { color: var(--muted); font-size: 0.82rem; }
 
 /* ---------- radio pills (segmented controls) ---------- */
+/* ---------- segmented mode toggles (colored, inline-left) ---------- */
+.row-head {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+.seg-toggle {
+  display: inline-flex;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  padding: 3px;
+  gap: 2px;
+  background: var(--panel-strong);
+}
+.seg-btn {
+  appearance: none;
+  border: 0;
+  background: transparent;
+  color: var(--muted);
+  font: inherit;
+  font-size: 0.82rem;
+  font-weight: 700;
+  padding: 5px 14px;
+  border-radius: 999px;
+  cursor: pointer;
+  transition: background 0.15s ease, color 0.15s ease;
+}
+.seg-btn:hover { color: var(--text); }
+.seg-btn:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
+.seg-btn.active { color: #fff; }
+.seg-blue .seg-btn.active { background: var(--accent); }
+html[data-theme="dark"] .seg-blue .seg-btn.active { color: #0b1220; }
+.seg-green .seg-btn.active { background: var(--green); }
+.seg-amber .seg-btn.active { background: var(--amber); }
+.seg-red .seg-btn.active { background: var(--red); }
+
 /* ---------- customizable price chart ---------- */
 .chart-head {
   display: flex;
