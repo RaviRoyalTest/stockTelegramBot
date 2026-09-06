@@ -99,7 +99,34 @@
       </div>
       <div class="field">
         <label for="sector">Sector contains</label>
-        <input id="sector" type="text" placeholder="e.g. Bank" autocomplete="off" />
+        <input id="sector" type="text" placeholder="e.g. Bank" autocomplete="off" list="sectorList" />
+        <datalist id="sectorList">
+          <option value="Bank"></option>
+          <option value="Financial Services"></option>
+          <option value="Information Technology"></option>
+          <option value="Pharmaceuticals"></option>
+          <option value="Healthcare"></option>
+          <option value="Automobile"></option>
+          <option value="Auto Components"></option>
+          <option value="Oil Gas &amp; Consumable Fuels"></option>
+          <option value="Metals &amp; Mining"></option>
+          <option value="Fast Moving Consumer Goods"></option>
+          <option value="Consumer Durables"></option>
+          <option value="Power"></option>
+          <option value="Construction"></option>
+          <option value="Capital Goods"></option>
+          <option value="Telecommunication"></option>
+          <option value="Chemicals"></option>
+          <option value="Cement"></option>
+          <option value="Realty"></option>
+          <option value="Retailing"></option>
+          <option value="Services"></option>
+          <option value="Media Entertainment &amp; Publication"></option>
+          <option value="Textiles"></option>
+          <option value="Infrastructure"></option>
+          <option value="Technology"></option>
+          <option value="Energy"></option>
+        </datalist>
       </div>
       <div class="field">
         <label for="symContains">Symbol contains</label>
@@ -268,6 +295,19 @@
           var rows = await res.json();
           if (!Array.isArray(rows)) throw new Error('unexpected response');
           document.getElementById('resCount').textContent = String(rows.length) + ' rows';
+          // learn real sector names from results so the dropdown grows useful
+          var sectorList = document.getElementById('sectorList');
+          var known = {};
+          Array.prototype.forEach.call(sectorList.options, function (opt) { known[opt.value.toLowerCase()] = true; });
+          rows.forEach(function (r) {
+            var s = (r.sector || '').trim();
+            if (s && !known[s.toLowerCase()]) {
+              known[s.toLowerCase()] = true;
+              var opt = document.createElement('option');
+              opt.value = s;
+              sectorList.appendChild(opt);
+            }
+          });
           tbody.innerHTML = rows.length ? rows.map(function (r) {
             var chg = r.change_pct;
             var chgClass = chg == null ? '' : (Number(chg) >= 0 ? 'pos' : 'neg');

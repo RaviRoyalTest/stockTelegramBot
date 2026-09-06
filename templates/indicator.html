@@ -11,7 +11,8 @@
     <form id="lookupForm" class="form-row">
       <div class="field" style="flex:1; min-width:200px;">
         <label for="symbol">Symbol</label>
-        <input id="symbol" required placeholder="e.g. RELIANCE or AAPL" autocomplete="off" style="text-transform:uppercase" />
+        <input id="symbol" required placeholder="e.g. RELIANCE or AAPL" autocomplete="off" style="text-transform:uppercase" list="symbolList" />
+        <datalist id="symbolList"></datalist>
       </div>
       <div class="field" style="flex:1; min-width:200px;">
         <label for="iname">Indicator <span class="muted">(blank = full card)</span></label>
@@ -90,6 +91,7 @@
         var symbol = document.getElementById('symbol').value.trim().toUpperCase().replace(/\.NS$|\.BO$|\.US$/, '');
         if (symbol) load(symbol, document.getElementById('iname').value.trim());
       });
+      RS.attachSymbolAutocomplete('symbol', 'symbolList');
     })();
   </script>
 {% endblock %}

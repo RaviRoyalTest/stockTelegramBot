@@ -92,4 +92,39 @@
 
   window.RS.applyTheme = applyTheme;
   window.RS.getPreferredTheme = getPreferredTheme;
+
+  /**
+   * Symbol autocomplete: debounced /api/search -> <datalist> options.
+   * @param {string} inputId id of the text input
+   * @param {string} [listId] id of the <datalist>; created when omitted
+   */
+  window.RS.attachSymbolAutocomplete = function (inputId, listId) {
+    var input = document.getElementById(inputId);
+    if (!input) return;
+    var list = listId ? document.getElementById(listId) : null;
+    if (!list) {
+      list = document.createElement('datalist');
+      list.id = inputId + 'List';
+      input.setAttribute('list', list.id);
+      input.parentNode.appendChild(list);
+    }
+    var timer = null;
+    input.addEventListener('input', function () {
+      var term = input.value.trim();
+      clearTimeout(timer);
+      if (term.length < 2) { list.innerHTML = ''; return; }
+      timer = setTimeout(function () {
+        fetch('/api/search?q=' + encodeURIComponent(term) + '&limit=8')
+          .then(function (res) { return res.ok ? res.json() : { results: [] }; })
+          .then(function (data) {
+            list.innerHTML = (data.results || []).map(function (r) {
+              var sym = String(r.symbol || '').toUpperCase().replace(/\.NS$|\.BO$/, '');
+              var name = r.name || r.company || '';
+              return '<option value="' + window.RS.escapeHtml(sym) + '">' + window.RS.escapeHtml(name) + '</option>';
+            }).join('');
+          })
+          .catch(function () { /* suggestions are best-effort */ });
+      }, 250);
+    });
+  };
 })();

@@ -11,7 +11,8 @@
     <form id="fetchForm" class="form-row">
       <div class="field" style="flex:1; min-width:220px;">
         <label for="symbol">Symbol <span class="muted">(leave blank for all)</span></label>
-        <input id="symbol" placeholder="e.g. RELIANCE" autocomplete="off" style="text-transform:uppercase" />
+        <input id="symbol" placeholder="e.g. RELIANCE" autocomplete="off" style="text-transform:uppercase" list="symbolList" />
+        <datalist id="symbolList"></datalist>
       </div>
       <button class="btn btn-primary" type="submit">🔍 Fetch</button>
       <button class="btn" type="button" id="download">⬇️ CSV</button>
@@ -104,6 +105,7 @@
         event.preventDefault();
         fetchAndRender();
       });
+      RS.attachSymbolAutocomplete('symbol', 'symbolList');
       document.getElementById('download').addEventListener('click', function () {
         var symbol = document.getElementById('symbol').value.trim().toUpperCase();
         window.location = '/api/corporate_actions.csv' + (symbol ? '?symbol=' + encodeURIComponent(symbol) : '');

@@ -391,12 +391,19 @@ def normalise_fundamentals(symbol: str, fund: dict, quote: dict | None = None) -
             bull = line > sig
         fund["macd_bull"] = bool(bull) if bull is not None else False
     # -- above 200-day average -------------------------------------------------
-    if "above_ema200" not in fund or fund.get("above_ema200") is None:
-        sma200 = _safe_float(fund.get("sma_200"))
-        ema200 = _safe_float(fund.get("ema_200"))
-        ref = sma200 if sma200 is not None else ema200
-        fund["above_ema200"] = bool(price is not None and ref is not None and price >= ref)
-    fund.setdefault("above_sma200", fund.get("above_ema200"))
+    # Recompute whenever a price AND a 200-day reference are both available:
+    # a cached False computed before any price existed (the fund build calls
+    # this with quote=None) must not stick forever, otherwise "above 200-DMA"
+    # filters and momentum screens never match anything.
+    sma200 = _safe_float(fund.get("sma_200"))
+    ema200 = _safe_float(fund.get("ema_200"))
+    ref200 = sma200 if sma200 is not None else ema200
+    if price is not None and ref200 is not None:
+        fund["above_ema200"] = bool(price >= ref200)
+        fund["above_sma200"] = fund["above_ema200"]
+    elif "above_ema200" not in fund or fund.get("above_ema200") is None:
+        fund["above_ema200"] = False
+        fund["above_sma200"] = False
     # -- 52-week / PE / yield back-fill from the merged quote ------------------
     for key in ("wk52_high", "wk52_low", "pe", "div_yield"):
         if fund.get(key) is None and quote.get(key) is not None:

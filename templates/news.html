@@ -11,7 +11,8 @@
     <form id="lookupForm" class="form-row">
       <div class="field" style="flex:1; min-width:220px;">
         <label for="symbol">Symbol <span class="muted">(blank = whole watchlist)</span></label>
-        <input id="symbol" placeholder="e.g. RELIANCE" autocomplete="off" style="text-transform:uppercase" />
+        <input id="symbol" placeholder="e.g. RELIANCE" autocomplete="off" style="text-transform:uppercase" list="symbolList" />
+        <datalist id="symbolList"></datalist>
       </div>
       <div class="field">
         <label for="limit">Per stock</label>
@@ -93,6 +94,7 @@
         event.preventDefault();
         load();
       });
+      RS.attachSymbolAutocomplete('symbol', 'symbolList');
       load();
     })();
   </script>
