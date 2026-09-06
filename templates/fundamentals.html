@@ -223,6 +223,7 @@
       <div class="chart-wrap">
         <canvas id="rChart" height="460" aria-label="Price history chart"></canvas>
         <div class="chart-legend" id="rChartLegend" hidden></div>
+        <div class="chart-ohlc" id="rChartOHLC" aria-live="polite"></div>
       </div>
       <p class="note" id="rChartNote" style="margin-bottom:0;"></p>
     </section>
@@ -439,6 +440,23 @@
         var legend = document.getElementById('rChartLegend');
         if (!canvas || !bars || !bars.close || bars.close.length < 2) {
           if (legend) legend.hidden = true;
+          // Clear any previous drawing so a failed range never leaves the
+          // old chart on screen looking like the new one.
+          if (canvas) {
+            var ctx0 = canvas.getContext('2d');
+            if (ctx0) {
+              ctx0.setTransform(1, 0, 0, 1, 0, 0);
+              ctx0.clearRect(0, 0, canvas.width, canvas.height);
+              if (chartState.msg) {
+                var css0 = getComputedStyle(document.documentElement);
+                ctx0.fillStyle = (css0.getPropertyValue('--muted') || '').trim() || '#64748b';
+                ctx0.font = '600 14px Inter, sans-serif';
+                ctx0.textAlign = 'center';
+                ctx0.textBaseline = 'middle';
+                ctx0.fillText(chartState.msg, canvas.clientWidth / 2, (canvas.clientHeight || 420) / 2);
+              }
+            }
+          }
           return;
         }
         var c = chartColors();
@@ -675,6 +693,22 @@
         if (cl != null) parts.push('C <strong>' + fmt(cl) + '</strong>');
         if (vol) parts.push('Vol ' + (vol >= 1e7 ? (vol / 1e7).toFixed(1) + 'Cr' : vol >= 1e5 ? (vol / 1e5).toFixed(1) + 'L' : vol >= 1e3 ? (vol / 1e3).toFixed(1) + 'K' : vol));
         el.innerHTML = parts.join(' · ');
+        showOHLCBox(ts, o, h, l, cl, vol);
+      }
+
+      // Compact always-visible price-details box on the chart itself.
+      // Shows the last bar by default; the hovered bar while the crosshair
+      // is up — so the numbers are readable without leaving the chart.
+      function showOHLCBox(ts, o, h, l, cl, vol) {
+        var box = document.getElementById('rChartOHLC');
+        if (!box) return;
+        function seg(k, v) { return v == null ? '' : '<span><span class="ohlc-k">' + k + '</span>' + fmt(v) + '</span>'; }
+        var volTxt = '';
+        if (vol) volTxt = '<span><span class="ohlc-k">Vol</span>' + (vol >= 1e7 ? (vol / 1e7).toFixed(1) + 'Cr' : vol >= 1e5 ? (vol / 1e5).toFixed(1) + 'L' : vol >= 1e3 ? (vol / 1e3).toFixed(1) + 'K' : vol) + '</span>';
+        var up = (o != null && cl != null) ? cl >= o : null;
+        var clTxt = cl == null ? '' : '<span><span class="ohlc-k">C</span><strong style="color:' + (up == null ? 'inherit' : (up ? 'var(--green)' : 'var(--red)')) + '">' + fmt(cl) + '</strong></span>';
+        box.innerHTML = '<span class="ohlc-t">' + fmtFullTime(ts, chartState.tf) + '</span>' +
+          seg('O', o) + seg('H', h) + seg('L', l) + clTxt + volTxt;
       }
 
       function hideCrosshairInfo() {
@@ -689,6 +723,11 @@
           if (s50 != null) stats += ' · vs SMA50 ' + (lastC >= s50 ? '<span class="pos">above</span>' : '<span class="neg">below</span>');
         }
         document.getElementById('rChartStats').innerHTML = stats;
+        // restore the box to the latest bar
+        var li = n - 1;
+        showOHLCBox(bars.timestamp && bars.timestamp[li],
+          bars.open && bars.open[li], bars.high && bars.high[li],
+          bars.low && bars.low[li], bars.close[li], bars.volume && bars.volume[li]);
       }
 
       (function initCrosshair() {
@@ -720,6 +759,7 @@
 
       function loadChart(symbol) {
         chartState.symbol = symbol;
+        chartState.msg = '';
         document.getElementById('rChartNote').textContent = 'Loading price history…';
         document.getElementById('rChartStats').textContent = '';
         fetch('/api/history?symbol=' + encodeURIComponent(symbol) + '&range=' + encodeURIComponent(chartState.tf))
@@ -727,16 +767,28 @@
           .then(function (hj) {
             if (!hj || chartState.symbol !== symbol) return;
             var bars = hj.bars;
+            var served = hj.range && CHART_RANGES[hj.range] ? CHART_RANGES[hj.range] : (hj.range || '').toUpperCase();
             document.getElementById('rChartSrc').textContent = bars && bars.source ? '· ' + bars.source : '';
             if (bars && bars.close && bars.close.length > 1) {
               chartState.bars = bars;
+              chartState.msg = '';
               renderChart();
+              // Surface degradation honestly: e.g. "1D unavailable — showing 5D".
               document.getElementById('rChartNote').textContent =
                 (hj.downsampled ? 'Downsampled — ' : '') +
-                (CHART_RANGES[chartState.tf] || chartState.tf) + ' range · ' +
+                (served && served !== (CHART_RANGES[chartState.tf] || chartState.tf)
+                  ? (CHART_RANGES[chartState.tf] || chartState.tf) + ' unavailable — showing ' + served + ' · '
+                  : (served ? served + ' range · ' : '')) +
                 'from free sources.';
+              var li = bars.close.length - 1;
+              showOHLCBox(bars.timestamp && bars.timestamp[li],
+                bars.open && bars.open[li], bars.high && bars.high[li],
+                bars.low && bars.low[li], bars.close[li], bars.volume && bars.volume[li]);
             } else {
               chartState.bars = null;
+              chartState.msg = 'No ' + (CHART_RANGES[chartState.tf] || chartState.tf) + ' history available right now';
+              renderChart();
+              document.getElementById('rChartOHLC').innerHTML = '';
               document.getElementById('rChartNote').textContent =
                 'No ' + (CHART_RANGES[chartState.tf] || chartState.tf) + ' history from free sources right now.';
             }

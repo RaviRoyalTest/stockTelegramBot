@@ -583,9 +583,13 @@ async def api_history(
             bars = await asyncio.to_thread(sources.get_chart_ohlc, ex, key, range_key)
         else:
             bars = await asyncio.to_thread(sources.get_ohlc, ex, key, tf)
+        fallback_used = ""
         if not bars or not bars.get("close"):
-            # Fallback ladder: chart-range miss -> nearest scanner timeframe;
-            # both miss and daily wanted -> stooq daily CSV (no intraday).
+            # Degrade instead of blanking: the chart must always show
+            # something. Exact range miss -> nearest scanner timeframe ->
+            # successively wider chart ranges -> stooq daily CSV (no
+            # intraday). The response names the range actually served so
+            # the UI can tell the user rather than silently mislead.
             ladder = {
                 "1d": "5m", "5d": "15m", "1mo": "1h", "6mo": "1d",
                 "1y": "1d", "5y": "1w", "max": "1mo",
@@ -593,13 +597,25 @@ async def api_history(
             fallback_tf = ladder.get(range_key) or tf or "1d"
             if fallback_tf != "1d" and range_key:
                 bars = await asyncio.to_thread(sources.get_ohlc, ex, key, fallback_tf)
+                if bars and bars.get("close"):
+                    fallback_used = range_key
+            if not bars or not bars.get("close"):
+                wider = {"1d": "5d", "5d": "1mo", "1mo": "6mo", "6mo": "1y", "1y": "5y", "5y": "max"}
+                probe = wider.get(range_key)
+                while probe and (not bars or not bars.get("close")):
+                    bars = await asyncio.to_thread(sources.get_chart_ohlc, ex, key, probe)
+                    if bars and bars.get("close"):
+                        fallback_used = probe
+                        used_range = probe
+                        break
+                    probe = wider.get(probe)
             if (not bars or not bars.get("close")) and (range_key in ("", "6mo", "1y", "5y", "max") or tf == "1d"):
                 try:
                     bars = await asyncio.to_thread(sources.get_stooq_history, key, ex)
                     source = "stooq"
                 except Exception:
                     bars = None
-            if not bars:
+            if not bars or not bars.get("close"):
                 return JSONResponse({"symbol": key, "range": range_key or None, "timeframe": tf or None, "bars": None, "source": "none"})
         # Downsample to <= 260 points so the canvas chart stays fast.
         closes = bars.get("close") or []
@@ -613,6 +629,8 @@ async def api_history(
         return JSONResponse({
             "symbol": key,
             "range": used_range or None,
+            "requested_range": range_key or None,
+            "fallback": fallback_used or None,
             "timeframe": tf or None,
             "bars": bars,
             "source": bars.get("source"),

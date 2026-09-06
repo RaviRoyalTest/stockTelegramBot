@@ -987,6 +987,29 @@ html[data-theme="dark"] .seg-blue .seg-btn.active { color: #0b1220; }
   width: 12px; height: 3px; border-radius: 2px; display: inline-block;
 }
 .legend-item .legend-vol { width: 10px; height: 10px; border-radius: 2px; opacity: 0.5; background: var(--muted); }
+/* compact always-visible price-details box (hover shows the hovered bar) */
+.chart-ohlc {
+  position: absolute;
+  left: 10px;
+  bottom: 8px;
+  display: flex;
+  gap: 10px;
+  align-items: center;
+  font-size: 0.78rem;
+  font-weight: 600;
+  color: var(--text);
+  background: color-mix(in srgb, var(--card) 88%, transparent);
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  padding: 5px 12px;
+  backdrop-filter: blur(4px);
+  box-shadow: 0 1px 4px rgb(0 0 0 / 0.06);
+  pointer-events: none;
+  flex-wrap: wrap;
+  max-width: calc(100% - 20px);
+}
+.chart-ohlc .ohlc-t { color: var(--muted); margin-right: 2px; }
+.chart-ohlc .ohlc-k { color: var(--muted); font-weight: 700; margin-right: 1px; }
 @media (max-width: 700px) {
   .chart-wrap canvas { height: 300px; }
   .chart-toolbar { flex-direction: column; align-items: flex-start; }

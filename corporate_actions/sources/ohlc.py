@@ -121,6 +121,7 @@ _INDEX_OHLC_CACHE_SECONDS = 180  # seconds
 
 _chart_range_cache: dict = {}
 _CHART_RANGE_CACHE_SECONDS = 120  # seconds
+_CHART_RANGE_FAIL_SECONDS = 15   # don't pin transient failures for 2 minutes
 
 # Chart-friendly range/interval combos (Groww-style toolbar).
 # Keys are 'range' values served by /api/history; values are
@@ -153,8 +154,13 @@ def get_chart_ohlc(exchange: str, symbol: str, range_key: str) -> dict | None:
     key = (exchange.upper(), symbol.upper(), interval, range_)
     now = time.time()
     cached = _chart_range_cache.get(key)
-    if cached and now - cached["timestamp"] < _CHART_RANGE_CACHE_SECONDS:
-        return cached["data"]
+    if cached:
+        # A failed fetch (None) is only trusted briefly so a transient Yahoo
+        # hiccup doesn't blank the chart for two full minutes; successes
+        # cache for the normal TTL.
+        ttl = _CHART_RANGE_CACHE_SECONDS if cached["data"] else _CHART_RANGE_FAIL_SECONDS
+        if now - cached["timestamp"] < ttl:
+            return cached["data"]
     suffix = "" if exchange.upper() == "US" else (".BO" if exchange.upper() == "BSE" else ".NS")
     url = (
         f"https://query1.finance.yahoo.com/v8/finance/chart/{symbol}{suffix}"
