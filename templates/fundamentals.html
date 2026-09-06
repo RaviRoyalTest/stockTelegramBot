@@ -29,6 +29,12 @@
     <p class="note" style="margin-bottom:0;">First fetch of a symbol takes up to ~30s (live scraping of financial tables); afterwards it's instant from cache. Start typing for suggestions.</p>
   </section>
 
+  <div id="invalidCard" class="card section" hidden>
+    <h2 id="invalidTitle">❓ Symbol not found</h2>
+    <p id="invalidMsg" style="margin:0 0 10px;"></p>
+    <p class="note" style="margin:0;">Actions (refresh, CSV download, add to watchlist) stay disabled until a valid stock is loaded. Check the spelling — suggestions appear as you type.</p>
+  </div>
+
   <div id="report" class="section" hidden>
     <!-- header -->
     <section class="card" aria-labelledby="rTitle">
@@ -260,6 +266,7 @@
       var esc = RS.escapeHtml;
       var CUR = '₹';
       var MARKET = 'in';
+      var VALID = false; // becomes true only after a successful report render
 
       function fmt(v, d) {
         if (v === null || v === undefined || v === '') return '−';
@@ -881,10 +888,37 @@
         } catch (e) { /* chart is best-effort */ }
       }
 
+      function setActionsEnabled(enabled) {
+        ['refresh', 'download', 'addWatch'].forEach(function (id) {
+          var b = document.getElementById(id);
+          if (b) b.disabled = !enabled;
+        });
+      }
+
+      function showInvalid(symbol, market) {
+        var card = document.getElementById('invalidCard');
+        document.getElementById('invalidTitle').textContent = '❓ "' + symbol + '" is not a valid stock symbol';
+        document.getElementById('invalidMsg').textContent =
+          'No price data or exchange listing found for ' + symbol +
+          (market === 'us' ? ' on US exchanges' : ' on NSE or BSE') +
+          '. It may be misspelled, delisted, or not a listed equity.';
+        card.hidden = false;
+        document.getElementById('placeholder').hidden = true;
+        document.getElementById('report').hidden = true;
+        setActionsEnabled(false);
+      }
+
+      function clearInvalidState() {
+        document.getElementById('invalidCard').hidden = true;
+      }
+
       async function loadReport(symbol, refresh, market) {
         var report = document.getElementById('report');
         var placeholder = document.getElementById('placeholder');
         var go = document.getElementById('go');
+        clearInvalidState();
+        setActionsEnabled(false);
+        VALID = false;
         MARKET = market || 'in';
         CUR = MARKET === 'us' ? '$' : '₹';
         placeholder.hidden = true;
@@ -905,10 +939,27 @@
         });
         try {
           var res = await fetch('/api/fundamentals?symbol=' + encodeURIComponent(symbol) + (refresh ? '&refresh=1' : '') + '&market=' + encodeURIComponent(MARKET));
+          if (res.status === 404) {
+            showInvalid(symbol, MARKET);
+            RS.toast('"' + symbol + '" not found — check the symbol and try again', 'err');
+            return;
+          }
           if (!res.ok) throw new Error('HTTP ' + res.status);
           var data = await res.json();
+          var fund = data.fund || {};
+          var quote = data.quote || {};
+          // Belt-and-braces: an empty merge still counts as invalid even if
+          // an older backend lets it through as HTTP 200.
+          var hasData = Object.keys(fund).length > 0 || quote.price != null;
+          if (!hasData) {
+            showInvalid(symbol, MARKET);
+            RS.toast('"' + symbol + '" not found — check the symbol and try again', 'err');
+            return;
+          }
           render(data);
           loadExtras(symbol, MARKET);
+          VALID = true;
+          setActionsEnabled(true);
           try { RS.pushRecent(symbol, MARKET); } catch (e) {}
           history.replaceState(null, '', '/fundamentals?symbol=' + encodeURIComponent(symbol));
         } catch (err) {
@@ -916,6 +967,7 @@
           RS.toast('Could not load report for ' + symbol + ': ' + err.message, 'err');
           placeholder.hidden = false;
           report.hidden = true;
+          setActionsEnabled(false);
         } finally {
           go.disabled = false;
         }
@@ -1239,24 +1291,28 @@
       });
       document.getElementById('refresh').addEventListener('click', function () {
         var symbol = document.getElementById('symbol').value.trim().toUpperCase().replace(/\.NS$|\.BO$|\.US$/, '');
-        if (!symbol) { RS.toast('Enter a symbol first', 'err'); return; }
+        if (!symbol || !VALID) { RS.toast(!symbol ? 'Enter a symbol first' : 'Load a valid stock first', 'err'); return; }
         RS.toast('Refreshing data…');
         loadReport(symbol, true, document.getElementById('market').value);
       });
       document.getElementById('download').addEventListener('click', function () {
         var symbol = document.getElementById('symbol').value.trim().toUpperCase();
-        if (!symbol) { RS.toast('Enter a symbol first', 'err'); return; }
+        if (!symbol || !VALID) { RS.toast(!symbol ? 'Enter a symbol first' : 'Load a valid stock before downloading', 'err'); return; }
         window.location = '/api/fundamentals.csv?symbol=' + encodeURIComponent(symbol);
       });
       document.getElementById('addWatch').addEventListener('click', async function () {
         var symbol = document.getElementById('symbol').value.trim().toUpperCase().replace(/\.NS$|\.BO$/, '');
-        if (!symbol) { RS.toast('Enter a symbol first', 'err'); return; }
+        if (!symbol || !VALID) { RS.toast(!symbol ? 'Enter a symbol first' : 'Load a valid stock before watching', 'err'); return; }
         try {
           var res = await fetch('/api/watchlist', {
             method: 'POST', headers: { 'content-type': 'application/json' },
-            body: JSON.stringify({ items: [{ symbol: symbol }] }),
+            body: JSON.stringify({ items: [{ symbol: symbol, market: MARKET }] }),
           });
-          if (!res.ok) throw new Error('HTTP ' + res.status);
+          if (!res.ok) {
+            var detail = '';
+            try { detail = (await res.json()).detail || ''; } catch (e) {}
+            throw new Error(detail || ('HTTP ' + res.status));
+          }
           RS.toast('Added ' + symbol + ' to watchlist', 'ok');
         } catch (err) { RS.toast('Could not add: ' + err.message, 'err'); }
       });

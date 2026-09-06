@@ -115,18 +115,37 @@
         event.preventDefault();
         var symbolInput = document.getElementById('symbol');
         var companyInput = document.getElementById('company');
-        var symbol = symbolInput.value.trim().toUpperCase().replace(/\.NS$|\.BO$/, '');
+        var symbol = symbolInput.value.trim().toUpperCase().replace(/\.NS$|\.BO$|\.US$/, '');
         if (!symbol) return;
         var button = this.querySelector('button[type="submit"]');
         button.disabled = true;
+        button.textContent = '⏳ Checking…';
         try {
+          // Only real, resolvable stocks may be added — validate first so a
+          // typo never lands in the list as a permanent blank row.
+          var market = null;
+          var check = null;
+          for (var i = 0; i < 2 && !market; i++) {
+            var mkt = i === 0 ? 'in' : 'us';
+            var vres = await fetch('/api/validate?symbol=' + encodeURIComponent(symbol) + '&market=' + mkt);
+            check = vres.ok ? await vres.json() : { valid: false };
+            if (check.valid) market = mkt;
+          }
+          if (!market) {
+            RS.toast('"' + symbol + '" is not a valid stock symbol — nothing was added', 'err');
+            return;
+          }
           var res = await fetch('/api/watchlist', {
             method: 'POST',
             headers: { 'content-type': 'application/json' },
-            body: JSON.stringify({ items: [{ symbol: symbol, company: companyInput.value.trim() }] }),
+            body: JSON.stringify({ items: [{ symbol: symbol, company: companyInput.value.trim(), market: market, exchange: check.exchange || 'NSE' }] }),
           });
-          if (!res.ok) throw new Error('HTTP ' + res.status);
-          RS.toast('Added ' + symbol, 'ok');
+          if (!res.ok) {
+            var detail = '';
+            try { detail = (await res.json()).detail || ''; } catch (e) {}
+            throw new Error(detail || ('HTTP ' + res.status));
+          }
+          RS.toast('Added ' + symbol + ' to watchlist', 'ok');
           symbolInput.value = '';
           companyInput.value = '';
           symbolInput.focus();
@@ -135,6 +154,7 @@
           RS.toast('Could not add ' + symbol + ': ' + err.message, 'err');
         } finally {
           button.disabled = false;
+          button.textContent = '➕ Add to watchlist';
         }
       });
 

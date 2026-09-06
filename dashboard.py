@@ -24,6 +24,21 @@ from corporate_actions.telegram import client as telegram_client
 import asyncio
 import logging
 
+log = logging.getLogger(__name__)
+
+# Fields the source layer fabricates even when nothing was found (identity
+# placeholders + derived booleans). A fund merge containing ONLY these is a
+# stub => the symbol almost certainly does not exist.
+_FUND_STUB_KEYS = {"company", "name", "macd_bull", "above_ema200", "above_sma200", "data_sources"}
+
+
+def _is_stub_fund(fund: dict) -> bool:
+    """True when a fundamentals fetch found nothing substantive."""
+    return not any(
+        key not in _FUND_STUB_KEYS and value not in (None, "", [], {})
+        for key, value in (fund or {}).items()
+    )
+
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 app = FastAPI(title="Royal Stock", version="2.0.0")
 app.mount("/static", StaticFiles(directory=os.path.join(BASE_DIR, "static")), name="static")
@@ -249,13 +264,82 @@ async def api_watchlist(enrich: bool = Query(False)):
     return JSONResponse(enriched)
 
 
+async def _validate_symbol(symbol: str, market: str) -> dict:
+    """Resolve a symbol against real data sources before any user action.
+
+    Ladder — IN: Yahoo quote (NSE suffix) -> BSE suffix -> the NSE master
+    stock list; US: Yahoo quote (bare ticker) -> Yahoo ticker search.
+    Only a resolvable price or an exact hit in the exchange master list
+    counts as valid, so typos and delisted names are rejected.
+    """
+    key = symbol.strip().upper().removesuffix(".NS").removesuffix(".BO").removesuffix(".US")
+    want_us = market.strip().lower() in ("us", "usa", "nasdaq", "nyse")
+
+    def _check_in() -> dict:
+        if sources.get_quote("NSE", key):
+            return {"symbol": key, "valid": True, "exchange": "NSE", "source": "yahoo"}
+        if sources.get_quote("BSE", key):
+            return {"symbol": key, "valid": True, "exchange": "BSE", "source": "yahoo-bse"}
+        for hit in sources.search_stocks(key, limit=3):
+            if str(hit.get("symbol") or "").upper() == key:
+                return {"symbol": key, "valid": True, "exchange": "NSE", "source": "nse-list"}
+        return {"symbol": key, "valid": False, "reason": "not-found"}
+
+    def _check_us() -> dict:
+        if sources.get_quote("US", key):
+            return {"symbol": key, "valid": True, "exchange": "US", "source": "yahoo"}
+        for hit in sources.search_us_tickers(key, limit=5):
+            if str(hit.get("symbol") or "").upper() == key:
+                return {"symbol": key, "valid": True, "exchange": "US", "source": "yahoo-search"}
+        return {"symbol": key, "valid": False, "reason": "not-found"}
+
+    try:
+        return await asyncio.to_thread(_check_us if want_us else _check_in)
+    except Exception as exc:
+        # Never block the user on a validator outage — fail open, marked degraded.
+        log.warning("symbol validation degraded for %s: %s", key, exc)
+        return {"symbol": key, "valid": True, "degraded": True, "reason": str(exc)}
+
+
+@app.get("/api/validate")
+async def api_validate(symbol: str | None = Query(None), market: str = Query("in")):
+    """Check a symbol actually resolves to a real, tradable stock.
+
+    Used by the UI before offering actions (watchlist add, refresh, CSV)
+    so an invalid or delisted symbol can never be acted on.
+    """
+    if not symbol or not symbol.strip():
+        return JSONResponse({"symbol": "", "valid": False, "reason": "empty"})
+    return JSONResponse(await _validate_symbol(symbol, market or "in"))
+
+
 @app.post("/api/watchlist")
 async def add_watchlist(payload: dict):
     items = payload.get("items") or []
     if not isinstance(items, list):
         raise HTTPException(status_code=400, detail="items must be a list")
-    result = storage.add_to_watchlist([{**item, "exchange": (item.get("exchange") or "NSE").upper()} for item in items])
-    return JSONResponse({"items": result, "count": len(result)})
+    # Reject symbols that do not resolve to a real stock so the watchlist
+    # never fills with typos that render as permanent "−" rows.
+    validated: list[dict] = []
+    rejected: list[dict] = []
+    for item in items:
+        item = item or {}
+        sym = str(item.get("symbol") or "").strip().upper().removesuffix(".NS").removesuffix(".BO")
+        market = str(item.get("market") or "in").strip().lower()
+        if not sym:
+            rejected.append({"symbol": "", "reason": "empty"})
+            continue
+        check = await _validate_symbol(sym, market)
+        if not check.get("valid"):
+            rejected.append({"symbol": sym, "reason": check.get("reason") or "not-found"})
+            continue
+        validated.append({**item, "symbol": sym, "exchange": (item.get("exchange") or "NSE").upper()})
+    if rejected:
+        log.info("watchlist add rejected invalid symbols: %s", [r["symbol"] for r in rejected])
+    if not validated and rejected:
+        raise HTTPException(status_code=422, detail="Unknown symbol(s): " + ", ".join(r["symbol"] or "(empty)" for r in rejected))
+    result = storage.add_to_watchlist(validated)
+    return JSONResponse({"items": result, "count": len(result), "rejected": rejected})
 
 
 @app.delete("/api/watchlist")
@@ -941,7 +1025,8 @@ async def api_fundamentals(symbol: str | None = Query(None), refresh: bool = Que
     """
     if not symbol:
         raise HTTPException(status_code=400, detail="symbol is required")
-    key = symbol.strip().upper().removesuffix(".NS").removesuffix(".BO")
+    symbol = symbol.strip().upper().removesuffix(".NS").removesuffix(".BO").removesuffix(".US")
+    key = symbol
     log = logging.getLogger(__name__)
     want_us = (market or "in").strip().lower() in ("us", "usa", "nasdaq", "nyse")
     try:
@@ -958,6 +1043,8 @@ async def api_fundamentals(symbol: str | None = Query(None), refresh: bool = Que
             quote = await asyncio.to_thread(
                 lambda: sources.get_quote("US", key) or {}
             )
+            if _is_stub_fund(fund) and not (quote or {}).get("price"):
+                raise HTTPException(status_code=404, detail=f"no data for {key} - symbol looks invalid")
             return JSONResponse({"symbol": key, "market": "us", "fund": fund, "quote": quote or {}})
         fund = await asyncio.to_thread(sources.get_fundamentals, key, True) or {}
         try:
@@ -975,7 +1062,14 @@ async def api_fundamentals(symbol: str | None = Query(None), refresh: bool = Que
             fund = sources.normalise_fundamentals(key, dict(fund or {}), quote or {})
         except Exception:
             pass
+        # A stub-only merge (no quote, no fundamentals) means the symbol does
+        # not resolve anywhere — tell the client plainly so it can gate the
+        # watchlist/export actions instead of rendering a hollow report.
+        if _is_stub_fund(fund) and not (quote or {}).get("price"):
+            raise HTTPException(status_code=404, detail=f"no data for {key} - symbol looks invalid")
         return JSONResponse({"symbol": key, "market": "in", "fund": fund, "quote": quote or {}})
+    except HTTPException:
+        raise
     except Exception as e:
         log.exception("/api/fundamentals failed: %s", e)
         raise HTTPException(status_code=500, detail=str(e))
