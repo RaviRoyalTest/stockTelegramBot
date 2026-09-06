@@ -491,8 +491,22 @@ td strong { letter-spacing: 0.01em; }
 .foot-links a { color: var(--muted); text-decoration: none; font-weight: 600; }
 .foot-links a:hover { color: var(--accent); }
 
+/* ---------- global topbar search ---------- */
+.top-search { margin-left: auto; }
+.top-search input {
+  width: 210px;
+  padding: 8px 12px 8px 34px;
+  border-radius: 999px;
+  background: var(--panel-strong) url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='14' height='14' viewBox='0 0 24 24' fill='none' stroke='%2394a3b8' stroke-width='2.4' stroke-linecap='round'%3E%3Ccircle cx='11' cy='11' r='7'/%3E%3Cpath d='M20 20l-3.5-3.5'/%3E%3C/svg%3E") no-repeat 12px center;
+}
+.top-search input::placeholder { color: var(--muted); font-size: 0.85rem; }
+.theme-toggle { margin-left: 0; }
+.nav-toggle + .top-search { margin-left: auto; }
+
 /* ---------- grouped nav on small screens ---------- */
 @media (max-width: 920px) {
+  .top-search { order: 4; flex-basis: 100%; margin-left: 0; }
+  .top-search input { width: 100%; }
   .nav-group { width: 100%; }
   .nav-drop { width: 100%; justify-content: space-between; padding: 12px; }
   .nav-menu {

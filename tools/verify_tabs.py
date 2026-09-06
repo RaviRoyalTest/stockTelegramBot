@@ -134,7 +134,15 @@ for needle in ["rAboutCard", "rDiv", "/api/dividends", "rScore", "How is this sc
 print("== nav links ==")
 nb = pathlib.Path("templates/base.html").read_text(encoding="utf-8")
 for link in ['href="/movers"', 'href="/forecast"', 'href="/checklist"',
-             'href="/indicator"', 'href="/news"', 'href="/invest"']:
+             'href="/indicator"', 'href="/news"', 'href="/invest"',
+             'topSearchInput']:
+    print(("OK  " if link in nb else "MISS"), link)
+for fname, needle in [("fundamentals.html", "recentPills"),
+                      ("index.html", "recentPills"),
+                      ("fundamentals.html", "pushRecent")]:
+    content = pathlib.Path("templates") / fname
+    text = content.read_text(encoding="utf-8")
+    print(("OK  " if needle in text else "MISS"), f"{fname}:{needle}")
     print(("OK  " if link in nb else "MISS"), link)
 
 print("== bot report extras ==")

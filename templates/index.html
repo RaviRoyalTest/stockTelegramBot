@@ -47,6 +47,10 @@
       <button class="btn" id="sendTest">📨 Send test message</button>
       <span class="pill" id="loadStatus" hidden aria-live="polite"></span>
     </div>
+    <div id="recentWrap" style="margin-top:12px;" hidden>
+      <h3 style="font-size:0.85rem; color:var(--muted); margin:0 0 6px;">🕘 Recently viewed</h3>
+      <div class="pill-row" id="recentPills"></div>
+    </div>
   </section>
 
   <section class="card section" aria-labelledby="topStocksHeading">
@@ -190,6 +194,17 @@
       document.getElementById('search').addEventListener('input', applySearchFilter);
       document.getElementById('limit').addEventListener('change', loadData);
       document.getElementById('universe').addEventListener('change', loadData);
+
+      try {
+        var recents = RS.getRecent ? RS.getRecent() : [];
+        if (recents.length) {
+          document.getElementById('recentWrap').hidden = false;
+          document.getElementById('recentPills').innerHTML = recents.map(function (e) {
+            return '<a class="pill" href="/fundamentals?symbol=' + encodeURIComponent(e.s) +
+              (e.m && e.m !== 'in' ? '&market=' + encodeURIComponent(e.m) : '') + '">' + esc(e.s) + '</a>';
+          }).join('');
+        }
+      } catch (e) {}
 
       loadData();
       loadStats();

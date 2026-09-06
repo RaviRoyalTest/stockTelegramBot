@@ -55,7 +55,45 @@
       if (actives.length > 1) {
         actives.sort(function (a, b) {
           return (b.getAttribute('href') || '').length - (a.getAttribute('href') || '').length;
-        });
+    // global topbar search: autocomplete + Enter jumps to the stock report.
+    // "/" focuses it from anywhere (unless already typing).
+    (function () {
+      var form = document.getElementById('topSearch');
+      var input = document.getElementById('topSearchInput');
+      if (!form || !input) return;
+      if (window.RS.attachSymbolAutocomplete) {
+        window.RS.attachSymbolAutocomplete('topSearchInput', null);
+      }
+      form.addEventListener('submit', function (event) {
+        event.preventDefault();
+        var symbol = input.value.trim().toUpperCase().replace(/\.NS$|\.BO$|\.US$/, '');
+        if (symbol) window.location.href = '/fundamentals?symbol=' + encodeURIComponent(symbol);
+      });
+      document.addEventListener('keydown', function (event) {
+        if (event.key !== '/' || event.ctrlKey || event.metaKey || event.altKey) return;
+        var tag = (document.activeElement && document.activeElement.tagName) || '';
+        if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT') return;
+        event.preventDefault();
+        input.focus();
+      });
+    });
+
+    // recently viewed symbols (written by the fundamentals page, read anywhere)
+    window.RS.pushRecent = function (symbol, market) {
+      try {
+        var key = 'recentSymbols';
+        var list = JSON.parse(localStorage.getItem(key) || '[]');
+        list = [{ s: symbol, m: market || 'in' }].concat(
+          list.filter(function (e) { return e && e.s !== symbol; })
+        ).slice(0, 8);
+        localStorage.setItem(key, JSON.stringify(list));
+      } catch (e) { /* private mode */ }
+    };
+    window.RS.getRecent = function () {
+      try { return JSON.parse(localStorage.getItem('recentSymbols') || '[]'); }
+      catch (e) { return []; }
+    };
+  });
         actives.slice(1).forEach(function (link) { link.classList.remove('active'); });
       }
     })();

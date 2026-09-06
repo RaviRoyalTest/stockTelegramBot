@@ -209,6 +209,10 @@
 
   <div id="placeholder" class="card section">
     <p class="muted" style="margin:0;">Enter a symbol above and press <strong>Fetch full report</strong>.</p>
+    <div id="recentWrap" style="margin-top:10px;" hidden>
+      <span class="muted">Recently viewed:</span>
+      <span class="pill-row" id="recentPills" style="margin-top:6px;"></span>
+    </div>
   </div>
 {% endblock %}
 
@@ -458,6 +462,7 @@
           var data = await res.json();
           render(data);
           loadExtras(symbol, MARKET);
+          try { RS.pushRecent(symbol, MARKET); } catch (e) {}
           history.replaceState(null, '', '/fundamentals?symbol=' + encodeURIComponent(symbol));
         } catch (err) {
           console.error('loadReport failed:', err);
@@ -803,6 +808,17 @@
       });
 
       // deep-link: /fundamentals?symbol=RELIANCE
+      (function renderRecent() {
+        try {
+          var list = RS.getRecent ? RS.getRecent() : [];
+          if (!list.length) return;
+          document.getElementById('recentWrap').hidden = false;
+          document.getElementById('recentPills').innerHTML = list.map(function (e) {
+            return '<a class="pill" href="/fundamentals?symbol=' + encodeURIComponent(e.s) +
+              (e.m && e.m !== 'in' ? '&market=' + encodeURIComponent(e.m) : '') + '">' + esc(e.s) + '</a>';
+          }).join('');
+        } catch (e) {}
+      })();
       var initial = new URLSearchParams(window.location.search).get('symbol');
       var initialMarket = new URLSearchParams(window.location.search).get('market');
       if (initialMarket && document.getElementById('market').querySelector('option[value="' + initialMarket + '"]')) {
