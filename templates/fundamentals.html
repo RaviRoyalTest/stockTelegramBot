@@ -177,10 +177,38 @@
       </section>
     </div>
 
-    <!-- price chart: full width (NEW) -->
+    <!-- price chart: full width, customizable -->
     <section class="card section" aria-labelledby="hChart">
-      <h2 id="hChart">📊 Price history <span class="muted" id="rChartSrc"></span></h2>
-      <canvas id="rChart" height="180" style="width:100%;height:220px;" aria-label="Price history chart"></canvas>
+      <div class="chart-head">
+        <h2 id="hChart">📊 Price history <span class="muted" id="rChartSrc"></span></h2>
+        <div class="chart-summary" id="rChartStats" aria-live="polite"></div>
+      </div>
+      <div class="chart-toolbar" role="toolbar" aria-label="Chart customization">
+        <div class="radio-pills" role="radiogroup" aria-label="Timeframe" id="chartTF">
+          <label><input type="radio" name="chartTF" value="5m" /> 5m</label>
+          <label><input type="radio" name="chartTF" value="15m" /> 15m</label>
+          <label><input type="radio" name="chartTF" value="30m" /> 30m</label>
+          <label><input type="radio" name="chartTF" value="1h" /> 1h</label>
+          <label><input type="radio" name="chartTF" value="4h" /> 4h</label>
+          <label><input type="radio" name="chartTF" value="1d" checked /> 1D</label>
+          <label><input type="radio" name="chartTF" value="1w" /> 1W</label>
+          <label><input type="radio" name="chartTF" value="1mo" /> 1M</label>
+        </div>
+        <div class="chart-toolbar-right">
+          <div class="radio-pills" role="radiogroup" aria-label="Chart type" id="chartType">
+            <label><input type="radio" name="chartType" value="line" checked /> 📈 Line</label>
+            <label><input type="radio" name="chartType" value="candles" /> 🕯️ Candles</label>
+          </div>
+          <div class="chart-toggles">
+            <label class="chart-toggle"><input type="checkbox" id="chartSMA" /> SMA 20/50/200</label>
+            <label class="chart-toggle"><input type="checkbox" id="chartVol" /> Volume</label>
+          </div>
+        </div>
+      </div>
+      <div class="chart-wrap">
+        <canvas id="rChart" height="460" aria-label="Price history chart"></canvas>
+        <div class="chart-legend" id="rChartLegend" hidden></div>
+      </div>
       <p class="note" id="rChartNote" style="margin-bottom:0;"></p>
     </section>
 
@@ -320,29 +348,297 @@
           'Sales growth YoY (15 pts), Profit growth YoY (15 pts). Missing data scores partial credit.</p></details></div></div>';
       }
 
-      function drawChart(canvas, closes) {
-        var ctx = canvas.getContext('2d');
-        var W = canvas.width = canvas.clientWidth * 2;
-        var H = canvas.height = 440;
-        ctx.clearRect(0, 0, W, H);
-        if (!closes || closes.length < 2) return;
-        var min = Math.min.apply(null, closes), max = Math.max.apply(null, closes);
-        if (max === min) max = min + 1;
-        var up = closes[closes.length - 1] >= closes[0];
-        ctx.strokeStyle = up ? '#16a34a' : '#dc2626';
-        ctx.lineWidth = 3;
-        ctx.beginPath();
-        closes.forEach(function (c, i) {
-          var px = 8 + (W - 16) * i / (closes.length - 1);
-          var py = 12 + (H - 40) * (1 - (c - min) / (max - min));
-          if (i === 0) ctx.moveTo(px, py); else ctx.lineTo(px, py);
-        });
-        ctx.stroke();
-        ctx.fillStyle = '#64748b';
-        ctx.font = '22px Inter, sans-serif';
-        ctx.fillText(fmt(min, 0), 10, H - 8);
-        ctx.fillText(fmt(max, 0), 10, 30);
+      // ---- customizable price chart ----
+      var chartState = { symbol: null, tf: '1d', type: 'line', sma: false, vol: false, bars: null };
+      try {
+        var savedPrefs = JSON.parse(localStorage.getItem('RS.chartPrefs') || '{}');
+        if (savedPrefs.tf && document.querySelector('#chartTF input[value="' + savedPrefs.tf + '"]')) chartState.tf = savedPrefs.tf;
+        if (savedPrefs.type === 'candles' || savedPrefs.type === 'line') chartState.type = savedPrefs.type;
+        chartState.sma = !!savedPrefs.sma;
+        chartState.vol = !!savedPrefs.vol;
+      } catch (e) {}
+      function saveChartPrefs() {
+        try {
+          localStorage.setItem('RS.chartPrefs', JSON.stringify(
+            { tf: chartState.tf, type: chartState.type, sma: chartState.sma, vol: chartState.vol }));
+        } catch (e) {}
       }
+      // Reflect saved prefs into the toolbar controls.
+      (function initChartToolbar() {
+        var tfInput = document.querySelector('#chartTF input[value="' + chartState.tf + '"]');
+        if (tfInput) tfInput.checked = true;
+        var typeInput = document.querySelector('#chartType input[value="' + chartState.type + '"]');
+        if (typeInput) typeInput.checked = true;
+        document.getElementById('chartSMA').checked = chartState.sma;
+        document.getElementById('chartVol').checked = chartState.vol;
+      })();
+
+      function chartColors() {
+        var cs = getComputedStyle(document.documentElement);
+        function v(name, fallback) { var s = cs.getPropertyValue(name).trim(); return s || fallback; }
+        return {
+          up: v('--green', '#16a34a'), down: v('--red', '#dc2626'),
+          text: v('--muted', '#64748b'), grid: v('--line', '#e2e8f0'),
+          accent: v('--accent', '#2563eb'), sma20: '#f59e0b', sma50: '#3b82f6', sma200: '#a855f7'
+        };
+      }
+
+      function smaSeries(closes, n) {
+        var out = [];
+        for (var i = 0; i < closes.length; i++) {
+          if (i < n - 1) { out.push(null); continue; }
+          var sum = 0;
+          for (var j = i - n + 1; j <= i; j++) sum += closes[j];
+          out.push(sum / n);
+        }
+        return out;
+      }
+
+      function fmtTimeLabel(ts, tf) {
+        var d = new Date(ts * 1000);
+        if (isNaN(d)) return '';
+        try {
+          if (tf === '5m' || tf === '15m' || tf === '30m' || tf === '1h') {
+            return d.toLocaleString(undefined, { weekday: 'short', hour: '2-digit', minute: '2-digit' });
+          }
+          if (tf === '4h') return d.toLocaleDateString(undefined, { day: 'numeric', month: 'short' });
+          if (tf === '1d') return d.toLocaleDateString(undefined, { day: 'numeric', month: 'short' });
+          return d.toLocaleDateString(undefined, { month: 'short', year: '2-digit' });
+        } catch (e) { return d.toLocaleDateString(); }
+      }
+
+      function renderChart() {
+        var canvas = document.getElementById('rChart');
+        var bars = chartState.bars;
+        var legend = document.getElementById('rChartLegend');
+        if (!canvas || !bars || !bars.close || bars.close.length < 2) {
+          if (legend) legend.hidden = true;
+          return;
+        }
+        var c = chartColors();
+        var dpr = window.devicePixelRatio || 1;
+        var W = canvas.clientWidth, H = canvas.clientHeight || 420;
+        canvas.width = Math.round(W * dpr); canvas.height = Math.round(H * dpr);
+        var ctx = canvas.getContext('2d');
+        ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+        ctx.clearRect(0, 0, W, H);
+
+        var padL = 8, padR = 62, padT = 12, padB = 22;
+        var volH = chartState.vol ? Math.round((H - padT - padB) * 0.18) : 0;
+        var priceB = H - padB - volH - (chartState.vol ? 6 : 0);
+        var plotW = W - padL - padR, plotH = priceB - padT;
+        var n = bars.close.length;
+        var closes = bars.close;
+
+        // price extent (include SMA + candles wicks)
+        var lo = Infinity, hi = -Infinity;
+        for (var i = 0; i < n; i++) {
+          var cc = closes[i]; if (cc == null) continue;
+          if (cc < lo) lo = cc; if (cc > hi) hi = cc;
+          if (chartState.type === 'candles' && bars.high && bars.high[i] != null) {
+            if (bars.high[i] > hi) hi = bars.high[i];
+            if (bars.low && bars.low[i] != null && bars.low[i] < lo) lo = bars.low[i];
+          }
+        }
+        var smas = [];
+        if (chartState.sma) {
+          [20, 50, 200].forEach(function (nn, idx) {
+            var s = smaSeries(closes, nn);
+            smas.push({ n: nn, data: s, color: [c.sma20, c.sma50, c.sma200][idx] });
+            for (var k = nn - 1; k < s.length; k++) {
+              if (s[k] == null) continue;
+              if (s[k] < lo) lo = s[k]; if (s[k] > hi) hi = s[k];
+            }
+          });
+        }
+        if (!isFinite(lo) || !isFinite(hi)) return;
+        if (hi === lo) hi = lo + 1;
+        var span = hi - lo; lo -= span * 0.05; hi += span * 0.05;
+
+        function xAt(i) { return padL + plotW * (n === 1 ? 0.5 : i / (n - 1)); }
+        function yAt(p) { return padT + plotH * (1 - (p - lo) / (hi - lo)); }
+
+        // gridlines + right-side price labels
+        ctx.strokeStyle = c.grid; ctx.fillStyle = c.text;
+        ctx.lineWidth = 1; ctx.font = '11px Inter, sans-serif'; ctx.textBaseline = 'middle';
+        for (var g = 0; g <= 4; g++) {
+          var gy = padT + plotH * g / 4;
+          var gp = hi - (hi - lo) * g / 4;
+          ctx.beginPath(); ctx.moveTo(padL, gy); ctx.lineTo(padL + plotW, gy); ctx.stroke();
+          ctx.textAlign = 'left';
+          ctx.fillText(fmt(gp, 0), padL + plotW + 6, gy);
+        }
+
+        // volume panel
+        if (chartState.vol && bars.volume) {
+          var vMax = 0;
+          for (var vi = 0; vi < n; vi++) { var vv = bars.volume[vi] || 0; if (vv > vMax) vMax = vv; }
+          if (vMax > 0) {
+            var bw = Math.max(1, plotW / n * 0.7);
+            for (var vi2 = 0; vi2 < n; vi2++) {
+              var v2 = bars.volume[vi2] || 0; if (!v2) continue;
+              var up2 = closes[vi2] >= (bars.open && bars.open[vi2] != null ? bars.open[vi2] : (closes[vi2 - 1] || closes[vi2]));
+              ctx.fillStyle = up2 ? c.up : c.down;
+              ctx.globalAlpha = 0.35;
+              var vh = (H - padB - (priceB + 6)) * (v2 / vMax);
+              ctx.fillRect(xAt(vi2) - bw / 2, H - padB - vh, bw, vh);
+            }
+            ctx.globalAlpha = 1;
+          }
+        }
+
+        // series
+        if (chartState.type === 'candles' && bars.open && bars.high && bars.low) {
+          var cw = Math.max(1.5, Math.min(12, plotW / n * 0.7));
+          for (var ci = 0; ci < n; ci++) {
+            var o = bars.open[ci], h = bars.high[ci], l = bars.low[ci], cl = closes[ci];
+            if (o == null || h == null || l == null || cl == null) continue;
+            var bull = cl >= o;
+            ctx.strokeStyle = ctx.fillStyle = bull ? c.up : c.down;
+            ctx.lineWidth = 1;
+            var cx = xAt(ci);
+            ctx.beginPath(); ctx.moveTo(cx, yAt(h)); ctx.lineTo(cx, yAt(l)); ctx.stroke();
+            var yo = yAt(o), yc = yAt(cl);
+            var top = Math.min(yo, yc), bh = Math.max(1, Math.abs(yc - yo));
+            ctx.fillRect(cx - cw / 2, top, cw, bh);
+          }
+        } else {
+          var up = closes[n - 1] >= closes[0];
+          ctx.strokeStyle = up ? c.up : c.down;
+          ctx.lineWidth = 2.5;
+          ctx.beginPath();
+          var started = false;
+          for (var li = 0; li < n; li++) {
+            if (closes[li] == null) continue;
+            var px = xAt(li), py = yAt(closes[li]);
+            if (!started) { ctx.moveTo(px, py); started = true; } else ctx.lineTo(px, py);
+          }
+          ctx.stroke();
+          // soft area fill under the line
+          ctx.globalAlpha = 0.08;
+          ctx.fillStyle = up ? c.up : c.down;
+          ctx.lineTo(xAt(n - 1), padT + plotH); ctx.lineTo(xAt(0), padT + plotH); ctx.closePath(); ctx.fill();
+          ctx.globalAlpha = 1;
+        }
+
+        // SMA overlays
+        smas.forEach(function (s) {
+          ctx.strokeStyle = s.color; ctx.lineWidth = 1.5; ctx.beginPath();
+          var began = false;
+          for (var si = 0; si < s.data.length; si++) {
+            if (s.data[si] == null) continue;
+            var sx = xAt(si), sy = yAt(s.data[si]);
+            if (!began) { ctx.moveTo(sx, sy); began = true; } else ctx.lineTo(sx, sy);
+          }
+          ctx.stroke();
+        });
+
+        // last price line + label
+        var lastP = closes[n - 1];
+        if (lastP != null) {
+          var ly = yAt(lastP);
+          if (ly >= padT && ly <= padT + plotH) {
+            ctx.strokeStyle = c.accent; ctx.setLineDash([4, 4]); ctx.lineWidth = 1;
+            ctx.beginPath(); ctx.moveTo(padL, ly); ctx.lineTo(padL + plotW, ly); ctx.stroke();
+            ctx.setLineDash([]);
+            ctx.fillStyle = c.accent;
+            var label = fmt(lastP, 2);
+            ctx.font = 'bold 11px Inter, sans-serif';
+            var tw = ctx.measureText(label).width;
+            ctx.fillRect(padL + plotW + 2, ly - 9, Math.max(tw + 8, padR - 6), 18);
+            ctx.fillStyle = '#fff'; ctx.textAlign = 'left';
+            ctx.fillText(label, padL + plotW + 6, ly);
+            ctx.font = '11px Inter, sans-serif';
+          }
+        }
+
+        // time axis labels (max 6)
+        ctx.fillStyle = c.text; ctx.textAlign = 'center'; ctx.textBaseline = 'top';
+        var ticks = Math.min(6, n);
+        for (var t2 = 0; t2 < ticks; t2++) {
+          var ti = Math.round(t2 * (n - 1) / (ticks - 1));
+          var tx = xAt(ti);
+          if (tx > padL + 18 && tx < padL + plotW - 18) {
+            ctx.fillText(fmtTimeLabel(bars.timestamp && bars.timestamp[ti], chartState.tf), tx, priceB + (chartState.vol ? 8 : 4));
+          }
+        }
+
+        // legend
+        if (legend) {
+          var parts = [];
+          smas.forEach(function (s) {
+            parts.push('<span class="legend-item"><i style="background:' + s.color + '"></i>SMA ' + s.n + '</span>');
+          });
+          if (chartState.vol) parts.push('<span class="legend-item"><i class="legend-vol"></i>Volume</span>');
+          legend.innerHTML = parts.join('');
+          legend.hidden = parts.length === 0;
+        }
+
+        // window stats
+        var first = closes[0], lastC = closes[n - 1];
+        var chg = (first && lastC) ? ((lastC / first - 1) * 100) : null;
+        var stats = n + ' ' + (chartState.tf === '1d' ? 'sessions' : 'bars') + ' · ' +
+          (chg == null ? '' : (chg >= 0 ? '+' : '') + chg.toFixed(1) + '% over the window');
+        if (chartState.sma && smas.length) {
+          var s50 = smas[1].data[n - 1];
+          if (s50 != null) stats += ' · vs SMA50 ' + (lastC >= s50 ? '<span class="pos">above</span>' : '<span class="neg">below</span>');
+        }
+        document.getElementById('rChartStats').innerHTML = stats;
+      }
+
+      function loadChart(symbol) {
+        chartState.symbol = symbol;
+        document.getElementById('rChartNote').textContent = 'Loading price history…';
+        document.getElementById('rChartStats').textContent = '';
+        fetch('/api/history?symbol=' + encodeURIComponent(symbol) + '&timeframe=' + encodeURIComponent(chartState.tf))
+          .then(function (r) { return r.ok ? r.json() : null; })
+          .then(function (hj) {
+            if (!hj || chartState.symbol !== symbol) return;
+            var bars = hj.bars;
+            document.getElementById('rChartSrc').textContent = bars && bars.source ? '· ' + bars.source : '';
+            if (bars && bars.close && bars.close.length > 1) {
+              chartState.bars = bars;
+              renderChart();
+              document.getElementById('rChartNote').textContent =
+                (hj.downsampled ? 'Downsampled — ' : '') +
+                (({ '5m': '5-minute', '15m': '15-minute', '30m': '30-minute', '1h': 'hourly', '4h': '4-hour', '1d': 'daily', '1w': 'weekly', '1mo': 'monthly' })[chartState.tf] || '') +
+                ' candles from free sources.';
+            } else {
+              chartState.bars = null;
+              document.getElementById('rChartNote').textContent =
+                'No ' + chartState.tf + ' history from free sources right now — try 1D.';
+            }
+          })
+          .catch(function () { /* chart is best-effort */ });
+      }
+
+      // toolbar wiring: timeframe refetches; style options just redraw
+      document.getElementById('chartTF').addEventListener('change', function (e) {
+        if (e.target && e.target.name === 'chartTF') {
+          chartState.tf = e.target.value; saveChartPrefs();
+          if (chartState.symbol) loadChart(chartState.symbol);
+        }
+      });
+      document.getElementById('chartType').addEventListener('change', function (e) {
+        if (e.target && e.target.name === 'chartType') {
+          chartState.type = e.target.value; saveChartPrefs(); renderChart();
+        }
+      });
+      document.getElementById('chartSMA').addEventListener('change', function (e) {
+        chartState.sma = e.target.checked; saveChartPrefs(); renderChart();
+      });
+      document.getElementById('chartVol').addEventListener('change', function (e) {
+        chartState.vol = e.target.checked; saveChartPrefs(); renderChart();
+      });
+      var resizeT;
+      window.addEventListener('resize', function () {
+        clearTimeout(resizeT); resizeT = setTimeout(renderChart, 150);
+      });
+      // redraw on theme flip so canvas colours match
+      try {
+        new MutationObserver(function () { if (chartState.bars) renderChart(); })
+          .observe(document.documentElement, { attributes: true, attributeFilter: ['class', 'data-theme'] });
+      } catch (e) {}
 
       async function loadExtras(symbol, market) {
         // Dividend history (Yahoo payout events + annual totals).
@@ -416,21 +712,7 @@
           }
         } catch (e) { /* actions are best-effort */ }
         try {
-          var hr = await fetch('/api/history?symbol=' + encodeURIComponent(symbol));
-          if (hr.ok) {
-            var hj = await hr.json();
-            var bars = hj.bars;
-            document.getElementById('rChartSrc').textContent = bars && bars.source ? '· ' + bars.source : '';
-            if (bars && bars.close && bars.close.length > 1) {
-              drawChart(document.getElementById('rChart'), bars.close.filter(function (c) { return c != null; }));
-              var first = bars.close[0], last = bars.close[bars.close.length - 1];
-              var chg = (first && last) ? ((last / first - 1) * 100) : null;
-              document.getElementById('rChartNote').textContent =
-                bars.close.length + ' sessions · ' + (chg == null ? '' : (chg >= 0 ? '+' : '') + chg.toFixed(1) + '% over the window');
-            } else {
-              document.getElementById('rChartNote').textContent = 'Price history unavailable from free sources right now.';
-            }
-          }
+          loadChart(symbol);
         } catch (e) { /* chart is best-effort */ }
       }
 

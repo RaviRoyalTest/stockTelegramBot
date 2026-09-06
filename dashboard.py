@@ -471,39 +471,50 @@ async def api_history(
     exchange: str = Query("NSE"),
     timeframe: str = Query("1d"),
 ):
-    """OHLC history for the fundamentals price chart (Yahoo -> Stooq).
+    """OHLCV history for the customizable price chart (Yahoo -> Stooq fallback).
 
-    Returns {'symbol','bars': {timestamp,open,high,low,close,volume,...},
-    'source'} with at most ~260 daily bars, downsampled server-side when the
-    full 1y series would bloat the response.
+    Timeframes: 5m, 15m, 30m, 1h, 4h, 1d, 1w, 1mo (get_ohlc); the stooq
+    fallback only serves daily bars. Returns {'symbol','timeframe','bars':
+    {timestamp,open,high,low,close,volume,...},'source','downsampled'} with
+    at most ~260 bars, downsampled server-side so the canvas chart stays
+    fast.
     """
     if not symbol:
         raise HTTPException(status_code=400, detail="symbol is required")
     key = symbol.strip().upper().removesuffix(".NS").removesuffix(".BO")
     ex = (exchange or "NSE").strip().upper()
     tf = (timeframe or "1d").strip().lower()
-    if tf not in ("1d", "1w", "1mo"):
+    if tf not in ("5m", "15m", "30m", "1h", "4h", "1d", "1w", "1mo"):
         tf = "1d"
     try:
         bars = await asyncio.to_thread(sources.get_ohlc, ex, key, tf)
         source = "yahoo"
         if not bars or not bars.get("close"):
+            if tf != "1d":
+                return JSONResponse({"symbol": key, "timeframe": tf, "bars": None, "source": "none"})
             try:
                 bars = await asyncio.to_thread(sources.get_stooq_history, key, ex)
                 source = "stooq"
             except Exception:
                 bars = None
         if not bars:
-            return JSONResponse({"symbol": key, "bars": None, "source": "none"})
-        # Downsample to <= 160 points so the canvas chart stays fast.
+            return JSONResponse({"symbol": key, "timeframe": tf, "bars": None, "source": "none"})
+        # Downsample to <= 260 points so the canvas chart stays fast.
         closes = bars.get("close") or []
-        if len(closes) > 160:
-            step = max(1, len(closes) // 160)
+        downsampled = len(closes) > 260
+        if downsampled:
+            step = max(1, -(-len(closes) // 260))  # ceil so we always land <= 260
             for field in ("timestamp", "open", "high", "low", "close", "volume"):
                 values = bars.get(field) or []
                 bars[field] = values[::step]
         bars["source"] = bars.get("source") or source
-        return JSONResponse({"symbol": key, "bars": bars, "source": bars.get("source")})
+        return JSONResponse({
+            "symbol": key,
+            "timeframe": tf,
+            "bars": bars,
+            "source": bars.get("source"),
+            "downsampled": downsampled,
+        })
     except Exception as exc:
         raise HTTPException(status_code=500, detail=str(exc))
 
