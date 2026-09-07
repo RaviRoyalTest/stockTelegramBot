@@ -26,7 +26,7 @@ from ..formatting import (
     format_price_alert,
     format_reminder,
 )
-from ..sources import get_quote
+from ..sources import get_best_quote, get_quote
 from ..sources.types import ACTION_TYPES, action_type
 from ..telegram.client import NotifierError, send_message
 from ..telegram.markup import symbol_buttons
@@ -48,6 +48,25 @@ log = logging.getLogger(__name__)
 # as a poll error again and again (noisy "N error(s)" lines and wasted calls).
 _nse_fetch_fail: dict[str, float] = {}
 _NSE_FETCH_FAIL_CACHE_SECONDS = 3600  # seconds - re-check the symbol hourly
+
+
+def _poll_quote(exchange: str, symbol: str) -> dict | None:
+    """Live quote for the poll loop with free-API fallbacks.
+
+    Yahoo first (previous-close change %, the daily-alert semantic), then
+    NSE equity API, then Stooq — so a Yahoo outage never silently swallows
+    a price alert or a corporate-action price line. Never raises.
+    """
+    try:
+        quote = get_best_quote(exchange or "NSE", symbol or "")
+        if quote and quote.get("price") is not None:
+            return quote
+    except Exception as error:
+        log.info("poll quote fallback chain failed for %s:%s: %s", exchange, symbol, error)
+    try:
+        return get_quote(exchange or "NSE", symbol or "")
+    except Exception:
+        return None
 
 
 class Poller:
@@ -341,7 +360,7 @@ class Poller:
                     action["new"] = not already
                     if already and not force:
                         continue
-                    quote = get_quote(action["exchange"], action["symbol"])
+                    quote = _poll_quote(action["exchange"], action["symbol"])
                     if quote:
                         action["quote"] = quote
                     try:
@@ -364,7 +383,7 @@ class Poller:
                     remind_key = f"remind|{chat_id}|{event_key(action)}"
                     if remind_key in self._seen and not force:
                         continue
-                    quote = get_quote(action["exchange"], action["symbol"])
+                    quote = _poll_quote(action["exchange"], action["symbol"])
                     if quote:
                         action["quote"] = quote
                     try:
@@ -396,7 +415,7 @@ class Poller:
                     )
                     if day_key in self._seen and not force:
                         continue
-                    quote = get_quote(item.get("exchange", "NSE"), item.get("symbol", ""))
+                    quote = _poll_quote(item.get("exchange", "NSE"), item.get("symbol", ""))
                     if not quote or quote.get("change_pct") is None:
                         continue
                     if abs(quote["change_pct"]) < threshold:

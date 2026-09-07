@@ -137,10 +137,15 @@ def format_reminder(action: dict) -> str:
 
 
 def format_price_alert(item: dict, quote: dict, threshold: float) -> str:
-    """Render a price-move alert for a watched stock."""
+    """Render a price-move alert for a watched stock.
+
+    Company prefers the live quote name (full "BSE Limited") over the stored
+    short label, and the exchange rides along as a suffix so a symbol that
+    equals an exchange name ("BSE" on NSE) never reads ambiguously.
+    """
     symbol = item.get("symbol") or "-"
-    exchange = item.get("exchange") or "-"
-    company = item.get("company") or "-"
+    exchange = (item.get("exchange") or "-").upper()
+    company = quote.get("name") or item.get("company") or "-"
     price = quote.get("price")
     change = quote.get("change_pct")
     currency = quote.get("currency", "INR")
@@ -165,7 +170,7 @@ def format_price_alert(item: dict, quote: dict, threshold: float) -> str:
     return "\n".join(
         [
             f"{header_icon} <b>Price Alert \u2014 {escape(symbol)}</b>",
-            f"({escape(exchange)}) {escape(company)}",
+            f"{escape(company)} \u00b7 {escape(exchange)}",
             detail_line,
             f"Crossed your \u00b1{threshold:g}% daily alert threshold.",
         ]

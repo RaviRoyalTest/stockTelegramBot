@@ -8,7 +8,7 @@ from __future__ import annotations
 from concurrent.futures import ThreadPoolExecutor, as_completed
 
 from .. import storage
-from ..sources import get_index_universe, get_quote
+from ..sources import get_best_quote, get_index_universe, get_quote
 
 # A chat that has never touched /watcher gets this default config - the
 # watcher is ON by default at 5% over NIFTY 100 (same defaults /watcher on
@@ -58,12 +58,30 @@ def unique_watch_pairs(targets) -> list[tuple[str, str]]:
     return unique_pairs
 
 
+def _watch_quote(symbol: str) -> dict | None:
+    """One watcher quote with free-API fallbacks (never raises).
+
+    Yahoo first (previous-close change %), then NSE equity API, then Stooq,
+    so a Yahoo outage never silently blinds the sudden-move scan.
+    """
+    try:
+        quote = get_best_quote("NSE", symbol) or {}
+        if quote.get("price") is not None:
+            return quote
+    except Exception:
+        pass
+    try:
+        return get_quote("NSE", symbol)
+    except Exception:
+        return None
+
+
 def fetch_quotes(unique_pairs: list[tuple[str, str]]) -> dict[str, dict]:
     """{SYMBOL: quote} for the watch pairs, fetching in parallel."""
     quotes: dict[str, dict] = {}
     with ThreadPoolExecutor(max_workers=20) as executor:
         futures = {
-            executor.submit(get_quote, "NSE", symbol): (chat_id, symbol)
+            executor.submit(_watch_quote, symbol): (chat_id, symbol)
             for chat_id, symbol in unique_pairs
         }
         for future in as_completed(futures):
