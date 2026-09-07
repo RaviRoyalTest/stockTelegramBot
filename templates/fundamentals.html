@@ -1041,7 +1041,7 @@
         var badges = [];
         if (f.sector) badges.push(f.sector);
         if (f.industry && f.industry !== f.sector) badges.push(f.industry);
-        if (f.rec_key) badges.push('Analysts: ' + String(f.rec_key).toUpperCase());
+        if (f.rec_key) badges.push('Analysts: ' + RS.recLabel(f.rec_key));
         if (MARKET === 'us' && f.mcap_usd != null) badges.push('Mkt cap $' + fmt(f.mcap_usd, 2) + 'B');
         else if (f.mcap_cr != null || f.market_cap != null) badges.push('Mkt cap ₹' + fmt(f.mcap_cr != null ? f.mcap_cr : f.market_cap, 0) + ' Cr');
         if (q.source && q.source !== 'none') badges.push('Price: ' + q.source);
@@ -1050,7 +1050,10 @@
         }).join('');
 
         var srcList = f.data_sources || (f.analyst_source ? [f.analyst_source] : []);
-        if (q.source && q.source !== 'none' && srcList.indexOf(q.source) === -1) srcList.push(q.source);
+        if (q.source && q.source !== 'none') {
+          var covered = srcList.some(function (s) { return s.indexOf(q.source) !== -1 || q.source.indexOf(s) !== -1; });
+          if (!covered) srcList.push(q.source);
+        }
         document.getElementById('rSources').textContent =
           srcList.length ? 'Sources: ' + srcList.join(' · ') : 'Sources: cache';
 
@@ -1217,7 +1220,7 @@
         var upside = (f.target_mean != null && price != null && price > 0)
           ? signed((f.target_mean - price) / price * 100, 1) : null;
         document.getElementById('rAnalyst').innerHTML = rows([
-          ['Consensus', f.rec_key ? String(f.rec_key).toUpperCase() : null],
+          ['Consensus', f.rec_key ? RS.recLabel(f.rec_key) : null],
           ['Source', f.analyst_source ? esc(f.analyst_source) : null],
           ['Mean rating (1=buy, 5=sell)', f.rec_mean != null ? fmt(f.rec_mean) : null],
           ['Analysts covering', f.num_analysts != null ? fmt(f.num_analysts, 0) : null],

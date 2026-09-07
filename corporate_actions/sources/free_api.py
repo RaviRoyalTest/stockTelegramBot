@@ -422,10 +422,15 @@ def normalise_fundamentals(symbol: str, fund: dict, quote: dict | None = None) -
     if fund.get("pe") is not None:
         sources.add("yahoo/screener")
     if quote.get("source") and quote.get("source") != "none":
-        sources.add(str(quote["source"]))
+        quote_source = str(quote["source"])
+        # skip when already covered ("yahoo" inside "yahoo/screener")
+        if not any(quote_source in entry or entry in quote_source for entry in sources):
+            sources.add(quote_source)
     if fund.get("promoter_pct") or fund.get("sector_pe"):
         sources.add("screener.in")
     if fund.get("analyst_source"):
         sources.add(str(fund["analyst_source"]))
-    fund.setdefault("data_sources", sorted(sources) or ["cache"])
+    # Always recompute (never setdefault): a cached data_sources list from
+    # before a dedupe fix would otherwise stick around for the full TTL.
+    fund["data_sources"] = sorted(sources) or ["cache"]
     return fund

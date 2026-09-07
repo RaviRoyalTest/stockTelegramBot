@@ -115,7 +115,7 @@
           } else { chgEl.textContent = ''; }
           var badges = [];
           if (f.sector) badges.push(f.sector);
-          if (f.rec_key) badges.push('Analysts: ' + String(f.rec_key).toUpperCase());
+          if (f.rec_key) badges.push('Analysts: ' + RS.recLabel(f.rec_key));
           if (f.analyst_source) badges.push(f.analyst_source);
           document.getElementById('rBadges').innerHTML = badges.map(function (b) {
             return '<span class="pill">' + esc(b) + '</span>';
@@ -129,7 +129,7 @@
               ? ((f.target_mean - price) / price * 100) : null;
             statsEl.hidden = false;
             statsEl.innerHTML = [
-              f.rec_key ? { k: 'Consensus', v: String(f.rec_key).toUpperCase(), cls: /buy/i.test(f.rec_key) ? 'pos' : /sell/i.test(f.rec_key) ? 'neg' : '' } : null,
+              f.rec_key ? { k: 'Consensus', v: RS.recLabel(f.rec_key), cls: /buy/i.test(f.rec_key) ? 'pos' : /sell/i.test(f.rec_key) ? 'neg' : '' } : null,
               f.target_mean != null ? { k: 'Mean target', v: cr(f.target_mean) } : null,
               upVal != null ? { k: 'Upside', v: (upVal >= 0 ? '+' : '') + upVal.toFixed(1) + '%', cls: upVal >= 0 ? 'pos' : 'neg' } : null,
               f.num_analysts != null ? { k: 'Analysts', v: fmt(f.num_analysts, 0) } : null,
@@ -140,7 +140,7 @@
             statsEl.hidden = true;
           }
           document.getElementById('rAnalyst').innerHTML = rows([
-            ['Consensus', f.rec_key ? String(f.rec_key).toUpperCase() : null],
+            ['Consensus', f.rec_key ? RS.recLabel(f.rec_key) : null],
             ['Mean rating (1=buy, 5=sell)', f.rec_mean != null ? fmt(f.rec_mean) : null],
             ['Analysts covering', f.num_analysts != null ? fmt(f.num_analysts, 0) : null],
             ['Mean target', f.target_mean != null ? cr(f.target_mean) : null],

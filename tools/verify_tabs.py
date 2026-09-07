@@ -270,7 +270,7 @@ css = pathlib.Path("static/app.css").read_text(encoding="utf-8")
 for needle in [".nav-group", ".nav-drop", ".nav-menu", ".crumbs", ".foot-links"]:
     print(("OK  " if needle in css else "MISS"), "css:" + needle)
 js = pathlib.Path("static/app.js").read_text(encoding="utf-8")
-for needle in ["nav-drop", "closeGroups", "crumbs"]:
+for needle in ["nav-drop", "closeGroups", "crumbs", "recLabel", "topSearchInput"]:
     print(("OK  " if needle in js else "MISS"), "js:" + needle)
 
 print("DONE")

@@ -229,6 +229,13 @@
     return (n >= 0 ? '+' : '') + n.toFixed(2) + '%';
   };
 
+  window.RS.recLabel = function (key) {
+    // 'strong_buy' -> 'Strong Buy' (Yahoo recommendationKey snake_case)
+    return String(key == null ? '' : key)
+      .replace(/_/g, ' ')
+      .replace(/\w\S*/g, function (w) { return w.charAt(0).toUpperCase() + w.slice(1).toLowerCase(); });
+  };
+
   // '2026-09-04' -> '04 Sep 2026' (returns the input unchanged if not ISO)
   window.RS.fmtDate = function (value) {
     var s = String(value || '');
