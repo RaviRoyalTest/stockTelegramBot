@@ -454,6 +454,19 @@
       });
     }
 
+    function firstClickDir(idx) {
+      // text columns sort A→Z first; numbers/dates sort largest/newest first
+      var rows = Array.prototype.slice.call(body.querySelectorAll('tr'));
+      for (var r = 0; r < rows.length; r++) {
+        var cell = rows[r].cells[idx];
+        if (!cell) continue;
+        var v = parseCell(cell.textContent);
+        if (v == null) continue;
+        return typeof v === 'string' ? 'asc' : 'desc';
+      }
+      return 'desc';
+    }
+
     function sortBy(idx, dir) {
       var rows = Array.prototype.slice.call(body.querySelectorAll('tr')).filter(function (tr) {
         return !tr.querySelector('td.empty');
@@ -477,7 +490,10 @@
       btn.setAttribute('aria-label', 'Sort by ' + label);
       btn.textContent = label;
       btn.addEventListener('click', function () {
-        sortBy(i, sortState.idx === i && sortState.dir === 'desc' ? 'asc' : 'desc');
+        var dir = sortState.idx === i
+          ? (sortState.dir === 'asc' ? 'desc' : 'asc')   // same column: flip
+          : firstClickDir(i);                            // new column: smart default
+        sortBy(i, dir);
       });
       th.textContent = '';
       th.appendChild(btn);
