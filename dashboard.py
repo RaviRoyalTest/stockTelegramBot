@@ -670,7 +670,11 @@ async def api_search(q: str | None = Query(None), market: str = Query("in"), lim
 
 @app.get("/api/universe")
 async def api_universe(universe: str = Query("nifty500")):
-    """Index constituent symbols (NIFTY 500 / NIFTY 100 / NASDAQ 100 / S&P 500)."""
+    """Index constituent symbols.
+
+    Universes: NIFTY 100 / NIFTY 500 / NIFTY 1000 (Total Market, ~750 stocks)
+    / all NSE equities (``all``, ~2.5k) / NASDAQ 100 / S&P 500.
+    """
     try:
         symbols = await asyncio.to_thread(sources.get_index_universe, universe)
         return JSONResponse({"universe": universe, "count": len(symbols or []), "symbols": symbols or []})
@@ -798,10 +802,10 @@ async def api_movers(
         deadline += 10
     if range_from:
         deadline += 30
-    # Scale with the universe so NIFTY 500 scans are not cut off after the
+    # Scale with the universe so the broad NSE scans are not cut off after the
     # first ~200 symbols (capped to keep the API responsive).
     try:
-        deadline += min(30.0, len(symbols) / 50.0)
+        deadline += min(75.0, len(symbols) / 50.0)
     except Exception:
         pass
     started = asyncio.get_event_loop().time()
@@ -824,7 +828,7 @@ async def api_movers(
                 }
             if target_date or range_from:
                 # Historical screen: best single-session move per stock. A
-                # range reuses ONE gap-history fetch per symbol (every
+                # range reuses ONE gap-history fetch per symbol (every
                 # session's open/close/prev_close/gap) instead of one fetch
                 # per day, which made week-long scans take minutes.
                 if range_from:

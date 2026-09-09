@@ -27,6 +27,8 @@ _UNIVERSE_CACHE_SECONDS = 86400  # 24h - index constituents change rarely
 _INDEX_CSV = {
     "nifty100": "https://archives.nseindia.com/content/indices/ind_nifty100list.csv",
     "nifty500": "https://archives.nseindia.com/content/indices/ind_nifty500list.csv",
+    # Broad NSE index (~750 stocks, the practical "NIFTY 1000" universe).
+    "niftyTotalMarket": "https://archives.nseindia.com/content/indices/ind_niftytotalmarket_list.csv",
 }
 
 # NSE constituent downloads are flaky; keep a compact static fallback with the
@@ -125,9 +127,18 @@ _SP500_FALLBACK = [
 _UNIVERSE_EXCHANGE = {
     "nifty100": "NSE",
     "nifty500": "NSE",
+    "niftyTotalMarket": "NSE",
+    "all": "NSE",
     "nasdaq100": "US",
     "sp500": "US",
 }
+
+# Alias tables for the broader NSE universes.
+_NIFTY_TOTAL_KEYS = (
+    "nifty1000", "n1000", "1000", "totalmarket", "total-market",
+    "nifty-total-market", "niftytotalmarket",
+)
+_ALL_NSE_KEYS = ("all", "allnse", "all-nse", "allstocks", "all-stocks", "allequities")
 
 
 def _fetch_nasdaq100() -> list[str]:
@@ -218,8 +229,29 @@ def _fetch_nse_equity_list() -> list[str]:
     return []
 
 
+def _get_equity_list_universe() -> list[str]:
+    """All NSE active equities (EQUITY_L.csv, ~2.5k symbols), cached 24h."""
+    now = time.time()
+    cached = _universe_cache.get("equity_l")
+    if cached and now - cached["timestamp"] < _UNIVERSE_CACHE_SECONDS:
+        log.debug("all-NSE universe cache hit (%d symbols)", len(cached["data"]))
+        return cached["data"]
+    symbols = _fetch_nse_equity_list()
+    if symbols:
+        _universe_cache["equity_l"] = {"timestamp": now, "data": symbols}
+        return symbols
+    # Static lifeline only if even the exchange list is unreachable; not cached.
+    log.warning("All-NSE universe unavailable - using static fallback list")
+    return list(_NIFTY500_FALLBACK)
+
+
 def get_index_universe(index: str = "nifty100") -> list[str]:
-    """Return symbols for an index universe, cached 24h. Empty list on failure."""
+    """Return symbols for an index universe, cached 24h. Empty list on failure.
+
+    Beyond the base NIFTY 100/500 this also serves the broad NSE universes:
+    ``nifty1000``/``totalmarket`` (NIFTY Total Market, ~750 stocks) and
+    ``all``/``allstocks`` (every active NSE equity via EQUITY_L.csv).
+    """
     key = (index or "nifty100").lower()
     if key in ("nasdaq", "nasdaq100", "ndx", "us100", "nasdaq-100"):
         key = "nasdaq100"
@@ -244,7 +276,12 @@ def get_index_universe(index: str = "nifty100") -> list[str]:
         if symbols:
             _universe_cache["sp500"] = {"timestamp": now, "data": symbols}
         return symbols
-    url = _INDEX_CSV["nifty500"] if key in ("all", "500", "nifty500") else _INDEX_CSV["nifty100"]
+    if key in _ALL_NSE_KEYS:
+        return _get_equity_list_universe()
+    if key in _NIFTY_TOTAL_KEYS:
+        url = _INDEX_CSV["niftyTotalMarket"]
+    else:
+        url = _INDEX_CSV["nifty500"] if key in ("500", "nifty500") else _INDEX_CSV["nifty100"]
     now = time.time()
     cached = _universe_cache.get(url)
     if cached and now - cached["timestamp"] < _UNIVERSE_CACHE_SECONDS:
@@ -270,7 +307,8 @@ def get_index_universe(index: str = "nifty100") -> list[str]:
             symbols = fallback
             log.info("NSE index universe fallback used for %s (%d symbols)", key, len(symbols))
         else:
-            symbols = _NIFTY500_FALLBACK if key in ("all", "500", "nifty500") else _NIFTY100_FALLBACK
+            broad = key in ("500", "nifty500") or key in _NIFTY_TOTAL_KEYS
+            symbols = _NIFTY500_FALLBACK if broad else _NIFTY100_FALLBACK
             log.warning("Using static NIFTY fallback list for %s (%d symbols)", key, len(symbols))
 
     # Only cache a successful (non-empty) load. Caching an empty list for 24h
