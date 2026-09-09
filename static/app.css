@@ -312,6 +312,18 @@ th button.sort {
 }
 th button.sort:hover { color: var(--accent); }
 th[aria-sort] button.sort { color: var(--accent); }
+th button.sort::after {
+  content: "↕";
+  opacity: 0.4;
+  font-size: 0.75em;
+  margin-left: 2px;
+}
+th button.sort:hover::after { opacity: 0.8; }
+th[aria-sort] button.sort::after {
+  content: attr(data-arrow);
+  opacity: 1;
+  font-size: 0.85em;
+}
 
 td.num, th.num { text-align: right; font-variant-numeric: tabular-nums; }
 .pos { color: var(--green); }

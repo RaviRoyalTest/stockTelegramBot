@@ -105,9 +105,27 @@
           if (k !== 'drop' && k !== 'recovery' && k !== 'severity') return;
           if (recSortK === k) recSortD = recSortD === 'asc' ? 'desc' : 'asc';
           else { recSortK = k; recSortD = 'asc'; }
+          document.querySelectorAll('th[data-k]').forEach(function (th) {
+            var b = th.querySelector('button.sort');
+            if (!b) return;
+            if (th.dataset.k === recSortK) {
+              th.setAttribute('aria-sort', recSortD === 'asc' ? 'ascending' : 'descending');
+              b.setAttribute('data-arrow', recSortD === 'asc' ? '↑' : '↓');
+            } else {
+              th.removeAttribute('aria-sort');
+              b.removeAttribute('data-arrow');
+            }
+          });
           renderRec();
         });
       });
+      (function () {  // paint the default sort arrow on load
+        var th = document.querySelector('th[data-k="drop"]');
+        if (!th) return;
+        th.setAttribute('aria-sort', 'ascending');
+        var b = th.querySelector('button.sort');
+        if (b) b.setAttribute('data-arrow', '↑');
+      })();
       ['recMin', 'recMax', 'recSev'].forEach(function (id) {
         document.getElementById(id).addEventListener('input', renderRec);
       });

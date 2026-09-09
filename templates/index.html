@@ -93,6 +93,7 @@
     (function () {
       'use strict';
       var fmtNum = RS.fmtNum, esc = RS.escapeHtml;
+      var sorter = RS.makeSortable ? RS.makeSortable('#stockRows', { default: 4 }) : null;
 
       function buildQueryParams() {
         var params = new URLSearchParams();
@@ -125,6 +126,7 @@
               '<td class="num">' + fmtNum(r.rsi14, 1) + '</td>' +
             '</tr>';
           }).join('') : '<tr><td colspan="8" class="empty">No results.</td></tr>';
+          if (sorter) sorter.resort();
           applySearchFilter();
         } catch (err) {
           console.error('loadData failed:', err);

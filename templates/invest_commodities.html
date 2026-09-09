@@ -69,6 +69,7 @@
       'use strict';
       var esc = RS.escapeHtml, fmtNum = RS.fmtNum;
       var usdInr = null;
+      var sorter = RS.makeSortable ? RS.makeSortable('#liveBody', {}) : null;
 
       function analyse(ratio) {
         if (ratio == null || !isFinite(ratio) || ratio <= 0) return null;
@@ -117,6 +118,7 @@
             return '<tr><td>' + esc(r.source) + '</td><td class="num">$' + fmtNum(r.gold) + '</td>' +
               '<td class="num">$' + fmtNum(r.silver) + '</td><td>' + esc(r.time || '') + '</td></tr>';
           }).join('') : '<tr><td colspan="4" class="empty">All APIs failed — enter prices manually.</td></tr>';
+          if (sorter) sorter.resort();
           if (data.gold && data.silver) {
             document.getElementById('gold').value = data.gold.toFixed(2);
             document.getElementById('silver').value = data.silver.toFixed(2);

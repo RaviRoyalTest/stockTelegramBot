@@ -101,6 +101,8 @@
       'use strict';
       var fmtNum = RS.fmtNum, esc = RS.escapeHtml;
 
+      var sorter = RS.makeSortable ? RS.makeSortable('#tbody', { default: 3 }) : null;
+
       // Deep-link: /movers?mode=gappers
       var initial = new URLSearchParams(window.location.search).get('mode');
       if (initial && document.querySelector('input[name="mode"][value="' + initial + '"]')) {
@@ -116,7 +118,9 @@
         var tbody = document.getElementById('tbody');
         var mode = currentMode();
         var moveLabel = mode === 'gappers' ? 'Gap' : 'Move';
-        document.querySelectorAll('thead th')[3].textContent = moveLabel;
+        var moveBtn = document.querySelectorAll('thead th')[3].querySelector('button.sort');
+        if (moveBtn) { moveBtn.textContent = moveLabel; moveBtn.setAttribute('aria-label', 'Sort by ' + moveLabel); }
+        else { document.querySelectorAll('thead th')[3].textContent = moveLabel; }
         tbody.innerHTML = '<tr><td colspan="8" class="empty"><span class="skeleton" style="display:block;width:100%"></span></td></tr>';
         try {
           var params = new URLSearchParams({
@@ -161,6 +165,7 @@
               '<td class="num">' + fmtNum(r.rsi14, 1) + '</td>' +
             '</tr>';
           }).join('') : '<tr><td colspan="8" class="empty">No movers found for this screen.</td></tr>';
+          if (sorter) sorter.resort();
         } catch (err) {
           tbody.innerHTML = '<tr><td colspan="8" class="empty">Unable to load movers. Please try again.</td></tr>';
           RS.toast('Movers failed: ' + err.message, 'err');

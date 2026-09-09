@@ -51,6 +51,7 @@
     (function () {
       'use strict';
       var esc = RS.escapeHtml;
+      var sorter = RS.makeSortable ? RS.makeSortable('#wlRows', { skip: [6] }) : null;
 
       async function load(enriched) {
         var tbody = document.getElementById('wlRows');
@@ -81,6 +82,7 @@
                 'data-sym="' + esc(sym) + '" data-ex="' + esc(ex) + '">Remove</button></td>' +
             '</tr>';
           }).join('');
+          if (sorter) sorter.resort();
           applyFilter();
         } catch (err) {
           tbody.innerHTML = '<tr><td colspan="7" class="empty">Unable to load the watchlist.</td></tr>';

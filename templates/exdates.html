@@ -53,6 +53,7 @@
       'use strict';
       var esc = RS.escapeHtml;
       var latest = [];
+      var sorter = RS.makeSortable ? RS.makeSortable('#tbody', { default: 2 }) : null;
 
       async function fetchAndRender() {
         var tbody = document.getElementById('tbody');
@@ -86,6 +87,7 @@
             '<td><span class="pill">' + esc(item.source || item.exchange || 'NSE') + '</span></td>' +
           '</tr>';
         }).join('');
+        if (sorter) sorter.resort();
       }
 
       document.getElementById('filter').addEventListener('input', function () {

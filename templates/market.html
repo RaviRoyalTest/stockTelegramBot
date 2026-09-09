@@ -325,6 +325,17 @@
       document.getElementById('resetFilters').addEventListener('click', function () {
         document.getElementById('filtersForm').reset();
         sortKey = 'market_cap'; ascending = false; offset = 0;
+        document.querySelectorAll('th[data-key]').forEach(function (th) {
+          var b = th.querySelector('button.sort');
+          if (!b) return;
+          if (th.dataset.key === 'market_cap') {
+            th.setAttribute('aria-sort', 'descending');
+            b.setAttribute('data-arrow', '↓');
+          } else {
+            th.removeAttribute('aria-sort');
+            b.removeAttribute('data-arrow');
+          }
+        });
         updateActiveCount();
         load();
       });
@@ -380,8 +391,12 @@
           document.querySelectorAll('th[data-key]').forEach(function (th) {
             if (th.dataset.key === key) {
               th.setAttribute('aria-sort', ascending ? 'ascending' : 'descending');
+              var b = th.querySelector('button.sort');
+              if (b) b.setAttribute('data-arrow', ascending ? '↑' : '↓');
             } else {
               th.removeAttribute('aria-sort');
+              var b = th.querySelector('button.sort');
+              if (b) b.removeAttribute('data-arrow');
             }
           });
           load();
@@ -397,6 +412,13 @@
         }
       } catch (e) { /* ignore */ }
       updateActiveCount();
+      (function () {  // paint the default sort arrow on load
+        var th = document.querySelector('th[data-key="market_cap"]');
+        if (!th) return;
+        th.setAttribute('aria-sort', 'descending');
+        var b = th.querySelector('button.sort');
+        if (b) b.setAttribute('data-arrow', '↓');
+      })();
       load();
     })();
   </script>

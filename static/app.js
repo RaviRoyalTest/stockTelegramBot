@@ -392,6 +392,108 @@
    * @param {string} inputId id of the text input
    * @param {string} [listId] id of the <datalist>; created when omitted
    */
+  /**
+   * Sortable data tables: wraps each column header in a click-to-sort button
+   * with an arrow indicator and re-orders the table body client-side.
+   *
+   * @param {string} tableSel selector for the <table> (or its container)
+   * @param {Object} [opts]
+   *   skip: array of column indexes (0-based) to leave unsortable (e.g. Actions)
+   *   default: column index to pre-sort descending (default: first numeric col)
+   *   onSort: optional callback(rows) to re-run filters after sorting
+   */
+  window.RS.makeSortable = function (tableSel, opts) {
+    opts = opts || {};
+    var el = document.querySelector(tableSel);
+    if (!el) return null;
+    var table = el.tagName === 'TABLE' ? el : el.closest('table');
+    var head = table && table.querySelector('thead');
+    var body = table.querySelector('tbody');
+    if (!head || !body) return;
+    var headers = Array.prototype.slice.call(head.querySelectorAll('tr:first-child > th'));
+    var skip = opts.skip || [];
+    var sortState = { idx: -1, dir: 'desc' };
+
+    function parseCell(text) {
+      var t = String(text == null ? '' : text).trim();
+      if (!t || t === '−' || t === '-') return null;
+      // dd-Mon-yyyy (NSE style) and similar human dates sort chronologically
+      var dm = t.match(/^(\d{1,2})[- ]([A-Za-z]{3,})[- ,]+(\d{4})$/);
+      if (dm) {
+        var dv = Date.parse(dm[2].slice(0, 3) + ' ' + dm[1] + ', ' + dm[3]);
+        if (!isNaN(dv)) return dv;
+      }
+      var m = t.replace(/[,%₹$]/g, '').replace(/−/g, '-').replace(/Cr$|L$|K$/i, '').trim();
+      var n = Number(m);
+      if (isFinite(n)) return n;
+      var d2 = Date.parse(t);            // ISO dates like 2026-09-04
+      return !isNaN(d2) ? d2 : t.toLowerCase();
+    }
+
+    function compare(a, b) {
+      var va = parseCell(a.cells[sortState.idx] && a.cells[sortState.idx].textContent);
+      var vb = parseCell(b.cells[sortState.idx] && b.cells[sortState.idx].textContent);
+      if (va == null && vb == null) return 0;
+      if (va == null) return 1;   // blanks always sink to the bottom
+      if (vb == null) return -1;
+      if (typeof va === 'number' && typeof vb === 'number') return va - vb;
+      return String(va).localeCompare(String(vb));
+    }
+
+    function paintArrows() {
+      headers.forEach(function (th, i) {
+        var btn = th.querySelector('button.sort');
+        if (!btn) return;
+        if (i === sortState.idx) {
+          th.setAttribute('aria-sort', sortState.dir === 'asc' ? 'ascending' : 'descending');
+          btn.setAttribute('data-arrow', sortState.dir === 'asc' ? '↑' : '↓');
+        } else {
+          th.removeAttribute('aria-sort');
+          btn.removeAttribute('data-arrow');
+        }
+      });
+    }
+
+    function sortBy(idx, dir) {
+      var rows = Array.prototype.slice.call(body.querySelectorAll('tr')).filter(function (tr) {
+        return !tr.querySelector('td.empty');
+      });
+      if (!rows.length) return;
+      sortState.idx = idx;
+      sortState.dir = dir;
+      rows.sort(function (a, b) { return dir === 'asc' ? compare(a, b) : compare(b, a); });
+      rows.forEach(function (tr) { body.appendChild(tr); });
+      paintArrows();
+      if (typeof opts.onSort === 'function') opts.onSort();
+    }
+
+    headers.forEach(function (th, i) {
+      if (skip.indexOf(i) !== -1) return;
+      var label = th.textContent.trim();
+      if (!label) return;
+      var btn = document.createElement('button');
+      btn.type = 'button';
+      btn.className = 'sort';
+      btn.setAttribute('aria-label', 'Sort by ' + label);
+      btn.textContent = label;
+      btn.addEventListener('click', function () {
+        sortBy(i, sortState.idx === i && sortState.dir === 'desc' ? 'asc' : 'desc');
+      });
+      th.textContent = '';
+      th.appendChild(btn);
+    });
+
+    if (opts.default != null) sortBy(opts.default, 'desc');
+    paintArrows();
+    return {
+      resort: function () {
+        if (sortState.idx < 0 && opts.default != null) { sortBy(opts.default, 'desc'); return; }
+        if (sortState.idx >= 0) sortBy(sortState.idx, sortState.dir);
+      },
+      clear: function () { sortState.idx = -1; paintArrows(); }
+    };
+  };
+
   window.RS.attachSymbolAutocomplete = function (inputId, listId) {
     var input = document.getElementById(inputId);
     if (!input) return;
