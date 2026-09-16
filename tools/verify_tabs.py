@@ -89,7 +89,8 @@ for must in ["/api/movers", "/api/analysis", "/api/checklist", "/api/indicator",
              "/indicator", "/news", "/invest", "/invest/stocks",
              "/invest/stocks/average", "/invest/stocks/profit", "/invest/stocks/recovery",
              "/invest/stocks/pnl", "/invest/stocks/checklist",
-             "/invest/mutual-funds", "/invest/bonds", "/invest/commodities"]:
+             "/invest/mutual-funds", "/invest/bonds", "/invest/commodities",
+             "/invest/ipo"]:
     print(("OK  " if must in paths else "MISS"), must)
 
 print("== new web templates ==")
@@ -99,9 +100,15 @@ for name in ["movers.html", "forecast.html", "checklist.html",
              "invest_stock_profit.html", "invest_stock_recovery.html",
              "invest_stock_pnl.html", "invest_stock_checklist.html",
              "invest_mutual.html", "invest_bonds.html",
-             "invest_commodities.html"]:
+             "invest_commodities.html", "invest_ipo.html"]:
     p = pathlib.Path("templates") / name
     print(("OK  " if p.exists() else "MISS"), name)
+
+print("== ipo content ==")
+ipo = pathlib.Path("templates/invest_ipo.html").read_text(encoding="utf-8")
+for needle in ["ipoQib", "alRet", "ipoChecks", "QIB should be more",
+               "Chance per lot", "Expected listing"]:
+    print(("OK  " if needle in ipo else "MISS"), "ipo:" + needle)
 
 print("== invest content ==")
 stocks = pathlib.Path("templates/invest_stocks.html").read_text(encoding="utf-8")

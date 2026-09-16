@@ -40,6 +40,7 @@ PAGES = [
     "/invest/mutual-funds",
     "/invest/bonds",
     "/invest/commodities",
+    "/invest/ipo",
     "/exdates",
     "/system",
 ]

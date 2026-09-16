@@ -1,0 +1,192 @@
+{% extends "base.html" %}
+{% block title %}IPO Check · Royal Stock{% endblock %}
+{% block content %}
+  <div class="page-header">
+    <h1>📋 IPO Check</h1>
+    <p class="sub">Subscription strength (QIB first), allotment odds, listing estimate and the evaluation checklist. <a href="/invest">← All investment tools</a></p>
+  </div>
+
+  <section class="card" aria-labelledby="hSub">
+    <h2 id="hSub">Subscription Analyzer <span class="muted" style="font-weight:400;">(day-wise numbers from NSE / BSE India)</span></h2>
+    <div class="form-row">
+      <div class="field"><label for="ipoQib">QIB subscription (×)</label><input id="ipoQib" type="number" min="0" step="any" placeholder="e.g., 120" /></div>
+      <div class="field"><label for="ipoNii">NII / HNI subscription (×)</label><input id="ipoNii" type="number" min="0" step="any" placeholder="e.g., 40" /></div>
+      <div class="field"><label for="ipoRet">Retail subscription (×)</label><input id="ipoRet" type="number" min="0" step="any" placeholder="e.g., 12" /></div>
+    </div>
+    <div class="form-row" style="margin-top:10px;">
+      <div class="field"><label for="ipoIssue">Issue price (₹) <span class="muted">(upper band)</span></label><input id="ipoIssue" type="number" min="0" step="any" placeholder="e.g., 500" /></div>
+      <div class="field"><label for="ipoGmp">GMP (₹) <span class="muted">(grey market premium)</span></label><input id="ipoGmp" type="number" step="any" placeholder="e.g., 80" /></div>
+    </div>
+    <table class="kv" style="margin-top:12px;"><tbody id="ipoOut"><tr><td class="empty">Enter subscription numbers — the verdict appears automatically.</td></tr></tbody></table>
+    <p class="note">Rule of thumb: <strong>QIB should be more.</strong> Institutions do the deepest diligence — when QIB leads NII and Retail, conviction is strongest. Undersubscription (&lt;1×) in any bucket is a red flag.</p>
+  </section>
+
+  <section class="card section" aria-labelledby="hAllot">
+    <h2 id="hAllot">🎯 Allotment &amp; Listing Estimate</h2>
+    <div class="form-row">
+      <div class="field"><label for="alRet">Retail subscription (×)</label><input id="alRet" type="number" min="0" step="any" placeholder="e.g., 12" /></div>
+      <div class="field"><label for="alLots">Lots applied</label><input id="alLots" type="number" min="1" step="1" placeholder="e.g., 1" value="1" /></div>
+      <div class="field"><label for="alIssue">Issue price (₹)</label><input id="alIssue" type="number" min="0" step="any" placeholder="e.g., 500" /></div>
+      <div class="field"><label for="alGmp">Expected GMP (₹)</label><input id="alGmp" type="number" step="any" placeholder="e.g., 80" /></div>
+    </div>
+    <table class="kv" style="margin-top:12px;"><tbody id="alOut"><tr><td class="empty">Enter values — odds and listing estimate appear automatically.</td></tr></tbody></table>
+    <p class="note">Oversubscribed retail = lottery: each lot has ≈ 1 ÷ subscription chance. GMP is unofficial and swings fast — treat it as sentiment, not price.</p>
+  </section>
+
+  <section class="card section" aria-labelledby="hCheck">
+    <h2 id="hCheck">IPO Evaluation Checklist</h2>
+    <p class="muted">Run every IPO through this before applying. Saved on this device.</p>
+    <p><span class="pill" id="ipoProgress">0 / 12</span>
+      <button class="btn btn-sm" type="button" id="ipoReset">Reset</button>
+      <button class="btn btn-sm" type="button" id="ipoCopy">📋 Copy summary</button>
+    </p>
+    <div id="ipoChecks"></div>
+  </section>
+{% endblock %}
+
+{% block scripts %}
+  <script>
+    (function () {
+      'use strict';
+      var esc = RS.escapeHtml, fmtNum = RS.fmtNum;
+      function num(v) { if (v == null || String(v).trim() === '') return null; var n = Number(v); return isFinite(n) ? n : null; }
+      function inr(v) { return v == null ? '−' : '₹' + fmtNum(v, 2); }
+      function kv(pairs) {
+        return pairs.map(function (p) {
+          return '<tr><th scope="row">' + esc(p[0]) + '</th><td>' + p[1] + '</td></tr>';
+        }).join('');
+      }
+      function pill(text, cls) { return '<span class="pill ' + (cls || '') + '">' + esc(text) + '</span>'; }
+
+      function band(value, strongAt, decentAt) {
+        if (value == null) return null;
+        if (value < 1) return { t: 'Undersubscribed', c: 'pill-bad' };
+        if (value >= strongAt) return { t: 'Strong', c: 'pill-ok' };
+        if (value >= decentAt) return { t: 'Decent', c: 'pill-warn' };
+        return { t: 'Weak', c: '' };
+      }
+
+      function renderSub() {
+        var qib = num(document.getElementById('ipoQib').value);
+        var nii = num(document.getElementById('ipoNii').value);
+        var ret = num(document.getElementById('ipoRet').value);
+        var issue = num(document.getElementById('ipoIssue').value);
+        var gmp = num(document.getElementById('ipoGmp').value);
+        if (qib == null && nii == null && ret == null) {
+          document.getElementById('ipoOut').innerHTML = '<tr><td class="empty">Enter subscription numbers — the verdict appears automatically.</td></tr>';
+          return;
+        }
+        var qb = band(qib, 10, 3), nb = band(nii, 15, 5), rb = band(ret, 5, 2);
+        var rows = [];
+        if (qb) rows.push(['QIB ' + (qib != null ? fmtNum(qib) + '×' : ''), pill(qb.t, qb.c)]);
+        if (nb) rows.push(['NII / HNI ' + (nii != null ? fmtNum(nii) + '×' : ''), pill(nb.t, nb.c)]);
+        if (rb) rows.push(['Retail ' + (ret != null ? fmtNum(ret) + '×' : ''), pill(rb.t, rb.c)]);
+        // QIB-first rule
+        if (qib != null && (nii != null || ret != null)) {
+          var other = Math.max(nii || 0, ret || 0);
+          rows.push(['QIB vs others', qib >= other
+            ? '<span class="pos">✅ QIB leads — strongest institutional conviction.</span>'
+            : '<span class="neg">⚠️ QIB trails NII/Retail — institutions less excited.</span>' +
+              (qib < 1 ? ' Undersubscribed QIB is a red flag.' : '')]);
+        }
+        var strongs = [qb, nb, rb].filter(function (b) { return b && b.t === 'Strong'; }).length;
+        var filled = [qb, nb, rb].filter(Boolean).length;
+        if (filled) {
+          var verdict = strongs >= 2 ? ['Strong demand', 'pill-ok'] : strongs === 1 ? ['Mixed demand', 'pill-warn'] : ['Weak demand', 'pill-bad'];
+          rows.push(['Overall demand', pill(verdict[0], verdict[1])]);
+        }
+        if (issue != null && issue > 0 && gmp != null) {
+          var gpct = gmp / issue * 100;
+          var sig = gpct >= 10 ? ['Strong positive', 'pill-ok'] : gpct > 0 ? ['Positive', 'pill-warn'] : ['Weak / negative', 'pill-bad'];
+          rows.push(['GMP ' + inr(gmp) + ' (' + (gpct >= 0 ? '+' : '') + fmtNum(gpct, 1) + '%)', pill(sig[0], sig[1])]);
+        }
+        document.getElementById('ipoOut').innerHTML = kv(rows);
+      }
+
+      function renderAl() {
+        var ret = num(document.getElementById('alRet').value);
+        var lots = Math.max(1, Math.floor(num(document.getElementById('alLots').value) || 1));
+        var issue = num(document.getElementById('alIssue').value);
+        var gmp = num(document.getElementById('alGmp').value);
+        if (ret == null && issue == null) {
+          document.getElementById('alOut').innerHTML = '<tr><td class="empty">Enter values — odds and listing estimate appear automatically.</td></tr>';
+          return;
+        }
+        var rows = [];
+        if (ret != null) {
+          if (ret < 1) {
+            rows.push(['Allotment chance', pill('Confirmed (undersubscribed)', 'pill-ok')]);
+          } else {
+            var p = 1 / ret;
+            var overall = 1 - Math.pow(1 - p, lots);
+            rows.push(['Chance per lot', '<strong>' + fmtNum(p * 100, 2) + '%</strong> <span class="muted">(≈ 1 in ' + fmtNum(ret, 1) + ')</span>']);
+            if (lots > 1) rows.push(['Chance across ' + lots + ' lots', '<strong>' + fmtNum(overall * 100, 1) + '%</strong>']);
+          }
+        }
+        if (issue != null && issue > 0 && gmp != null) {
+          var list = issue + gmp, gain = gmp / issue * 100;
+          rows.push(['Expected listing', inr(list)]);
+          rows.push(['Expected gain', '<span class="' + (gain >= 0 ? 'pos' : 'neg') + '"><strong>' + (gain >= 0 ? '+' : '') + fmtNum(gain, 1) + '%</strong></span>']);
+        }
+        document.getElementById('alOut').innerHTML = kv(rows);
+      }
+
+      ['ipoQib', 'ipoNii', 'ipoRet', 'ipoIssue', 'ipoGmp'].forEach(function (id) {
+        document.getElementById(id).addEventListener('input', renderSub);
+      });
+      ['alRet', 'alLots', 'alIssue', 'alGmp'].forEach(function (id) {
+        document.getElementById(id).addEventListener('input', renderAl);
+      });
+      renderSub();
+      renderAl();
+
+      /* ---------- IPO CHECKLIST (QIB-first, same interactive pattern) ---------- */
+      var ITEMS = [
+        ['QIB subscribed strongly (10×+) — institutions show conviction', 'Demand'],
+        ['QIB leads NSE/BSE NII and Retail multiples', 'Demand'],
+        ['Anchor book fully subscribed with marquee investors', 'Demand'],
+        ['GMP positive and stable/rising till listing', 'Sentiment'],
+        ['Profit-making company with growing revenue', 'Business'],
+        ['P/E reasonable vs listed peers', 'Valuation'],
+        ['Promoters retain skin in the game post-issue (no heavy OFS)', 'Structure'],
+        ['Fresh issue funds growth (capex/debt-paydown), not just selling holders', 'Structure'],
+        ['Retail quota adequate (mainboard ~35%) and lot affordable', 'Access'],
+        ['No heavy promoter pledging or governance red flags', 'Risk'],
+        ['SME IPO? Extra caution — liquidity and migration risk', 'Risk'],
+        ['Never borrow to apply; size the application you can hold', 'Risk'],
+      ];
+      var LS = 'investIpoChecklist', saved = {};
+      try { saved = JSON.parse(localStorage.getItem(LS) || '{}'); } catch (e) { saved = {}; }
+      document.getElementById('ipoChecks').innerHTML = ITEMS.map(function (it, i) {
+        return '<label style="display:flex; gap:8px; align-items:flex-start; padding:6px 0; border-bottom:1px solid var(--line-soft); cursor:pointer;">' +
+          '<input type="checkbox" data-id="' + i + '"' + (saved[i] ? ' checked' : '') + ' style="width:auto; margin-top:4px;" />' +
+          '<span>' + esc(it[0]) + ' <span class="pill">' + esc(it[1]) + '</span></span></label>';
+      }).join('');
+      function ipoCount() {
+        document.getElementById('ipoProgress').textContent =
+          document.querySelectorAll('#ipoChecks input:checked').length + ' / ' + ITEMS.length;
+      }
+      document.getElementById('ipoChecks').addEventListener('change', function () {
+        var s = {};
+        document.querySelectorAll('#ipoChecks input').forEach(function (b) { if (b.checked) s[b.dataset.id] = true; });
+        try { localStorage.setItem(LS, JSON.stringify(s)); } catch (e) {}
+        ipoCount();
+      });
+      document.getElementById('ipoReset').addEventListener('click', function () {
+        document.querySelectorAll('#ipoChecks input').forEach(function (b) { b.checked = false; });
+        try { localStorage.removeItem(LS); } catch (e) {}
+        ipoCount();
+      });
+      document.getElementById('ipoCopy').addEventListener('click', function () {
+        var lines = ['IPO Evaluation Checklist'];
+        document.querySelectorAll('#ipoChecks input').forEach(function (b, i) {
+          lines.push((b.checked ? '[x] ' : '[ ] ') + ITEMS[i][0]);
+        });
+        if (navigator.clipboard) navigator.clipboard.writeText(lines.join('\n')).then(
+          function () { RS.toast('Checklist copied', 'ok'); },
+          function () { RS.toast('Copy failed', 'err'); });
+      });
+      ipoCount();
+    })();
+  </script>
+{% endblock %}

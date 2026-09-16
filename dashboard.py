@@ -1412,6 +1412,11 @@ async def invest_commodities_page(request: Request):
     return templates.TemplateResponse(request, "invest_commodities.html")
 
 
+@app.get("/invest/ipo", response_class=HTMLResponse)
+async def invest_ipo_page(request: Request):
+    return templates.TemplateResponse(request, "invest_ipo.html")
+
+
 @app.get("/fundamentals", response_class=HTMLResponse)
 async def fundamentals_page(request: Request):
     return templates.TemplateResponse(request, "fundamentals.html")
