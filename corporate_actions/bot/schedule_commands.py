@@ -299,6 +299,15 @@ def handle_schedule_add(chat_id, parts) -> None:
     if command.lower().split()[0] in ("/sched", "/schedule"):
         reply(chat_id, "You cannot schedule /schedule itself.")
         return
+    from .registry import is_known_command
+    if not is_known_command(command):
+        reply(
+            chat_id,
+            f"\u26A0\uFE0F <code>{html.escape(command)}</code> is not a command this bot "
+            "recognises - nothing was scheduled. Check the spelling with /help "
+            "and try again (a typo would otherwise fail on every run, forever).",
+        )
+        return
     market = options.get("market") or (storage.get_user_settings(chat_id) or {}).get(
         "schedule_market", config.SCHEDULED_REPORTS_MARKET
     )

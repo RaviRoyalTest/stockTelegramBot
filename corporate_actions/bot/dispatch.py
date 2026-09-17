@@ -59,6 +59,12 @@ def handle_command(chat_id, text):
     if not parts:
         return
     command = parts[0].lower().split("@")[0]
+    # A doubled slash ('//myfavourites set /cmd') is always a typo, not a
+    # different command - treat it as the intended single-slash command so
+    # it routes normally instead of falling through to 'unknown'.
+    if command.startswith("//"):
+        command = command[1:]
+        parts = [command] + parts[1:]
     log.info("command from chat %s: %s", chat_id, text)
 
     # Remember what this chat runs so /help and bare-command hints can offer

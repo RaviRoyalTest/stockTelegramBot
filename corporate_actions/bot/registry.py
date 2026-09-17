@@ -179,6 +179,61 @@ ALIAS_TO_MAIN = {
 }
 
 
+# Every command the dispatcher actually routes, plus the Telegram-menu
+# entries. Single source of truth for validating user-supplied command lists
+# (/myfavourites set, /schedule add) so typos and placeholder text can never
+# be saved and then fail (or loop) forever.
+DISPATCHED_COMMANDS = frozenset({
+    "/", "/actionfilters", "/add", "/addstock", "/alert", "/alertfilters",
+    "/all", "/analyst", "/bigmover", "/bigmovers", "/buttons", "/ca",
+    "/casummary", "/checklist", "/checknow", "/corp-actions",
+    "/corpactions", "/corpactionsformylist", "/corpactionssummary",
+    "/corporate-actions", "/dailybrief", "/dnd", "/ex-dates", "/exdate",
+    "/exdates", "/explain", "/favorites", "/favourites", "/filter",
+    "/filterstocks", "/forecast", "/forecastanalysis", "/fund",
+    "/fundamental-analysis", "/fundamentalanalyze", "/fundamentals",
+    "/fundamentalreport", "/fundmode", "/gainers", "/gap", "/gappers",
+    "/guide", "/harmonic", "/harmonicpatterns", "/help", "/howto",
+    "/increase", "/ind", "/indicator", "/investcheck", "/learn", "/list",
+    "/losers", "/market", "/marketmovers", "/menu", "/moverlist",
+    "/movers", "/moversfund", "/moversover", "/moverwatch", "/myfavourites",
+    "/mypicks", "/news", "/next", "/pauseall", "/pricealert", "/quality",
+    "/qualitycheck", "/quick", "/quiet", "/remove", "/removestock",
+    "/sched", "/schednow", "/schedule", "/scorecard", "/scan500", "/screen",
+    "/screener", "/setlist", "/settings", "/setwatchlist", "/shareholder",
+    "/shortcuts", "/silence", "/start", "/status", "/summary", "/tech",
+    "/technical", "/topgainers", "/toplosers", "/topmovers", "/tutorial",
+    "/upcoming", "/us", "/usfund", "/usquote", "/usstock", "/watcher",
+    "/watcherlist", "/watchlist",
+})
+
+
+def normalize_command(raw: str) -> str | None:
+    """Collapse one raw token to its canonical command, or None if unknown.
+
+    '//' and '///' prefixes (a common double-slash typo) collapse to '/';
+    @botname suffixes (Telegram group addressing) are stripped; aliases map
+    to their main command. Returns None for anything the dispatcher would
+    not recognise.
+    """
+    token = str(raw or "").strip().lower()
+    while token.startswith("//"):
+        token = token[1:]
+    token = token.split("@")[0]
+    if not token.startswith("/"):
+        return None
+    canonical = ALIAS_TO_MAIN.get(token, token)
+    return canonical if canonical in DISPATCHED_COMMANDS else None
+
+
+def is_known_command(raw: str) -> bool:
+    """True when the first word of ``raw`` is a command this bot routes."""
+    first = str(raw or "").strip().split()
+    if not first:
+        return False
+    return normalize_command(first[0]) is not None
+
+
 COMMAND_USAGE = {
     "/corpactions": CA_HELP,
     "/exdates": (

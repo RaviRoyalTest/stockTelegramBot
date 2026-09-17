@@ -340,8 +340,8 @@ def _favourites_summary(chat_id) -> str:
     for index, command in enumerate(commands, 1):
         lines.append(f"  {index}. <code>{html.escape(command)}</code>")
     lines.append(
-        "\nChange them: <code>/myfavourites set /cmd</code>, "
-        "<code>/myfavourites add /cmd</code>, "
+        "\nChange them: <code>/myfavourites set /toplosers 1h /news</code>, "
+        "<code>/myfavourites add /watchlist</code>, "
         "<code>/myfavourites remove N</code>, <code>/myfavourites reset</code>."
     )
     return "\n".join(lines)
@@ -355,7 +355,7 @@ def _run_favourites(chat_id) -> None:
         intro="\U0001F4CB <b>Your Favourites</b> - running your commands...",
         done="\u2705 <b>Favourites done.</b> Run again with "
              "<code>/myfavourites run</code> or edit the list with "
-             "<code>/myfavourites set /cmd</code>.",
+             "<code>/myfavourites set /toplosers 1h /news</code>.",
         source_note=storage.list_location(chat_id),
     )
 
@@ -364,16 +364,68 @@ def _group_favourite_commands(tokens: list[str]) -> list[str]:
     """Group raw tokens into commands, starting a new command at each '/' token.
 
     /myfavourites set /toplosers 1h /news -> ['/toplosers 1h', '/news']
+    '//' typos collapse to the single-slash command they clearly were meant
+    to be (dispatch.py normalizes the message command; this catches tokens).
     """
     commands: list[str] = []
     for token in tokens:
         if not token:
             continue
+        if token.startswith("//"):
+            token = token[1:]
         if token.startswith("/") or not commands:
             commands.append(token)
         else:
             commands[-1] += " " + token
     return [command for command in commands if command.startswith("/")]
+
+
+# Tokens commonly pasted from the help text instead of a real command.
+_PLACEHOLDER_COMMANDS = {"/cmd", "/command", "/c1", "/c2", "/example"}
+# Commands that would run favourites again - never allowed on the list.
+_SELF_REFERENCE_COMMANDS = {
+    "/myfavourites", "/favorites", "/favourites", "/mypicks", "/dailybrief",
+}
+
+
+def _validate_favourite_commands(commands: list[str]) -> tuple[list[str], list[str]]:
+    """Split favourite candidates into (valid, problems).
+
+    Each problem is a human-readable line: unknown command, placeholder
+    ('/cmd' is the help-text example, not a command), a favourites command
+    (would run forever inside /myfavourites run) or an empty token.
+    """
+    from .registry import is_known_command, normalize_command
+
+    valid: list[str] = []
+    problems: list[str] = []
+    for command in commands:
+        first = command.strip().split()[0] if command.strip() else ""
+        canonical = normalize_command(first) if first else None
+        if not first:
+            problems.append("(empty command)")
+            continue
+        if first.lower() in _PLACEHOLDER_COMMANDS:
+            problems.append(
+                f"<code>{html.escape(command)}</code> - <code>{first}</code> is the "
+                "help-text placeholder. Type the real command, e.g. "
+                "<code>/myfavourites set /toplosers 1h /news</code>."
+            )
+            continue
+        if canonical in _SELF_REFERENCE_COMMANDS:
+            problems.append(
+                f"<code>{html.escape(command)}</code> - favourites cannot contain "
+                "themselves (<code>/myfavourites run</code> would never stop)."
+            )
+            continue
+        if not is_known_command(command):
+            problems.append(
+                f"<code>{html.escape(command)}</code> - unknown command. "
+                "Check the spelling with /help."
+            )
+            continue
+        valid.append(command)
+    return valid, problems
 
 
 def handle_favourites(chat_id, parts=None) -> None:
@@ -398,9 +450,21 @@ def handle_favourites(chat_id, parts=None) -> None:
         if not commands:
             reply(chat_id, "Usage: <code>/myfavourites set /cmd1 /cmd2 ...</code>")
             return
+        commands, problems = _validate_favourite_commands(commands)
+        if not commands:
+            reply(
+                chat_id,
+                "\u26A0\uFE0F <b>Nothing was saved</b> - none of those are runnable commands:\n"
+                + "\n".join(problems)
+                + "\n\nExample: <code>/myfavourites set /toplosers 1h /news</code>",
+            )
+            return
         _save_favourites(chat_id, commands)
         log.info("chat %s set favourites: %s", chat_id, commands)
-        reply(chat_id, f"\u2705 Favourites updated.\n\n{_favourites_summary(chat_id)}")
+        notice = "\u2705 Favourites updated."
+        if problems:
+            notice += "\n\u26A0\uFE0F Skipped:\n" + "\n".join(problems)
+        reply(chat_id, notice + f"\n\n{_favourites_summary(chat_id)}")
         return
 
     if subcommand == "add":
@@ -409,10 +473,22 @@ def handle_favourites(chat_id, parts=None) -> None:
         if not added:
             reply(chat_id, "Usage: <code>/myfavourites add /cmd</code>")
             return
+        added, problems = _validate_favourite_commands(added)
+        existing_keys = {c.strip().lower() for c in commands}
+        added = [c for c in added if c.strip().lower() not in existing_keys]
+        if not added and problems:
+            reply(
+                chat_id,
+                "\u26A0\uFE0F <b>Nothing was added</b>:\n" + "\n".join(problems),
+            )
+            return
         commands.extend(added)
         _save_favourites(chat_id, commands)
         log.info("chat %s added favourites: %s", chat_id, added)
-        reply(chat_id, f"\u2705 Favourites updated.\n\n{_favourites_summary(chat_id)}")
+        notice = "\u2705 Favourites updated."
+        if problems:
+            notice += "\n\u26A0\uFE0F Skipped:\n" + "\n".join(problems)
+        reply(chat_id, notice + f"\n\n{_favourites_summary(chat_id)}")
         return
 
     if subcommand == "remove":
