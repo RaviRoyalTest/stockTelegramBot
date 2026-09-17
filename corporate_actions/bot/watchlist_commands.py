@@ -24,10 +24,18 @@ from ..sources import (
 )
 from ..telegram.client import NotifierError, send_message
 from ..telegram.markup import symbol_buttons
-from .helpers import MAX_NEWS_STOCKS, attach_quotes, reply_suggestions, run_command_sequence
+from .helpers import (
+    MAX_NEWS_STOCKS,
+    attach_quotes,
+    reply_suggestions,
+    resolve_or_none,
+    run_command_sequence,
+)
 from .reply import reply
 
 log = logging.getLogger(__name__)
+
+BULK_ADD_LIMIT = 60  # max symbols per bulk /add or /setlist message
 
 DEFAULT_FAVOURITES = [
     "/corpactionsformylist",
@@ -108,6 +116,129 @@ def send_watchlist_actions(chat_id) -> None:
         format_next_report(upcoming, recent, pending),
         reply_markup=symbol_buttons(tap_symbols[:12], "fund") if tap_symbols else None,
     )
+
+
+def _parse_symbol_args(text: str) -> list[str]:
+    """Split a bulk symbol string on commas and/or whitespace, uppercase, deduped."""
+    raw = (text or "").replace("\n", ",")
+    tokens = [tok.strip().upper() for seg in raw.split(",") for tok in seg.split()]
+    seen, ordered = set(), []
+    for tok in tokens:
+        if tok and tok not in seen:
+            seen.add(tok)
+            ordered.append(tok)
+    return ordered
+
+
+def handle_bulk_add(chat_id, text) -> None:
+    """Add many stocks at once: /add RELIANCE, INFY, CANBK (missing only).
+
+    Every symbol is validated; unknown ones are reported with suggestions,
+    duplicates are skipped, and the existing list is never trimmed.
+    """
+    tokens = _parse_symbol_args(text)
+    if not tokens:
+        reply(chat_id, "Usage: <code>/add RELIANCE, INFY, CANBK</code> (comma or space separated).")
+        return
+    if len(tokens) == 1:
+        handle_add_remove(chat_id, ["/addstock", tokens[0]], "/addstock")
+        return
+    where = storage.list_location(chat_id)
+    added: list[str] = []
+    skipped: list[str] = []
+    unknown: list[str] = []
+    for token in tokens[:BULK_ADD_LIMIT]:
+        resolved = resolve_or_none(token)
+        if resolved is None:
+            unknown.append(token)
+            continue
+        before = len(storage.get_user_list(chat_id))
+        storage.add_to_user_list(chat_id, resolved)
+        if len(storage.get_user_list(chat_id)) > before:
+            added.append(resolved["symbol"])
+        else:
+            skipped.append(resolved["symbol"])
+    lines = [f"<b>Bulk add</b> - {len(tokens)} symbol(s) checked:"
+             f"\n\u2705 Added: <b>{len(added)}</b>"
+             f"\n\u23ED\uFE0F Already in list: <b>{len(skipped)}</b>"
+             f"\n\u274C Not found: <b>{len(unknown)}</b>"]
+    if added:
+        lines.append("\nNew: " + ", ".join(added))
+    if skipped:
+        lines.append("\nPresent already: " + ", ".join(skipped))
+    if unknown:
+        lines.append("\nUnknown (check spelling): " + ", ".join(unknown))
+    lines.append(f"\nSaved in: <code>{html.escape(where)}</code>")
+    reply(chat_id, "\n".join(lines))
+
+
+def handle_setlist(chat_id, parts) -> None:
+    """Make the watchlist EXACTLY the given stocks: /setlist A, B, C ...
+
+    Duplicates in the input collapse to one; stocks already present stay
+    exactly where they are; the final list follows the order you typed.
+    Prefix the list with 'check' to preview without changing anything.
+    """
+    raw = " ".join(parts[1:]).strip()
+    preview = False
+    if raw.lower().startswith("check "):
+        preview = True
+        raw = raw[6:].strip()
+    tokens = _parse_symbol_args(raw)
+    if not tokens:
+        reply(
+            chat_id,
+            "Usage: <code>/setlist RELIANCE, INFY, CANBK</code>\n"
+            "Makes your watchlist <b>exactly</b> these stocks (duplicates ignored, "
+            "everything else removed).\n"
+            "Preview first with <code>/setlist check RELIANCE, INFY</code>.",
+        )
+        return
+    if len(tokens) > BULK_ADD_LIMIT:
+        reply(chat_id, f"That is {len(tokens)} symbols - the limit is <b>{BULK_ADD_LIMIT}</b> per /setlist.")
+        return
+    resolved: list[dict] = []
+    unknown: list[str] = []
+    for token in tokens:
+        item = resolve_or_none(token)
+        if item is None:
+            unknown.append(token)
+        else:
+            resolved.append(item)
+    if unknown:
+        lines = ["\u26A0\uFE0F <b>Nothing was changed</b> - these could not be validated:"]
+        lines.append(", ".join(unknown))
+        lines.append("Fix or remove them, then run /setlist again. (Everything must be valid so a typo never wipes stocks you wanted to keep.)")
+        reply(chat_id, "\n".join(lines))
+        return
+    wanted = [f"<b>{i['symbol']}</b> ({i['exchange']})" for i in resolved]
+    if preview:
+        reply(
+            chat_id,
+            "<b>Preview only</b> - nothing changed.\n"
+            f"Your watchlist would become exactly <b>{len(resolved)}</b> stock(s):\n"
+            + "\n".join(f"{n}. {s}" for n, s in enumerate(wanted, 1))
+            + "\n\nRun it for real: <code>/setlist " + ", ".join(tokens[:20])
+            + ("..." if len(tokens) > 20 else "") + "</code>",
+        )
+        return
+    before_syms = {str(i.get("symbol", "")).upper() for i in storage.get_user_list(chat_id)}
+    result = storage.set_user_list_exact(chat_id, resolved)
+    new_list = result["list"]
+    new_syms = {str(i.get("symbol", "")).upper() for i in new_list}
+    removed = sorted(before_syms - new_syms)
+    kept = sorted(before_syms & new_syms)
+    lines = [
+        "\U0001F4CB <b>Watchlist set</b> - exact list mode:",
+        f"\u2705 Now tracking <b>{len(new_list)}</b> stock(s) (you asked for {len(tokens)}).",
+        f"\u21BB Kept (already present): <b>{len(kept)}</b>",
+        f"\u2795 Newly added: <b>{len(new_syms - before_syms)}</b>",
+        f"\u2796 Removed (not in your list): <b>{len(removed)}</b>",
+    ]
+    if removed:
+        lines.append("\nRemoved: " + ", ".join(removed))
+    lines.append("\nUse <code>/watchlist</code> to see the final list.")
+    reply(chat_id, "\n".join(lines))
 
 
 def handle_add_remove(chat_id, parts, command) -> None:

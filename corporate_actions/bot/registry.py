@@ -443,6 +443,14 @@ COMMAND_USAGE = {
         "<b>/removestock</b> - remove a stock from your watchlist\n"
         "/removestock TCS        \u2192 remove TCS"
     ),
+    "/setlist": (
+        "<b>/setlist</b> - make your watchlist EXACTLY the stocks you give\n"
+        "Comma or space separated, one line or many:\n"
+        "/setlist RELIANCE, INFY, CANBK, SUZLON\n"
+        "Everything already present stays once; anything not in your list "
+        "is removed. Duplicates are ignored. Use <code>/setlist check RELIANCE, ...</code> "
+        "to preview without changing anything."
+    ),
 }
 
 
@@ -476,8 +484,9 @@ COMMAND_EXAMPLES = {
     "/quiet": ["/quiet on", "/quiet 2h", "/quiet off"],
     "/watcher": ["/watcher", "/watcher off", "/watcher on", "/watcher set 5", "/watcher universe nifty500"],
     "/fundmode": ["/fundmode button", "/fundmode auto", "/fundmode default"],
-    "/addstock": ["/addstock RELIANCE NSE", "/addstock PGINVIT"],
+    "/addstock": ["/addstock RELIANCE NSE", "/addstock PGINVIT", "/add RELIANCE, INFY, CANBK"],
     "/removestock": ["/removestock TCS"],
+    "/setlist": ["/setlist RELIANCE, INFY, CANBK, SUZLON", "/setlist check RELIANCE, INFY"],
 }
 
 
@@ -626,6 +635,7 @@ def register_commands() -> bool:
         {"command": "watchlist", "description": "Show your watchlist"},
         {"command": "addstock", "description": "Add a stock: /addstock RELIANCE NSE"},
         {"command": "removestock", "description": "Remove a stock from your watchlist"},
+        {"command": "setlist", "description": "Set watchlist to exactly these stocks: /setlist A, B, C"},
         {"command": "news", "description": "Latest news for your watchlist stocks"},
         {"command": "fundamentalanalyze", "description": "Analysis card or watchlist range: /fundamentalanalyze mylist"},
         {"command": "fundamentalreport", "description": "Deep report or range: /fundamentalreport mylist"},

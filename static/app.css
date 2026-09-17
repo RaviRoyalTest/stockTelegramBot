@@ -301,6 +301,39 @@ th {
 
 tbody tr:hover { background: var(--accent-soft); }
 
+/* Bulk paste box on the watchlist page */
+.bulk-box {
+  margin-top: 18px;
+  padding: 14px 16px;
+  border: 1px dashed var(--border, #cbd5e1);
+  border-radius: 12px;
+  background: var(--surface-2, rgba(148, 163, 184, 0.06));
+}
+.bulk-box textarea {
+  resize: vertical;
+  min-height: 84px;
+  padding: 10px 12px;
+  border-radius: 10px;
+  border: 1px solid var(--border, #cbd5e1);
+  background: var(--surface, #fff);
+  color: var(--text, inherit);
+  font-size: 0.95rem;
+  letter-spacing: 0.03em;
+}
+.bulk-box textarea:focus {
+  outline: 2px solid var(--accent, #2563eb);
+  outline-offset: 1px;
+}
+.bulk-result {
+  margin-top: 12px;
+  padding: 10px 14px;
+  border-radius: 10px;
+  background: var(--surface-2, rgba(148, 163, 184, 0.1));
+  border: 1px solid var(--border, #cbd5e1);
+  font-size: 0.95rem;
+  line-height: 1.5;
+}
+
 th button.sort {
   all: unset;
   cursor: pointer;

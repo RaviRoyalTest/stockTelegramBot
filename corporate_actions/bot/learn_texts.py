@@ -85,6 +85,14 @@ COMMAND_LEARN: dict = {
         "output": "Confirmation that the symbol is gone; the next alert/round-up skips it.",
         "aliases": "/remove",
     },
+    "/setlist": {
+        "what": "Make your watchlist EXACTLY the stocks you list - the fastest way to replace the whole list in one shot.",
+        "syntax": "/setlist SYMBOL[, SYMBOL...]  (or  /setlist check SYMBOL[, ...]  to preview)",
+        "examples": ["/setlist RELIANCE, INFY, CANBK, SUZLON", "/setlist check RELIANCE, INFY"],
+        "output": "Your list becomes exactly those stocks in your order - duplicates collapse to one, stocks already present stay, anything else is removed. Every symbol is validated first; if any is unknown nothing changes.",
+        "tips": ["Comma or space separated, single or multi-line.", "Preview with 'check' before committing.", "Just adding to what you have? Use /add A, B, C instead - it never removes.", "The web Watchlist page has the same two buttons."],
+        "aliases": "/setwatchlist",
+    },
     "/myfavourites": {
         "what": "One command that runs all your regular reports together (corporate actions for your list, top losers 1h + today, watchlist, deep fundamentals).",
         "syntax": "/myfavourites [run | set CMD | add CMD | remove N | reset]",
@@ -448,6 +456,7 @@ _COMMAND_ALIASES = {
     "upcoming": "/corpactionsformylist", "corpactionsformylist": "/corpactionsformylist",
     "watchlist": "/watchlist", "list": "/watchlist", "addstock": "/addstock", "add": "/addstock",
     "removestock": "/removestock", "remove": "/removestock", "myfavourites": "/myfavourites",
+    "setlist": "/setlist", "setwatchlist": "/setlist",
     "favorites": "/myfavourites", "favourites": "/myfavourites", "mypicks": "/myfavourites",
     "dailybrief": "/myfavourites", "news": "/news",
     "fundamentalanalyze": "/fundamentalanalyze", "stock": "/fundamentalanalyze",

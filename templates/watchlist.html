@@ -22,6 +22,21 @@
       <a class="btn" href="/api/watchlist.csv">⬇️ Download CSV</a>
       <button class="btn" type="button" id="refreshBtn">🔄 Refresh prices</button>
     </form>
+
+    <div class="bulk-box">
+      <h3 style="margin:0 0 6px;">📋 Paste a whole list</h3>
+      <p class="muted" style="margin:0 0 10px;">Comma, space or newline separated — 50+ symbols in one go. Duplicates are removed automatically.</p>
+      <div class="field">
+        <label for="bulkSymbols">Symbols</label>
+        <textarea id="bulkSymbols" rows="4" placeholder="AMBER, ASHOKLEY, CANBK, CAPINVIT-IV, CHOLAFIN, COALINDIA, HDFCBANK, INFY …" style="text-transform:uppercase; width:100%; font-family:inherit;"></textarea>
+      </div>
+      <div style="display:flex; gap:10px; flex-wrap:wrap; align-items:center; margin-top:8px;">
+        <button class="btn btn-add" type="button" id="bulkAddBtn" style="background:#166534; border-color:#166534; color:#fff;">➕ Add missing stocks</button>
+        <button class="btn btn-exact" type="button" id="bulkSetBtn" style="background:#9a3412; border-color:#9a3412; color:#fff;">🎯 Set list to exactly these</button>
+        <span class="muted" id="bulkCount"></span>
+      </div>
+      <div id="bulkResult" class="bulk-result" hidden></div>
+    </div>
   </section>
 
   <section class="card section" aria-labelledby="listHeading">
@@ -174,6 +189,96 @@
           button.disabled = false;
           RS.toast('Could not remove: ' + err.message, 'err');
         }
+      });
+
+      // ------------------------------------------------ bulk paste box
+      var bulkArea = document.getElementById('bulkSymbols');
+      var bulkAddBtn = document.getElementById('bulkAddBtn');
+      var bulkSetBtn = document.getElementById('bulkSetBtn');
+      var bulkCount = document.getElementById('bulkCount');
+      var bulkResult = document.getElementById('bulkResult');
+
+      function parseBulk() {
+        var seen = {}, out = [];
+        bulkArea.value.split(/[\s,]+/).forEach(function (t) {
+          t = t.trim().toUpperCase().replace(/\.NS$|\.BO$|\.US$/, '');
+          if (t && !seen[t]) { seen[t] = 1; out.push(t); }
+        });
+        return out;
+      }
+
+      bulkArea.addEventListener('input', function () {
+        var n = parseBulk().length;
+        bulkCount.textContent = n ? n + ' unique symbol' + (n > 1 ? 's' : '') : '';
+      });
+
+      async function runBulk(mode) {
+        var symbols = parseBulk();
+        if (!symbols.length) {
+          RS.toast('Paste or type some symbols first', 'err');
+          bulkArea.focus();
+          return;
+        }
+        var btn = mode === 'exact' ? bulkSetBtn : bulkAddBtn;
+        var other = mode === 'exact' ? bulkAddBtn : bulkSetBtn;
+        var label = btn.textContent;
+        var beforeCount = parseInt(document.getElementById('wlCount').textContent || '0', 10);
+        btn.disabled = true; other.disabled = true;
+        btn.textContent = '⏳ Checking ' + symbols.length + ' symbols…';
+        bulkResult.hidden = true;
+        try {
+          var res = await fetch('/api/watchlist', {
+            method: 'POST',
+            headers: { 'content-type': 'application/json' },
+            body: JSON.stringify({ symbols: symbols, mode: mode }),
+          });
+          var data = await res.json().catch(function () { return {}; });
+          if (!res.ok) throw new Error(data.detail || ('HTTP ' + res.status));
+          var rejected = data.rejected || [];
+          var dupN = data.skipped_duplicates || 0;
+          var total = data.count || (data.items || []).length;
+          var htmlOut = '<strong>' + (mode === 'exact' ? '🎯 List set' : '✅ Done') + ':</strong> ';
+          if (mode === 'exact') {
+            var newN = Math.max(0, total - (data.kept || []).length);
+            htmlOut += 'watchlist now has <strong>' + total + '</strong> stock' + (total !== 1 ? 's' : '') + ' — '
+              + 'kept ' + ((data.kept || []).length) + ' already present, added ' + newN + ' new'
+              + (dupN ? ', ' + dupN + ' duplicate' + (dupN !== 1 ? 's' : '') + ' in your text merged' : '');
+          } else {
+            var newN = Math.max(0, total - beforeCount);
+            var existingN = Math.max(0, symbols.length - rejected.length - newN);
+            htmlOut += 'added <strong>' + newN + '</strong> new stock' + (newN !== 1 ? 's' : '')
+              + ' · already in list: ' + existingN
+              + ' · watchlist total <strong>' + total + '</strong>';
+          }
+          if (rejected.length) {
+            htmlOut += '<div style="margin-top:6px;">❌ Not found (check spelling): <strong>'
+              + rejected.map(function (r) { return esc(r.symbol || '(blank)'); }).join(', ') + '</strong></div>';
+          }
+          bulkResult.innerHTML = htmlOut;
+          bulkResult.hidden = false;
+          RS.toast(mode === 'exact' ? ('Watchlist set to ' + total + ' stocks')
+            : (Math.max(0, total - beforeCount) + ' new stock(s) added'), 'ok');
+          load(true);
+        } catch (err) {
+          RS.toast('Bulk ' + (mode === 'exact' ? 'set' : 'add') + ' failed: ' + err.message, 'err');
+        } finally {
+          btn.disabled = false; other.disabled = false;
+          btn.textContent = label;
+        }
+      }
+
+      bulkAddBtn.addEventListener('click', function () { runBulk('add'); });
+      bulkSetBtn.addEventListener('click', function () {
+        var symbols = parseBulk();
+        if (!symbols.length) {
+          RS.toast('Paste or type some symbols first', 'err');
+          bulkArea.focus();
+          return;
+        }
+        var current = parseInt(document.getElementById('wlCount').textContent || '0', 10);
+        var msg = 'Set your watchlist to EXACTLY these ' + symbols.length + ' stocks?\n\n'
+          + 'Stocks not in your list (' + current + ' currently tracked) will be REMOVED.';
+        if (window.confirm(msg)) runBulk('exact');
       });
 
       document.getElementById('filter').addEventListener('input', applyFilter);

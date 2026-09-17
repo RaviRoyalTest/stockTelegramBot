@@ -7,8 +7,18 @@ single entry point so callers never branch on ownership themselves.
 from __future__ import annotations
 
 from .. import config
-from .subscriptions import add_subscription, load_subscriptions, remove_subscription
-from .watchlist import add_to_watchlist, load_watchlist, remove_from_watchlist
+from .subscriptions import (
+    add_subscription,
+    load_subscriptions,
+    remove_subscription,
+    replace_subscriptions,
+)
+from .watchlist import (
+    add_to_watchlist,
+    load_watchlist,
+    remove_from_watchlist,
+    replace_watchlist,
+)
 
 
 def is_owner(chat_id) -> bool:
@@ -37,6 +47,32 @@ def add_to_user_list(chat_id, item: dict) -> list:
     if is_owner(chat_id):
         return add_to_watchlist([item])
     return add_subscription(chat_id, item)
+
+
+def bulk_add_to_user_list(chat_id, items: list) -> dict:
+    """Add many items at once, skipping ones already present. Returns a summary."""
+    if is_owner(chat_id):
+        return add_to_watchlist(items)
+    added, dups = 0, 0
+    current = get_user_list(chat_id)
+    seen = {str(i.get("symbol", "")).upper() for i in current}
+    for item in items:
+        sym = str(item.get("symbol", "")).upper()
+        if not sym or sym in seen:
+            dups += 1
+            continue
+        seen.add(sym)
+        add_subscription(chat_id, item)
+        added += 1
+    return {"list": get_user_list(chat_id), "added": added,
+            "skipped_duplicates": dups}
+
+
+def set_user_list_exact(chat_id, items: list) -> dict:
+    """Replace the chat's list with exactly ``items`` (dedup applied). Returns a summary."""
+    if is_owner(chat_id):
+        return replace_watchlist(items)
+    return replace_subscriptions(chat_id, items)
 
 
 def remove_from_user_list(chat_id, symbol: str, exchange: str) -> list:

@@ -44,7 +44,7 @@ log = logging.getLogger(__name__)
 # Commands that mutate state on disk - /status uses this to decide whether a
 # GitHub push is warranted after handling a message.
 WRITE_COMMANDS = {
-    "/add", "/addstock", "/remove", "/removestock",
+    "/add", "/addstock", "/remove", "/removestock", "/setlist", "/setwatchlist",
     "/filter", "/alertfilters", "/actionfilters", "/alert", "/pricealert",
     "/sched", "/schedule", "/watcher", "/moverwatch",
     "/myfavourites", "/favorites", "/favourites", "/mypicks", "/dailybrief",
@@ -251,7 +251,16 @@ def handle_command(chat_id, text):
         return
 
     if command in ("/add", "/addstock", "/remove", "/removestock"):
+        if command in ("/add", "/addstock") and any(
+            sep in (text or "") for sep in (",", "\n")
+        ):
+            watchlist_commands.handle_bulk_add(chat_id, text)
+            return
         watchlist_commands.handle_add_remove(chat_id, parts, command)
+        return
+
+    if command in ("/setlist", "/setwatchlist"):
+        watchlist_commands.handle_setlist(chat_id, parts)
         return
 
     send_help(chat_id)

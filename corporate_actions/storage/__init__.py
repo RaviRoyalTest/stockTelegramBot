@@ -27,18 +27,26 @@ from .settings import (
     record_recent_command,
     save_user_settings,
 )
-from .subscriptions import add_subscription, load_subscriptions, remove_subscription
+from .subscriptions import (
+    add_subscription,
+    load_subscriptions,
+    remove_subscription,
+    replace_subscriptions,
+)
 from .users import (
     add_to_user_list,
+    bulk_add_to_user_list,
     get_user_list,
     is_owner,
     list_location,
     remove_from_user_list,
+    set_user_list_exact,
 )
 from .watchlist import (
     add_to_watchlist,
     load_watchlist,
     remove_from_watchlist,
+    replace_watchlist,
     save_watchlist,
     watchlist_key,
 )
@@ -49,13 +57,17 @@ __all__ = [
     "watchlist_key",
     "add_to_watchlist",
     "remove_from_watchlist",
+    "replace_watchlist",
     "load_subscriptions",
     "add_subscription",
     "remove_subscription",
+    "replace_subscriptions",
     "is_owner",
     "list_location",
     "get_user_list",
     "add_to_user_list",
+    "bulk_add_to_user_list",
+    "set_user_list_exact",
     "remove_from_user_list",
     "load_settings",
     "get_user_settings",

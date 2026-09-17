@@ -313,33 +313,97 @@ async def api_validate(symbol: str | None = Query(None), market: str = Query("in
     return JSONResponse(await _validate_symbol(symbol, market or "in"))
 
 
-@app.post("/api/watchlist")
-async def add_watchlist(payload: dict):
-    items = payload.get("items") or []
-    if not isinstance(items, list):
-        raise HTTPException(status_code=400, detail="items must be a list")
-    # Reject symbols that do not resolve to a real stock so the watchlist
-    # never fills with typos that render as permanent "−" rows.
+async def _resolve_watchlist_items(items: list) -> tuple[list[dict], list[dict]]:
+    """Validate watchlist candidates; unknown symbols are rejected, never stored.
+
+    Market detection: an explicit item market wins; otherwise try IN first,
+    then fall back to US so a single pasted list can mix both.
+    """
     validated: list[dict] = []
     rejected: list[dict] = []
+    seen: set = set()
     for item in items:
         item = item or {}
-        sym = str(item.get("symbol") or "").strip().upper().removesuffix(".NS").removesuffix(".BO")
-        market = str(item.get("market") or "in").strip().lower()
+        sym = str(item.get("symbol") or "").strip().upper().removesuffix(".NS").removesuffix(".BO").removesuffix(".US")
         if not sym:
             rejected.append({"symbol": "", "reason": "empty"})
             continue
-        check = await _validate_symbol(sym, market)
-        if not check.get("valid"):
-            rejected.append({"symbol": sym, "reason": check.get("reason") or "not-found"})
+        key = ((item.get("exchange") or "").upper(), sym)
+        if key in seen:
             continue
-        validated.append({**item, "symbol": sym, "exchange": (item.get("exchange") or "NSE").upper()})
+        explicit_market = str(item.get("market") or "").strip().lower()
+        check: dict = {}
+        if explicit_market in ("in", "us"):
+            check = await _validate_symbol(sym, explicit_market)
+            if not check.get("valid"):
+                rejected.append({"symbol": sym, "reason": check.get("reason") or "not-found"})
+                continue
+        else:
+            check = await _validate_symbol(sym, "in")
+            if not check.get("valid"):
+                check = await _validate_symbol(sym, "us")
+            if not check.get("valid"):
+                rejected.append({"symbol": sym, "reason": check.get("reason") or "not-found"})
+                continue
+        seen.add(key)
+        validated.append({
+            "symbol": sym,
+            "company": str(item.get("company") or ""),
+            "exchange": (check.get("exchange") or item.get("exchange") or "NSE").upper(),
+        })
+    return validated, rejected
+
+
+@app.post("/api/watchlist")
+async def add_watchlist(payload: dict):
+    """Bulk watchlist write.
+
+    Body: {"symbols": ["A","B"]} or {"items": [{symbol, company, market}...]}.
+    mode "add" (default) adds missing symbols only; mode "exact" replaces the
+    whole list with exactly the given symbols (duplicates collapse, order kept).
+    """
+    mode = str(payload.get("mode") or "add").strip().lower()
+    items = payload.get("items")
+    if items is None:
+        symbols = payload.get("symbols")
+        if not isinstance(symbols, list):
+            raise HTTPException(status_code=400, detail="provide 'symbols' (list) or 'items' (list)")
+        items = [{"symbol": s} for s in symbols]
+    if not isinstance(items, list) or not items:
+        raise HTTPException(status_code=400, detail="items must be a non-empty list")
+    validated, rejected = await _resolve_watchlist_items(items)
     if rejected:
-        log.info("watchlist add rejected invalid symbols: %s", [r["symbol"] for r in rejected])
+        log.info("watchlist %s rejected invalid symbols: %s", mode, [r["symbol"] for r in rejected])
     if not validated and rejected:
         raise HTTPException(status_code=422, detail="Unknown symbol(s): " + ", ".join(r["symbol"] or "(empty)" for r in rejected))
+    if mode == "exact":
+        if rejected:
+            # All-or-nothing: a typo in a 50-symbol list must never silently
+            # wipe the valid stocks. Same rule the Telegram /setlist applies.
+            raise HTTPException(
+                status_code=422,
+                detail="Nothing was changed - unknown symbol(s): "
+                + ", ".join(r["symbol"] or "(empty)" for r in rejected),
+            )
+        result = storage.replace_watchlist(validated)
+        before = {str(i.get("symbol", "")).upper() for i in storage.load_watchlist()}
+        return JSONResponse({
+            "items": result["list"],
+            "count": result["added"],
+            "added": result["added"],
+            "skipped_duplicates": result["skipped_duplicates"],
+            "kept": sorted({str(i.get("symbol", "")).upper() for i in result["list"]} & before),
+            "rejected": rejected,
+            "mode": "exact",
+        })
     result = storage.add_to_watchlist(validated)
-    return JSONResponse({"items": result, "count": len(result), "rejected": rejected})
+    return JSONResponse({
+        "items": result,
+        "count": len(result),
+        "added": len(validated),
+        "rejected": rejected,
+        "mode": "add",
+    })
 
 
 @app.delete("/api/watchlist")

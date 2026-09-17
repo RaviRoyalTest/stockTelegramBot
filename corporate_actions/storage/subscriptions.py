@@ -48,6 +48,36 @@ def add_subscription(chat_id, item: dict) -> list:
     return current
 
 
+def replace_subscriptions(chat_id, items: list) -> dict:
+    """Replace one chat's subscription list with exactly ``items`` (deduped).
+
+    Returns {"list": new_list, "added": n, "skipped_duplicates": n}.
+    """
+    with _lock, _file_lock(config.SUBSCRIPTIONS_FILE):
+        subs = read_json(config.SUBSCRIPTIONS_FILE, {})
+        key = str(chat_id)
+        fresh: list = []
+        seen: set = set()
+        dups = 0
+        for item in items:
+            if not isinstance(item, dict) or not item.get("symbol"):
+                continue
+            k = watchlist_key(item)
+            if k in seen:
+                dups += 1
+                continue
+            seen.add(k)
+            fresh.append(item)
+        before = len(subs.get(key, []))
+        subs[key] = fresh
+        write_json(config.SUBSCRIPTIONS_FILE, subs)
+    log.info(
+        "subscriptions.json: chat %s %d -> %d item(s) (exact set, %d duplicate(s) skipped)",
+        key, before, len(fresh), dups,
+    )
+    return {"list": fresh, "added": len(fresh), "skipped_duplicates": dups}
+
+
 def remove_subscription(chat_id, symbol: str, exchange: str) -> list:
     """Remove an item from one chat's subscription list. Returns the new list."""
     with _lock, _file_lock(config.SUBSCRIPTIONS_FILE):

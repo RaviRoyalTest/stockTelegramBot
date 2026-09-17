@@ -7,7 +7,13 @@ from concurrent.futures import ThreadPoolExecutor
 
 from .. import config
 from ..core.text import escape
-from ..sources import get_nse_stock_list_cached, get_quote, search_stocks
+from ..sources import (
+    get_bse_stock_list,
+    get_nse_stock_list_cached,
+    get_quote,
+    search_stocks,
+    search_us_tickers,
+)
 from .reply import reply
 
 log = logging.getLogger(__name__)
@@ -95,6 +101,52 @@ def close_symbols(query: str, limit: int = 3) -> list[str]:
     except Exception:
         return []
     return get_close_matches((query or "").upper(), symbols, n=limit, cutoff=0.72)
+
+
+def resolve_or_none(symbol: str, exchange: str = "NSE") -> dict | None:
+    """Validate one symbol and return {'symbol','company','exchange'} or None.
+
+    Same validation ladder as handle_add_remove: Yahoo quote first, then the
+    exact-symbol pass through the exchange's own stock list / US ticker search.
+    """
+    raw = str(symbol or "").strip().upper()
+    if not raw:
+        return None
+    if raw.endswith(".NS"):
+        raw, exchange = raw[:-3], "NSE"
+    elif raw.endswith(".BO"):
+        raw, exchange = raw[:-3], "BSE"
+    quote = get_quote(exchange, raw)
+    if quote:
+        return {"symbol": raw, "company": quote.get("name", "") or "", "exchange": exchange}
+    try:
+        if exchange == "NSE":
+            exact = next(
+                (s for s in search_stocks(raw, limit=5) if s["symbol"].upper() == raw),
+                None,
+            )
+            if exact:
+                return {"symbol": raw, "company": exact.get("company", "") or "", "exchange": exchange}
+        elif exchange == "BSE":
+            bse_list = get_bse_stock_list()
+            exact = next(
+                (s for s in bse_list if s["symbol"].upper() == raw or s.get("code") == raw),
+                None,
+            )
+            if exact:
+                return {"symbol": exact["symbol"], "company": exact.get("company", "") or "", "exchange": exchange}
+        elif exchange == "US":
+            us_matches = search_us_tickers(raw, limit=1)
+            if us_matches:
+                exact = us_matches[0]
+                return {
+                    "symbol": exact.get("symbol", raw),
+                    "company": exact.get("name") or exact.get("company", "") or "",
+                    "exchange": exchange,
+                }
+    except Exception as error:
+        log.warning("resolve_or_none(%s:%s) fallback failed: %s", exchange, raw, error)
+    return None
 
 
 def reply_suggestions(chat_id, query, command="add"):

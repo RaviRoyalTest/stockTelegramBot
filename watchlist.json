@@ -1,221 +1,256 @@
 [
   {
+    "symbol": "RELIANCE",
+    "company": "",
+    "exchange": "NSE"
+  },
+  {
     "symbol": "AMBER",
-    "exchange": "NSE",
-    "company": "Amber Enterprises India Limited"
+    "company": "",
+    "exchange": "NSE"
   },
   {
     "symbol": "ASHOKLEY",
-    "exchange": "NSE",
-    "company": "Ashok Leyland Limited"
-  },
-  {
-    "symbol": "ASKAUTOLTD",
-    "exchange": "NSE",
-    "company": "ASK Automotive Limited"
-  },
-  {
-    "symbol": "BSE",
-    "exchange": "NSE",
-    "company": "BSE Limited"
-  },
-  {
-    "symbol": "CANBK",
-    "exchange": "NSE",
-    "company": "Canara Bank"
-  },
-  {
-    "symbol": "CHOLAFIN",
-    "exchange": "NSE",
-    "company": "Cholamandalam Investment and Finance Company Limited"
-  },
-  {
-    "symbol": "COALINDIA",
-    "exchange": "NSE",
-    "company": "Coal India Limited"
-  },
-  {
-    "symbol": "DRREDDY",
-    "exchange": "NSE",
-    "company": "Dr. Reddy's Laboratories Limited"
-  },
-  {
-    "symbol": "ELITECON",
-    "exchange": "NSE",
-    "company": "Elitecon International Limited"
-  },
-  {
-    "symbol": "GENESYS",
-    "exchange": "NSE",
-    "company": "Genesys International Corporation Limited"
-  },
-  {
-    "symbol": "GRSE",
-    "exchange": "NSE",
-    "company": "Garden Reach Shipbuilders & Engineers Limited"
-  },
-  {
-    "symbol": "HAPPSTMNDS",
-    "exchange": "NSE",
-    "company": "Happiest Minds Technologies Limited"
-  },
-  {
-    "symbol": "INFY",
-    "exchange": "NSE",
-    "company": "Infosys Limited"
-  },
-  {
-    "symbol": "IRCTC",
-    "exchange": "NSE",
-    "company": "Indian Railway Catering And Tourism Corporation Limited"
-  },
-  {
-    "symbol": "ITC",
-    "exchange": "NSE",
-    "company": "ITC Limited"
-  },
-  {
-    "symbol": "JSWCEMENT",
-    "exchange": "NSE",
-    "company": "JSW Cement Limited"
-  },
-  {
-    "symbol": "KPITTECH",
-    "exchange": "NSE",
-    "company": "KPIT Technologies Limited"
-  },
-  {
-    "symbol": "MARUTI",
-    "exchange": "NSE",
-    "company": "Maruti Suzuki India Limited"
-  },
-  {
-    "symbol": "MCX",
-    "exchange": "NSE",
-    "company": "Multi Commodity Exchange of India Limited"
-  },
-  {
-    "symbol": "MOTILALOFS",
-    "exchange": "NSE",
-    "company": "Motilal Oswal Financial Services Limited"
-  },
-  {
-    "symbol": "NATCOPHARM",
-    "exchange": "NSE",
-    "company": "Natco Pharma Limited"
-  },
-  {
-    "symbol": "NATIONALUM",
-    "exchange": "NSE",
-    "company": "National Aluminium Company Limited"
-  },
-  {
-    "symbol": "NMDC",
-    "exchange": "NSE",
-    "company": "NMDC Limited"
-  },
-  {
-    "symbol": "RELIANCE",
-    "exchange": "NSE",
-    "company": "Reliance Industries Limited"
-  },
-  {
-    "symbol": "SHAKTIPUMP",
-    "exchange": "NSE",
-    "company": "Shakti Pumps (India) Limited"
-  },
-  {
-    "symbol": "SHRIRAMFIN",
-    "exchange": "NSE",
-    "company": "Shriram Finance Limited"
-  },
-  {
-    "symbol": "SOUTHBANK",
-    "exchange": "NSE",
-    "company": "The South Indian Bank Limited"
-  },
-  {
-    "symbol": "SUZLON",
-    "exchange": "NSE",
-    "company": "Suzlon Energy Limited"
-  },
-  {
-    "symbol": "TAJGVK",
-    "exchange": "NSE",
-    "company": "Taj GVK Hotels & Resorts Limited"
-  },
-  {
-    "symbol": "TEXRAIL",
-    "exchange": "NSE",
-    "company": "Texmaco Rail & Engineering Limited"
-  },
-  {
-    "symbol": "UNIONBANK",
-    "exchange": "NSE",
-    "company": "Union Bank of India"
-  },
-  {
-    "symbol": "VBL",
-    "exchange": "NSE",
-    "company": "Varun Beverages Limited"
-  },
-  {
-    "symbol": "ITBEES",
-    "exchange": "NSE",
-    "company": "Nippon India ETF Nifty IT"
-  },
-  {
-    "symbol": "CAPINVIT-IV",
-    "exchange": "NSE",
-    "company": "CAPITAL INFRA TRUST"
-  },
-  {
-    "symbol": "SILVERCASE",
-    "exchange": "NSE",
-    "company": "Zerodha Silver ETF"
-  },
-  {
-    "symbol": "PGINVIT",
-    "exchange": "NSE",
-    "company": "PGINVIT"
-  },
-  {
-    "symbol": "MODEFENCE",
-    "exchange": "NSE",
-    "company": "Motilal Oswal Nifty India Defence ETF"
-  },
-  {
-    "symbol": "GOLDBEES",
-    "exchange": "NSE",
-    "company": "Nippon India ETF Gold BeES"
+    "company": "",
+    "exchange": "NSE"
   },
   {
     "symbol": "AUTOBEES",
-    "exchange": "NSE",
-    "company": "Nippon India Nifty Auto ETF"
+    "company": "",
+    "exchange": "NSE"
+  },
+  {
+    "symbol": "BSE",
+    "company": "",
+    "exchange": "NSE"
+  },
+  {
+    "symbol": "CANBK",
+    "company": "",
+    "exchange": "NSE"
+  },
+  {
+    "symbol": "CAPINVIT-IV",
+    "company": "",
+    "exchange": "NSE"
+  },
+  {
+    "symbol": "CHOLAFIN",
+    "company": "",
+    "exchange": "NSE"
+  },
+  {
+    "symbol": "COALINDIA",
+    "company": "",
+    "exchange": "NSE"
+  },
+  {
+    "symbol": "CROMPTON",
+    "company": "",
+    "exchange": "NSE"
+  },
+  {
+    "symbol": "DRREDDY",
+    "company": "",
+    "exchange": "NSE"
+  },
+  {
+    "symbol": "ELITECON",
+    "company": "",
+    "exchange": "NSE"
+  },
+  {
+    "symbol": "GENESYS",
+    "company": "",
+    "exchange": "NSE"
+  },
+  {
+    "symbol": "GOLDBEES",
+    "company": "",
+    "exchange": "NSE"
   },
   {
     "symbol": "GOLDCASE",
-    "exchange": "NSE",
-    "company": "Zerodha Gold ETF"
+    "company": "",
+    "exchange": "NSE"
+  },
+  {
+    "symbol": "GRSE",
+    "company": "",
+    "exchange": "NSE"
+  },
+  {
+    "symbol": "HAPPSTMNDS",
+    "company": "",
+    "exchange": "NSE"
+  },
+  {
+    "symbol": "HDFCBANK",
+    "company": "",
+    "exchange": "NSE"
+  },
+  {
+    "symbol": "INFY",
+    "company": "",
+    "exchange": "NSE"
+  },
+  {
+    "symbol": "IRCTC",
+    "company": "",
+    "exchange": "NSE"
+  },
+  {
+    "symbol": "ITBEES",
+    "company": "",
+    "exchange": "NSE"
+  },
+  {
+    "symbol": "ITC",
+    "company": "",
+    "exchange": "NSE"
+  },
+  {
+    "symbol": "JSWCEMENT",
+    "company": "",
+    "exchange": "NSE"
+  },
+  {
+    "symbol": "KPITTECH",
+    "company": "",
+    "exchange": "NSE"
   },
   {
     "symbol": "MAGNUS",
-    "exchange": "NSE",
-    "company": ""
+    "company": "",
+    "exchange": "BSE"
+  },
+  {
+    "symbol": "MARUTI",
+    "company": "",
+    "exchange": "NSE"
+  },
+  {
+    "symbol": "MODEFENCE",
+    "company": "",
+    "exchange": "NSE"
+  },
+  {
+    "symbol": "MOTILALOFS",
+    "company": "",
+    "exchange": "NSE"
+  },
+  {
+    "symbol": "NATCOPHARM",
+    "company": "",
+    "exchange": "NSE"
+  },
+  {
+    "symbol": "NMDC",
+    "company": "",
+    "exchange": "NSE"
+  },
+  {
+    "symbol": "PFC",
+    "company": "",
+    "exchange": "NSE"
+  },
+  {
+    "symbol": "PGINVIT-IV",
+    "company": "",
+    "exchange": "NSE"
+  },
+  {
+    "symbol": "SHAKTIPUMP",
+    "company": "",
+    "exchange": "NSE"
+  },
+  {
+    "symbol": "SHRIRAMFIN",
+    "company": "",
+    "exchange": "NSE"
   },
   {
     "symbol": "SILVERBEES",
-    "exchange": "NSE",
-    "company": "Nippon India Silver ETF"
+    "company": "",
+    "exchange": "NSE"
   },
   {
-    "symbol": "SGBDE31III-GB",
-    "exchange": "NSE",
-    "company": ""
+    "symbol": "SILVERCASE",
+    "company": "",
+    "exchange": "NSE"
+  },
+  {
+    "symbol": "SOUTHBANK",
+    "company": "",
+    "exchange": "NSE"
+  },
+  {
+    "symbol": "SPANDANA",
+    "company": "",
+    "exchange": "NSE"
   },
   {
     "symbol": "SPRIGHT",
+    "company": "",
+    "exchange": "BSE"
+  },
+  {
+    "symbol": "SUZLON",
+    "company": "",
+    "exchange": "NSE"
+  },
+  {
+    "symbol": "TAJGVK",
+    "company": "",
+    "exchange": "NSE"
+  },
+  {
+    "symbol": "TECHNOE",
+    "company": "",
+    "exchange": "NSE"
+  },
+  {
+    "symbol": "TEXRAIL",
+    "company": "",
+    "exchange": "NSE"
+  },
+  {
+    "symbol": "UNIONBANK",
+    "company": "",
+    "exchange": "NSE"
+  },
+  {
+    "symbol": "VBL",
+    "company": "",
+    "exchange": "NSE"
+  },
+  {
+    "symbol": "WAAREERTL",
+    "company": "",
+    "exchange": "NSE"
+  },
+  {
+    "symbol": "ASKAUTOLTD",
+    "company": "",
+    "exchange": "NSE"
+  },
+  {
+    "symbol": "MCX",
+    "company": "",
+    "exchange": "NSE"
+  },
+  {
+    "symbol": "NATIONALUM",
+    "company": "",
+    "exchange": "NSE"
+  },
+  {
+    "symbol": "PGINVIT",
+    "company": "",
+    "exchange": "NSE"
+  },
+  {
+    "symbol": "SGBDE31III-GB",
     "exchange": "NSE",
     "company": ""
   }

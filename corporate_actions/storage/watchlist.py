@@ -51,6 +51,34 @@ def add_to_watchlist(items: list[dict]) -> list[dict]:
     return current
 
 
+def replace_watchlist(items: list[dict]) -> dict:
+    """Replace the watchlist with exactly ``items`` (dedup on exchange+symbol).
+
+    Returns {"list": new_list, "added": n, "skipped_duplicates": n} where
+    "added" counts the entries in the new list and duplicates were dropped.
+    """
+    with _lock, _file_lock(config.WATCHLIST_FILE):
+        current = read_json(config.WATCHLIST_FILE, [])
+        fresh: list[dict] = []
+        seen: set = set()
+        dups = 0
+        for item in items:
+            if not isinstance(item, dict) or not item.get("symbol"):
+                continue
+            key = watchlist_key(item)
+            if key in seen:
+                dups += 1
+                continue
+            seen.add(key)
+            fresh.append(item)
+        write_json(config.WATCHLIST_FILE, fresh)
+    log.info(
+        "watchlist.json: %d -> %d item(s) (exact set) | %d duplicate(s) skipped",
+        len(current), len(fresh), dups,
+    )
+    return {"list": fresh, "added": len(fresh), "skipped_duplicates": dups}
+
+
 def remove_from_watchlist(symbol: str, exchange: str) -> list[dict]:
     with _lock, _file_lock(config.WATCHLIST_FILE):
         current = read_json(config.WATCHLIST_FILE, [])
