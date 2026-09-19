@@ -25,7 +25,7 @@ import asyncio
 from .. import config
 from .analyst_forecast import fill_analyst_fallback
 from .http import _quote_session, _throttle_fund_req, _throttle_fund_req_async, _async_client
-from .screener import get_competitors, get_sector_pe, parse_screener_fundamentals
+from .screener import get_competitors, parse_screener_fundamentals
 
 log = logging.getLogger(__name__)
 

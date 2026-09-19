@@ -256,7 +256,6 @@ def _render_psar(df):
         return None
     bull = direction == "bull"
     emoji = "\U0001F7E2" if bull else "\U0001F534"
-    high, low = df["high"], df["low"]
     count = _run_length(
         [indicators.psar_direction(df.iloc[: index + 1]) for index in range(len(df) - 20, len(df))],
         direction,

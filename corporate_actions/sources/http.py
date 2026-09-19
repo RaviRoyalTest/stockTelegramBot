@@ -110,13 +110,14 @@ async def _throttle_fund_req_async():
         _last_fund_req = time.time()
 
 
-_async_client = None
+_async_client_instance = None
+
 
 def _async_client():
     """Return a shared httpx.AsyncClient or None if httpx unavailable."""
-    global _async_client
+    global _async_client_instance
     if httpx is None:
         return None
-    if _async_client is None:
-        _async_client = httpx.AsyncClient(headers=config.BROWSER_HEADERS, timeout=config.HTTP_TIMEOUT)
-    return _async_client
+    if _async_client_instance is None:
+        _async_client_instance = httpx.AsyncClient(headers=config.BROWSER_HEADERS, timeout=config.HTTP_TIMEOUT)
+    return _async_client_instance

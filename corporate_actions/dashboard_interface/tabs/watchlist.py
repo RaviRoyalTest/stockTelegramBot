@@ -84,7 +84,6 @@ def render() -> None:
             item for label in selected
             if (item := item_from_label(label, stock_list)) is not None
         ]
-        saved_keys = {(item["exchange"].upper(), item["symbol"].upper()) for item in saved}
         options_keys = {(item["exchange"].upper(), item["symbol"].upper()) for item in stock_list}
         extras = [item for item in saved if (item["exchange"].upper(), item["symbol"].upper()) not in options_keys]
         storage.save_watchlist(selected_items + extras)

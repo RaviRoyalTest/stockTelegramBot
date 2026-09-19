@@ -12,7 +12,7 @@ import logging
 from time import monotonic
 
 from .. import config, storage
-from ..core.text import escape, split_messages
+from ..core.text import split_messages
 from ..formatting.schedule import format_settings
 from ..sources.types import INCREASE_TYPES
 from ..telegram.client import answer_callback_query

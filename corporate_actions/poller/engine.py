@@ -206,7 +206,6 @@ class Poller:
         Returns (all_actions, errors, warnings). Uses the same TTL-cached
         per-symbol failure logic so delisted/renamed symbols fail quietly.
         """
-        global _nse_fetch_fail
         nse_symbols = [
             watch_item["symbol"] for watch_item in unique_watchlist
             if watch_item.get("exchange", "").upper() == "NSE"

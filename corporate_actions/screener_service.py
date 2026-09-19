@@ -5,23 +5,18 @@ of candidate stock rows using existing `sources` primitives.
 """
 from __future__ import annotations
 
+import asyncio
+import heapq
+import logging
 import math
+import os
+import time
+from concurrent.futures import ThreadPoolExecutor, as_completed
+from concurrent.futures import ThreadPoolExecutor as _TPE
 from functools import lru_cache
 from typing import Any, Callable
-import time
-import math
-from concurrent.futures import ThreadPoolExecutor, as_completed
-import heapq
 
-from . import sources
-from . import config
-import asyncio
-import logging
-from concurrent.futures import ThreadPoolExecutor as _TPE
-from . import redis_cache
-import hashlib
-import json
-import os
+from . import config, redis_cache, sources
 
 
 def _safe_float(value: Any, default: float | None = None) -> float | None:

@@ -12,11 +12,8 @@ from ..core.numbers import format_money
 from ..core.text import escape
 from .report_extras import (
     company_name,
-    mcap_cr_value,
-    peers_lines,
     quote_source_tag,
     rsi_value,
-    sources_footer_lines,
 )
 from .stock_common import (
     _GREEN,

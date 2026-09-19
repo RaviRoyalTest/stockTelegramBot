@@ -228,7 +228,6 @@ def action_status(action: dict, today=None) -> str:
     type_name = action_type(action.get("subject"))
     ex_date = parse_iso_date(action.get("ex_date"))
     record_date = parse_iso_date(action.get("record_date"))
-    announcement_date = parse_iso_date(action.get("announcement_date"))
 
     if ex_date is None:
         return "Announced - ex-date not fixed yet (check the company notice for dates)"

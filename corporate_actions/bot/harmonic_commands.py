@@ -170,10 +170,9 @@ def handle_harmonic_scan(chat_id, universe, timeframe) -> None:
         done = 0
         for future in as_completed(futures):
             done += 1
-            symbol = futures[future]
             try:
                 result = future.result()[1]
-            except Exception as error:
+            except Exception:
                 result = None
             if result and result.get("pattern") and result.get("status") not in (
                 "No harmonic pattern detected", "Pattern invalidated",

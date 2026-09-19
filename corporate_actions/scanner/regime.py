@@ -19,7 +19,6 @@ def market_regime(benchmark: dict | None, breadth: dict, benchmark_label: str = 
         count = len(closes)
         return_5d = (price / closes[max(0, count - 6)] - 1.0) * 100.0 if count > 6 else None
         return_20d = (price / closes[max(0, count - 21)] - 1.0) * 100.0 if count > 21 else None
-        return_200d = (price / closes[max(0, count - 201)] - 1.0) * 100.0 if count > 201 else None
         details.append(f"{benchmark_label} {price:,.0f}  (5d {return_5d:+.1f}% / 20d {return_20d:+.1f}%)")
         if ema50 is not None:
             details.append(f"{benchmark_label} vs 50 EMA: {'above' if price > ema50 else 'below'} "

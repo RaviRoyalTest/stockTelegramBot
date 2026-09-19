@@ -12,7 +12,7 @@ from concurrent.futures import ThreadPoolExecutor, as_completed
 
 import pandas as pd
 
-from .. import config, sources
+from .. import sources
 from ..formatting.stock_india import _fund_report_lines, _stock_summary_lines
 from ..market import MOVERS_PERIODS, fetch_period_change
 

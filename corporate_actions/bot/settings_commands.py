@@ -11,7 +11,7 @@ import re
 import time
 from datetime import datetime
 
-from .. import config, storage
+from .. import storage
 from ..poller.watcher import DEFAULT_WATCHER
 from ..sources.types import ACTION_TYPES
 from .reply import reply

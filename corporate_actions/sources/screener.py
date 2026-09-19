@@ -25,7 +25,6 @@ except Exception:
     httpx = None
 from .screener_parsing import (
     parse_company_id,
-    parse_company_name,
     parse_competitors,
     parse_page,
     parse_sector_pe_table,

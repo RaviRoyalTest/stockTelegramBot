@@ -12,6 +12,7 @@ rate-limited, this module tries an independent source:
 """
 from __future__ import annotations
 
+import asyncio
 import logging
 import re
 import time

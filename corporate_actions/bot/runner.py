@@ -7,11 +7,10 @@ push state - which is what `python run_bot.py` does on a GitHub Actions cron.
 from __future__ import annotations
 
 import logging
-import os
 import sys
 
 from .. import config, scheduler
-from ..github import main_check, pending_state_changes, push_state
+from ..github import main_check, push_state
 from ..poller import poller
 from ..telegram.client import get_updates, is_configured
 from . import dispatch

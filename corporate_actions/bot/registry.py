@@ -13,7 +13,7 @@ from ..formatting.schedule import format_schedule, format_settings
 from ..poller.watcher import DEFAULT_WATCHER
 from ..telegram.client import is_configured, set_my_commands
 from ..telegram.markup import inline_command_buttons, quick_menu_markup, recent_buttons
-from . import corporate_action_commands, scanner_commands, schedule_commands, settings_commands, status as status_commands, watchlist_commands
+from . import corporate_action_commands, scanner_commands, schedule_commands, screen_commands, status as status_commands, watchlist_commands
 from .help_texts import CA_HELP
 from .reply import reply, reply_messages
 
@@ -75,7 +75,6 @@ def _quiet_status_text(chat_id) -> str:
         until = storage.quiet_until_ts(chat_id)
         if until is None:
             return "Quiet mode: <b>ON</b> - all alerts paused until <code>/quiet off</code>"
-        import time
         from datetime import datetime
 
         try:
@@ -514,7 +513,7 @@ COMMAND_USAGE = {
 # /toplosers 1h 10, /toplosers 2d, ...). The button label IS the command
 # text, so tapping it runs the command - no typing, on mobile and desktop.
 COMMAND_EXAMPLES = {
-    "/corpactions": ["/corpactions", "/corpactions dividend", "/corpactions today", "/corpactions RELIANCE"],
+    "/corpactions": ["/corpactions", "/corpactions dividend", "/corpactions today", "/corpactions RELIANCE", "/corpactions on", "/corpactions off"],
     "/exdates": ["/exdates today", "/exdates 7"],
     "/news": ["/news", "/news RELIANCE", "/news 5"],
     "/fundamentalanalyze": ["/fundamentalanalyze RELIANCE", "/fundamentalanalyze mylist", "/fundamentalanalyze 5-10"],
@@ -535,7 +534,6 @@ COMMAND_EXAMPLES = {
     "/market": ["/market", "/market in", "/market us", "/market any"],
     "/pricealert": ["/pricealert 3", "/pricealert off", "/pricealert on"],
     "/alertfilters": ["/alertfilters dividend,bonus", "/alertfilters all", "/alertfilters off"],
-    "/corpactions": ["/corpactions on", "/corpactions off"],
     "/quiet": ["/quiet on", "/quiet 2h", "/quiet off"],
     "/watcher": ["/watcher", "/watcher off", "/watcher on", "/watcher set 5", "/watcher universe nifty500"],
     "/fundmode": ["/fundmode button", "/fundmode auto", "/fundmode default"],

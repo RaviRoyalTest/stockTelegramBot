@@ -8,7 +8,7 @@ callers can `from corporate_actions.sources import get_quote` (or
 """
 from .bse import get_bse_corporate_actions, get_bse_stock_list
 from .errors import SourceError
-from .fundamentals import FUND_MAX_ROWS, get_fundamentals, get_fundamentals_async
+from .fundamentals import FUND_MAX_ROWS, get_fundamentals
 from .free_api import (
     get_best_quote,
     get_nse_quote,
@@ -91,6 +91,7 @@ __all__ = [
     "get_window_gap_range",
     "universe_exchange",
     "get_ohlc",
+    "get_chart_ohlc",
     "get_index_ohlc",
     "OHLC_TIMEFRAMES",
     "_HIGHER_TIMEFRAME_LADDER",

@@ -23,7 +23,6 @@ from ..helpers import fetch_quotes_for, tg_to_markdown
 from ..widgets import (
     render_ca_card,
     render_linked_analysis,
-    symbol_fund_button,
     symbol_picker,
 )
 

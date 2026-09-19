@@ -11,7 +11,7 @@ try:
 except Exception:
     st = None
 
-from .. import config, sources
+from .. import sources
 from ..formatting import status_tag
 from ..formatting.actions import _TYPE_EMOJI
 from ..formatting.stock_common import _consensus_label

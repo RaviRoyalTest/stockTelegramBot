@@ -69,7 +69,7 @@ def send_watchlist(chat_id) -> None:
         chat_id,
         "<b>Your Watchlist:</b>\n"
         + "\n".join(lines)
-        + f"\n\nUse <code>/fundamentalanalyze 5-10</code> or <code>/fundamentalreport 3-5</code> to get details by these numbers."
+        + "\n\nUse <code>/fundamentalanalyze 5-10</code> or <code>/fundamentalreport 3-5</code> to get details by these numbers."
         + "\nTap a ticker below for its fundamentals."
         + f"\nSaved in: <code>{html.escape(where)}</code>\nPersistence: {html.escape(persistence)}",
         reply_markup=symbol_buttons(tap_symbols, "fund") if tap_symbols else None,

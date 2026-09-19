@@ -9,7 +9,6 @@ from __future__ import annotations
 
 from .formatting.stock_common import _holding_delta
 from .formatting.stock_india_report import (
-    _fy_label,
     _main_question,
     _overall_ratings,
     _verdict,

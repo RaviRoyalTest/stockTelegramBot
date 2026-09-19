@@ -40,7 +40,6 @@ _HIGHER_TIMEFRAME_LADDER = {
 def _bars_from_response(result: dict, name: str, exchange: str, symbol: str,
                         interval: str, timeframe: str) -> dict | None:
     """Build the aligned-bar dict from a Yahoo chart response."""
-    meta = result.get("meta") or {}
     timestamps = result.get("timestamp") or []
     quotes = (result.get("indicators") or {}).get("quote") or [{}]
     quote = quotes[0] or {}
@@ -104,8 +103,7 @@ def get_ohlc(exchange: str, symbol: str, timeframe: str = "1d") -> dict | None:
         response = _quote_session().get(url, timeout=config.HTTP_TIMEOUT)
         response.raise_for_status()
         result = response.json()["chart"]["result"][0]
-        meta = result.get("meta") or {}
-        name = meta.get("longName") or meta.get("shortName") or symbol
+        name = result.get("meta", {}).get("longName") or result.get("meta", {}).get("shortName") or symbol
         data = _bars_from_response(result, name, exchange, symbol, interval, timeframe)
         if data:
             log.info("ohlc: %d %s bars for %s:%s", len(data["timestamp"]), interval, exchange, symbol)
@@ -172,8 +170,7 @@ def get_chart_ohlc(exchange: str, symbol: str, range_key: str) -> dict | None:
         response = _quote_session().get(url, timeout=config.HTTP_TIMEOUT)
         response.raise_for_status()
         result = response.json()["chart"]["result"][0]
-        meta = result.get("meta") or {}
-        name = meta.get("longName") or meta.get("shortName") or symbol
+        name = result.get("meta", {}).get("longName") or result.get("meta", {}).get("shortName") or symbol
         data = _bars_from_response(result, name, exchange, symbol, interval, range_)
         if data:
             log.info("chart ohlc: %d %s/%s bars for %s:%s", len(data["timestamp"]), interval, range_, exchange, symbol)
@@ -209,8 +206,7 @@ def get_index_ohlc(index_symbol: str, range_: str = "6mo",
         response = _quote_session().get(url, timeout=config.HTTP_TIMEOUT)
         response.raise_for_status()
         result = response.json()["chart"]["result"][0]
-        meta = result.get("meta") or {}
-        name = meta.get("longName") or meta.get("shortName") or index_symbol
+        name = result.get("meta", {}).get("longName") or result.get("meta", {}).get("shortName") or index_symbol
         data = _bars_from_response(result, name, "IDX", index_symbol, interval, interval)
         if data:
             log.info("index ohlc: %d %s bars for %s", len(data["timestamp"]), interval, index_symbol)

@@ -355,8 +355,6 @@ def format_report(session: dict) -> list[str]:
     """Render the full scanner report as HTML lines for Telegram."""
     regime = session["regime"]
     universe_label = session.get("universe_label", "NIFTY 500")
-    currency = session.get("currency", "INR")
-    sym = _CURRENCY.get(currency, "\u20b9")
     lines = []
     lines.append(f"\U0001F4CA <b>{universe_label} \u2014 ADVANCED SCANNER</b>")
     lines.append("")

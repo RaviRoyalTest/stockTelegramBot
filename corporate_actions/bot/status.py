@@ -54,10 +54,10 @@ def handle_status(chat_id) -> None:
                 f"<b>Saved in:</b> <code>{html.escape(location)}</code>",
                 f"<b>GitHub push:</b> {html.escape(push_status)}",
                 html.escape(sync_line),
-                f"<b>Scheduled reports:</b> "
+                "<b>Scheduled reports:</b> "
                 + ("enabled" if config.SCHEDULED_REPORTS_ENABLED and config.PROCESS_COMMANDS else "off")
                 + " \u00b7 " + html.escape(format_schedule(chat_id).split("\n")[0])
-                + f" \u00b7 manage with /schedule",
+                + " \u00b7 manage with /schedule",
                 "Run /watchlist to see your current watchlist.",
             ]
         ),

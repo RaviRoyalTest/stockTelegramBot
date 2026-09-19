@@ -44,8 +44,8 @@ class ScreenerServiceTests(unittest.TestCase):
 
         screener_service._build_row = build
         # first call populates cache
-        rows1 = screener_service.screen_universe(filters={}, limit=10)
-        rows2 = screener_service.screen_universe(filters={}, limit=10)
+        screener_service.screen_universe(filters={}, limit=10)
+        screener_service.screen_universe(filters={}, limit=10)
         # _build_row should be called at least once but not for each screen_universe call
         self.assertLessEqual(call_count["n"], 2)
 

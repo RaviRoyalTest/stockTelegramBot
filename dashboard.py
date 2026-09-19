@@ -18,11 +18,10 @@ import logging
 import traceback
 
 from corporate_actions import sources, storage
-from corporate_actions.screener_service import screen_universe, screen_universe_async
+from corporate_actions.screener_service import screen_universe_async
 from corporate_actions.market import hours as market_hours
 from corporate_actions.telegram import client as telegram_client
 import asyncio
-import logging
 
 log = logging.getLogger(__name__)
 

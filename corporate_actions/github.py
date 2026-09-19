@@ -37,7 +37,7 @@ def _git(*args: str, timeout: int = 30) -> subprocess.CompletedProcess:
         return subprocess.run(
             list(args), capture_output=True, text=True, check=False, timeout=timeout
         )
-    except subprocess.TimeoutExpired as error:
+    except subprocess.TimeoutExpired:
         return subprocess.CompletedProcess(
             list(args), 124, stdout="", stderr=f"command timed out after {timeout}s"
         )

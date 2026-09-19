@@ -14,7 +14,6 @@ from datetime import date, datetime, timedelta, timezone
 
 from .. import config
 from .http import _quote_session
-from .types import pick
 
 log = logging.getLogger(__name__)
 

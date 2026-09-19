@@ -15,7 +15,7 @@ from time import monotonic
 from .. import storage
 from ..core.dates import date_from_parts, format_date
 from ..core.text import escape, split_messages
-from ..formatting.stock_common import _rsi_signal, _wk52_signal
+from ..formatting.stock_common import _wk52_signal
 from ..formatting.stock_india import _fundamentals_lines
 from ..formatting.stock_us import _us_movers_lines
 from ..market import MOVERS_PERIODS, fetch_period_change, period_label
@@ -26,7 +26,6 @@ from ..sources import (
     get_fundamentals,
     get_index_universe,
     get_us_fundamentals,
-    universe_exchange,
 )
 from ..telegram.markup import fundamentals_button, symbol_buttons
 from .reply import reply, reply_messages
