@@ -19,7 +19,7 @@ from datetime import datetime
 
 from .. import config, storage
 from ..core.dates import today_ist
-from ..market.hours import market_active
+from ..market.hours import market_active, market_for_exchange, screen_available
 from ..formatting import (
     format_corporate_action,
     format_mover_alert,
@@ -48,6 +48,29 @@ log = logging.getLogger(__name__)
 # as a poll error again and again (noisy "N error(s)" lines and wasted calls).
 _nse_fetch_fail: dict[str, float] = {}
 _NSE_FETCH_FAIL_CACHE_SECONDS = 3600  # seconds - re-check the symbol hourly
+
+# Session-day verdicts for the price-alert gate, cached per market per date:
+# a mid-week exchange holiday (market hours say 'weekday, within session'
+# but no trading happened) would otherwise re-fire Friday-style stale alerts
+# on every cycle. One benchmark probe per market per day resolves it.
+_session_day_cache: dict[tuple[str, str], bool] = {}
+
+
+def _session_day(market: str, today) -> bool:
+    """True when ``market`` really traded today (weekday+hours AND a session).
+
+    Cached per (market, date) so the extra benchmark probe runs at most once
+    per market per day, and only when the cheap clock check already passed.
+    """
+    key = (market, today.isoformat())
+    if key not in _session_day_cache:
+        from ..opening_report import data as ordata
+
+        traded = ordata.has_session_on(market, today)
+        # None (probe unavailable) counts as trading so a data-source outage
+        # degrades to the old behaviour instead of silencing alerts all day.
+        _session_day_cache[key] = True if traded is None else bool(traded)
+    return _session_day_cache[key]
 
 
 def _poll_quote(exchange: str, symbol: str) -> dict | None:
@@ -407,6 +430,19 @@ class Poller:
                 )
                 for item in watchlist:
                     if not isinstance(item, dict):
+                        continue
+                    item_market = market_for_exchange(item.get("exchange"))
+                    # Session-day gate: the quote's change % is THIS session
+                    # vs the previous close. Outside that session (weekend,
+                    # holiday, or before the next open) Yahoo still serves
+                    # the last completed session's move, which would fire
+                    # under TODAY's dedup key - Friday's +3% re-alerting all
+                    # Saturday, and again Monday pre-open. Skip items whose
+                    # market did not trade today; seen keys stay date-stamped
+                    # so the alert still fires once on the next real session.
+                    if not screen_available(item_market):
+                        continue
+                    if not _session_day(item_market, today):
                         continue
                     day_key = (
                         f"price|{chat_id}|{item.get('exchange', '').upper()}"

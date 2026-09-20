@@ -206,6 +206,19 @@ def market_active(market, grace_minutes: int = 60, now=None) -> bool:
     return close_minutes <= current_minutes < close_minutes + max(0, int(grace_minutes))
 
 
+def market_for_exchange(exchange) -> str:
+    """Market key ('in'/'us') governing a stock exchange name ('in' default).
+
+    Watchlists can mix NSE/BSE and US tickers (the bulk adder auto-detects
+    the market), so per-item gates need this mapping rather than one global
+    market flag.
+    """
+    text = str(exchange or "").strip().upper()
+    if text in {"NASDAQ", "NYSE", "AMEX", "NYSEARCA", "OTC"}:
+        return "us"
+    return "in"
+
+
 def screen_available(market, now=None) -> bool:
     """True while a session's data is fresh enough to screen (on-demand).
 
