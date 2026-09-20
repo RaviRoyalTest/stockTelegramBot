@@ -17,10 +17,14 @@
       </div>
     </div>
     <div style="display:flex; gap:12px; align-items:center; flex-wrap:wrap; margin-top:10px;">
-      <button class="btn btn-primary" id="runBtn" type="button">▶️ Build report</button>
+      <div class="field" style="margin-bottom:0;">
+        <label for="reportDate">Session date <span class="muted">(empty = live)</span></label>
+        <input type="date" id="reportDate" autocomplete="off" />
+      </div>
+      <button class="btn btn-primary" id="runBtn" type="button" style="align-self:flex-end;">▶️ Build report</button>
       <span class="muted" id="buildMeta" aria-live="polite"></span>
     </div>
-    <p class="note" style="margin-bottom:0;">Both markets take about 60–90 seconds (India ~1,000 symbols + US ~518 + market caps). Change % is vs the previous trading day's close; Volume Change % is today's cumulative regular volume vs the previous session's total — N/A when the previous day's volume is unavailable, never estimated.</p>
+    <p class="note" style="margin-bottom:0;">A date builds that session's completed report (this page's honest twin of the live scan: full closes, no estimates); a non-trading date is refused. Both live markets take about 60–90 seconds. Change % is vs the previous trading day's close; Volume Change % is that session's volume vs the prior session's — N/A when unavailable, never estimated.</p>
   </section>
 
   <div id="statusStrip" style="display:flex; gap:12px; flex-wrap:wrap; margin:14px 0;"></div>
@@ -197,14 +201,16 @@
       async function run() {
         var btn = document.getElementById('runBtn');
         var market = (document.querySelector('input[name="market"]:checked') || {}).value || 'all';
+        var dateVal = document.getElementById('reportDate').value;
+        var historical = !!dateVal;
         btn.disabled = true;
-        btn.textContent = '⏳ Scanning… (60–90s)';
+        btn.textContent = historical ? '⏳ Building that session…' : '⏳ Scanning… (60–90s)';
         document.getElementById('buildMeta').textContent = '';
         document.getElementById('statusStrip').innerHTML = '';
         document.getElementById('sections').innerHTML = '';
         document.getElementById('results').hidden = true;
         try {
-          var res = await fetch('/api/openreport?market=' + encodeURIComponent(market));
+          var res = await fetch('/api/openreport?market=' + encodeURIComponent(market) + (dateVal ? '&date=' + encodeURIComponent(dateVal) : ''));
           if (!res.ok) {
             var detail = '';
             try { detail = (await res.json()).detail || ''; } catch (e) {}
@@ -234,6 +240,14 @@
       // exposed for UI verification (tests inject a synthetic report payload;
       // nothing here fabricates market data)
       window.RSOpenReport = { renderSection: renderSection, statusCard: statusCard, renderSummary: renderSummary, stockTable: stockTable };
+      // deep-link: /openreport?date=2026-09-18 builds that session on load
+      (function () {
+        var wanted = new URLSearchParams(window.location.search).get('date');
+        if (wanted) {
+          document.getElementById('reportDate').value = wanted;
+          run();
+        }
+      })();
     })();
   </script>
 {% endblock %}

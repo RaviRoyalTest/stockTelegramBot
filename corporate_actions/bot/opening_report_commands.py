@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import logging
 
+from ..core.dates import parse_date_token
 from ..core.text import split_messages
 from ..market.hours import is_market_open, market_tz_tag, normalise_market
 from ..opening_report import build_report
@@ -22,14 +23,39 @@ def _requested_markets(parts) -> tuple[str, ...]:
     /openreport in   -> India only
     /openreport us   -> US only
     /openreport      -> both (each marked OPEN/CLOSED independently)
+    A market token is only honoured when it is the FIRST argument; anything
+    later (e.g. the date in /openreport 18-09-2026 in) is left to the caller.
     """
     if len(parts) > 1:
         token = normalise_market(parts[1])
-        if token == "in":
-            return ("in",)
-        if token == "us":
-            return ("us",)
+        if token in ("in", "us") and parts[1].lower() in ("in", "us", "india", "united states"):
+            return (token,)
     return ("in", "us")
+
+
+def _requested_date(parts):
+    """Optional historical date from the command args (datetime.date or None).
+
+    Accepts the repo's standard flexible tokens (18-09-2026, 2026-09-18,
+    yesterday, 18sep, ...). 'yesterday'/'yday' resolve to the day before the
+    bot's local today. Anything unparseable raises ValueError so the caller
+    can show usage instead of silently reporting the wrong day.
+    """
+    for arg in parts[1:]:
+        lowered = arg.lower().strip()
+        if lowered in ("yesterday", "yday", "yd"):
+            from ..market.hours import local_now
+            import datetime as _dt
+
+            return local_now("in").date() - _dt.timedelta(days=1)
+        if lowered in ("in", "us", "india", "united states", "auto", "all"):
+            continue
+        parsed = parse_date_token(arg)
+        if parsed is None and arg.strip() and not arg.startswith("/"):
+            raise ValueError(arg)
+        if parsed is not None:
+            return parsed
+    return None
 
 
 def handle_opening_report(chat_id, parts) -> None:
@@ -46,29 +72,51 @@ def handle_opening_report(chat_id, parts) -> None:
     if len(parts) > 1 and parts[1].lower() in ("auto", "schedule", "daily", "everyday"):
         handle_openreport_auto(chat_id, parts)
         return
+    try:
+        target_date = _requested_date(parts)
+    except ValueError as bad:
+        reply(
+            chat_id,
+            f"\u274c Could not read the date <code>{bad.args[0]}</code>. "
+            "Try <code>/openreport 18-09-2026</code>, <code>/openreport yesterday</code>, "
+            "or <code>/openreport in 18-09-2026</code>.",
+        )
+        return
     markets = _requested_markets(parts)
     labels = ", ".join(
         f"{'India' if market == 'in' else 'US'} "
         f"({'OPEN' if is_market_open(market) else 'CLOSED'})"
         for market in markets
     )
-    reply(
-        chat_id,
-        "\U0001F680 <b>Building the opening/closing session screener</b>\n"
-        f"Markets: {labels}\n"
-        "Fetching regular-session price &amp; volume across the official "
-        "universes (Nifty 100 / Nifty 500 ex-100 / Nifty Microcap 250 and the "
-        "US Mega/Large-cap sets). This takes about a minute - the report "
-        "arrives in this chat when ready.",
-    )
+    if target_date is not None:
+        head = (
+            "\U0001F4DC <b>Building the historical session report</b>\n"
+            f"Date: <b>{target_date.strftime('%d-%b-%Y')}</b> \u00b7 Markets: {labels}\n"
+            "Completed regular-session closes only - stocks that did not trade "
+            "that day are reported unavailable, never ranked against another "
+            "session. This takes about a minute."
+        )
+    else:
+        head = (
+            "\U0001F680 <b>Building the opening/closing session screener</b>\n"
+            f"Markets: {labels}\n"
+            "Fetching regular-session price &amp; volume across the official "
+            "universes (Nifty 100 / Nifty 500 ex-100 / Nifty Microcap 250 and the "
+            "US Mega/Large-cap sets). This takes about a minute - the report "
+            "arrives in this chat when ready."
+        )
+    reply(chat_id, head)
     try:
-        lines = build_report(markets)
+        lines = build_report(markets, target_date)
     except Exception as error:
         log.warning("opening report failed: %s", error, exc_info=True)
         reply(chat_id, f"Could not build the report: {error}. Please try again shortly.")
         return
     reply_messages(chat_id, split_messages(lines))
-    log.info("opening/closing report sent for chat %s (%d market(s))", chat_id, len(markets))
+    log.info(
+        "opening/closing report sent for chat %s (%d market(s), date=%s)",
+        chat_id, len(markets), target_date or "live",
+    )
 
 
 def market_session_note() -> str:

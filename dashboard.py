@@ -1052,20 +1052,29 @@ def _scan_symbols(symbols: list[str], worker, deadline: float, started: float) -
 
 
 @app.get("/api/openreport")
-async def api_openreport(market: str = Query("all")):
+async def api_openreport(market: str = Query("all"), date: str = Query("")):
     """Opening/closing session screener (web twin of the bot's /openreport).
 
-    market: all | in | us. Regular-session data only, official universes
+    market: all | in | us. date: optional YYYY-MM-DD for a historical session
+    (that day's completed closes; a non-trading date is refused with a closed
+    block - never substituted). Regular-session data only, official universes
     (Nifty 100 / Nifty 500 ex-100 / Nifty Microcap 250, US Mega/Large by
-    market cap). A closed market (weekend/holiday) returns a closed block
-    with the next session - never stale data dressed up as today's.
+    market cap).
     """
     from corporate_actions.opening_report import report as openreport
 
     markets = {"all": ("in", "us"), "in": ("in",), "us": ("us",)}.get(market)
     if markets is None:
         raise HTTPException(status_code=400, detail="market must be all|in|us")
-    return await asyncio.to_thread(openreport.collect, markets)
+    target_date = None
+    if (date or "").strip():
+        import datetime as _dt
+
+        try:
+            target_date = _dt.date.fromisoformat(date.strip())
+        except ValueError:
+            raise HTTPException(status_code=400, detail="date must be YYYY-MM-DD")
+    return await asyncio.to_thread(openreport.collect, markets, target_date)
 
 
 @app.get("/api/checklist")

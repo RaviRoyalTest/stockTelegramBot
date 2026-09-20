@@ -518,8 +518,12 @@ COMMAND_USAGE = {
         "/openreport            \u2192 both markets now\n"
         "/openreport in         \u2192 India only\n"
         "/openreport us         \u2192 US only\n"
+        "/openreport 18-09-2026 \u2192 THAT day's completed session (history)\n"
+        "/openreport yesterday  \u2192 the previous day's completed report\n"
         "/openreport auto       \u2192 DAILY reports at market open AND close\n"
         "/openreport auto off   \u2192 stop the daily reports\n"
+        "Historical dates report that session's completed closes only - a "
+        "weekend/holiday date is refused, never filled with another day.\n"
         "A closed market (weekend/holiday) shows MARKET CLOSED + next session.\n"
         "Aliases: /closereport \u00b7 /sessionreport \u00b7 /openclose"
     ),

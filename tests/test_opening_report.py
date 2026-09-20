@@ -155,6 +155,54 @@ class GetUsMarketCapsTests(unittest.TestCase):
         self.assertEqual(caps, {"Y": 2e10})
 
 
+class HistoricalSnapshotTests(unittest.TestCase):
+    """Historical mode picks the bar ON the target date and the nearest
+    earlier close as reference - Yahoo period responses can contain phantom
+    null-close bars, which must never become the reference session."""
+
+    @staticmethod
+    def _epoch(y, m, d):
+        import calendar
+
+        return calendar.timegm((y, m, d, 12, 0, 0, 0, 0, 0))  # noon UTC
+
+    def _quote(self):
+        e15, e16, e17, e18 = (self._epoch(2026, 9, day) for day in (15, 16, 17, 18))
+        timestamps = [e15, e16, e17, e18]
+        quote = {
+            "close": [10.0, 11.0, None, 12.0],   # 17-Sep is a phantom bar
+            "volume": [100, 110, None, 240],
+        }
+        return timestamps, quote, e18
+
+    def test_reference_skips_phantom_bar(self):
+        from corporate_actions.opening_report import data as d
+
+        timestamps, quote, end = self._quote()
+        snap = d._historical_snapshot(quote, timestamps, end)
+        self.assertEqual(snap, (12.0, 240, 11.0, 110))  # reference = 16-Sep
+
+    def test_target_on_phantom_date_refused(self):
+        from corporate_actions.opening_report import data as d
+
+        timestamps, quote, _end = self._quote()
+        phantom_day = self._epoch(2026, 9, 17)
+        self.assertIsNone(d._historical_snapshot(quote, timestamps, phantom_day))
+
+    def test_date_with_no_bar_refused(self):
+        from corporate_actions.opening_report import data as d
+
+        timestamps, quote, _end = self._quote()
+        self.assertIsNone(d._historical_snapshot(quote, timestamps, self._epoch(2026, 9, 19)))
+
+    def test_first_ever_bar_has_no_reference(self):
+        from corporate_actions.opening_report import data as d
+
+        e1, e2 = self._epoch(2026, 9, 15), self._epoch(2026, 9, 16)
+        quote = {"close": [10.0, 11.0], "volume": [100, 110]}
+        self.assertIsNone(d._historical_snapshot(quote, [e1, e2], e1))
+
+
 class DailyPlanSanityTests(unittest.TestCase):
     def test_auto_plans_fire_exactly_at_their_clock_times(self):
         # Regression: a window_start/window_end pair makes the scheduler build

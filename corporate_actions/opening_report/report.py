@@ -13,6 +13,7 @@ notice with the next session instead of substituting old data.
 from __future__ import annotations
 
 import logging
+import time as _time
 from datetime import datetime
 
 from ..market.hours import is_market_open, local_now, next_open_after
@@ -24,15 +25,37 @@ log = logging.getLogger(__name__)
 INDIA_MARKET = "in"
 US_MARKET = "us"
 
+# Daily bars fetched per stock for a historical run: the snapshot session plus
+# enough earlier sessions for a healthy reference-bar scan (Yahoo period-mode
+# responses can contain phantom null-close bars, so a short window risks
+# losing the previous session entirely).
+HISTORY_WINDOW_DAYS = 21
+
 
 # ---------------------------------------------------------------- snapshot --
 
-def _snapshot(market: str) -> dict:
-    """Date/timestamp/state for one market (IST conversion for the US)."""
+def _snapshot(market: str, session_date=None) -> dict:
+    """Date/timestamp/state for one market (IST conversion for the US).
+
+    With ``session_date`` the snapshot describes a completed historical
+    session: its date, mode='historical' and no wall-clock time (the report
+    is that session's close, not a live tick).
+    """
+    if session_date is not None:
+        return {
+            "market": market,
+            "mode": "historical",
+            "date": session_date.strftime("%d-%b-%Y"),
+            "time_local": "Session close",
+            "tz_label": "ET" if market == US_MARKET else "IST",
+            "state": "CLOSED",  # a past session is never 'open'
+            "time_ist": None,
+        }
     local = local_now(market)
     state = "OPEN" if is_market_open(market) else "CLOSED"
     out = {
         "market": market,
+        "mode": "live",
         "date": local.strftime("%d-%b-%Y"),
         "time_local": local.strftime("%H:%M"),
         "tz_label": "ET" if market == US_MARKET else "IST",
@@ -49,19 +72,21 @@ def _snapshot(market: str) -> dict:
     return out
 
 
-def _closed_block(market: str, reason: str) -> dict:
+def _closed_block(market: str, reason: str, next_session: str | None = None) -> dict:
     label = "Indian" if market == INDIA_MARKET else "U.S."
-    try:
-        next_dt = datetime.fromtimestamp(next_open_after(market), local_now(market).tzinfo)
-        nxt = next_dt.strftime("%a %d-%b-%Y %H:%M")
-        suffix = " IST" if market == INDIA_MARKET else " ET"
-    except Exception:
-        nxt, suffix = "the next session", ""
+    if next_session is None:
+        try:
+            next_dt = datetime.fromtimestamp(next_open_after(market), local_now(market).tzinfo)
+            nxt = next_dt.strftime("%a %d-%b-%Y %H:%M")
+            suffix = " IST" if market == INDIA_MARKET else " ET"
+            next_session = f"{nxt}{suffix}"
+        except Exception:
+            next_session = "the next session"
     return {
         "market": market,
         "closed": True,
         "reason": reason,
-        "next_session": f"{nxt}{suffix}",
+        "next_session": next_session,
         "label": label,
     }
 
@@ -82,12 +107,15 @@ def _market_status(market: str) -> tuple[bool, str]:
 
 # ----------------------------------------------------------------- collect --
 
-def _collect_universe(title: str, symbols: list[str], exchange: str, key: str) -> dict:
+def _collect_universe(
+    title: str, symbols: list[str], exchange: str, key: str,
+    start: float | None = None, end: float | None = None,
+) -> dict:
     """One universe's gainers/losers as plain dicts (empty when unusable)."""
     if not symbols:
         return {"key": key, "title": title, "unavailable": True,
                 "gainers": [], "losers": [], "verified": 0, "target": 20}
-    rows = _data.fetch_universe_moves(exchange, symbols)
+    rows = _data.fetch_universe_moves(exchange, symbols, start=start, end=end)
     gainers = _data.top_gainers(rows)
     losers = _data.top_losers(rows)
     return {
@@ -102,22 +130,26 @@ def _collect_universe(title: str, symbols: list[str], exchange: str, key: str) -
     }
 
 
-def _collect_india() -> dict:
+def _collect_india(start: float | None = None, end: float | None = None) -> dict:
     universes = [
-        _collect_universe("NIFTY 100", _data.get_nifty100(), INDIA_MARKET, "in100"),
-        _collect_universe("NIFTY 500 EX-NIFTY 100", _data.get_nifty500_ex_100(), INDIA_MARKET, "in500x"),
-        _collect_universe("NIFTY MICROCAP 250", _data.get_microcap250(), INDIA_MARKET, "inmicro"),
+        _collect_universe("NIFTY 100", _data.get_nifty100(), INDIA_MARKET, "in100", start, end),
+        _collect_universe("NIFTY 500 EX-NIFTY 100", _data.get_nifty500_ex_100(), INDIA_MARKET, "in500x", start, end),
+        _collect_universe("NIFTY MICROCAP 250", _data.get_microcap250(), INDIA_MARKET, "inmicro", start, end),
     ]
     all_rows: list[dict] = []
     for universe in universes:
         all_rows.extend(universe.pop("_rows", []))
+    historical = start is not None and end is not None
     return {
         "market": INDIA_MARKET,
-        "snapshot": _snapshot(INDIA_MARKET),
+        "snapshot": _snapshot(
+            INDIA_MARKET,
+            session_date=datetime.fromtimestamp(end).date() if historical else None,
+        ),
         "universes": universes,
-        "indices": _data.get_index_levels(INDIA_MARKET),
+        "indices": _data.get_index_levels(INDIA_MARKET, start, end),
         "volume_buckets": _tables.volume_buckets_payload(all_rows),
-        "catalysts": _tables.catalyst_items(
+        "catalysts": [] if historical else _tables.catalyst_items(
             _data.top_gainers(all_rows, 4) + _data.top_losers(all_rows, 4), "NSE",
         ),
         "volume_computed": sum(
@@ -126,7 +158,7 @@ def _collect_india() -> dict:
     }
 
 
-def _collect_us() -> dict:
+def _collect_us(start: float | None = None, end: float | None = None) -> dict:
     symbols = _data.get_us_universe()
     if not symbols:
         return {
@@ -140,7 +172,7 @@ def _collect_us() -> dict:
             "volume_computed": 0,
             "unclassified": 0,
         }
-    rows = _data.fetch_universe_moves(US_MARKET, symbols)
+    rows = _data.fetch_universe_moves(US_MARKET, symbols, start=start, end=end)
     # Market cap does NOT ride on the chart payload - it comes from Yahoo's
     # batched v7/quote endpoint (about six calls for the whole universe).
     # Tickers with no reliable cap stay unclassified; nothing is guessed.
@@ -149,13 +181,17 @@ def _collect_us() -> dict:
     universes = [_collect_from_rows("MEGA CAP ($200B+)", mega_rows, "usmega"),
                  _collect_from_rows("LARGE CAP ($10B-$200B)", large_rows, "uslarge")]
     scanned = mega_rows + large_rows
+    historical = start is not None and end is not None
     return {
         "market": US_MARKET,
-        "snapshot": _snapshot(US_MARKET),
+        "snapshot": _snapshot(
+            US_MARKET,
+            session_date=datetime.fromtimestamp(end).date() if historical else None,
+        ),
         "universes": universes,
-        "indices": _data.get_index_levels(US_MARKET),
+        "indices": _data.get_index_levels(US_MARKET, start, end),
         "volume_buckets": _tables.volume_buckets_payload(scanned),
-        "catalysts": _tables.catalyst_items(
+        "catalysts": [] if historical else _tables.catalyst_items(
             _data.top_gainers(scanned, 4) + _data.top_losers(scanned, 4), "US",
         ),
         "volume_computed": sum(
@@ -180,20 +216,60 @@ def _collect_from_rows(title: str, rows: list[dict], key: str) -> dict:
     }
 
 
-def collect(markets: tuple[str, ...] = (INDIA_MARKET, US_MARKET)) -> dict:
+def collect(
+    markets: tuple[str, ...] = (INDIA_MARKET, US_MARKET),
+    target_date=None,
+) -> dict:
     """Structured report: one section per requested market + a final summary.
 
     Sections whose market is closed carry closed=True with reason/next
     session and no stock data - never old data dressed up as today's.
+
+    With ``target_date`` (datetime.date) the report describes that completed
+    historical session instead of the live market. The date is refused with a
+    closed block when that market did not trade on it (weekend/holiday/before
+    the benchmark's history), and each stock present is individually verified
+    to have traded that day - a delisted/renamed symbol is unavailable rather
+    than ranked against a different session.
     """
-    report: dict = {"sections": [], "total_verified": 0, "total_target": 0}
+    historical = target_date is not None
+    window_start = window_end = None
+    if historical:
+        window_end = _time.mktime(
+            (target_date.year, target_date.month, target_date.day, 0, 0, 0, 0, 0, -1)
+        ) + 86400 - 1  # target date 23:59:59 local
+        window_start = window_end - HISTORY_WINDOW_DAYS * 86400
+    report: dict = {
+        "sections": [], "total_verified": 0, "total_target": 0,
+        "mode": "historical" if historical else "live",
+    }
+    if historical:
+        report["target_date"] = target_date.strftime("%d-%b-%Y")
     volume_total = 0
     for market in markets:
-        trading, reason = _market_status(market)
-        if not trading:
-            report["sections"].append(_closed_block(market, reason))
-            continue
-        section = _collect_india() if market == INDIA_MARKET else _collect_us()
+        if historical:
+            traded = _data.has_session_on(market, target_date)
+            if traded is False:
+                block = _closed_block(
+                    market,
+                    f"No regular session on {target_date.strftime('%d-%b-%Y')} "
+                    "(weekend or exchange holiday).",
+                    next_session="",
+                )
+                block["no_report"] = True
+                report["sections"].append(block)
+                continue
+            # traded True or None (probe down): attempt the real build; the
+            # per-stock date verification keeps phantom data out either way.
+        else:
+            trading, reason = _market_status(market)
+            if not trading:
+                report["sections"].append(_closed_block(market, reason))
+                continue
+        section = (
+            _collect_india(window_start, window_end)
+            if market == INDIA_MARKET else _collect_us(window_start, window_end)
+        )
         for universe in section.get("universes", []):
             report["total_verified"] += universe["verified"]
             report["total_target"] += universe["target"]
@@ -203,6 +279,8 @@ def collect(markets: tuple[str, ...] = (INDIA_MARKET, US_MARKET)) -> dict:
     report["source"] = (
         "Yahoo Finance regular-session bars (includePrePost=false); "
         "Indian universes: official NSE index constituent CSVs."
+        + (" Historical mode: completed daily closes for the requested session."
+           if historical else "")
     )
     return report
 
@@ -210,6 +288,14 @@ def collect(markets: tuple[str, ...] = (INDIA_MARKET, US_MARKET)) -> dict:
 # ------------------------------------------------------------ telegram out --
 
 def _snapshot_line(snap: dict) -> str:
+    if snap.get("mode") == "historical":
+        label = "Indian" if snap["market"] == INDIA_MARKET else "U.S."
+        flag = "\U0001F1EE\U0001F1F3" if snap["market"] == INDIA_MARKET else "\U0001F1FA\U0001F1F8"
+        suffix = "IST" if snap["market"] == INDIA_MARKET else "ET"
+        return (
+            f"\U0001F4C5 <b>{snap['date']}</b> | \u23F1 <b>Session close {suffix}</b> | "
+            f"{flag} {label} Market: <b>COMPLETED SESSION</b> (historical)"
+        )
     stamp = snap["time_local"]
     if snap["market"] == US_MARKET:
         ist = snap.get("time_ist") or stamp
@@ -225,12 +311,21 @@ def _snapshot_line(snap: dict) -> str:
 
 def _closed_lines(block: dict) -> list[str]:
     flag = "\U0001F1EE\U0001F1F3" if block["market"] == INDIA_MARKET else "\U0001F1FA\U0001F1F8"
+    if block.get("no_report"):
+        tail = (
+            "A session report for this date is not possible - the exchange did "
+            "not trade, and no other session's data may be substituted."
+        )
+    else:
+        tail = (
+            f"Next regular trading session: <b>{block['next_session']}</b>\n"
+            "No opening-session report is generated while the market is closed - "
+            "previous-session data is never presented as today's opening data."
+        )
     return [
         f"{flag} <b>{block['label']} market: \U0001F534 MARKET CLOSED</b>",
         f"Reason: {block['reason']}",
-        f"Next regular trading session: <b>{block['next_session']}</b>",
-        "No opening-session report is generated while the market is closed - "
-        "previous-session data is never presented as today's opening data.",
+        tail,
     ]
 
 
@@ -325,6 +420,12 @@ def _final_summary(report: dict) -> list[str]:
     return lines
 
 
-def build_report(markets: tuple[str, ...] = (INDIA_MARKET, US_MARKET)) -> list[str]:
-    """Build the full opening/closing screener as Telegram HTML message chunks."""
-    return render_telegram(collect(markets))
+def build_report(
+    markets: tuple[str, ...] = (INDIA_MARKET, US_MARKET), target_date=None,
+) -> list[str]:
+    """Build the full opening/closing screener as Telegram HTML message chunks.
+
+    With ``target_date`` (datetime.date) the report describes that completed
+    historical session - see collect().
+    """
+    return render_telegram(collect(markets, target_date))
