@@ -27,5 +27,23 @@
     "run_at": "09:15",
     "market": "in",
     "next_due": "2026-09-10T09:15:00"
+  },
+  {
+    "interval_min": 1440,
+    "commands": [
+      "/openreport in"
+    ],
+    "chat": "@StockVigilBot",
+    "run_at": "10:00,15:35",
+    "market": "in"
+  },
+  {
+    "interval_min": 1440,
+    "commands": [
+      "/openreport us"
+    ],
+    "chat": "@StockVigilBot",
+    "run_at": "09:40,16:05",
+    "market": "us"
   }
 ]

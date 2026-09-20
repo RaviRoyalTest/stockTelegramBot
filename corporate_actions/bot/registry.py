@@ -172,6 +172,9 @@ ALIAS_TO_MAIN = {
     "/moversfund": "/fundmode",
     "/moverlist": "/moversover",
     "/watcherlist": "/moversover",
+    "/closereport": "/openreport",
+    "/sessionreport": "/openreport",
+    "/openclose": "/openreport",
     "/dnd": "/quiet",
     "/silence": "/quiet",
     "/pauseall": "/quiet",
@@ -196,10 +199,10 @@ DISPATCHED_COMMANDS = frozenset({
     "/increase", "/ind", "/indicator", "/investcheck", "/learn", "/list",
     "/losers", "/market", "/marketmovers", "/menu", "/moverlist",
     "/movers", "/moversfund", "/moversover", "/moverwatch", "/myfavourites",
-    "/mypicks", "/news", "/next", "/pauseall", "/pricealert", "/quality",
+    "/mypicks", "/news", "/next", "/openclose", "/openreport", "/pauseall", "/pricealert", "/quality",
     "/qualitycheck", "/quick", "/quiet", "/remove", "/removestock",
     "/sched", "/schednow", "/schedule", "/scorecard", "/scan500", "/screen",
-    "/screener", "/setlist", "/settings", "/setwatchlist", "/shareholder",
+    "/screener", "/sessionreport", "/closereport", "/setlist", "/settings", "/setwatchlist", "/shareholder",
     "/shortcuts", "/silence", "/start", "/status", "/summary", "/tech",
     "/technical", "/topgainers", "/toplosers", "/topmovers", "/tutorial",
     "/upcoming", "/us", "/usfund", "/usquote", "/usstock", "/watcher",
@@ -505,6 +508,21 @@ COMMAND_USAGE = {
         "is removed. Duplicates are ignored. Use <code>/setlist check RELIANCE, ...</code> "
         "to preview without changing anything."
     ),
+    "/openreport": (
+        "<b>/openreport</b> - opening/closing session screener (India + US)\n"
+        "Official universes, regular-session data only:\n"
+        "  Nifty 100 \u00b7 Nifty 500 ex-Nifty 100 \u00b7 Nifty Microcap 250\n"
+        "  US Mega Cap ($200B+) \u00b7 US Large Cap ($10B-$200B)\n"
+        "Each table: price, change, change %, volume and volume change %\n"
+        "(N/A when the previous session volume is unavailable - never estimated).\n\n"
+        "/openreport            \u2192 both markets now\n"
+        "/openreport in         \u2192 India only\n"
+        "/openreport us         \u2192 US only\n"
+        "/openreport auto       \u2192 DAILY reports at market open AND close\n"
+        "/openreport auto off   \u2192 stop the daily reports\n"
+        "A closed market (weekend/holiday) shows MARKET CLOSED + next session.\n"
+        "Aliases: /closereport \u00b7 /sessionreport \u00b7 /openclose"
+    ),
 }
 
 
@@ -540,6 +558,7 @@ COMMAND_EXAMPLES = {
     "/addstock": ["/addstock RELIANCE NSE", "/addstock PGINVIT", "/add RELIANCE, INFY, CANBK"],
     "/removestock": ["/removestock TCS"],
     "/setlist": ["/setlist RELIANCE, INFY, CANBK, SUZLON", "/setlist check RELIANCE, INFY"],
+    "/openreport": ["/openreport", "/openreport in", "/openreport us", "/openreport auto"],
 }
 
 
@@ -700,6 +719,7 @@ def register_commands() -> bool:
         {"command": "scan500", "description": "NIFTY 500 CNC/MIS technical scanner"},
         {"command": "screen", "description": "Fundamental screener: /screen pe<25 roe>15"},
         {"command": "topmovers", "description": "Top gainers AND losers with fundamentals"},
+        {"command": "openreport", "description": "Opening/closing screener: India + US, gainers & losers"},
         {"command": "topgainers", "description": "Top rising stocks with fundamentals"},
         {"command": "toplosers", "description": "Top falling stocks with fundamentals"},
         {"command": "gappers", "description": "Overnight gaps (prev close vs today's open): /gappers down, /gappers GODREJCP"},

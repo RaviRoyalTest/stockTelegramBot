@@ -27,6 +27,7 @@ from . import (
     indicator_commands,
     learn_commands,
     movers_commands,
+    opening_report_commands,
     scanner_commands,
     schedule_commands,
     screen_commands,
@@ -49,6 +50,7 @@ WRITE_COMMANDS = {
     "/sched", "/schedule", "/watcher", "/moverwatch",
     "/myfavourites", "/favorites", "/favourites", "/mypicks", "/dailybrief",
     "/fundmode", "/moversfund", "/market",
+    "/openreport", "/closereport", "/sessionreport", "/openclose",
     "/quiet", "/dnd", "/silence", "/pauseall",
 }
 
@@ -189,6 +191,10 @@ def handle_command(chat_id, text):
 
     if command == "/news":
         watchlist_commands.handle_news(chat_id, parts)
+        return
+
+    if command in ("/openreport", "/closereport", "/sessionreport", "/openclose"):
+        opening_report_commands.handle_opening_report(chat_id, parts)
         return
 
     if command in ("/movers", "/topmovers", "/marketmovers"):
