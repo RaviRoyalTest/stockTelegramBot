@@ -97,25 +97,58 @@ def index_table(market: str, levels: list[dict]) -> list[str]:
     return lines
 
 
-def volume_analysis(rows: list[dict]) -> list[str]:
-    """Stocks with unusually strong volume vs the previous session."""
+def volume_flagged(rows: list[dict]) -> list[dict]:
+    """Rows whose volume change exceeded +50%, strongest first."""
     flagged = [
         r for r in rows
         if r.get("volume_change_pct") is not None and r["volume_change_pct"] > 50
     ]
-    lines = ["<b>\U0001F525 Volume analysis</b>"]
-    if not flagged:
-        lines.append("No stock exceeded +50% volume change on the verified set.")
-        return lines
     flagged.sort(key=lambda r: r["volume_change_pct"], reverse=True)
+    return flagged
+
+
+def volume_buckets(rows: list[dict]) -> list[tuple[str, list[dict]]]:
+    """Flagged rows grouped into the +50/+100/+200 bands, strongest bands first."""
+    flagged = volume_flagged(rows)
     buckets = (
         ("+200% or more", [r for r in flagged if r["volume_change_pct"] > 200]),
         ("+100% to +200%", [r for r in flagged if 100 < r["volume_change_pct"] <= 200]),
         ("+50% to +100%", [r for r in flagged if 50 < r["volume_change_pct"] <= 100]),
     )
+    return [(label, group) for label, group in buckets if group]
+
+
+def volume_buckets_payload(rows: list[dict]) -> list[dict]:
+    """JSON-friendly shape of volume_buckets for the web dashboard."""
+    return [
+        {"label": label, "rows": [dict(row) for row in group]}
+        for label, group in volume_buckets(rows)
+    ]
+
+
+def volume_analysis_payload(buckets: list[dict]) -> list[str]:
+    """Telegram rendering of a volume_buckets_payload."""
+    lines: list[str] = []
+    for bucket in buckets:
+        lines.append(f"<b>{bucket['label']}</b>")
+        for row in bucket["rows"][:10]:
+            lines.append(
+                "<code>"
+                f"{row['symbol']:<12} {_pct(row.get('change_pct')):>7} "
+                f"Vol {_volume(row.get('volume')):>9} {_pct(row['volume_change_pct']):>8}"
+                "</code>"
+            )
+    return lines
+
+
+def volume_analysis(rows: list[dict]) -> list[str]:
+    """Stocks with unusually strong volume vs the previous session."""
+    lines = ["<b>\U0001F525 Volume analysis</b>"]
+    buckets = volume_buckets(rows)
+    if not buckets:
+        lines.append("No stock exceeded +50% volume change on the verified set.")
+        return lines
     for label, group in buckets:
-        if not group:
-            continue
         lines.append(f"<b>{label}</b>")
         for row in group[:10]:
             lines.append(
@@ -127,27 +160,45 @@ def volume_analysis(rows: list[dict]) -> list[str]:
     return lines
 
 
-def catalyst_lines(rows: list[dict], exchange: str, heading: str) -> list[str]:
-    """News-based catalyst scan for the biggest movers (factual headlines)."""
+def catalyst_items(rows: list[dict], exchange: str, max_rows: int = 4) -> list[dict]:
+    """News-based catalyst scan for the biggest movers (factual headlines).
+
+    JSON-friendly dicts so both the Telegram renderer and the web dashboard
+    consume the same lookup: {symbol, change_pct, headline, publisher}.
+    """
     from ..sources.news import get_stock_news
 
-    lines = [f"<b>{heading}</b>"]
-    found_any = False
-    for row in rows[:4]:
+    items: list[dict] = []
+    for row in rows[:max_rows]:
         try:
-            items = get_stock_news(exchange, row["symbol"], limit=1)
+            news = get_stock_news(exchange, row["symbol"], limit=1)
         except Exception:
-            items = []
-        if not items:
+            news = []
+        if not news:
             continue
-        found_any = True
-        headline = (items[0].get("title") or "").strip()
-        publisher = (items[0].get("publisher") or "").strip()
-        source = f" <i>({_escape(publisher)})</i>" if publisher else ""
+        items.append({
+            "symbol": row["symbol"],
+            "change_pct": row.get("change_pct"),
+            "headline": (news[0].get("title") or "").strip()[:160],
+            "publisher": (news[0].get("publisher") or "").strip(),
+        })
+    return items
+
+
+def catalyst_lines_from_items(items: list[dict], heading: str) -> list[str]:
+    """Telegram rendering of a catalyst_items payload."""
+    lines = [f"<b>{heading}</b>"]
+    for item in items:
+        source = f" <i>({_escape(item['publisher'])})</i>" if item["publisher"] else ""
         lines.append(
-            f"\u2022 <b>{_escape(row['symbol'])}</b> {_pct(row.get('change_pct'))} "
-            f"\u2014 {_escape(headline[:160])}{source}"
+            f"\u2022 <b>{_escape(item['symbol'])}</b> {_pct(item.get('change_pct'))} "
+            f"\u2014 {_escape(item['headline'])}{source}"
         )
-    if not found_any:
+    if not items:
         lines.append("No matching news headlines retrieved for the top movers.")
     return lines
+
+
+def catalyst_lines(rows: list[dict], exchange: str, heading: str) -> list[str]:
+    """Telegram rendering of catalyst_items."""
+    return catalyst_lines_from_items(catalyst_items(rows, exchange), heading)

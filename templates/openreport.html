@@ -1,0 +1,239 @@
+{% extends "base.html" %}
+{% block title %}Open / Close Report · Royal Stock{% endblock %}
+{% block content %}
+  <div class="page-header">
+    <h1>Open / Close session report</h1>
+    <p class="sub">The web twin of the bot's /openreport — top gainers &amp; losers across the official universes (Nifty 100 · Nifty 500 ex-100 · Nifty Microcap 250 · US Mega/Large by market cap), regular-session data only.</p>
+  </div>
+
+  <section class="card lookup-hero" aria-labelledby="ctlHeading">
+    <h2 id="ctlHeading">Report</h2>
+    <div class="field">
+      <label>Market</label>
+      <div class="radio-pills" role="radiogroup" aria-label="Report market">
+        <label><input type="radio" name="market" value="all" checked /> 🌍 India + U.S.</label>
+        <label><input type="radio" name="market" value="in" /> 🇮🇳 India only</label>
+        <label><input type="radio" name="market" value="us" /> 🇺🇸 U.S. only</label>
+      </div>
+    </div>
+    <div style="display:flex; gap:12px; align-items:center; flex-wrap:wrap; margin-top:10px;">
+      <button class="btn btn-primary" id="runBtn" type="button">▶️ Build report</button>
+      <span class="muted" id="buildMeta" aria-live="polite"></span>
+    </div>
+    <p class="note" style="margin-bottom:0;">Both markets take about 60–90 seconds (India ~1,000 symbols + US ~518 + market caps). Change % is vs the previous trading day's close; Volume Change % is today's cumulative regular volume vs the previous session's total — N/A when the previous day's volume is unavailable, never estimated.</p>
+  </section>
+
+  <div id="statusStrip" style="display:flex; gap:12px; flex-wrap:wrap; margin:14px 0;"></div>
+
+  <section id="results" hidden>
+    <div id="sections"></div>
+
+    <section class="card section">
+      <h2>📋 Final summary</h2>
+      <div class="table-scroll">
+        <table>
+          <thead><tr><th>Market</th><th>Universe</th><th class="num">Verified / Target</th></tr></thead>
+          <tbody id="summaryBody"><tr><td colspan="3" class="empty">Run the report to see verified counts.</td></tr></tbody>
+        </table>
+      </div>
+      <p class="muted" id="totalLine" style="margin-bottom:0;"></p>
+    </section>
+  </section>
+{% endblock %}
+
+{% block scripts %}
+  <script>
+    (function () {
+      'use strict';
+      var esc = RS.escapeHtml, fmtNum = RS.fmtNum, fmtPct = RS.fmtPct;
+
+      function currencyOf(market) { return market === 'in' ? '₹' : '$'; }
+      function flagOf(market) { return market === 'in' ? '🇮🇳' : '🇺🇸'; }
+      function moveClass(v) { return v == null ? '' : (Number(v) >= 0 ? 'pos' : 'neg'); }
+      function cell(v, fmt) { return v == null ? '<span class="muted">N/A</span>' : fmt(v); }
+
+      function stockHref(symbol, market) {
+        return '/fundamentals?symbol=' + encodeURIComponent(symbol || '') + (market === 'us' ? '&market=us' : '');
+      }
+
+      function stockTable(rows, market, caption) {
+        var cur = currencyOf(market);
+        var head = '<tr><th scope="col">Rank</th><th scope="col">Company</th><th scope="col">Symbol</th>' +
+          '<th scope="col" class="num">Price</th><th scope="col" class="num">Chg</th>' +
+          '<th scope="col" class="num">Chg %</th><th scope="col" class="num">Volume</th>' +
+          '<th scope="col" class="num">Vol Chg %</th></tr>';
+        var body = rows.length ? rows.map(function (r, i) {
+          var href = stockHref(r.symbol, market);
+          return '<tr>' +
+            '<td>' + (i + 1) + '</td>' +
+            '<td><a href="' + href + '" style="color:inherit; text-decoration:none;">' + esc(r.name || r.symbol) + '</a></td>' +
+            '<td><a href="' + href + '"><strong>' + esc(r.symbol) + '</strong></a></td>' +
+            '<td class="num">' + cell(r.price, function (v) { return cur + fmtNum(v); }) + '</td>' +
+            '<td class="num ' + moveClass(r.change) + '">' + cell(r.change, function (v) { return (v >= 0 ? '+' : '') + fmtNum(v); }) + '</td>' +
+            '<td class="num ' + moveClass(r.change_pct) + '">' + cell(r.change_pct, fmtPct) + '</td>' +
+            '<td class="num">' + cell(r.volume, fmtNum) + '</td>' +
+            '<td class="num ' + moveClass(r.volume_change_pct) + '">' + cell(r.volume_change_pct, fmtPct) + '</td>' +
+          '</tr>';
+        }).join('') : '<tr><td colspan="8" class="empty">No verified stocks.</td></tr>';
+        return '<div class="table-scroll"><table><caption class="visually-hidden">' + esc(caption) + '</caption>' +
+          '<thead>' + head + '</thead><tbody data-sort-body>' + body + '</tbody></table></div>';
+      }
+
+      function snapshotText(snap) {
+        var text = esc(snap.date) + ' · ' + esc(snap.time_local) + ' ' + esc(snap.tz_label);
+        if (snap.time_ist) text += ' · ' + esc(snap.time_ist) + ' IST';
+        return text + ' · ' + (snap.state === 'OPEN' ? '🟢 OPEN' : '🔴 CLOSED');
+      }
+
+      function statusCard(sec) {
+        if (sec.closed) {
+          return '<div class="card section" style="flex:1 1 280px;">' +
+            '<h3 style="margin-bottom:6px;">' + flagOf(sec.market) + ' ' + esc(sec.label) + ' market</h3>' +
+            '<span class="pill" style="background:#7f1d1d; color:#fecaca;">🔴 MARKET CLOSED</span>' +
+            '<p class="muted" style="margin:6px 0 4px;">' + esc(sec.reason) + '</p>' +
+            '<p style="margin-bottom:0;">Next session: <strong>' + esc(sec.next_session) + '</strong></p>' +
+          '</div>';
+        }
+        var open = sec.snapshot.state === 'OPEN';
+        return '<div class="card section" style="flex:1 1 280px;">' +
+          '<h3 style="margin-bottom:6px;">' + flagOf(sec.market) + ' ' + (sec.market === 'in' ? 'Indian' : 'U.S.') + ' market</h3>' +
+          '<p style="margin:0 0 6px;">' + snapshotText(sec.snapshot) + '</p>' +
+          '<span class="pill" style="' + (open ? 'background:#14532d; color:#bbf7d0;' : 'background:#7f1d1d; color:#fecaca;') + '">' +
+          (open ? '🟢 OPEN' : '🔴 CLOSED') + '</span>' +
+        '</div>';
+      }
+
+      function universeCard(u, market) {
+        var pill = '<span class="pill">' + u.verified + '/' + u.target + ' verified</span>';
+        if (u.unavailable) {
+          return '<section class="card section"><h2>' + flagOf(market) + ' ' + esc(u.title) + ' ' + pill + '</h2>' +
+            '<p class="muted" style="margin-bottom:0;">Universe unavailable — no rows fabricated.</p></section>';
+        }
+        return '<section class="card section">' +
+          '<h2 style="display:flex; gap:10px; align-items:center; flex-wrap:wrap;">' + flagOf(market) + ' ' + esc(u.title) + ' ' + pill + '</h2>' +
+          '<h3 style="margin-bottom:4px;">🟢 Top 10 gainers</h3>' + stockTable(u.gainers, market, u.title + ' gainers') +
+          '<h3 style="margin-bottom:4px; margin-top:14px;">🔴 Top 10 losers</h3>' + stockTable(u.losers, market, u.title + ' losers') +
+        '</section>';
+      }
+
+      function indicesTable(rows) {
+        var body = rows.map(function (r) {
+          return '<tr><td>' + esc(r.label) + '</td>' +
+            '<td class="num">' + cell(r.level, function (v) { return fmtNum(v, 2); }) + '</td>' +
+            '<td class="num ' + moveClass(r.change) + '">' + cell(r.change, function (v) { return (v >= 0 ? '+' : '') + fmtNum(v, 2); }) + '</td>' +
+            '<td class="num ' + moveClass(r.change_pct) + '">' + cell(r.change_pct, fmtPct) + '</td></tr>';
+        }).join('');
+        return '<div class="table-scroll"><table>' +
+          '<thead><tr><th>Index</th><th class="num">Level</th><th class="num">Point change</th><th class="num">Change %</th></tr></thead>' +
+          '<tbody data-sort-body>' + (body || '<tr><td colspan="4" class="empty">Index levels unavailable.</td></tr>') + '</tbody></table></div>';
+      }
+
+      function volumePanel(buckets) {
+        if (!buckets.length) return '<p class="muted" style="margin-bottom:0;">No stock exceeded +50% volume change on the verified set.</p>';
+        return buckets.map(function (b) {
+          var rows = b.rows.slice(0, 10).map(function (r) {
+            return '<tr><td><strong>' + esc(r.symbol) + '</strong></td>' +
+              '<td class="num ' + moveClass(r.change_pct) + '">' + cell(r.change_pct, fmtPct) + '</td>' +
+              '<td class="num">' + cell(r.volume, fmtNum) + '</td>' +
+              '<td class="num pos">' + fmtPct(r.volume_change_pct) + '</td></tr>';
+          }).join('');
+          return '<div style="margin:10px 0;"><h3>' + esc(b.label) + '</h3>' +
+            '<div class="table-scroll"><table><thead><tr><th>Symbol</th><th class="num">Chg %</th><th class="num">Volume</th><th class="num">Vol Chg %</th></tr></thead>' +
+            '<tbody data-sort-body>' + rows + '</tbody></table></div></div>';
+        }).join('');
+      }
+
+      function catalystList(items) {
+        if (!items.length) return '<p class="muted" style="margin-bottom:0;">— no matching headlines for the top movers.</p>';
+        return '<ul style="margin-bottom:0;">' + items.map(function (i) {
+          var src = i.publisher ? ' <span class="muted">(' + esc(i.publisher) + ')</span>' : '';
+          return '<li><a href="' + stockHref(i.symbol, '') + '"><strong>' + esc(i.symbol) + '</strong></a> ' +
+            fmtPct(i.change_pct) + ' — ' + esc(i.headline) + src + '</li>';
+        }).join('') + '</ul>';
+      }
+
+      function renderSection(sec) {
+        if (sec.closed) return '';
+        var html = '<section class="card section"><h2>' + flagOf(sec.market) + ' ' +
+          (sec.market === 'in' ? 'Part 1 — Indian stock market' : 'Part 2 — U.S. stock market') + '</h2>' +
+          '<p class="muted" style="margin-bottom:0;">Snapshot ' + snapshotText(sec.snapshot) + '</p></section>';
+        (sec.universes || []).forEach(function (u) { html += universeCard(u, sec.market); });
+        html += '<section class="card section"><h2>📊 Market overview</h2>' + indicesTable(sec.indices || []) + '</section>';
+        html += '<section class="card section"><h2>🔥 Volume analysis</h2>' + volumePanel(sec.volume_buckets || []) + '</section>';
+        html += '<section class="card section"><h2>📰 Catalysts (news-sourced)</h2>' + catalystList(sec.catalysts || []) + '</section>';
+        if (sec.unclassified) {
+          html += '<p class="muted">' + sec.unclassified + ' US stock(s) excluded: market cap unavailable or below $10B (not guessed into a bucket).</p>';
+        }
+        return html;
+      }
+
+      function renderSummary(report) {
+        var titles = {
+          in100: ['🇮🇳 India', 'Nifty 100'],
+          in500x: ['🇮🇳 India', 'Nifty 500 ex-Nifty 100'],
+          inmicro: ['🇮🇳 India', 'Nifty Microcap 250'],
+          usmega: ['🇺🇸 U.S.', 'Mega Cap $200B+'],
+          uslarge: ['🇺🇸 U.S.', 'Large Cap $10B–$200B'],
+        };
+        var body = '';
+        report.sections.forEach(function (sec) {
+          if (sec.closed) {
+            body += '<tr><td>' + flagOf(sec.market) + ' ' + (sec.market === 'in' ? 'India' : 'U.S.') + '</td>' +
+              '<td>Market closed — ' + esc(sec.reason) + '</td><td class="num">0/20</td></tr>';
+            return;
+          }
+          (sec.universes || []).forEach(function (u) {
+            var t = titles[u.key] || ['', u.title];
+            body += '<tr><td>' + t[0] + '</td><td>' + esc(t[1]) + '</td><td class="num">' + u.verified + '/' + u.target + '</td></tr>';
+          });
+        });
+        document.getElementById('summaryBody').innerHTML = body ||
+          '<tr><td colspan="3" class="empty">No universes reported.</td></tr>';
+        document.getElementById('totalLine').textContent =
+          'Total verified ' + report.total_verified + '/' + report.total_target +
+          ' (target 100 = 60 India + 40 U.S.) · Volume Change % computed for ' + report.volume_computed + ' stock(s).';
+      }
+
+      async function run() {
+        var btn = document.getElementById('runBtn');
+        var market = (document.querySelector('input[name="market"]:checked') || {}).value || 'all';
+        btn.disabled = true;
+        btn.textContent = '⏳ Scanning… (60–90s)';
+        document.getElementById('buildMeta').textContent = '';
+        document.getElementById('statusStrip').innerHTML = '';
+        document.getElementById('sections').innerHTML = '';
+        document.getElementById('results').hidden = true;
+        try {
+          var res = await fetch('/api/openreport?market=' + encodeURIComponent(market));
+          if (!res.ok) {
+            var detail = '';
+            try { detail = (await res.json()).detail || ''; } catch (e) {}
+            throw new Error(detail || ('API ' + res.status));
+          }
+          var report = await res.json();
+          document.getElementById('statusStrip').innerHTML =
+            report.sections.map(statusCard).join('');
+          document.getElementById('sections').innerHTML =
+            report.sections.map(renderSection).join('');
+          renderSummary(report);
+          document.querySelectorAll('[data-sort-body]').forEach(function (tbody) {
+            if (RS.makeSortable) RS.makeSortable(tbody, {});
+          });
+          document.getElementById('results').hidden = false;
+          document.getElementById('buildMeta').textContent = 'Built ' + new Date().toLocaleTimeString() + ' · source: Yahoo regular-session bars + official NSE index CSVs';
+          RS.toast('Report ready', 'ok');
+        } catch (err) {
+          RS.toast('Report failed: ' + err.message, 'err');
+        } finally {
+          btn.disabled = false;
+          btn.textContent = '▶️ Build report';
+        }
+      }
+
+      document.getElementById('runBtn').addEventListener('click', run);
+      // exposed for UI verification (tests inject a synthetic report payload;
+      // nothing here fabricates market data)
+      window.RSOpenReport = { renderSection: renderSection, statusCard: statusCard, renderSummary: renderSummary, stockTable: stockTable };
+    })();
+  </script>
+{% endblock %}

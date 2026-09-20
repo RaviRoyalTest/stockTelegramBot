@@ -1051,6 +1051,23 @@ def _scan_symbols(symbols: list[str], worker, deadline: float, started: float) -
     return out
 
 
+@app.get("/api/openreport")
+async def api_openreport(market: str = Query("all")):
+    """Opening/closing session screener (web twin of the bot's /openreport).
+
+    market: all | in | us. Regular-session data only, official universes
+    (Nifty 100 / Nifty 500 ex-100 / Nifty Microcap 250, US Mega/Large by
+    market cap). A closed market (weekend/holiday) returns a closed block
+    with the next session - never stale data dressed up as today's.
+    """
+    from corporate_actions.opening_report import report as openreport
+
+    markets = {"all": ("in", "us"), "in": ("in",), "us": ("us",)}.get(market)
+    if markets is None:
+        raise HTTPException(status_code=400, detail="market must be all|in|us")
+    return await asyncio.to_thread(openreport.collect, markets)
+
+
 @app.get("/api/checklist")
 async def api_checklist(symbol: str | None = Query(None), market: str = Query("in")):
     """32-point investment scorecard (bot /checklist parity).
@@ -1383,6 +1400,11 @@ async def api_corporate_actions_csv(symbol: str | None = Query(None)):
             yield ""
 
     return StreamingResponse(gen(), media_type="text/csv")
+
+
+@app.get("/openreport", response_class=HTMLResponse)
+async def openreport_page(request: Request):
+    return templates.TemplateResponse(request, "openreport.html")
 
 
 @app.get("/market", response_class=HTMLResponse)

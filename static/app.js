@@ -404,7 +404,7 @@
    */
   window.RS.makeSortable = function (tableSel, opts) {
     opts = opts || {};
-    var el = document.querySelector(tableSel);
+    var el = typeof tableSel === 'string' ? document.querySelector(tableSel) : tableSel;
     if (!el) return null;
     var table = el.tagName === 'TABLE' ? el : el.closest('table');
     var head = table && table.querySelector('thead');
