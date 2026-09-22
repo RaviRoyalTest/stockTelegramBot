@@ -247,6 +247,24 @@ class DailyPlanSanityTests(unittest.TestCase):
             orc.handle_openreport_auto(123, ["/openreport", "auto", "off"])
         mock_storage.remove_schedule_entry.assert_called_once_with(123, 0)
 
+    def test_bare_openreport_shows_usage_AND_runs_the_report(self):
+        # Regression: bare /openreport was intercepted by the usage hint and
+        # NEVER ran - the help text promises "both markets now". The registry's
+        # RUN_AFTER_USAGE must fire the handler after the usage text.
+        from corporate_actions.bot import registry
+        from corporate_actions.bot import opening_report_commands as orc
+        calls = []
+        with patch.object(registry, "reply"), \
+                patch.object(orc, "handle_opening_report",
+                             side_effect=lambda chat_id, parts: calls.append(parts)):
+            registry._bare_command_usage(123, "/openreport")
+        self.assertEqual(calls, [["/openreport"]])  # both markets, no date
+
+    def test_run_after_usage_covers_only_registry_commands(self):
+        from corporate_actions.bot import registry
+        for command in registry.RUN_AFTER_USAGE:
+            self.assertIn(command, registry.COMMAND_USAGE, command)
+
     def test_auto_plans_fire_exactly_at_their_clock_times(self):
         # Regression: a window_start/window_end pair makes the scheduler build
         # its own grid from the window edges and IGNORE run_at entirely.
@@ -325,6 +343,21 @@ class TelegramLayoutTests(unittest.TestCase):
         for line in lines:
             self.assertLessEqual(len(_visible(line)), 47)
         self.assertIn("N/A", "\n".join(lines))
+
+    def test_symbols_with_ampersand_are_html_escaped(self):
+        # Regression: M&M / Larsen & Toubro emit a bare '&' inside <code>,
+        # which makes Telegram's HTML parser reject the whole chunk.
+        rows = [
+            {"symbol": "M&M", "name": "Mahindra & Mahindra Limited",
+             "price": 3000.0, "change": 10.0, "change_pct": 0.33,
+             "volume": 1000, "volume_change_pct": None},
+        ]
+        lines = t.table(rows, "INR")
+        for line in lines:
+            if "<code>" in line:
+                body = line.replace("<code>", "").replace("</code>", "")
+                self.assertNotIn("&", body.replace("&amp;", ""), line)
+        self.assertIn("M&amp;M", " ".join(lines))
 
     def test_empty_table_verified_zero(self):
         lines = t.table([], "INR")

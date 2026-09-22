@@ -620,13 +620,30 @@ DESCRIBE_AND_RUN = {
 }
 
 
+def _run_openreport(chat_id) -> None:
+    """Bare /openreport: after the usage, actually run the both-markets report."""
+    from .opening_report_commands import handle_opening_report  # lazy: heavy imports
+
+    handle_opening_report(chat_id, ["/openreport"])
+
+
+# Bare commands listed in COMMAND_USAGE whose default action should STILL run
+# after the usage is shown - the usage text promises "/openreport -> both
+# markets now", so the bare form must deliver it (usage rides along first so
+# the subcommands stay discoverable).
+RUN_AFTER_USAGE = {
+    "/openreport": _run_openreport,
+}
+
+
 def _bare_command_usage(chat_id, command) -> bool:
     """When a main command is typed with no arguments, explain it.
 
     Commands with subcommands get the subcommand list (COMMAND_USAGE);
     commands that already produce useful output get a short description AND
     are still run (DESCRIBE_AND_RUN), so nothing useful is lost.
-    Returns True when a hint was sent.
+    RUN_AFTER_USAGE commands show their usage AND then run their default
+    action. Returns True when a hint was sent.
     """
     usage = COMMAND_USAGE.get(command)
     if usage:
@@ -655,6 +672,9 @@ def _bare_command_usage(chat_id, command) -> bool:
             (status + "\n\n" if status else "") + usage,
             reply_markup=reply_markup,
         )
+        runnable = RUN_AFTER_USAGE.get(command)
+        if runnable:
+            runnable(chat_id)
         return True
     described = DESCRIBE_AND_RUN.get(command)
     if described:

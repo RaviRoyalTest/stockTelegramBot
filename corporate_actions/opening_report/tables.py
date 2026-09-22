@@ -80,14 +80,20 @@ def _trim_name(name: str, budget: int) -> str:
 
 
 def _stock_name_line(index: int, row: dict) -> str:
-    """`` 1. Solar Industries India (SOLARINDS)`` - full name, never cut."""
+    """`` 1. Solar Industries India (SOLARINDS)`` - full name, never cut.
+
+    The visible text is HTML-escaped AFTER the width budget is applied, so
+    escaping never pushes a line past the phone-wrap limit - important for
+    names like ``Larsen & Toubro`` / symbols like ``M&M`` (a bare ``&``
+    makes Telegram's HTML parser reject the whole chunk).
+    """
     rank = f"{index:>2}. "
     name = " ".join(str(row.get("name") or row["symbol"]).split())
     symbol = str(row["symbol"]).strip()
     suffix = "" if name.lower() == symbol.lower() else f" ({symbol})"
     budget = _MAX_NAME_LINE - len(rank) - len(suffix)
     text = _trim_name(name, max(budget, 8))
-    return f"{rank}{text}{suffix}"
+    return f"{rank}{_escape(text)}{_escape(suffix)}"
 
 
 def _vol_change_token(row: dict) -> str:
@@ -177,7 +183,7 @@ def volume_buckets_payload(rows: list[dict]) -> list[dict]:
 def _volume_scan_line(row: dict) -> str:
     symbol = str(row.get("symbol") or "")[:12]
     return (
-        f"{symbol:<12} {_pct(row.get('change_pct')):>8}  "
+        f"{_escape(symbol):<12} {_pct(row.get('change_pct')):>8}  "
         f"Vol {_volume(row.get('volume')):>8}  {_pct(row['volume_change_pct']):>7}"
     )
 
