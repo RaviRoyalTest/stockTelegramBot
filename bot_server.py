@@ -266,6 +266,10 @@ def main():
     # ex-date reminders, price alerts AND the sudden-move watcher). The GitHub
     # Actions cron runs with PROCESS_COMMANDS=false so it never double-polls.
     if config.PROCESS_COMMANDS:
+        # The poller's post-alert push: dedup keys reach GitHub right after
+        # alerts are sent, not at the next periodic flush - a redeploy in
+        # between must not re-fire the same alerts (the double-send flood).
+        poller.push_state_callback = flush_pending_state
         poller.start()
         log.info("Background poller + sudden-move watcher started")
     log.info("Starting long-polling bot (instant responses)...")

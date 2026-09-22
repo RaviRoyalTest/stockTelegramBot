@@ -93,10 +93,15 @@ def _poll_quote(exchange: str, symbol: str) -> dict | None:
 
 
 class Poller:
-    def __init__(self):
+    def __init__(self, push_state_callback=None):
         self._stop = threading.Event()
         self._thread = None
         self._watcher_thread = None
+        # Called right after alerts are sent so the dedup keys reach GitHub
+        # immediately. Without it the keys sit on the host's ephemeral disk
+        # until the periodic flush - and a redeploy in between boots with the
+        # stale seen-set and RE-SENDS every alert (the double-fire flood).
+        self.push_state_callback = push_state_callback
         self.status = {
             "running": False,
             "last_run": None,
@@ -108,6 +113,7 @@ class Poller:
         }
         self._status_lock = threading.Lock()
         self._seen = storage.load_seen()
+        self._warn_if_stale_seen()
 
     # ------------------------------------------------------------ lifecycle
     def start(self):
@@ -474,6 +480,12 @@ class Poller:
                 # re-sent next cycle - log it loudly so it isn't silent data loss.
                 log.exception("save_seen failed: %s", error)
                 errors.append(f"seen cache: {error}")
+        if sent:
+            # Alerts went out - persist the dedup keys to GitHub NOW rather
+            # than waiting for the periodic flush. A redeploy that lands
+            # before the flush boots with the old seen-set and re-sends
+            # every alert the user already received.
+            self._persist_seen_to_github()
 
         total_sent = self.status["total_sent"] + sent
         self._set("total_sent", total_sent)
@@ -495,6 +507,59 @@ class Poller:
         return sent
 
     # -------------------------------------------------------------- helpers
+    def _persist_seen_to_github(self):
+        """Best-effort immediate push of the dedup state after alerts.
+
+        Never raises: a push failure must not break the alert cycle that
+        just succeeded. The periodic flush retries anyway.
+        """
+        if not self.push_state_callback:
+            return
+        try:
+            self.push_state_callback()
+        except Exception as error:
+            log.warning("post-alert state push failed: %s", config.redact(error))
+
+    def _warn_if_stale_seen(self):
+        """Boot-time warning when the dedup cache looks frozen.
+
+        Every key carries a date (ISO or dd-Mmm-yyyy); if the newest is more
+        than two days old the host's pushes have not been landing - the exact
+        condition that makes every redeploy re-fire old alerts. Warning at
+        boot makes the failure visible in the deploy log instead of only in
+        the user's Telegram.
+        """
+        try:
+            import datetime as _dt
+            import re
+
+            newest = None
+            for key in self._seen:
+                match = re.search(r"(\d{4}-\d{2}-\d{2})", str(key))
+                if match:
+                    day = _dt.date.fromisoformat(match.group(1))
+                else:
+                    match = re.search(r"(\d{2})-([A-Za-z]{3})-(\d{4})", str(key))
+                    if not match:
+                        continue
+                    day = _dt.datetime.strptime(
+                        f"{match.group(1)}-{match.group(2)}-{match.group(3)}", "%d-%b-%Y"
+                    ).date()
+                if newest is None or day > newest:
+                    newest = day
+            if newest is None:
+                return
+            age_days = (_dt.date.today() - newest).days
+            if age_days > 2:
+                log.warning(
+                    "seen_actions.json is %d day(s) stale (newest key %s) - "
+                    "recent alert dedup keys never reached GitHub, so alerts "
+                    "WILL re-fire on redeploy. Check GH_TOKEN / push_state logs.",
+                    age_days, newest,
+                )
+        except Exception:  # diagnostics must never break boot
+            log.debug("seen staleness check failed", exc_info=True)
+
     def _set(self, key, value):
         with self._status_lock:
             self.status[key] = value

@@ -33,6 +33,17 @@ STATE_FILES = (
 
 
 def _git(*args: str, timeout: int = 30) -> subprocess.CompletedProcess:
+    """Run one git command; returns a CompletedProcess (never raises).
+
+    Pins HTTP/1.1 for all HTTP transports: git's default HTTP/2 stalls
+    indefinitely on some networks/hosts (observed on Render and locally) -
+    the POST phase hangs forever, so every state push silently fails and
+    alerts re-fire after every redeploy (fresh container = stale
+    seen_actions.json). Set GIT_HTTP_VERSION in the environment to override.
+    """
+    http_version = os.getenv("GIT_HTTP_VERSION", "HTTP/1.1").strip()
+    if http_version and args and args[0] in ("push", "fetch", "ls-remote", "pull"):
+        args = ("-c", f"http.version={http_version}", *args)
     try:
         return subprocess.run(
             list(args), capture_output=True, text=True, check=False, timeout=timeout
