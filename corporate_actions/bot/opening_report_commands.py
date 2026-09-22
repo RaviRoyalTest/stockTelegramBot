@@ -130,9 +130,9 @@ def market_session_note() -> str:
 
 
 # Daily open + close anchors for each market (times are in that market's own
-# wall clock: IST for India, ET for the US). The explicit run windows keep the
-# close-of-session run alive even though it fires just after the bell, and stop
-# any other time of day from firing the report.
+# wall clock: IST for India, ET for the US). Deliberately NO window keys: an
+# explicit window makes the scheduler build its own grid from the window
+# edges and IGNORE run_at, so the reports would fire at the wrong times.
 _DAILY_PLANS = (
     # No explicit window: run_at wins. (A window_start/window_end pair makes
     # the scheduler build its own grid from the window edges and IGNORE these
@@ -200,14 +200,14 @@ def handle_openreport_auto(chat_id, parts) -> None:
         return
     _remove_auto_entries(chat_id)  # idempotent - never stack duplicates
     for plan in _DAILY_PLANS:
+        # No window keys here on purpose: a window_start/window_end pair makes
+        # the scheduler build its own grid and IGNORE run_at (see _DAILY_PLANS).
         storage.add_schedule_entry(
             1440,
             [plan["command"]],
             str(chat_id),
             run_at=plan["run_at"],
             market=plan["market"],
-            window_start=plan["window_start"],
-            window_end=plan["window_end"],
         )
     lines = [
         "\U0001F514 <b>Daily open + close reports ENABLED</b>",

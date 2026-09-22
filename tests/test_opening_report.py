@@ -211,6 +211,42 @@ class HistoricalSnapshotTests(unittest.TestCase):
 
 
 class DailyPlanSanityTests(unittest.TestCase):
+    def test_auto_install_writes_plans_without_window_keys(self):
+        # Regression: /openreport auto crashed with KeyError 'window_start'
+        # after the plans dropped their window keys (windows make the
+        # scheduler ignore run_at). The installer must not reference them.
+        from unittest.mock import MagicMock
+        from corporate_actions.bot import opening_report_commands as orc
+        # storage is imported inside the handler, so patch the package attr.
+        with patch("corporate_actions.storage", new=MagicMock()) as mock_storage, \
+                patch.object(orc, "reply") as mock_reply:
+            orc.handle_openreport_auto(123, ["/openreport", "auto", "on"])
+        self.assertTrue(mock_storage.add_schedule_entry.called)
+        for call in mock_storage.add_schedule_entry.call_args_list:
+            kwargs = call.kwargs
+            self.assertNotIn("window_start", kwargs)
+            self.assertNotIn("window_end", kwargs)
+            self.assertIn("run_at", kwargs)
+        plans = orc._DAILY_PLANS
+        self.assertEqual(
+            [c.kwargs["run_at"] for c in mock_storage.add_schedule_entry.call_args_list],
+            [p["run_at"] for p in plans],
+        )
+        mock_reply.assert_called()  # user always gets a confirmation
+
+    def test_auto_off_removes_entries_without_touching_others(self):
+        from unittest.mock import MagicMock
+        from corporate_actions.bot import opening_report_commands as orc
+        entries = [
+            {"commands": ["/openreport in"], "chat": "123"},
+            {"commands": ["/toplosers 1h"], "chat": "123"},
+        ]
+        with patch("corporate_actions.storage", new=MagicMock()) as mock_storage, \
+                patch.object(orc, "reply"):
+            mock_storage.load_schedule_for.return_value = entries
+            orc.handle_openreport_auto(123, ["/openreport", "auto", "off"])
+        mock_storage.remove_schedule_entry.assert_called_once_with(123, 0)
+
     def test_auto_plans_fire_exactly_at_their_clock_times(self):
         # Regression: a window_start/window_end pair makes the scheduler build
         # its own grid from the window edges and IGNORE run_at entirely.
