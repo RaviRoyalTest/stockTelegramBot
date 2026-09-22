@@ -332,17 +332,7 @@ def _closed_lines(block: dict) -> list[str]:
 def _index_lines(market: str, levels: list[dict]) -> list[str]:
     title = ("\U0001F1EE\U0001F1F3 Indian indices" if market == INDIA_MARKET
              else "\U0001F1FA\U0001F1F8 US indices")
-    lines = [f"<b>{title}</b>", "<code>Index                 Level        Chg      Chg%</code>"]
-    for row in levels:
-        level = row.get("level")
-        level_text = f"{level:,.2f}" if isinstance(level, (int, float)) else "N/A"
-        lines.append(
-            "<code>"
-            f"{row['label'][:20]:<20} {level_text:>12} "
-            f"{_tables._amount(row.get('change')):>9} {_tables._pct(row.get('change_pct')):>7}"
-            "</code>"
-        )
-    return lines
+    return [f"<b>{title}</b>", *_tables.index_table(levels)]
 
 
 def _render_section(section: dict) -> list[str]:
@@ -361,9 +351,9 @@ def _render_section(section: dict) -> list[str]:
             lines.append("Universe unavailable from the official NSE index CSV - no rows fabricated.")
             continue
         lines.append("\U0001F7E2 <i>Top 10 gainers</i>")
-        lines.extend(_tables.table("Gainers", universe["gainers"], currency))
+        lines.extend(_tables.table(universe["gainers"], currency))
         lines.append("\U0001F534 <i>Top 10 losers</i>")
-        lines.extend(_tables.table("Losers", universe["losers"], currency))
+        lines.extend(_tables.table(universe["losers"], currency))
     if section.get("unclassified"):
         lines.append(
             f"<i>{section['unclassified']} US stock(s) excluded: market cap unavailable or "
@@ -392,23 +382,21 @@ def render_telegram(report: dict) -> list[str]:
 
 
 def _final_summary(report: dict) -> list[str]:
-    lines = ["<b>\U0001F4CB Final summary</b>", "<code>Market  Universe                     Verified/Target</code>"]
+    lines = ["<b>\U0001F4CB Final summary</b>"]
     titles = {
-        "in100": "\U0001F1EE\U0001F1F3 India Nifty 100",
-        "in500x": "\U0001F1EE\U0001F1F3 India Nifty 500 ex-Nifty 100",
-        "inmicro": "\U0001F1EE\U0001F1F3 India Nifty Microcap 250",
-        "usmega": "\U0001F1FA\U0001F1F8 U.S. Mega Cap $200B+",
-        "uslarge": "\U0001F1FA\U0001F1F8 U.S. Large Cap $10B-$200B",
+        "in100": "\U0001F1EE\U0001F1F3 India \u2014 Nifty 100",
+        "in500x": "\U0001F1EE\U0001F1F3 India \u2014 Nifty 500 ex-Nifty 100",
+        "inmicro": "\U0001F1EE\U0001F1F3 India \u2014 Nifty Microcap 250",
+        "usmega": "\U0001F1FA\U0001F1F8 U.S. \u2014 Mega Cap $200B+",
+        "uslarge": "\U0001F1FA\U0001F1F8 U.S. \u2014 Large Cap $10B-$200B",
     }
     for section in report.get("sections", []):
         for universe in section.get("universes", []):
             name = titles.get(universe["key"], universe["key"])
-            lines.append(
-                f"<code>{name:<32} {universe['verified']}/{universe['target']}</code>"
-            )
+            lines.append(f"{name}: <b>{universe['verified']}/{universe['target']}</b>")
         if section.get("closed"):
             flag = "\U0001F1EE\U0001F1F3" if section["market"] == INDIA_MARKET else "\U0001F1FA\U0001F1F8"
-            lines.append(f"<code>{flag} {'Market closed':<31} 0/20</code>")
+            lines.append(f"{flag} Market closed: <b>0/20</b>")
     lines.append("")
     lines.append(
         f"<b>Total verified: {report.get('total_verified', 0)}/{report.get('total_target', 0)}</b> "

@@ -5,11 +5,18 @@ never guessed), top-gainer/loser selection, the market-closed gate
 (weekend + exchange holiday) and the batched Yahoo market-cap parser
 including its 401 crumb-refresh retry. No network access.
 """
+import re
 import unittest
 from datetime import datetime
 from unittest.mock import patch
 
 from corporate_actions.opening_report import data as d
+from corporate_actions.opening_report import tables as t
+
+
+def _visible(line: str) -> str:
+    """Strip HTML tags so length asserts measure what the phone actually wraps."""
+    return re.sub(r"<[^>]+>", "", line)
 
 
 class _FakeResponse:
@@ -221,6 +228,79 @@ class DailyPlanSanityTests(unittest.TestCase):
             times = [t.strip() for t in plan["run_at"].split(",")]
             self.assertGreaterEqual(len(times), 2, plan)  # open AND close
             self.assertEqual(sched._entry_anchor_times(entry, 1440), times, plan)
+
+
+class TelegramLayoutTests(unittest.TestCase):
+    """The old fixed-width grid broke on long company names (numbers shifted
+    sideways and 80-char lines wrapped mid-number). Pin the card layout."""
+
+    ROWS = [
+        {"symbol": "SOLARINDS", "name": "Solar Industries India",
+         "price": 19890.0, "change": 625.0, "change_pct": 3.24,
+         "volume": 396_600, "volume_change_pct": 84.05},
+        {"symbol": "INDIGO", "name": "InterGlobe Aviation Limited",
+         "price": 5030.0, "change": 90.0, "change_pct": 1.80,
+         "volume": 873800, "volume_change_pct": None},  # missing prev-day volume
+        {"symbol": "VBL", "name": "Varun Beverages Limited",
+         "price": 430.0, "change": 5.0, "change_pct": 1.18,
+         "volume": 5_140_000, "volume_change_pct": -12.4},
+    ]
+
+    def test_full_name_never_truncated(self):
+        lines = t.table(self.ROWS, "INR")
+        text = "\n".join(_visible(l) for l in lines)
+        self.assertIn("InterGlobe Aviation Limited (INDIGO)", text)
+        self.assertIn("Varun Beverages Limited (VBL)", text)
+        self.assertNotIn("Limite", text.replace("Limited", ""))
+
+    def test_name_line_width_capped(self):
+        rows = [dict(self.ROWS[0], name="X" * 120)]
+        lines = t.table(rows, "INR")
+        for line in lines:
+            if "XXX" in line:
+                self.assertLessEqual(len(_visible(line)), 44)
+
+    def test_data_line_short_and_ranked(self):
+        lines = t.table(self.ROWS, "INR")
+        data_lines = [_visible(l) for l in lines if "\u20b9" in l or "N/A" in l]
+        for line in data_lines:
+            self.assertLessEqual(len(line), 46, line)
+            self.assertRegex(line, r"^\s*\d+\.")  # rank repeats on the metrics line
+
+    def test_missing_volume_shows_na_token(self):
+        lines = t.table(self.ROWS, "INR")
+        text = "\n".join(_visible(l) for l in lines)
+        self.assertIn("Vol N/A", text)
+        self.assertIn("Vol \u25b284%", text)
+        self.assertIn("Vol \u25bc12%", text)
+
+    def test_negative_and_positive_render(self):
+        lines = t.table(self.ROWS, "INR")
+        text = "\n".join(_visible(l) for l in lines)
+        self.assertIn("+3.24%", text)
+        self.assertIn("+1.18%", text)  # signed pct on every metrics line
+
+    def test_index_table_alignment(self):
+        levels = [
+            {"label": "Nifty 50", "level": 25506.0, "change": 85.1, "change_pct": 0.33},
+            {"label": "Nifty Microcap 250", "level": None, "change": None, "change_pct": None},
+        ]
+        lines = t.index_table(levels)
+        for line in lines:
+            self.assertLessEqual(len(_visible(line)), 47)
+        self.assertIn("N/A", "\n".join(lines))
+
+    def test_empty_table_verified_zero(self):
+        lines = t.table([], "INR")
+        self.assertEqual(len(lines), 1)
+        self.assertIn("Verified: 0/10", lines[0])
+
+    def test_volume_lines_short(self):
+        rows = [dict(self.ROWS[0])]
+        buckets = t.volume_buckets_payload(rows)
+        lines = t.volume_analysis_payload(buckets)
+        for line in lines:
+            self.assertLessEqual(len(_visible(line)), 46)
 
 
 if __name__ == "__main__":

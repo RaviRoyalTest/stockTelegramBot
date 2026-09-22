@@ -3,12 +3,25 @@
 Pure formatting: takes already-fetched rows and produces HTML lines. Missing
 fields render as N/A (never estimated), and each table states Verified: X/10
 so a short table is never silently presented as complete.
+
+Layout rules (learned the hard way - the old fixed-width grid broke the
+moment a company name exceeded its column, shoving every number sideways):
+
+* Company names are NEVER truncated - the full name sits on its own line.
+* Numbers always go on short, space-separated metric lines (~46 columns
+  max) so a phone wrap can only land BETWEEN tokens, never inside one.
+* The rank prefix is repeated on every line of a stock's block, so even a
+  wrapped line still reads unambiguously.
 """
 from __future__ import annotations
 
 import html
 
 _TARGET_PER_TABLE = 10
+_MAX_NAME_LINE = 44   # rank + full company name + (SYMBOL)
+_MAX_DATA_LINE = 46   # rank + price + change% + volume-change token
+_ARROW_UP = "\u25b2"  # ▲
+_ARROW_DOWN = "\u25bc"  # ▼
 
 
 def _escape(value) -> str:
@@ -55,47 +68,82 @@ def _money(price, currency: str) -> str:
     return f"{symbol}{value:,.2f}"
 
 
-def table(title: str, rows: list[dict], currency: str) -> list[str]:
-    """One gainers/losers table with a Verified count."""
-    lines = [f"<b>{title}</b>"]
+# ------------------------------------------------------------- stock rows ---
+
+def _trim_name(name: str, budget: int) -> str:
+    """Collapse whitespace and, only if truly unavoidable, cut at a word."""
+    name = " ".join(str(name).split())
+    if len(name) <= budget:
+        return name
+    cut = name[: max(budget, 8)].rsplit(" ", 1)[0].strip(" ,.-")
+    return cut or name[: max(budget, 8)]
+
+
+def _stock_name_line(index: int, row: dict) -> str:
+    """`` 1. Solar Industries India (SOLARINDS)`` - full name, never cut."""
+    rank = f"{index:>2}. "
+    name = " ".join(str(row.get("name") or row["symbol"]).split())
+    symbol = str(row["symbol"]).strip()
+    suffix = "" if name.lower() == symbol.lower() else f" ({symbol})"
+    budget = _MAX_NAME_LINE - len(rank) - len(suffix)
+    text = _trim_name(name, max(budget, 8))
+    return f"{rank}{text}{suffix}"
+
+
+def _vol_change_token(row: dict) -> str:
+    """``Vol ▲34%`` / ``Vol ▼12%`` / ``Vol N/A`` - never estimated."""
+    value = row.get("volume_change_pct")
+    if value is None:
+        return "Vol N/A"
+    try:
+        number = float(value)
+    except (TypeError, ValueError):
+        return "Vol N/A"
+    arrow = _ARROW_UP if number >= 0 else _ARROW_DOWN
+    return f"Vol {arrow}{abs(number):,.0f}%"
+
+
+def _stock_metrics_line(index: int, row: dict, currency: str) -> str:
+    """`` 1.  ₹19,890.00  +3.24%  Vol ▲84%`` - aligned under the name line."""
+    return (
+        f"{index:>2}. {_money(row.get('price'), currency):>10}  "
+        f"{_pct(row.get('change_pct')):>8}  {_vol_change_token(row)}"
+    )
+
+
+def table(rows: list[dict], currency: str) -> list[str]:
+    """One gainers/losers block: name line + aligned metrics line per stock."""
+    lines: list[str] = []
     if not rows:
         lines.append(f"No verified stocks. <b>Verified: 0/{_TARGET_PER_TABLE}</b>")
         return lines
-    header = "Rk  Company / Symbol            Price     Chg      Chg%    Volume     VolChg%"
-    lines.append(f"<code>{header}</code>")
     for index, row in enumerate(rows, 1):
-        name = row.get("name") or row["symbol"]
-        label = f"{name[:22]} ({row['symbol']})"
-        vol_change = row.get("volume_change_pct")
-        vol_change_text = _pct(vol_change) if vol_change is not None else "N/A"
-        lines.append(
-            "<code>"
-            f"{index:>2}. {label:<30} "
-            f"{_money(row.get('price'), currency):>9} "
-            f"{_amount(row.get('change')):>8} "
-            f"{_pct(row.get('change_pct')):>7} "
-            f"{_volume(row.get('volume')):>9} "
-            f"{vol_change_text:>8}"
-            "</code>"
-        )
+        lines.append(f"<code>{_stock_name_line(index, row)}</code>")
+        lines.append(f"<code>{_stock_metrics_line(index, row, currency)}</code>")
     lines.append(f"<b>Verified: {len(rows)}/{_TARGET_PER_TABLE}</b>")
     return lines
 
 
-def index_table(market: str, levels: list[dict]) -> list[str]:
-    title = "\U0001F1EE\U0001F1F3 Indian indices" if market == "in" else "\U0001F1FA\U0001F1F8 US indices"
-    lines = [f"<b>{title}</b>", "<code>Index                 Level        Chg      Chg%</code>"]
+def index_table(levels: list[dict]) -> list[str]:
+    """Aligned one-line-per-index block (label column capped, numbers right)."""
+    lines = [
+        "<code>"
+        f"{'Index':<18} {'Level':>10} {'Chg':>9} {'Chg%':>7}"
+        "</code>"
+    ]
     for row in levels:
         level = row.get("level")
         level_text = f"{level:,.2f}" if isinstance(level, (int, float)) else "N/A"
         lines.append(
             "<code>"
-            f"{row['label'][:20]:<20} {level_text:>12} "
+            f"{str(row['label'])[:18]:<18} {level_text:>10} "
             f"{_amount(row.get('change')):>9} {_pct(row.get('change_pct')):>7}"
             "</code>"
         )
     return lines
 
+
+# --------------------------------------------------------- volume flagged ---
 
 def volume_flagged(rows: list[dict]) -> list[dict]:
     """Rows whose volume change exceeded +50%, strongest first."""
@@ -126,18 +174,21 @@ def volume_buckets_payload(rows: list[dict]) -> list[dict]:
     ]
 
 
+def _volume_scan_line(row: dict) -> str:
+    symbol = str(row.get("symbol") or "")[:12]
+    return (
+        f"{symbol:<12} {_pct(row.get('change_pct')):>8}  "
+        f"Vol {_volume(row.get('volume')):>8}  {_pct(row['volume_change_pct']):>7}"
+    )
+
+
 def volume_analysis_payload(buckets: list[dict]) -> list[str]:
-    """Telegram rendering of a volume_buckets_payload."""
+    """Telegram rendering of a volume_buckets_payload (no heading)."""
     lines: list[str] = []
     for bucket in buckets:
         lines.append(f"<b>{bucket['label']}</b>")
         for row in bucket["rows"][:10]:
-            lines.append(
-                "<code>"
-                f"{row['symbol']:<12} {_pct(row.get('change_pct')):>7} "
-                f"Vol {_volume(row.get('volume')):>9} {_pct(row['volume_change_pct']):>8}"
-                "</code>"
-            )
+            lines.append(f"<code>{_volume_scan_line(row)}</code>")
     return lines
 
 
@@ -148,17 +199,13 @@ def volume_analysis(rows: list[dict]) -> list[str]:
     if not buckets:
         lines.append("No stock exceeded +50% volume change on the verified set.")
         return lines
-    for label, group in buckets:
-        lines.append(f"<b>{label}</b>")
-        for row in group[:10]:
-            lines.append(
-                "<code>"
-                f"{row['symbol']:<12} {_pct(row.get('change_pct')):>7} "
-                f"Vol {_volume(row.get('volume')):>9} {_pct(row['volume_change_pct']):>8}"
-                "</code>"
-            )
+    lines.extend(volume_analysis_payload(
+        [{"label": label, "rows": group} for label, group in buckets]
+    ))
     return lines
 
+
+# --------------------------------------------------------------- catalysts --
 
 def catalyst_items(rows: list[dict], exchange: str, max_rows: int = 4) -> list[dict]:
     """News-based catalyst scan for the biggest movers (factual headlines).
