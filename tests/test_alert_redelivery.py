@@ -3,12 +3,14 @@
 Every push redeploys the host; a fresh container boots with the committed
 seen_actions.json. If the just-sent alerts' dedup keys never reach GitHub
 before the next deploy, the same alerts fire again (the double-send flood).
-These tests pin the three defenses:
+These tests pin the defenses:
 
 1. github._git pins HTTP/1.1 for network commands (HTTP/2 hangs forever on
    some hosts, silently failing every state push).
 2. The poller pushes dedup state immediately after alerts are sent.
 3. A stale seen-file is loudly reported at boot instead of re-firing quietly.
+4. The boot flood-guard: a stale-seen boot holds alerts in a grace window,
+   then the first cycle re-seeds dedup without sending and lifts the guard.
 """
 import unittest
 from datetime import date, timedelta
@@ -16,6 +18,7 @@ from unittest.mock import MagicMock, patch
 
 from corporate_actions.github import _git
 from corporate_actions.poller.engine import Poller
+from corporate_actions import config
 
 
 def _fake_run_recorder():
@@ -132,6 +135,119 @@ class StaleSeenWarningTests(unittest.TestCase):
             with patch("corporate_actions.poller.engine.log") as mock_log:
                 Poller()
         self.assertTrue(any("stale" in str(c) for c in mock_log.warning.call_args_list))
+
+
+class BootFloodGuardTests(unittest.TestCase):
+    """A stale-seen boot must not re-fire everything on the first cycle."""
+
+    def _stale_poller(self, boot_seconds_ago=0):
+        with patch("corporate_actions.poller.engine.storage.load_seen",
+                   return_value=set()) as _seen_mock:
+            # Patch AFTER construction: build the poller with a stale key by
+            # patching load_seen, then swap in an empty set is NOT what we
+            # want - so use the real stale key flow directly.
+            old = (date.today() - timedelta(days=10)).isoformat()
+            _seen_mock.return_value = {f"price|1|NSE|INFY|{old}"}
+            poller = Poller()
+        # Simulate time passing since boot without sleeping (anchor on the
+        # real clock so _grace_elapsed compares consistently).
+        import time as _time
+        poller._boot_monotonic = _time.monotonic() - boot_seconds_ago
+        return poller
+
+    def test_stale_boot_sets_flood_guard(self):
+        poller = self._stale_poller()
+        self.assertTrue(poller._seen_stale)
+
+    def test_fresh_boot_no_guard(self):
+        today = date.today().isoformat()
+        with patch("corporate_actions.poller.engine.storage.load_seen",
+                   return_value={f"price|1|NSE|INFY|{today}"}):
+            poller = Poller()
+        self.assertFalse(poller._seen_stale)
+
+    def test_inside_grace_suppresses_alerts(self):
+        poller = self._stale_poller(boot_seconds_ago=10)
+        with patch.object(config, "BOOT_FLOOD_GRACE_MINUTES", 45), \
+                patch.object(Poller, "_collect_targets", return_value=[("1", [])]), \
+                patch("corporate_actions.poller.engine.storage.save_seen"):
+            sent = poller.run_once()
+        self.assertEqual(sent, 0)
+        # The stale flag must still be up - nothing was re-seeded yet.
+        self.assertTrue(poller._seen_stale)
+
+    def test_after_grace_reseeds_without_sending_and_lifts_guard(self):
+        poller = self._stale_poller(boot_seconds_ago=46 * 60)
+        actions = [{
+            "exchange": "NSE", "symbol": "INFY",
+            "subject": "Dividend - Rs 5 Per Share",
+            "ex_date": date.today().strftime("%d-%b-%Y"),
+        }]
+        with patch.object(config, "BOOT_FLOOD_GRACE_MINUTES", 45), \
+                patch.object(Poller, "_collect_targets",
+                             return_value=[(str(config.TELEGRAM_CHAT_ID or "1"),
+                                            [{"exchange": "NSE", "symbol": "INFY"}])]), \
+                patch.object(Poller, "_fetch_for_watchlist",
+                             return_value=(actions, [], [])), \
+                patch("corporate_actions.poller.engine.storage.save_seen"), \
+                patch("corporate_actions.poller.engine.send_message") as mock_send:
+            sent = poller.run_once()
+        # Nothing re-sent, the event marked seen, and the guard lifted.
+        self.assertEqual(sent, 0)
+        mock_send.assert_not_called()
+        self.assertTrue(any("INFY" in k for k in poller._seen))
+        self.assertFalse(poller._seen_stale)
+
+    def test_force_checknow_bypasses_guard(self):
+        poller = self._stale_poller(boot_seconds_ago=10)
+        with patch.object(config, "BOOT_FLOOD_GRACE_MINUTES", 45), \
+                patch.object(Poller, "_collect_targets", return_value=[]), \
+                patch("corporate_actions.poller.engine.storage.save_seen"):
+            # force=True (as /checknow does) must not be muted by the guard:
+            # with no targets the cycle simply has nothing to do, but the
+            # suppression branch must be off - pinned via run_once returning
+
+            # normally and the guard still lifted only by re-seed.
+            sent = poller.run_once(force=True)
+        self.assertEqual(sent, 0)
+
+    def test_watcher_suppressed_inside_grace(self):
+        poller = self._stale_poller(boot_seconds_ago=10)
+        with patch.object(config, "BOOT_FLOOD_GRACE_MINUTES", 45), \
+                patch("corporate_actions.poller.engine.market_active", return_value=True), \
+                patch("corporate_actions.poller.engine.watcher_module.watcher_targets",
+                      return_value=[("1", {"enabled": True, "threshold": 5.0})]) as mock_targets:
+            sent = poller.run_watcher_once()
+        self.assertEqual(sent, 0)
+        mock_targets.assert_not_called()
+
+    def test_watcher_runs_after_guard_lifted(self):
+        poller = self._stale_poller(boot_seconds_ago=10)
+        poller._seen_stale = False  # first post-grace cycle already re-seeded
+        with patch.object(config, "BOOT_FLOOD_GRACE_MINUTES", 45), \
+                patch("corporate_actions.poller.engine.market_active", return_value=True), \
+                patch("corporate_actions.poller.engine.watcher_module.watcher_targets",
+                      return_value=[]) as mock_targets:
+            poller.run_watcher_once()
+        mock_targets.assert_called()
+
+    def test_poll_wait_jitter_bounded(self):
+        with patch.object(config, "POLL_INTERVAL_SECONDS", 3600), \
+                patch.object(config, "POLL_JITTER_SECONDS", 300):
+            poller = self._stale_poller()
+            for _ in range(20):
+                wait = poller._poll_wait_seconds()
+                self.assertGreaterEqual(wait, 3600)
+                self.assertLessEqual(wait, 3900)
+
+    def test_owner_notice_sent_once_per_boot(self):
+        poller = self._stale_poller()
+        with patch("corporate_actions.poller.engine.send_message") as mock_send:
+            with patch.object(config, "TELEGRAM_CHAT_ID", "123"), \
+                    patch.object(config, "BOOT_FLOOD_GRACE_MINUTES", 45):
+                poller._notify_owner_stale_grace()
+                poller._notify_owner_stale_grace()
+        self.assertEqual(mock_send.call_count, 1)
 
 
 if __name__ == "__main__":

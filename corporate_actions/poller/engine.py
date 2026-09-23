@@ -12,10 +12,11 @@ Beyond new-action alerts it also supports:
 from __future__ import annotations
 
 import logging
+import random
 import threading
 import time
 from concurrent.futures import ThreadPoolExecutor, as_completed
-from datetime import datetime
+from datetime import datetime, date, timedelta
 
 from .. import config, storage
 from ..core.dates import today_ist
@@ -113,6 +114,13 @@ class Poller:
         }
         self._status_lock = threading.Lock()
         self._seen = storage.load_seen()
+        self._boot_monotonic = time.monotonic()
+        # Flood-guard state: True while the committed seen-file looks stale.
+        # The FIRST successful poll cycle clears it - by then every eligible
+        # alert has been de-duplicated into self._seen (and pushed to GitHub
+        # via push_state_callback), so redeploys can no longer re-fire.
+        self._seen_stale = (self._newest_seen_age_days() or 0) > 2
+        self._grace_notice_sent = False
         self._warn_if_stale_seen()
 
     # ------------------------------------------------------------ lifecycle
@@ -136,15 +144,32 @@ class Poller:
             self._watcher_thread.join(timeout=5)
         self._set("running", False)
 
-    # ----------------------------------------------------------------- loop
+    # ------------------------------------------------- lifecycle
     def _loop(self):
+        # Redeploy flood-guard: a fresh container whose committed seen-file is
+        # stale would instantly re-fire every alert the user already received.
+        # Hold the poll loop in a grace pause instead; the owner notice asks
+        # for the GH_TOKEN fix. The FIRST cycle that does run de-duplicates
+        # everything and clears the stale flag, ending the guard.
+        if self._seen_stale and config.BOOT_FLOOD_GRACE_MINUTES > 0:
+            grace = config.BOOT_FLOOD_GRACE_MINUTES * 60
+            log.warning(
+                "Stale dedup cache (%d day(s)) - holding alerts in grace for "
+                "%d min after boot to avoid a redeploy re-fire flood. Fix "
+                "GH_TOKEN so state pushes reach GitHub; the first poll cycle "
+                "re-seeds dedup and clears the guard.",
+                self._newest_seen_age_days(), config.BOOT_FLOOD_GRACE_MINUTES,
+            )
+            self._notify_owner_stale_grace()
+            if self._stop.wait(grace):
+                return
         while not self._stop.is_set():
             try:
                 self.run_once()
             except Exception as error:  # keep the loop alive no matter what
                 self._set("last_error", str(error))
                 log.exception("poll cycle failed")
-            self._stop.wait(config.POLL_INTERVAL_SECONDS)
+            self._stop.wait(self._poll_wait_seconds())
 
     # -------------------------------------------------- sudden-move watcher
     def _watcher_loop(self):
@@ -180,6 +205,12 @@ class Poller:
         """
         if not market_active("in"):
             log.debug("watcher cycle skipped - India market closed")
+            return 0
+        # Flood-guard: the watcher fires on session moves; a stale dedup boot
+        # would re-send them all. It stays quiet until the poller's first
+        # post-grace cycle re-seeds dedup and lifts the guard.
+        if self._seen_stale:
+            log.info("watcher cycle skipped - flood-guard active (stale dedup boot)")
             return 0
         targets = watcher_module.watcher_targets()
         if not targets:
@@ -309,6 +340,23 @@ class Poller:
             self._incr("cycle")
             return 0
 
+        # Flood-guard suppression: while the stale-boot guard is up the
+        # poller still gathers data but sends NOTHING. Once the grace window
+        # has passed, this same cycle re-seeds the dedup cache (at the tail
+        # of run_once) - which is what permanently ends the re-fire flood.
+        # An explicit /checknow (force) always bypasses the guard: the user
+        # asked for it by name.
+        suppress = (not force) and self._seen_stale
+        seeding = suppress and self._grace_elapsed()
+        if suppress and not seeding:
+            log.info(
+                "flood-guard: inside the %d min post-boot grace - "
+                "scanning but not alerting",
+                config.BOOT_FLOOD_GRACE_MINUTES,
+            )
+        elif seeding:
+            log.info("flood-guard: grace elapsed - re-seeding dedup without re-sending")
+
         log.info(
             "poll cycle start: %d list(s) to check (only_chat=%s, force=%s)",
             len(targets), only_chat, force,
@@ -380,7 +428,7 @@ class Poller:
             if str(chat_id) == owner:
                 self._set("last_results", matching)
 
-            if ca_on and not quiet:
+            if ca_on and not quiet and not suppress:
                 for action in matching:
                     base = event_key(action)
                     key = f"{chat_id}|{base}"
@@ -404,7 +452,7 @@ class Poller:
                         break  # token misconfiguration - stop hammering the API
 
             # --------------------------------------------- ex-date reminders
-            if config.REMINDER_DAYS > 0 and ca_on and not quiet:
+            if config.REMINDER_DAYS > 0 and ca_on and not quiet and not suppress:
                 for action in matching:
                     if not within_reminder_window(action.get("ex_date"), today):
                         continue
@@ -429,7 +477,7 @@ class Poller:
                 threshold = float(storage.get_user_settings(chat_id).get("price_alert_pct") or 0.0)
             except (TypeError, ValueError):
                 threshold = 0.0
-            if threshold > 0 and not quiet:
+            if threshold > 0 and not quiet and not suppress:
                 log.info(
                     "poll cycle: price alerts active for chat %s at +/-%.2f%%",
                     chat_id, threshold,
@@ -480,6 +528,36 @@ class Poller:
                 # re-sent next cycle - log it loudly so it isn't silent data loss.
                 log.exception("save_seen failed: %s", error)
                 errors.append(f"seen cache: {error}")
+        if seeding:
+            # First post-grace cycle: mark everything currently eligible as
+            # already-notified WITHOUT sending. The user already received
+            # these alerts before the redeploy; re-seeding is what makes
+            # future redeploys quiet even while GitHub pushes are broken.
+            seeded = 0
+            # Reuse the same eligibility rules as the alert loops above.
+            for chat_id, watchlist in targets:
+                filters = self._filters_for(chat_id)
+                wanted = {
+                    (wi.get("exchange", "").upper(), wi.get("symbol", "").upper())
+                    for wi in watchlist if isinstance(wi, dict)
+                }
+                for action in all_actions:
+                    if (action.get("exchange", "").upper(), action.get("symbol", "").upper()) not in wanted:
+                        continue
+                    if filters and action_type(action.get("subject")) not in filters:
+                        continue
+                    if not (
+                        within_reminder_window(action.get("ex_date"), today)
+                        or recently_passed(action.get("ex_date"), today)
+                        or parse_ex_date(action.get("ex_date")) is None
+                    ):
+                        continue
+                    self._seen.add(f"{chat_id}|{event_key(action)}")
+                    if str(chat_id) == owner:
+                        self._seen.add(event_key(action))
+                    seeded += 1
+            log.info("flood-guard re-seed: %d eligible action(s) marked as notified", seeded)
+            self._seen_stale = False
         if sent:
             # Alerts went out - persist the dedup keys to GitHub NOW rather
             # than waiting for the periodic flush. A redeploy that lands
@@ -507,6 +585,42 @@ class Poller:
         return sent
 
     # -------------------------------------------------------------- helpers
+    def _grace_elapsed(self) -> bool:
+        """True once the post-boot flood-guard window has passed."""
+        grace = config.BOOT_FLOOD_GRACE_MINUTES * 60
+        if grace <= 0:
+            return True
+        return (time.monotonic() - self._boot_monotonic) >= grace
+
+    def _poll_wait_seconds(self) -> int:
+        """Poll interval plus bounded random jitter (thundering-herd guard)."""
+        jitter = config.POLL_JITTER_SECONDS
+        if jitter > 0:
+            return config.POLL_INTERVAL_SECONDS + random.randint(0, jitter)
+        return config.POLL_INTERVAL_SECONDS
+
+    def _notify_owner_stale_grace(self) -> None:
+        """One-time owner notice that alerts are paused by the flood-guard."""
+        if self._grace_notice_sent or not config.TELEGRAM_CHAT_ID:
+            return
+        self._grace_notice_sent = True
+        try:
+            send_message(
+                "<b>\u26a0\ufe0f Alert flood-guard active</b>\n"
+                "The server restarted with an out-of-date alert memory "
+                "(dedup state on GitHub is stale - state pushes have been "
+                "failing, usually an expired GH_TOKEN).\n\n"
+                "Automatic alerts are <b>paused "
+                f"{config.BOOT_FLOOD_GRACE_MINUTES} min</b> so this restart "
+                "does not re-send everything you already got.\n"
+                "Fix <code>GH_TOKEN</code> on the host (fine-grained PAT, "
+                "Contents: read/write), then send /checknow to get any "
+                "genuinely new alerts now.",
+                chat_id=config.TELEGRAM_CHAT_ID,
+            )
+        except NotifierError as error:
+            log.warning("flood-guard notice failed: %s", config.redact(error))
+
     def _persist_seen_to_github(self):
         """Best-effort immediate push of the dedup state after alerts.
 
@@ -530,35 +644,44 @@ class Poller:
         the user's Telegram.
         """
         try:
-            import datetime as _dt
-            import re
-
-            newest = None
-            for key in self._seen:
-                match = re.search(r"(\d{4}-\d{2}-\d{2})", str(key))
-                if match:
-                    day = _dt.date.fromisoformat(match.group(1))
-                else:
-                    match = re.search(r"(\d{2})-([A-Za-z]{3})-(\d{4})", str(key))
-                    if not match:
-                        continue
-                    day = _dt.datetime.strptime(
-                        f"{match.group(1)}-{match.group(2)}-{match.group(3)}", "%d-%b-%Y"
-                    ).date()
-                if newest is None or day > newest:
-                    newest = day
-            if newest is None:
+            age_days = self._newest_seen_age_days()
+            if age_days is None or age_days <= 2:
                 return
-            age_days = (_dt.date.today() - newest).days
-            if age_days > 2:
-                log.warning(
-                    "seen_actions.json is %d day(s) stale (newest key %s) - "
-                    "recent alert dedup keys never reached GitHub, so alerts "
-                    "WILL re-fire on redeploy. Check GH_TOKEN / push_state logs.",
-                    age_days, newest,
-                )
+            log.warning(
+                "seen_actions.json is %d day(s) stale (newest key %s) - "
+                "recent alert dedup keys never reached GitHub, so alerts "
+                "WILL re-fire on redeploy. Check GH_TOKEN / push_state logs.",
+                age_days, date.today() - timedelta(days=age_days),
+            )
         except Exception:  # diagnostics must never break boot
             log.debug("seen staleness check failed", exc_info=True)
+
+    def _newest_seen_age_days(self):
+        """Age in days of the newest dated dedup key; None when undated.
+
+        Keys carry either an ISO date or a dd-Mmm-yyyy date (event keys); the
+        newest one approximates when dedup state last reached GitHub.
+        """
+        import datetime as _dt
+        import re
+
+        newest = None
+        for key in self._seen:
+            match = re.search(r"(\d{4}-\d{2}-\d{2})", str(key))
+            if match:
+                day = _dt.date.fromisoformat(match.group(1))
+            else:
+                match = re.search(r"(\d{2})-([A-Za-z]{3})-(\d{4})", str(key))
+                if not match:
+                    continue
+                day = _dt.datetime.strptime(
+                    f"{match.group(1)}-{match.group(2)}-{match.group(3)}", "%d-%b-%Y"
+                ).date()
+            if newest is None or day > newest:
+                newest = day
+        if newest is None:
+            return None
+        return (_dt.date.today() - newest).days
 
     def _set(self, key, value):
         with self._status_lock:

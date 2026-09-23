@@ -45,6 +45,16 @@ def _env_int(name: str, default: int, floor: int | None = None) -> int:
 
 
 POLL_INTERVAL_SECONDS = _env_int("POLL_INTERVAL_SECONDS", 3600, floor=60)
+# Redeploy flood-guard: when a fresh container boots and the committed
+# seen_actions.json is stale (host pushes have been failing), the first poll
+# cycle would re-fire every alert the user already received. While the seen
+# file is stale, cycles are delayed by this many minutes after boot - long
+# enough for the owner to fix GH_TOKEN and for the first successful push to
+# land - instead of instantly flooding Telegram. 0 disables the guard.
+BOOT_FLOOD_GRACE_MINUTES = _env_int("BOOT_FLOOD_GRACE_MINUTES", 45, floor=0)
+# Random +-jitter added to each poll wait so multiple hosts/crons never sync
+# into a thundering herd against the data sources.
+POLL_JITTER_SECONDS = _env_int("POLL_JITTER_SECONDS", 300, floor=0)
 # How often the sudden-move watcher scans its universes for big session moves
 # (see /watcher in Telegram and the System tab in the web dashboard).
 MOVERS_WATCH_INTERVAL_SECONDS = _env_int("MOVERS_WATCH_INTERVAL_SECONDS", 180, floor=60)
