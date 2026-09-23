@@ -10,11 +10,23 @@ from __future__ import annotations
 import logging
 import os
 import subprocess
+import threading
 from pathlib import Path
 
 from . import config
 
 log = logging.getLogger(__name__)
+
+# Serialize every state git operation. The always-on server runs git from
+# MULTIPLE threads: the main command loop (post-command push + sync), the
+# periodic flush, and the poller's post-alert push callback. Two overlapping
+# git commit/push/rebase/reset --hard runs on the same worktree corrupt each
+# other - index.lock collisions, a reset --hard wiping a just-made commit
+# (user's removal "comes back" after redeploy), and a failed push's error
+# being overwritten to "" by a concurrent success. One reentrant lock makes
+# every read-modify-push cycle atomic; RLock because push_state internally
+# calls helpers and flush runs push+sync back-to-back on the same thread.
+_state_git_lock = threading.RLock()
 
 
 def github_push_configured() -> bool:
@@ -100,17 +112,18 @@ def pending_state_changes() -> str:
     Empty string means the worktree is clean. Used by /status and by the
     always-on server's periodic flush to decide whether a push is needed.
     """
-    result = _git(
-        "git", "status", "--porcelain", "--untracked-files=no",
-        *[str(state_file) for state_file in STATE_FILES],
-    )
-    if result.returncode != 0:
-        return ""
-    names = []
-    for line in result.stdout.splitlines():
-        path = line[3:].strip().strip('"')
-        names.append(Path(path).name)
-    return ", ".join(sorted(set(names)))
+    with _state_git_lock:
+        result = _git(
+            "git", "status", "--porcelain", "--untracked-files=no",
+            *[str(state_file) for state_file in STATE_FILES],
+        )
+        if result.returncode != 0:
+            return ""
+        names = []
+        for line in result.stdout.splitlines():
+            path = line[3:].strip().strip('"')
+            names.append(Path(path).name)
+        return ", ".join(sorted(set(names)))
 
 
 def _ahead_of_origin(branch: str) -> bool:
@@ -128,9 +141,17 @@ def _ahead_of_origin(branch: str) -> bool:
         return False
 
 
-# Reason for the last push_state() failure ("" when OK). bot_server reads this
-# so the "NOT pushed to GitHub" warning can say WHY instead of guessing.
+# Reason for the last push_state() failure ("" when OK). Read via
+# last_push_error() so callers ALWAYS see the live value - importing the
+# variable directly copies the value at import time (usually ""), which is
+# why the Telegram warning once printed an empty "Reason:" and /status
+# never showed the real git error.
 push_error = ""
+
+
+def last_push_error() -> str:
+    """The live reason for the last push_state() failure ('' when OK)."""
+    return push_error
 
 
 def _redact_gh(text) -> str:
@@ -160,6 +181,13 @@ def push_state() -> bool:
 
     On failure, sets the module-global `push_error` to a short reason.
     """
+    global push_error
+    with _state_git_lock:
+        return _push_state_locked()
+
+
+def _push_state_locked() -> bool:
+    """push_state body - caller must hold _state_git_lock."""
     global push_error
     token = os.getenv("GH_TOKEN")
     repo = os.getenv("GITHUB_REPOSITORY")
@@ -285,27 +313,28 @@ def sync_state() -> bool:
         log.info("GH_TOKEN/GITHUB_REPOSITORY not set - skipping state sync")
         return True
     try:
-        remote_url = f"https://x-access-token:{token}@github.com/{repo}.git"
-        branch = _push_branch(remote_url)
-        dirty = _git("git", "status", "--porcelain").stdout.strip()
-        if dirty:
-            log.warning(
-                "State sync skipped: uncommitted changes present - push them "
-                "first (dirty: %s)",
-                dirty[:200],
-            )
-            return True
-        _git("git", "fetch", "origin")
-        if _ahead_of_origin(branch):
-            # Local commits exist that were never pushed. A hard reset here
-            # would silently destroy them - push them first instead.
-            log.warning(
-                "State sync skipped: local branch is ahead of origin/%s "
-                "(unpushed commits). Run push_state or fix credentials first.",
-                branch,
-            )
-            return True
-        result = _git("git", "reset", "--hard", f"origin/{branch}")
+        with _state_git_lock:
+            remote_url = f"https://x-access-token:{token}@github.com/{repo}.git"
+            branch = _push_branch(remote_url)
+            dirty = _git("git", "status", "--porcelain").stdout.strip()
+            if dirty:
+                log.warning(
+                    "State sync skipped: uncommitted changes present - push them "
+                    "first (dirty: %s)",
+                    dirty[:200],
+                )
+                return True
+            _git("git", "fetch", "origin")
+            if _ahead_of_origin(branch):
+                # Local commits exist that were never pushed. A hard reset here
+                # would silently destroy them - push them first instead.
+                log.warning(
+                    "State sync skipped: local branch is ahead of origin/%s "
+                    "(unpushed commits). Run push_state or fix credentials first.",
+                    branch,
+                )
+                return True
+            result = _git("git", "reset", "--hard", f"origin/{branch}")
         if result.returncode == 0:
             log.info("State synced from origin/%s", branch)
             return True

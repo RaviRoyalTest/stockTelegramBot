@@ -29,8 +29,8 @@ from corporate_actions.github import (
     _ahead_of_origin,
     _push_branch,
     github_push_configured,
+    last_push_error,
     pending_state_changes,
-    push_error,
     push_state,
     sync_state,
 )
@@ -340,18 +340,19 @@ def main():
                                     # never overwrite newer commits.
                                     sync_state()
                                 else:
+                                    reason = last_push_error()
                                     log.warning(
                                         "State NOT pushed for %s - change is "
                                         "saved locally but will be LOST on "
                                         "redeploy: %s",
-                                        command, push_error,
+                                        command, reason,
                                     )
                                     reply(
                                         chat_id,
                                         "⚠️ Your change was saved only on this "
                                         "server's disk, NOT pushed to GitHub. "
                                         "It will be LOST on the next redeploy. "
-                                        f"Reason: {push_error}. Run "
+                                        f"Reason: {reason}. Run "
                                         "/status for details, or `python "
                                         "run_bot.py --check` on the host.",
                                     )

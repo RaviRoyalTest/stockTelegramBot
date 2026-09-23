@@ -8,8 +8,8 @@ from ..formatting.schedule import format_schedule
 from ..github import (
     _push_branch,
     github_push_configured,
+    last_push_error,
     pending_state_changes,
-    push_error,
 )
 from .reply import reply
 
@@ -30,9 +30,10 @@ def handle_status(chat_id) -> None:
             "Local state vs GitHub: "
             + (pending or "in sync (nothing uncommitted)")
         )
-        if push_error:
+        last_error = last_push_error()
+        if last_error:
             push_status += " - last push FAILED"
-            sync_line += f" (last error: {push_error})"
+            sync_line += f" (last error: {last_error})"
     else:
         push_status = (
             "NOT set - your changes stay only on this host's disk (lost "
