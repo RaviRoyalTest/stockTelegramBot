@@ -2,6 +2,23 @@
 
 Rules for any AI agent or human working on this repository.
 
+## 0. PROTECTED — do not modify without explicit human instruction
+
+The uptime-monitor fix is locked. The following must NOT be edited,
+refactored, "improved", reformatted, or reverted by any AI agent unless the
+user explicitly asks for that exact change in that exact file:
+
+- `dashboard.py` — the `@app.api_route("/health", methods=["GET", "HEAD"])`
+  handler and the `@app.api_route("/", methods=["GET", "HEAD"], ...)` index
+  route. HEAD support here is deliberate: uptime monitors probe with HEAD and
+  a 405 makes the site report as DOWN.
+- `tests/test_health_head.py` — the regression test that pins HEAD → 200 on
+  `/health` and `/`. Do not delete, weaken, or skip it.
+
+Acceptable: touching other parts of `dashboard.py` (new endpoints, tabs, etc.)
+while leaving those two route decorators and the test file untouched.
+Not acceptable: any diff inside those routes or that test file.
+
 ## 1. Always pull before starting any work
 
 - Run `git pull --ff-only` (or `git fetch && git merge --ff-only origin/main`)
