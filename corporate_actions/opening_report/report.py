@@ -294,18 +294,19 @@ def _snapshot_line(snap: dict) -> str:
         suffix = "IST" if snap["market"] == INDIA_MARKET else "ET"
         return (
             f"\U0001F4C5 <b>{snap['date']}</b> | \u23F1 <b>Session close {suffix}</b> | "
-            f"{flag} {label} Market: <b>COMPLETED SESSION</b> (historical)"
+            f"{flag} {label} Market: <b>\U0001F3C1 COMPLETED SESSION</b> (historical)"
         )
     stamp = snap["time_local"]
+    state_mark = "\U0001F7E2" if snap["state"] == "OPEN" else "\U0001F534"
     if snap["market"] == US_MARKET:
         ist = snap.get("time_ist") or stamp
         return (
             f"\U0001F4C5 <b>{snap['date']}</b> | \u23F1 <b>{stamp} ET</b> | "
-            f"\u23F1 <b>{ist} IST</b> | \U0001F1FA\U0001F1F8 U.S. Market: <b>{snap['state']}</b>"
+            f"\u23F1 <b>{ist} IST</b> | \U0001F1FA\U0001F1F8 U.S. Market: {state_mark} <b>{snap['state']}</b>"
         )
     return (
         f"\U0001F4C5 <b>{snap['date']}</b> | \u23F1 <b>{stamp} IST</b> | "
-        f"\U0001F1EE\U0001F1F3 Indian Market: <b>{snap['state']}</b>"
+        f"\U0001F1EE\U0001F1F3 Indian Market: {state_mark} <b>{snap['state']}</b>"
     )
 
 
@@ -318,13 +319,13 @@ def _closed_lines(block: dict) -> list[str]:
         )
     else:
         tail = (
-            f"Next regular trading session: <b>{block['next_session']}</b>\n"
+            f"\u23ED Next regular trading session: <b>{block['next_session']}</b>\n"
             "No opening-session report is generated while the market is closed - "
             "previous-session data is never presented as today's opening data."
         )
     return [
         f"{flag} <b>{block['label']} market: \U0001F534 MARKET CLOSED</b>",
-        f"Reason: {block['reason']}",
+        f"\u26D4 Reason: {block['reason']}",
         tail,
     ]
 
@@ -344,12 +345,14 @@ def _render_section(section: dict) -> list[str]:
     currency = "INR" if market == INDIA_MARKET else "USD"
     lines = ["", f"{flag} <b>{part}</b>", _snapshot_line(section["snapshot"])]
     if section.get("unavailable"):
-        lines.append("US universe unavailable - no rows fabricated.")
+        lines.append("\u26A0\uFE0F US universe unavailable - no rows fabricated.")
     for universe in section.get("universes", []):
-        lines.append(f"<b>{flag} {universe['title']}</b>")
         if universe.get("unavailable"):
-            lines.append("Universe unavailable from the official NSE index CSV - no rows fabricated.")
+            lines.append(f"\u26A0\uFE0F <b>{flag} {universe['title']}</b>: unavailable "
+                         "from the official NSE index CSV - no rows fabricated.")
             continue
+        lines.append("")
+        lines.append(f"<b>{flag} {universe['title']}</b>")
         lines.append("\U0001F7E2 <i>Top 10 gainers</i>")
         lines.extend(_tables.table(universe["gainers"], currency))
         lines.append("\U0001F534 <i>Top 10 losers</i>")
@@ -361,8 +364,12 @@ def _render_section(section: dict) -> list[str]:
         )
     lines.append("<b>\U0001F4CA Market overview</b>")
     lines.extend(_index_lines(market, section.get("indices") or []))
-    lines.append("<b>\U0001F525 Volume analysis</b>")
-    lines.extend(_tables.volume_analysis_payload(section.get("volume_buckets") or []))
+    buckets = section.get("volume_buckets") or []
+    if buckets:
+        lines.append("<b>\U0001F525 Volume spikes</b>")
+        lines.extend(_tables.volume_analysis_payload(buckets))
+    else:
+        lines.append("<i>\U0001F525 No stock exceeded +50% volume change.</i>")
     lines.extend(_tables.catalyst_lines_from_items(
         section.get("catalysts") or [],
         "\U0001F4F0 Catalysts - " + ("India (news-sourced)" if market == INDIA_MARKET else "U.S. (news-sourced)"),
@@ -393,17 +400,22 @@ def _final_summary(report: dict) -> list[str]:
     for section in report.get("sections", []):
         for universe in section.get("universes", []):
             name = titles.get(universe["key"], universe["key"])
-            lines.append(f"{name}: <b>{universe['verified']}/{universe['target']}</b>")
+            verified, target = universe["verified"], universe["target"]
+            mark = "\u2705" if verified >= target else "\u26A0\uFE0F"
+            lines.append(f"{mark} {name}: <b>{verified}/{target}</b>")
         if section.get("closed"):
             flag = "\U0001F1EE\U0001F1F3" if section["market"] == INDIA_MARKET else "\U0001F1FA\U0001F1F8"
-            lines.append(f"{flag} Market closed: <b>0/20</b>")
+            lines.append(f"\U0001F534 {flag} Market closed: <b>0/20</b>")
     lines.append("")
+    total_verified = report.get("total_verified", 0)
+    total_target = report.get("total_target", 0)
+    total_mark = "\U0001F3C6" if total_verified >= total_target else "\u26A0\uFE0F"
     lines.append(
-        f"<b>Total verified: {report.get('total_verified', 0)}/{report.get('total_target', 0)}</b> "
+        f"{total_mark} <b>Total verified: {total_verified}/{total_target}</b> "
         "(target 100 = 60 India + 40 U.S.)"
     )
     lines.append(
-        f"Volume Change % successfully computed for <b>{report.get('volume_computed', 0)}</b> stock(s)."
+        f"\U0001F4A8 Volume Change % computed for <b>{report.get('volume_computed', 0)}</b> stock(s)."
     )
     return lines
 

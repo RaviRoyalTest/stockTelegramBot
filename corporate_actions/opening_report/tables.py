@@ -8,20 +8,57 @@ Layout rules (learned the hard way - the old fixed-width grid broke the
 moment a company name exceeded its column, shoving every number sideways):
 
 * Company names are NEVER truncated - the full name sits on its own line.
-* Numbers always go on short, space-separated metric lines (~46 columns
+* Numbers always go on short, token-separated metric lines (~40 columns
   max) so a phone wrap can only land BETWEEN tokens, never inside one.
-* The rank prefix is repeated on every line of a stock's block, so even a
-  wrapped line still reads unambiguously.
+* Cards are PLAIN TEXT, not monospace <code>: inline code renders as a
+  solid blue wall in several Telegram themes ("everything is blue").
+  Color comes from semantic emoji instead - medal/keycap ranks, green/red
+  direction dots, check/warn/fires - which survive every theme.
+* The direction dot (+green/-red) opens every metrics line, so a wrapped
+  or scrolled card still shows its sign at a glance.
 """
 from __future__ import annotations
 
 import html
 
 _TARGET_PER_TABLE = 10
-_MAX_NAME_LINE = 44   # rank + full company name + (SYMBOL)
-_MAX_DATA_LINE = 46   # rank + price + change% + volume-change token
+_MAX_NAME_LINE = 44   # rank token + full company name + (SYMBOL)
+_MAX_DATA_LINE = 46   # indent + pct + price + volume tokens
 _ARROW_UP = "\u25b2"  # ▲
 _ARROW_DOWN = "\u25bc"  # ▼
+_INDENT = "\u3000"     # ideographic space: indents metrics under the name
+_RANK_EMOJIS = {
+    1: "\U0001F947",  # 🥇
+    2: "\U0001F948",  # 🥈
+    3: "\U0001F949",  # 🥉
+    4: "4\u20e3", 5: "5\u20e3", 6: "6\u20e3",
+    7: "7\u20e3", 8: "8\u20e3", 9: "9\u20e3",
+    10: "\U0001F51F",  # 🔟
+}
+
+
+def _rank_token(index: int) -> str:
+    """🥇🥈🥉 then keycaps 4️⃣-🔟; plain '11.' beyond (tables target 10)."""
+    return _RANK_EMOJIS.get(index, f"{index}.")
+
+
+def _dir_token(value) -> str:
+    """Direction dot for any signed value: 🟢 up / 🔴 down / ⚪ unknown."""
+    try:
+        number = float(value)
+    except (TypeError, ValueError):
+        return "\u26aa"  # ⚪
+    if number > 0:
+        return "\U0001F7E2"  # 🟢
+    if number < 0:
+        return "\U0001F534"  # 🔴
+    return "\u26aa"
+
+
+def _verified_line(count: int) -> str:
+    """✅ when the table is complete, ⚠️ when it falls short of target."""
+    mark = "\u2705" if count >= _TARGET_PER_TABLE else "\u26a0\ufe0f"
+    return f"{mark} <b>Verified: {count}/{_TARGET_PER_TABLE}</b>"
 
 
 def _escape(value) -> str:
@@ -80,14 +117,14 @@ def _trim_name(name: str, budget: int) -> str:
 
 
 def _stock_name_line(index: int, row: dict) -> str:
-    """`` 1. Solar Industries India (SOLARINDS)`` - full name, never cut.
+    """``🥇 Solar Industries India (SOLARINDS)`` - full name, never cut.
 
     The visible text is HTML-escaped AFTER the width budget is applied, so
     escaping never pushes a line past the phone-wrap limit - important for
     names like ``Larsen & Toubro`` / symbols like ``M&M`` (a bare ``&``
     makes Telegram's HTML parser reject the whole chunk).
     """
-    rank = f"{index:>2}. "
+    rank = f"{_rank_token(index)} "
     name = " ".join(str(row.get("name") or row["symbol"]).split())
     symbol = str(row["symbol"]).strip()
     suffix = "" if name.lower() == symbol.lower() else f" ({symbol})"
@@ -109,43 +146,48 @@ def _vol_change_token(row: dict) -> str:
     return f"Vol {arrow}{abs(number):,.0f}%"
 
 
-def _stock_metrics_line(index: int, row: dict, currency: str) -> str:
-    """`` 1.  ₹19,890.00  +3.24%  Vol ▲84%`` - aligned under the name line."""
+def _stock_metrics_line(row: dict, currency: str) -> str:
+    """``　🟢 +3.24% · ₹19,890.00 · Vol ▲84%`` - colored, token-separated.
+
+    The direction dot leads so the sign survives any wrap; tokens are kept
+    short so the whole line fits a phone without wrapping mid-number.
+    """
     return (
-        f"{index:>2}. {_money(row.get('price'), currency):>10}  "
-        f"{_pct(row.get('change_pct')):>8}  {_vol_change_token(row)}"
+        f"{_INDENT}{_dir_token(row.get('change_pct'))} {_pct(row.get('change_pct'))}"
+        f" \u00b7 {_money(row.get('price'), currency)}"
+        f" \u00b7 {_vol_change_token(row)}"
     )
 
 
 def table(rows: list[dict], currency: str) -> list[str]:
-    """One gainers/losers block: name line + aligned metrics line per stock."""
+    """One gainers/losers block: plain-text card per stock + verified mark."""
     lines: list[str] = []
     if not rows:
-        lines.append(f"No verified stocks. <b>Verified: 0/{_TARGET_PER_TABLE}</b>")
+        lines.append(f"No verified stocks. {_verified_line(0)}")
         return lines
     for index, row in enumerate(rows, 1):
-        lines.append(f"<code>{_stock_name_line(index, row)}</code>")
-        lines.append(f"<code>{_stock_metrics_line(index, row, currency)}</code>")
-    lines.append(f"<b>Verified: {len(rows)}/{_TARGET_PER_TABLE}</b>")
+        lines.append(_stock_name_line(index, row))
+        lines.append(_stock_metrics_line(row, currency))
+    lines.append(_verified_line(len(rows)))
     return lines
 
 
 def index_table(levels: list[dict]) -> list[str]:
-    """Aligned one-line-per-index block (label column capped, numbers right)."""
-    lines = [
-        "<code>"
-        f"{'Index':<18} {'Level':>10} {'Chg':>9} {'Chg%':>7}"
-        "</code>"
-    ]
+    """One colored line per index: ``🟢 Nifty 50 25,506.00 +85.10 (+0.33%)``."""
+    lines: list[str] = []
     for row in levels:
+        label = str(row["label"])[:20]
         level = row.get("level")
-        level_text = f"{level:,.2f}" if isinstance(level, (int, float)) else "N/A"
-        lines.append(
-            "<code>"
-            f"{str(row['label'])[:18]:<18} {level_text:>10} "
-            f"{_amount(row.get('change')):>9} {_pct(row.get('change_pct')):>7}"
-            "</code>"
-        )
+        if isinstance(level, (int, float)):
+            lines.append(
+                f"{_dir_token(row.get('change_pct'))} <b>{_escape(label)}</b> "
+                f"{level:,.2f} {_amount(row.get('change'))}"
+                f" ({_pct(row.get('change_pct'))})"
+            )
+        else:
+            lines.append(f"\u26aa <b>{_escape(label)}</b>: N/A")
+    if not lines:
+        lines.append("Index levels unavailable.")
     return lines
 
 
@@ -181,10 +223,17 @@ def volume_buckets_payload(rows: list[dict]) -> list[dict]:
 
 
 def _volume_scan_line(row: dict) -> str:
+    """``• SOLARINDS 🟢 +3.24% · Vol 0.40M · ▲84%`` - one colored line."""
     symbol = str(row.get("symbol") or "")[:12]
+    try:
+        arrow = _ARROW_UP if float(row["volume_change_pct"]) >= 0 else _ARROW_DOWN
+        vol_pct = f"{arrow}{abs(float(row['volume_change_pct'])):,.0f}%"
+    except (TypeError, ValueError, KeyError):
+        vol_pct = "N/A"
     return (
-        f"{_escape(symbol):<12} {_pct(row.get('change_pct')):>8}  "
-        f"Vol {_volume(row.get('volume')):>8}  {_pct(row['volume_change_pct']):>7}"
+        f"\u2022 <b>{_escape(symbol)}</b> {_dir_token(row.get('change_pct'))} "
+        f"{_pct(row.get('change_pct'))} \u00b7 Vol {_volume(row.get('volume'))}"
+        f" \u00b7 {vol_pct}"
     )
 
 
@@ -192,9 +241,10 @@ def volume_analysis_payload(buckets: list[dict]) -> list[str]:
     """Telegram rendering of a volume_buckets_payload (no heading)."""
     lines: list[str] = []
     for bucket in buckets:
-        lines.append(f"<b>{bucket['label']}</b>")
+        count = len(bucket["rows"])
+        lines.append(f"\U0001F525 <b>{_escape(bucket['label'])}</b> \u00b7 {count} stock(s)")
         for row in bucket["rows"][:10]:
-            lines.append(f"<code>{_volume_scan_line(row)}</code>")
+            lines.append(_volume_scan_line(row))
     return lines
 
 
@@ -244,8 +294,8 @@ def catalyst_lines_from_items(items: list[dict], heading: str) -> list[str]:
     for item in items:
         source = f" <i>({_escape(item['publisher'])})</i>" if item["publisher"] else ""
         lines.append(
-            f"\u2022 <b>{_escape(item['symbol'])}</b> {_pct(item.get('change_pct'))} "
-            f"\u2014 {_escape(item['headline'])}{source}"
+            f"\u2022 {_dir_token(item.get('change_pct'))} <b>{_escape(item['symbol'])}</b>"
+            f" {_pct(item.get('change_pct'))} \u2014 {_escape(item['headline'])}{source}"
         )
     if not items:
         lines.append("No matching news headlines retrieved for the top movers.")

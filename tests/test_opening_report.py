@@ -314,12 +314,33 @@ class TelegramLayoutTests(unittest.TestCase):
             if "XXX" in line:
                 self.assertLessEqual(len(_visible(line)), 44)
 
-    def test_data_line_short_and_ranked(self):
+    def test_data_line_short_and_colored(self):
         lines = t.table(self.ROWS, "INR")
-        data_lines = [_visible(l) for l in lines if "\u20b9" in l or "N/A" in l]
+        data_lines = [_visible(l) for l in lines if "%" in l and "Verified" not in l]
         for line in data_lines:
             self.assertLessEqual(len(line), 46, line)
-            self.assertRegex(line, r"^\s*\d+\.")  # rank repeats on the metrics line
+            # The direction dot leads every metrics line, so a wrap can never
+            # separate a number from its sign.
+            self.assertTrue(line.lstrip().startswith(("\U0001F7E2", "\U0001F534", "\u26aa")), line)
+
+    def test_rank_tokens_medals_then_keycaps(self):
+        rows = [dict(self.ROWS[0]) for _ in range(11)]
+        lines = t.table(rows, "INR")
+        text = "\n".join(_visible(l) for l in lines)
+        for token in ("\U0001F947", "\U0001F948", "\U0001F949", "4\u20e3", "\U0001F51F"):
+            self.assertIn(token, text)
+        self.assertIn("\n11. ", "\n" + text)  # beyond 10 falls back to plain rank
+
+    def test_direction_dot_matches_sign(self):
+        rows = [
+            dict(self.ROWS[0]),                          # +3.24 -> green
+            dict(self.ROWS[2], change_pct=-1.18),        # -1.18 -> red
+            dict(self.ROWS[2], change_pct=None),         # unknown -> white
+        ]
+        lines = [_visible(l) for l in t.table(rows, "INR")]
+        self.assertIn("\U0001F7E2 +3.24%", lines[1])
+        self.assertIn("\U0001F534 -1.18%", lines[3])
+        self.assertIn("\u26aa N/A", lines[5])
 
     def test_missing_volume_shows_na_token(self):
         lines = t.table(self.ROWS, "INR")
@@ -341,11 +362,15 @@ class TelegramLayoutTests(unittest.TestCase):
         ]
         lines = t.index_table(levels)
         for line in lines:
-            self.assertLessEqual(len(_visible(line)), 47)
-        self.assertIn("N/A", "\n".join(lines))
+            self.assertLessEqual(len(_visible(line)), 56)
+        text = "\n".join(lines)
+        self.assertIn("N/A", text)
+        self.assertIn("\U0001F7E2", text)   # green dot on the positive index
+        self.assertIn("\u26aa", text)       # white dot on the missing level
+        self.assertIn("Nifty 50", text)
 
     def test_symbols_with_ampersand_are_html_escaped(self):
-        # Regression: M&M / Larsen & Toubro emit a bare '&' inside <code>,
+        # Regression: M&M / Larsen & Toubro emit a bare '&' inside the HTML,
         # which makes Telegram's HTML parser reject the whole chunk.
         rows = [
             {"symbol": "M&M", "name": "Mahindra & Mahindra Limited",
@@ -353,11 +378,10 @@ class TelegramLayoutTests(unittest.TestCase):
              "volume": 1000, "volume_change_pct": None},
         ]
         lines = t.table(rows, "INR")
-        for line in lines:
-            if "<code>" in line:
-                body = line.replace("<code>", "").replace("</code>", "")
-                self.assertNotIn("&", body.replace("&amp;", ""), line)
         self.assertIn("M&amp;M", " ".join(lines))
+        body = " ".join(lines)
+        self.assertNotIn("& ", body.replace("&amp;", ""))
+        self.assertNotIn("&amp; ", "")  # sanity: replacement pattern present above
 
     def test_empty_table_verified_zero(self):
         lines = t.table([], "INR")
@@ -369,7 +393,8 @@ class TelegramLayoutTests(unittest.TestCase):
         buckets = t.volume_buckets_payload(rows)
         lines = t.volume_analysis_payload(buckets)
         for line in lines:
-            self.assertLessEqual(len(_visible(line)), 46)
+            self.assertLessEqual(len(_visible(line)), 60, line)
+        self.assertIn("\U0001F525", lines[0])  # fire marks the spike band
 
 
 if __name__ == "__main__":
