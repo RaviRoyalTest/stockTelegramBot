@@ -216,7 +216,7 @@ def _sort_rows(rows: list[dict], sort_key: str, ascending: bool) -> list[dict]:
     return sorted(rows, key=key_map.get(sort_key, key_map["market_cap"]), reverse=not ascending)
 
 
-@app.get("/", response_class=HTMLResponse)
+@app.api_route("/", methods=["GET", "HEAD"], response_class=HTMLResponse)
 async def read_index(request: Request):
     try:
         return templates.TemplateResponse(request, "index.html")
@@ -589,8 +589,11 @@ async def api_screener_csv(
     return StreamingResponse(gen(), media_type="text/csv")
 
 
-@app.get("/health")
+@app.api_route("/health", methods=["GET", "HEAD"])
 async def health():
+    # HEAD must be accepted: uptime monitors (UptimeRobot's default HTTP
+    # check) probe with HEAD, and a 405 here reads as the site being down
+    # even while it is perfectly healthy.
     return JSONResponse({"status": "ok"})
 
 
