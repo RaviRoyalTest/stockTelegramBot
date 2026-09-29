@@ -1545,10 +1545,10 @@ async def sessions_page(request: Request):
 _snap_state: dict = {"recording": False, "error": None}
 
 
-def _record_snapshot_thread(universe: str, force: bool) -> None:
+def _record_snapshot_thread(market: str, force: bool) -> None:
     try:
         snapshots_service.record_session_snapshot(
-            universe=universe, force=force, recorded_by="web")
+            market=market, force=force, recorded_by="web")
     except Exception as exc:
         log.warning("/api/snapshots/record failed: %s", exc)
         _snap_state["error"] = str(exc)
@@ -1572,27 +1572,29 @@ async def api_snapshots():
 
 @app.post("/api/snapshots/record")
 async def api_snapshots_record(
-    universe: str = Query("nifty500"),
+    market: str = Query("in"),
+    universe: str | None = Query(None),
     force: bool = Query(False),
 ):
     """Start recording the last session in the background (202 at once).
 
-    Skips when a recording is already running or the file already covers
-    the latest session (unless force=1) - the UI polls GET /api/snapshots.
+    market in = India blocks (NIFTY 100 + 500 ex-100 + Microcap, like
+    /openreport); us = Mega + Large-cap. Skips when a recording is already
+    running or the file already covers the latest session (unless force=1)
+    - the UI polls GET /api/snapshots.
     """
-    universe = (universe or "nifty500").strip().lower()
-    if universe not in ("nifty500", "nifty100"):
-        raise HTTPException(status_code=400, detail="universe must be nifty500|nifty100")
+    text = f"{market or ''} {universe or ''}".lower()
+    market = "us" if any(token in text for token in ("us", "nasdaq", "sp500", "s&p")) else "in"
     if _snap_state["recording"]:
         return JSONResponse({"started": False, "reason": "already recording"}, status_code=202)
     _snap_state["recording"] = True
     _snap_state["error"] = None
     thread = threading.Thread(
-        target=_record_snapshot_thread, args=(universe, force),
+        target=_record_snapshot_thread, args=(market, force),
         daemon=True, name="snapshot-record",
     )
     thread.start()
-    return JSONResponse({"started": True, "universe": universe}, status_code=202)
+    return JSONResponse({"started": True, "market": market}, status_code=202)
 
 
 @app.get("/api/status")

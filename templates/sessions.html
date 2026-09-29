@@ -10,10 +10,10 @@
     <div style="display:flex; justify-content:space-between; align-items:center; gap:12px; flex-wrap:wrap;">
       <h2 id="hMeta" style="margin-bottom:0;">Snapshot <span class="pill" id="snapSession">—</span></h2>
       <div class="form-row" style="align-items:center;">
-        <label class="visually-hidden" for="universe">Universe</label>
-        <select id="universe" aria-label="Universe">
-          <option value="nifty500" selected>NIFTY 500</option>
-          <option value="nifty100">NIFTY 100</option>
+        <label class="visually-hidden" for="market">Market</label>
+        <select id="market" aria-label="Market">
+          <option value="in" selected>India</option>
+          <option value="us">US</option>
         </select>
         <button class="btn btn-primary btn-sm" type="button" id="recordBtn">📸 Record now</button>
         <button class="btn btn-sm" type="button" id="forceBtn" title="Re-record even when current">↻ Force</button>
@@ -52,6 +52,8 @@
       </div>
     </section>
   </div>
+
+  <div id="blocksWrap"></div>
 
   <section class="card section" aria-labelledby="hActions">
     <div style="display:flex; justify-content:space-between; align-items:center; gap:12px; flex-wrap:wrap;">
@@ -105,9 +107,10 @@
       function render(doc) {
         doc = doc || {};
         var session = doc.session || '—';
+        var market = (doc.market || 'in').toUpperCase();
         document.getElementById('snapSession').textContent = session;
         document.getElementById('snapMeta').textContent =
-          'Session ' + session + ' · ' + (doc.universe || 'nifty500').toUpperCase() +
+          'Session ' + session + ' · ' + market + ' · ' + (doc.universe || '') +
           ' · recorded ' + (doc.recorded_at || 'never') + ' by ' + (doc.recorded_by || '—') +
           (doc.recording ? ' · ⏳ recording in progress…' : '');
 
@@ -134,6 +137,26 @@
         document.getElementById('loseBody').innerHTML = losers.length
           ? losers.map(function (r) { return moverRow(r, 'neg'); }).join('')
           : '<tr><td colspan="3" class="empty">—</td></tr>';
+
+        // openreport-style universe blocks (India 3×20, US Mega/Large)
+        var blocks = doc.universes || [];
+        document.getElementById('blocksWrap').innerHTML = blocks.map(function (b) {
+          function blockRows(rows, cls) {
+            return (rows || []).length ? rows.map(function (r) {
+              return '<tr><td>' + symLink(r.symbol) + '</td><td class="num">' + num(r.price) + '</td>' +
+                '<td class="num ' + cls + '">' + RS.fmtPct(r.change_pct) + '</td></tr>';
+            }).join('') : '<tr><td colspan="3" class="empty">—</td></tr>';
+          }
+          return '<div class="section-grid section">' +
+            '<section class="card"><h2>🟢 ' + esc(b.title || '') + ' gainers <span class="pill">' + (b.gainers || []).length + '</span></h2>' +
+            '<div class="table-scroll" style="margin-top:12px;"><table class="table-mini">' +
+            '<thead><tr><th>Symbol</th><th class="num">Price</th><th class="num">Change %</th></tr></thead>' +
+            '<tbody>' + blockRows(b.gainers, 'pos') + '</tbody></table></div></section>' +
+            '<section class="card"><h2>🔴 ' + esc(b.title || '') + ' losers <span class="pill">' + (b.losers || []).length + '</span></h2>' +
+            '<div class="table-scroll" style="margin-top:12px;"><table class="table-mini">' +
+            '<thead><tr><th>Symbol</th><th class="num">Price</th><th class="num">Change %</th></tr></thead>' +
+            '<tbody>' + blockRows(b.losers, 'neg') + '</tbody></table></div></section></div>';
+        }).join('');
 
         actions = doc.corporate_actions || [];
         renderActions('');
@@ -177,8 +200,8 @@
         var btn = document.getElementById('recordBtn');
         btn.disabled = true;
         try {
-          var res = await fetch('/api/snapshots/record?universe=' +
-            encodeURIComponent(document.getElementById('universe').value) + (force ? '&force=1' : ''),
+          var res = await fetch('/api/snapshots/record?market=' +
+            encodeURIComponent(document.getElementById('market').value) + (force ? '&force=1' : ''),
             { method: 'POST' });
           var data = await res.json();
           if (!data.started) {

@@ -566,7 +566,7 @@ COMMAND_EXAMPLES = {
     "/gappers": ["/gappers", "/gappers 1d", "/gappers 2d", "/gappers window 3d", "/gappers 12-08-2026", "/gappers up", "/gappers all", "/gappers GODREJCP"],
     "/checklist": ["/checklist RELIANCE", "/checklist mylist"],
     "/screen": ["/screen pe<25 roe>15", "/screen div>1.5", "/screen rsi 50-70 macd"],
-    "/snap": ["/snap", "/snap nifty100"],
+    "/snap": ["/snap", "/snap us"],
     "/setemail": ["/setemail you@example.com", "/setemail off"],
     "/emailreport": ["/emailreport RELIANCE"],
     "/dailyemail": ["/dailyemail on", "/dailyemail off"],
@@ -633,7 +633,8 @@ DESCRIBE_AND_RUN = {
     "/snap": (
         "\U0001F4F8 <b>/snap</b> - records the last session (gap-downs + "
         "movers + actions) to disk for the web Sessions tab and the daily "
-        "mail. Skips when already recorded - starting it now.",
+        "mail. India records the 3 openreport blocks (60 rows); /snap us "
+        "records Mega + Large-cap. Skips when already recorded - starting it now.",
         lambda chat_id: snapshot_commands.handle_snap(chat_id, ["/snap"]),
     ),
     "/checknow": (

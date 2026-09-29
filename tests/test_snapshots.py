@@ -39,9 +39,18 @@ class SnapshotHelpersTests(unittest.TestCase):
         )
         self.assertEqual(doc["session"], "2026-09-25")
         self.assertEqual(doc["universe"], "nifty500")
+        self.assertEqual(doc["market"], "in")
         self.assertEqual(doc["recorded_by"], "test")
         self.assertTrue(doc["recorded_at"])
         self.assertEqual(len(doc["gap_downs"]), 1)
+        self.assertEqual(doc["universes"], [])
+
+    def test_market_key_normalization(self):
+        self.assertEqual(snapshots_mod._market_key("", "nifty500"), ("in", "nifty500"))
+        self.assertEqual(snapshots_mod._market_key("in", None), ("in", "nifty500"))
+        self.assertEqual(snapshots_mod._market_key("us", None), ("us", "us"))
+        self.assertEqual(snapshots_mod._market_key("", "sp500"), ("us", "us"))
+        self.assertEqual(snapshots_mod._market_key("in", "nifty100"), ("in", "nifty100"))
 
     def test_storage_roundtrip_in_tmp(self):
         with tempfile.TemporaryDirectory() as tmp:
