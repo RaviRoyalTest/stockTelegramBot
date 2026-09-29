@@ -20,6 +20,7 @@ from ..telegram.markup import quick_menu_markup
 from . import (
     checklist_commands,
     corporate_action_commands,
+    email_commands,
     forecast_commands,
     fundamentals_commands,
     gappers_commands,
@@ -253,6 +254,14 @@ def handle_command(chat_id, text):
 
     if command in ("/checklist", "/investcheck", "/scorecard", "/qualitycheck", "/quality"):
         checklist_commands.handle_checklist(chat_id, parts)
+        return
+
+    if command in ("/setemail", "/email"):
+        email_commands.handle_setemail(chat_id, parts)
+        return
+
+    if command in ("/emailreport", "/emailfund"):
+        email_commands.handle_emailreport(chat_id, parts)
         return
 
     if len(parts) < 2:

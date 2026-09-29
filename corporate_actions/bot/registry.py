@@ -394,6 +394,17 @@ COMMAND_USAGE = {
         "/screen sector bank n 15    \u2192 15 banking stocks\n"
         "Aliases: /screener, /filterstocks"
     ),
+    "/setemail": (
+        "<b>/setemail</b> - get bot reports in your mailbox\n"
+        "/setemail you@example.com  \u2192 save + test-mail the address\n"
+        "/setemail off              \u2192 forget the address\n"
+        "Aliases: /email"
+    ),
+    "/emailreport": (
+        "<b>/emailreport</b> - mail the deep fundamental report\n"
+        "/emailreport RELIANCE  \u2192 full report + snapshot in your inbox\n"
+        "Needs /setemail first. Aliases: /emailfund"
+    ),
     "/indicator": (
         "<b>/indicator</b> - clear deep-dive for ONE indicator\n"
         "/indicator RELIANCE RSI  \u2192 value, signal, trend &amp; how to read it\n"
@@ -549,6 +560,8 @@ COMMAND_EXAMPLES = {
     "/gappers": ["/gappers", "/gappers 1d", "/gappers 2d", "/gappers window 3d", "/gappers 12-08-2026", "/gappers up", "/gappers all", "/gappers GODREJCP"],
     "/checklist": ["/checklist RELIANCE", "/checklist mylist"],
     "/screen": ["/screen pe<25 roe>15", "/screen div>1.5", "/screen rsi 50-70 macd"],
+    "/setemail": ["/setemail you@example.com", "/setemail off"],
+    "/emailreport": ["/emailreport RELIANCE"],
     "/indicator": ["/indicator RELIANCE RSI", "/indicator AAPL MACD", "/indicator RELIANCE"],
     "/forecast": ["/forecast RELIANCE", "/forecast AAPL", "/forecast GODREJCP"],
     "/learn": ["/learn", "/learn stocks", "/learn schedule"],
@@ -737,6 +750,8 @@ def register_commands() -> bool:
         {"command": "fundamentalreport", "description": "Deep report or range: /fundamentalreport mylist"},
         {"command": "usstock", "description": "US stock details: /usstock AAPL (USD fundamentals)"},
         {"command": "checklist", "description": "32-point investment scorecard: /checklist RELIANCE"},
+        {"command": "setemail", "description": "Get reports in your mailbox: /setemail you@example.com"},
+        {"command": "emailreport", "description": "Mail the deep report: /emailreport RELIANCE"},
         {"command": "harmonicpatterns", "description": "Harmonic pattern scan NIFTY 100/500: /harmonicpatterns all"},
         {"command": "indicator", "description": "One-indicator deep-dive: /indicator RELIANCE RSI (US works too)"},
         {"command": "forecast", "description": "Analyst forecast + executives + competitors: /forecast RELIANCE"},

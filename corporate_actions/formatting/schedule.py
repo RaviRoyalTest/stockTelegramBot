@@ -76,6 +76,7 @@ def format_settings(chat_id) -> str:
                                 f"({(watcher.get('universe') or 'nifty100').upper()})"),
             "Movers fundamentals: " + ("auto" if settings.get("movers_fund") == "auto" else "button"),
             "Quiet mode: " + quiet_state,
+            "Mail id: " + (settings.get("email") or "not set (use /setemail)"),
             f"Your list is saved in: {where}",
             "Customize with /corpactions on|off, /pricealert, /watcher, /fundmode and /quiet.",
         ]

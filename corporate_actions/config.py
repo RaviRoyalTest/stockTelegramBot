@@ -135,6 +135,15 @@ BSE_LIST_URL = (
 )
 BSE_ACTIONS_URL = "https://api.bseindia.com/BseIndiaAPI/api/CorpActionAnncmentW/w"
 
+# Outgoing email (mail-id reports): any SMTP provider. Gmail needs an App
+# Password (Google Account > Security > 2-Step Verification > App passwords),
+# not the login password. Leave unset to disable email features.
+SMTP_HOST = os.getenv("SMTP_HOST", "").strip()
+SMTP_PORT = _env_int("SMTP_PORT", 587, floor=1)
+SMTP_USER = os.getenv("SMTP_USER", "").strip()
+SMTP_PASS = os.getenv("SMTP_PASS", "")
+SMTP_FROM = os.getenv("SMTP_FROM", "").strip() or SMTP_USER
+
 
 def today_ist() -> date:
     """Today's date in India Standard Time (Asia/Kolkata).
