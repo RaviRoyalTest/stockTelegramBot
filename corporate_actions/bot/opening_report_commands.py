@@ -107,7 +107,18 @@ def handle_opening_report(chat_id, parts) -> None:
         )
     reply(chat_id, head)
     try:
-        lines = build_report(markets, target_date)
+        # Single fetch shared by the shown report and the recorded file, so
+        # the saved open+close details can never disagree with this chat.
+        # Historical builds are computed but never saved (live file only).
+        from ..opening_report import collect_and_render
+        from ..opening_report.report import save_openclose_report
+
+        lines, report = collect_and_render(markets, target_date)
+        if target_date is None:
+            try:
+                save_openclose_report(report, markets, recorded_by="telegram")
+            except Exception as error:
+                log.info("openclose record skipped: %s", error)
     except Exception as error:
         log.warning("opening report failed: %s", error, exc_info=True)
         reply(chat_id, f"Could not build the report: {error}. Please try again shortly.")

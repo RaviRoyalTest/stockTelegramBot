@@ -226,7 +226,7 @@
             if (RS.makeSortable) RS.makeSortable(tbody, {});
           });
           document.getElementById('results').hidden = false;
-          document.getElementById('buildMeta').textContent = 'Built ' + new Date().toLocaleTimeString() + ' · source: Yahoo regular-session bars + official NSE index CSVs';
+          document.getElementById('buildMeta').textContent = 'Built ' + new Date().toLocaleTimeString() + ' · source: Yahoo regular-session bars + official NSE index CSVs' + (historical ? '' : ' · saved to data/openclose.json');
           RS.toast('Report ready', 'ok');
         } catch (err) {
           RS.toast('Report failed: ' + err.message, 'err');
@@ -237,6 +237,20 @@
       }
 
       document.getElementById('runBtn').addEventListener('click', run);
+      // recorded-file chip: what data/openclose.json holds (no re-fetch)
+      (function () {
+        fetch('/api/openreport/recorded').then(function (res) {
+          return res.ok ? res.json() : {};
+        }).then(function (doc) {
+          if (!doc || !doc.report) return;
+          var rep = doc.report || {};
+          var el = document.getElementById('buildMeta');
+          el.innerHTML = 'Recorded file: <strong>' + esc(doc.recorded_at || '?') + '</strong>' +
+            ' by ' + esc(doc.recorded_by || '?') +
+            ' · verified ' + (rep.total_verified || 0) + '/' + (rep.total_target || 0) +
+            ' · <a href="/sessions">Sessions tab</a> shows it without re-fetching.';
+        }).catch(function () { /* chip is best-effort */ });
+      })();
       // exposed for UI verification (tests inject a synthetic report payload;
       // nothing here fabricates market data)
       window.RSOpenReport = { renderSection: renderSection, statusCard: statusCard, renderSummary: renderSummary, stockTable: stockTable };

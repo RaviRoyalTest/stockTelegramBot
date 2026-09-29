@@ -17,6 +17,7 @@ from .schedule import (
     set_schedule_next_due,
 )
 from .migrate import migrate_legacy_state_files
+from .openclose import load_openclose, save_openclose
 from .seen import load_seen, save_seen
 from .snapshots import load_snapshots, save_snapshots
 from .settings import (
@@ -55,6 +56,8 @@ from .watchlist import (
 
 __all__ = [
     "migrate_legacy_state_files",
+    "load_openclose",
+    "save_openclose",
     "load_watchlist",
     "save_watchlist",
     "watchlist_key",

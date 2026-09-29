@@ -42,6 +42,7 @@ STATE_FILES = (
     config.SEEN_FILE,
     config.SCHEDULE_FILE,
     config.SNAPSHOT_FILE,
+    config.OPENREPORT_FILE,
 )
 
 

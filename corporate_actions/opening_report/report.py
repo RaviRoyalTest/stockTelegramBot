@@ -429,3 +429,130 @@ def build_report(
     historical session - see collect().
     """
     return render_telegram(collect(markets, target_date))
+
+
+def collect_and_render(
+    markets: tuple[str, ...] = (INDIA_MARKET, US_MARKET), target_date=None,
+) -> tuple[list[str], dict]:
+    """Collect the structured report AND render it (single fetch).
+
+    Use this instead of calling collect() + render_telegram() separately so
+    the recorded file and the shown report can never disagree.
+    """
+    report = collect(markets, target_date)
+    return render_telegram(report), report
+
+
+def _json_safe(value):
+    """Recursively coerce a report dict into strict JSON values.
+
+    Dates become ISO strings, sets become sorted lists, NaN/inf become
+    None - so the recorded file can never hold a value json.dump rejects
+    (or a NaN that silently poisons downstream math).
+    """
+    import math as _math
+    from datetime import date as _date
+    from datetime import datetime as _datetime
+
+    if isinstance(value, dict):
+        return {str(key): _json_safe(item) for key, item in value.items()}
+    if isinstance(value, (list, tuple)):
+        return [_json_safe(item) for item in value]
+    if isinstance(value, (set, frozenset)):
+        try:
+            return sorted((_json_safe(item) for item in value), key=repr)
+        except TypeError:
+            return [_json_safe(item) for item in value]
+    if isinstance(value, (_datetime, _date)):
+        return value.isoformat()
+    if isinstance(value, float) and (_math.isnan(value) or _math.isinf(value)):
+        return None
+    return value
+
+
+def _record_is_current(doc: dict, markets: tuple[str, ...], target_date=None) -> bool:
+    """True when the recorded file already covers this exact request."""
+    if not isinstance(doc, dict) or not doc.get("report"):
+        return False
+    if target_date is not None:
+        return doc.get("target_date") == target_date.isoformat()
+    try:
+        from ..core.dates import today_ist
+        from datetime import datetime as _dt
+
+        try:
+            from zoneinfo import ZoneInfo as _ZoneInfo
+            recorded_day = _dt.fromisoformat(
+                str(doc.get("recorded_at") or "").replace("Z", "+00:00")
+            ).astimezone(_ZoneInfo("Asia/Kolkata")).date().isoformat()
+        except Exception:
+            recorded_day = str(doc.get("recorded_at") or "")[:10]
+    except Exception:
+        return False
+    return (
+        doc.get("mode") == "live"
+        and recorded_day == today_ist().isoformat()
+        and sorted(doc.get("markets") or []) == sorted(markets)
+    )
+
+
+def save_openclose_report(report: dict, markets: tuple[str, ...],
+                          recorded_by: str = "manual") -> dict:
+    """Persist an already-built LIVE report doc. No fetching (pure save).
+
+    Returns the saved doc. Historical reports must never reach here -
+    callers gate on target_date is None.
+    """
+    from .. import storage
+    from datetime import datetime, timezone
+
+    doc = {
+        "recorded_at": datetime.now(timezone.utc).isoformat(timespec="seconds"),
+        "recorded_by": recorded_by,
+        "mode": "live",
+        "markets": sorted(markets),
+        "target_date": None,
+        "report": _json_safe(report),
+    }
+    storage.save_openclose(doc)
+    log.info("openclose: recorded live %s", "+".join(sorted(markets)))
+    return doc
+
+
+def record_openclose(
+    markets: tuple[str, ...] = (INDIA_MARKET, US_MARKET), target_date=None,
+    force: bool = False, recorded_by: str = "manual",
+) -> dict:
+    """Build the open+close report and persist it to data/openclose.json.
+
+    Historical-date builds are always computed but never saved - the file
+    holds the LIVE record only, so looking up a past session can never
+    clobber it. Live builds skip the fetch when the file is already current
+    (unless force). Never raises: returns {} only when every source failed.
+    """
+    from .. import storage
+
+    if target_date is not None:
+        lines, _report = collect_and_render(markets, target_date)
+        return {"lines": lines, "recorded": False, "reason": "historical builds are not saved"}
+
+    try:
+        existing = storage.load_openclose() or {}
+        if not force and _record_is_current(existing, markets):
+            log.info("openclose: record already current - skipping refetch")
+            return {"lines": [], "recorded": False, "reason": "already current", "doc": existing}
+    except Exception:
+        pass
+
+    try:
+        lines, report = collect_and_render(markets, None)
+    except Exception as error:
+        log.warning("openclose: record build failed: %s", error)
+        return {"lines": [], "recorded": False, "reason": str(error)}
+
+    try:
+        doc = save_openclose_report(report, markets, recorded_by)
+    except Exception as error:
+        log.warning("openclose: save failed: %s", error)
+        return {"lines": lines, "recorded": False, "reason": str(error)}
+    return {"lines": lines, "recorded": True, "doc": doc}

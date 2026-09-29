@@ -1079,7 +1079,32 @@ async def api_openreport(market: str = Query("all"), date: str = Query("")):
             target_date = _dt.date.fromisoformat(date.strip())
         except ValueError:
             raise HTTPException(status_code=400, detail="date must be YYYY-MM-DD")
-    return await asyncio.to_thread(openreport.collect, markets, target_date)
+    report = await asyncio.to_thread(openreport.collect, markets, target_date)
+    # Persist live builds so data/openclose.json survives redeploys and the
+    # page can show the recorded details without re-fetching. Historical
+    # builds are served but never saved (live record only).
+    if target_date is None:
+        try:
+            from corporate_actions.opening_report.report import save_openclose_report
+
+            await asyncio.to_thread(save_openclose_report, report, markets, "web")
+        except Exception as exc:
+            log.info("/api/openreport record skipped: %s", exc)
+    return JSONResponse(report)
+
+
+@app.get("/api/openreport/recorded")
+async def api_openreport_recorded():
+    """The recorded open+close file ({} when never recorded).
+
+    Lets the web page show the saved open/close details with their
+    recorded stamp instead of rebuilding the whole scan on every view.
+    """
+    try:
+        doc = await asyncio.to_thread(storage.load_openclose)
+        return JSONResponse(doc or {})
+    except Exception as exc:
+        raise HTTPException(status_code=500, detail=str(exc))
 
 
 @app.get("/api/checklist")

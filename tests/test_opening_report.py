@@ -397,5 +397,72 @@ class TelegramLayoutTests(unittest.TestCase):
         self.assertIn("\U0001F525", lines[0])  # fire marks the spike band
 
 
+class RecordOpencloseTests(unittest.TestCase):
+    """data/openclose.json recording: JSON-safety, skip rules, save shape."""
+
+    def test_json_safe_coerces_everything(self):
+        import datetime as _dt
+
+        from corporate_actions.opening_report import report as r
+
+        out = r._json_safe({
+            "day": _dt.date(2026, 9, 29),
+            "tags": {"b", "a"},
+            "bad": float("nan"),
+            "rows": [{"x": 1}],
+        })
+        self.assertEqual(out["day"], "2026-09-29")
+        self.assertEqual(out["tags"], ["a", "b"])
+        self.assertIsNone(out["bad"])
+        self.assertEqual(out["rows"], [{"x": 1}])
+        import json
+
+        json.dumps(out)  # must never raise
+
+    def test_historical_builds_are_never_saved(self):
+        import datetime as _dt
+
+        from corporate_actions.opening_report import report as r
+
+        saved = []
+        fake_report = {"sections": [], "total_verified": 0, "total_target": 0}
+        with patch.object(r, "collect_and_render",
+                          return_value=(["L"], fake_report)):
+            with patch("corporate_actions.storage.save_openclose",
+                       side_effect=lambda doc: saved.append(doc)):
+                out = r.record_openclose(
+                    ("in",), _dt.date(2026, 9, 18), recorded_by="test")
+        self.assertEqual(saved, [])
+        self.assertFalse(out["recorded"])
+        self.assertEqual(out["reason"], "historical builds are not saved")
+        self.assertEqual(out["lines"], ["L"])
+
+    def test_live_build_saves_once_then_skips(self):
+        from corporate_actions import storage as storage_pkg
+        from corporate_actions.opening_report import report as r
+
+        fake_report = {"sections": [], "total_verified": 4, "total_target": 4,
+                       "mode": "live"}
+        saved = []
+        with patch.object(r, "collect_and_render",
+                          return_value=(["L"], fake_report)):
+            with patch("corporate_actions.storage.save_openclose",
+                       side_effect=lambda doc: saved.append(doc)):
+                with patch.object(storage_pkg, "load_openclose", return_value={}):
+                    first = r.record_openclose(("in",), None, recorded_by="test")
+        self.assertTrue(first["recorded"])
+        self.assertEqual(len(saved), 1)
+        self.assertEqual(saved[0]["mode"], "live")
+        self.assertEqual(saved[0]["markets"], ["in"])
+        # Second call sees the fresh record and skips the fetch entirely.
+        with patch.object(r, "collect_and_render",
+                          side_effect=AssertionError("must not refetch")):
+            with patch.object(storage_pkg, "load_openclose",
+                              return_value=saved[0]):
+                second = r.record_openclose(("in",), None, recorded_by="test")
+        self.assertFalse(second["recorded"])
+        self.assertEqual(second["reason"], "already current")
+
+
 if __name__ == "__main__":
     unittest.main()

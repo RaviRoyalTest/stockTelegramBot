@@ -11,7 +11,9 @@ paths = sorted({r.path for r in dashboard.app.routes})
 for must in ["/api/quote", "/api/history", "/api/news", "/api/search",
              "/api/universe", "/api/screener", "/api/fundamentals",
              "/api/watchlist", "/api/status", "/api/corporate_actions",
-             "/", "/market", "/fundamentals", "/watchlist", "/exdates", "/system"]:
+             "/api/openreport", "/api/openreport/recorded",
+             "/", "/market", "/fundamentals", "/watchlist", "/exdates", "/system",
+             "/openreport"]:
     print(("OK  " if must in paths else "MISS"), must)
 
 print("== fundamentals template ids ==")

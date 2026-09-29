@@ -16,10 +16,12 @@ class StatePathsTests(unittest.TestCase):
         self.assertEqual(config.SEEN_FILE.parent.name, "data")
         self.assertEqual(config.SCHEDULE_FILE.parent.name, "data")
         self.assertEqual(config.SNAPSHOT_FILE.parent.name, "data")
+        self.assertEqual(config.OPENREPORT_FILE.parent.name, "data")
         self.assertEqual(
             {path.name for path in github.STATE_FILES},
             {"watchlist.json", "subscriptions.json", "settings.json",
-             "seen_actions.json", "schedule.json", "snapshots.json"},
+             "seen_actions.json", "schedule.json", "snapshots.json",
+             "openclose.json"},
         )
         for path in github.STATE_FILES:
             self.assertEqual(path.parent.name, "data")

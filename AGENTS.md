@@ -26,7 +26,8 @@ Not acceptable: any diff inside those routes or that test file.
   stale base or overwrite commits pushed by the deployed bot / GitHub Actions.
 - This repo is stateful: `data/watchlist.json`, `data/schedule.json`,
   `data/settings.json`, `data/seen_actions.json`, `data/subscriptions.json`
-  (plus `data/snapshots.json` for recorded market screens) are committed and
+  (plus `data/snapshots.json` for recorded market screens and
+  `data/openclose.json` for the recorded open+close report) are committed and
   written by the always-on bot server AND the hourly GitHub Actions cron.
   Always pull first.
 

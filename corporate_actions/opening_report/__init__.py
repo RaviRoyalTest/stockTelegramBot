@@ -17,7 +17,7 @@ from .data import (
     top_gainers,
     top_losers,
 )
-from .report import build_report
+from .report import build_report, collect_and_render, record_openclose
 
 __all__ = [
     "fetch_universe_moves",
@@ -33,4 +33,6 @@ __all__ = [
     "top_gainers",
     "top_losers",
     "build_report",
+    "collect_and_render",
+    "record_openclose",
 ]
