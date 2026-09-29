@@ -1,14 +1,5 @@
 [
   {
-    "interval_min": 60,
-    "commands": [
-      "/toplosers 1h"
-    ],
-    "chat": "862087765",
-    "next_due": "2026-09-09T14:15:00",
-    "market": "in"
-  },
-  {
     "interval_min": 1440,
     "commands": [
       "/corpactionsformylist"

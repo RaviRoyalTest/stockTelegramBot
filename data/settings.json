@@ -7,6 +7,7 @@
       "universe": "nifty500"
     },
     "recent_commands": [
+      "/schedule remove 1",
       "/schedule",
       "/status",
       "/toplosers 1h",
@@ -15,8 +16,7 @@
       "/schedule run",
       "/movers",
       "/news SCHNEIDER",
-      "/fundamentalreport  1",
-      "/fundamentalreport"
+      "/fundamentalreport  1"
     ],
     "movers_fund": "button"
   },
