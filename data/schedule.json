@@ -35,6 +35,7 @@
     ],
     "chat": "@StockVigilBot",
     "run_at": "09:40,16:05",
-    "market": "us"
+    "market": "us",
+    "next_due": "2026-09-29T20:05:00"
   }
 ]
