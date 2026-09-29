@@ -33,6 +33,7 @@ from . import (
     schedule_commands,
     screen_commands,
     settings_commands,
+    snapshot_commands,
     status as status_commands,
     us_commands,
     watchlist_commands,
@@ -231,6 +232,10 @@ def handle_command(chat_id, text):
         screen_commands.handle_screen(chat_id, parts)
         return
 
+    if command in ("/snap", "/snapshot", "/snapnow"):
+        snapshot_commands.handle_snap(chat_id, parts)
+        return
+
     if command in ("/ind", "/indicator", "/tech", "/technical"):
         indicator_commands.handle_indicator(chat_id, parts)
         return
@@ -262,6 +267,10 @@ def handle_command(chat_id, text):
 
     if command in ("/emailreport", "/emailfund"):
         email_commands.handle_emailreport(chat_id, parts)
+        return
+
+    if command in ("/dailyemail", "/dailymail", "/emaildaily"):
+        email_commands.handle_dailyemail(chat_id, parts)
         return
 
     if len(parts) < 2:

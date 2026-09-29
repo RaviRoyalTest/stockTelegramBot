@@ -18,10 +18,12 @@ import logging
 import traceback
 
 from corporate_actions import sources, storage
+from corporate_actions import snapshots as snapshots_service
 from corporate_actions.screener_service import screen_universe_async
 from corporate_actions.market import hours as market_hours
 from corporate_actions.telegram import client as telegram_client
 import asyncio
+import threading
 
 log = logging.getLogger(__name__)
 
@@ -1532,6 +1534,65 @@ async def exdates_page(request: Request):
 @app.get("/system", response_class=HTMLResponse)
 async def system_page(request: Request):
     return templates.TemplateResponse(request, "system.html")
+
+
+@app.get("/sessions", response_class=HTMLResponse)
+async def sessions_page(request: Request):
+    return templates.TemplateResponse(request, "sessions.html")
+
+
+# Background snapshot recording state (one at a time; the web UI polls).
+_snap_state: dict = {"recording": False, "error": None}
+
+
+def _record_snapshot_thread(universe: str, force: bool) -> None:
+    try:
+        snapshots_service.record_session_snapshot(
+            universe=universe, force=force, recorded_by="web")
+    except Exception as exc:
+        log.warning("/api/snapshots/record failed: %s", exc)
+        _snap_state["error"] = str(exc)
+    finally:
+        _snap_state["recording"] = False
+
+
+@app.get("/api/snapshots")
+async def api_snapshots():
+    """The recorded last-session file (gap-downs, movers, actions).
+
+    Served from disk - never re-fetches. Empty {} when nothing was
+    recorded yet (use POST /api/snapshots/record or Telegram /snap).
+    """
+    try:
+        doc = await asyncio.to_thread(storage.load_snapshots)
+        return JSONResponse({**(doc or {}), "recording": _snap_state["recording"]})
+    except Exception as exc:
+        raise HTTPException(status_code=500, detail=str(exc))
+
+
+@app.post("/api/snapshots/record")
+async def api_snapshots_record(
+    universe: str = Query("nifty500"),
+    force: bool = Query(False),
+):
+    """Start recording the last session in the background (202 at once).
+
+    Skips when a recording is already running or the file already covers
+    the latest session (unless force=1) - the UI polls GET /api/snapshots.
+    """
+    universe = (universe or "nifty500").strip().lower()
+    if universe not in ("nifty500", "nifty100"):
+        raise HTTPException(status_code=400, detail="universe must be nifty500|nifty100")
+    if _snap_state["recording"]:
+        return JSONResponse({"started": False, "reason": "already recording"}, status_code=202)
+    _snap_state["recording"] = True
+    _snap_state["error"] = None
+    thread = threading.Thread(
+        target=_record_snapshot_thread, args=(universe, force),
+        daemon=True, name="snapshot-record",
+    )
+    thread.start()
+    return JSONResponse({"started": True, "universe": universe}, status_code=202)
 
 
 @app.get("/api/status")

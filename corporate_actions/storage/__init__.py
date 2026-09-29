@@ -16,7 +16,9 @@ from .schedule import (
     schedule_next_due_ts,
     set_schedule_next_due,
 )
+from .migrate import migrate_legacy_state_files
 from .seen import load_seen, save_seen
+from .snapshots import load_snapshots, save_snapshots
 from .settings import (
     ca_alerts_enabled,
     get_recent_commands,
@@ -52,6 +54,7 @@ from .watchlist import (
 )
 
 __all__ = [
+    "migrate_legacy_state_files",
     "load_watchlist",
     "save_watchlist",
     "watchlist_key",
@@ -79,6 +82,8 @@ __all__ = [
     "get_recent_commands",
     "load_seen",
     "save_seen",
+    "load_snapshots",
+    "save_snapshots",
     "load_schedule",
     "load_schedule_for",
     "save_schedule",
@@ -90,3 +95,12 @@ __all__ = [
     "pause_schedule",
     "resume_schedule",
 ]
+
+
+# One-time move of any leftover repo-root state files (pre-reorg copies)
+# into data/. No-op when there is nothing to move; never raises, so importing
+# the storage package can never break the bot over a filesystem quirk.
+try:
+    migrate_legacy_state_files()
+except Exception:  # pragma: no cover - defensive, best effort only
+    pass

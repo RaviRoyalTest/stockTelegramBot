@@ -24,9 +24,11 @@ Not acceptable: any diff inside those routes or that test file.
 - Run `git pull --ff-only` (or `git fetch && git merge --ff-only origin/main`)
   before you start a task and before you commit/push, so you never build on a
   stale base or overwrite commits pushed by the deployed bot / GitHub Actions.
-- This repo is stateful: `watchlist.json`, `schedule.json`, `settings.json`,
-  `seen_actions.json`, `subscriptions.json` are committed and written by the
-  always-on bot server AND the hourly GitHub Actions cron. Always pull first.
+- This repo is stateful: `data/watchlist.json`, `data/schedule.json`,
+  `data/settings.json`, `data/seen_actions.json`, `data/subscriptions.json`
+  (plus `data/snapshots.json` for recorded market screens) are committed and
+  written by the always-on bot server AND the hourly GitHub Actions cron.
+  Always pull first.
 
 ## 2. Use SOLID principles and keep a proper folder structure
 

@@ -520,6 +520,19 @@ class Poller:
                         errors.append(f"Telegram: {error}")
                         break
 
+            # ------------------------------------------- daily email digest
+            # Opt-in everyday mail (snapshot + actions) to the chat's mail id.
+            # Respects quiet mode like every other automatic message; never
+            # raises (maybe_send_daily_email degrades to a skip internally).
+            if not quiet and not suppress:
+                try:
+                    from ..email.daily import maybe_send_daily_email
+
+                    if maybe_send_daily_email(chat_id):
+                        sent += 1
+                except Exception as error:
+                    log.info("poll cycle: daily email skipped for chat %s: %s", chat_id, error)
+
         if self._seen:
             try:
                 storage.save_seen(self._seen)

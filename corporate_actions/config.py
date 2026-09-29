@@ -101,11 +101,12 @@ SCHEDULED_COMMANDS = [
 # is active an automatic report only fires while that market is open.
 SCHEDULED_REPORTS_MARKET = os.getenv("SCHEDULED_REPORTS_MARKET", "in").strip().lower()
 
-WATCHLIST_FILE = Path(os.getenv("WATCHLIST_FILE", str(BASE_DIR / "watchlist.json")))
-SUBSCRIPTIONS_FILE = Path(os.getenv("SUBSCRIPTIONS_FILE", str(BASE_DIR / "subscriptions.json")))
-SETTINGS_FILE = Path(os.getenv("SETTINGS_FILE", str(BASE_DIR / "settings.json")))
-SEEN_FILE = Path(os.getenv("SEEN_FILE", str(BASE_DIR / "seen_actions.json")))
-SCHEDULE_FILE = Path(os.getenv("SCHEDULE_FILE", str(BASE_DIR / "schedule.json")))
+WATCHLIST_FILE = Path(os.getenv("WATCHLIST_FILE", str(BASE_DIR / "data" / "watchlist.json")))
+SUBSCRIPTIONS_FILE = Path(os.getenv("SUBSCRIPTIONS_FILE", str(BASE_DIR / "data" / "subscriptions.json")))
+SETTINGS_FILE = Path(os.getenv("SETTINGS_FILE", str(BASE_DIR / "data" / "settings.json")))
+SEEN_FILE = Path(os.getenv("SEEN_FILE", str(BASE_DIR / "data" / "seen_actions.json")))
+SCHEDULE_FILE = Path(os.getenv("SCHEDULE_FILE", str(BASE_DIR / "data" / "schedule.json")))
+SNAPSHOT_FILE = Path(os.getenv("SNAPSHOT_FILE", str(BASE_DIR / "data" / "snapshots.json")))
 
 USER_AGENT = (
     "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "

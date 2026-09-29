@@ -5,5 +5,12 @@ Sends the bot's HTML reports to a user's mail id via any SMTP provider
 smtplib + email.message from the standard library.
 """
 from .client import EmailError, is_configured, send_email
+from .daily import build_daily_lines, maybe_send_daily_email
 
-__all__ = ["EmailError", "is_configured", "send_email"]
+__all__ = [
+    "EmailError",
+    "is_configured",
+    "send_email",
+    "build_daily_lines",
+    "maybe_send_daily_email",
+]

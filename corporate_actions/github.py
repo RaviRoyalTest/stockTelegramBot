@@ -34,13 +34,14 @@ def github_push_configured() -> bool:
     return bool(os.getenv("GH_TOKEN") and os.getenv("GITHUB_REPOSITORY"))
 
 
-# The five state files that must reach GitHub to survive a redeploy.
+# The state files that must reach GitHub to survive a redeploy.
 STATE_FILES = (
     config.WATCHLIST_FILE,
     config.SUBSCRIPTIONS_FILE,
     config.SETTINGS_FILE,
     config.SEEN_FILE,
     config.SCHEDULE_FILE,
+    config.SNAPSHOT_FILE,
 )
 
 

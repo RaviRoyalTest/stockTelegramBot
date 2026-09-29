@@ -121,7 +121,7 @@ def format_schedule(chat_id) -> str:
             "Add one with <code>/schedule add 3h /scan500</code>."
         )
     lines = [
-        "<b>Your schedule (schedule.json - pushed to GitHub)</b>",
+        "<b>Your schedule (data/schedule.json - pushed to GitHub)</b>",
         f"Gate: <b>{market_label(default_market)}</b> (change with /market)",
     ]
     for index, entry in enumerate(mine, start=1):

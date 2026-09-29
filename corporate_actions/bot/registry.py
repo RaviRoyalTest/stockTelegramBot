@@ -13,7 +13,7 @@ from ..formatting.schedule import format_schedule, format_settings
 from ..poller.watcher import DEFAULT_WATCHER
 from ..telegram.client import is_configured, set_my_commands
 from ..telegram.markup import inline_command_buttons, quick_menu_markup, recent_buttons
-from . import corporate_action_commands, scanner_commands, schedule_commands, screen_commands, status as status_commands, watchlist_commands
+from . import corporate_action_commands, scanner_commands, schedule_commands, screen_commands, snapshot_commands, status as status_commands, watchlist_commands
 from .help_texts import CA_HELP
 from .reply import reply, reply_messages
 
@@ -405,6 +405,12 @@ COMMAND_USAGE = {
         "/emailreport RELIANCE  \u2192 full report + snapshot in your inbox\n"
         "Needs /setemail first. Aliases: /emailfund"
     ),
+    "/dailyemail": (
+        "<b>/dailyemail</b> - everyday snapshot digest to your mail id\n"
+        "/dailyemail on   \u2192 gap-downs, movers + actions mailed daily\n"
+        "/dailyemail off  \u2192 stop the daily mail\n"
+        "Needs /setemail first. Aliases: /dailymail, /emaildaily"
+    ),
     "/indicator": (
         "<b>/indicator</b> - clear deep-dive for ONE indicator\n"
         "/indicator RELIANCE RSI  \u2192 value, signal, trend &amp; how to read it\n"
@@ -560,8 +566,10 @@ COMMAND_EXAMPLES = {
     "/gappers": ["/gappers", "/gappers 1d", "/gappers 2d", "/gappers window 3d", "/gappers 12-08-2026", "/gappers up", "/gappers all", "/gappers GODREJCP"],
     "/checklist": ["/checklist RELIANCE", "/checklist mylist"],
     "/screen": ["/screen pe<25 roe>15", "/screen div>1.5", "/screen rsi 50-70 macd"],
+    "/snap": ["/snap", "/snap nifty100"],
     "/setemail": ["/setemail you@example.com", "/setemail off"],
     "/emailreport": ["/emailreport RELIANCE"],
+    "/dailyemail": ["/dailyemail on", "/dailyemail off"],
     "/indicator": ["/indicator RELIANCE RSI", "/indicator AAPL MACD", "/indicator RELIANCE"],
     "/forecast": ["/forecast RELIANCE", "/forecast AAPL", "/forecast GODREJCP"],
     "/learn": ["/learn", "/learn stocks", "/learn schedule"],
@@ -621,6 +629,12 @@ DESCRIBE_AND_RUN = {
         "the web Screener page): valuation, quality, yield &amp; momentum filters. "
         "Try <code>/screen pe&lt;25 roe&gt;15</code>.",
         lambda chat_id: screen_commands.handle_screen(chat_id, ["/screen"]),
+    ),
+    "/snap": (
+        "\U0001F4F8 <b>/snap</b> - records the last session (gap-downs + "
+        "movers + actions) to disk for the web Sessions tab and the daily "
+        "mail. Skips when already recorded - starting it now.",
+        lambda chat_id: snapshot_commands.handle_snap(chat_id, ["/snap"]),
     ),
     "/checknow": (
         "\u26A1 <b>/checknow</b> - force-runs an alert check now and re-sends "
@@ -752,11 +766,13 @@ def register_commands() -> bool:
         {"command": "checklist", "description": "32-point investment scorecard: /checklist RELIANCE"},
         {"command": "setemail", "description": "Get reports in your mailbox: /setemail you@example.com"},
         {"command": "emailreport", "description": "Mail the deep report: /emailreport RELIANCE"},
+        {"command": "dailyemail", "description": "Everyday snapshot digest: /dailyemail on"},
         {"command": "harmonicpatterns", "description": "Harmonic pattern scan NIFTY 100/500: /harmonicpatterns all"},
         {"command": "indicator", "description": "One-indicator deep-dive: /indicator RELIANCE RSI (US works too)"},
         {"command": "forecast", "description": "Analyst forecast + executives + competitors: /forecast RELIANCE"},
         {"command": "scan500", "description": "NIFTY 500 CNC/MIS technical scanner"},
         {"command": "screen", "description": "Fundamental screener: /screen pe<25 roe>15"},
+        {"command": "snap", "description": "Record last session to disk for Sessions tab + daily mail"},
         {"command": "topmovers", "description": "Top gainers AND losers with fundamentals"},
         {"command": "openreport", "description": "Opening/closing screener: India + US, gainers & losers"},
         {"command": "topgainers", "description": "Top rising stocks with fundamentals"},

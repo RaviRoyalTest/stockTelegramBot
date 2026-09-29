@@ -32,8 +32,8 @@ def list_location(chat_id) -> str:
     the user always knows which list the results relate to.
     """
     if is_owner(chat_id):
-        return "watchlist.json (owner's list)"
-    return f"subscriptions.json (chat {chat_id})"
+        return "data/watchlist.json (owner's list)"
+    return f"data/subscriptions.json (chat {chat_id})"
 
 
 def get_user_list(chat_id) -> list:

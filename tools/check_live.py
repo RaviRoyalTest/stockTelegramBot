@@ -39,6 +39,7 @@ PAGES = {
     "/invest/bonds": "Bonds",
     "/invest/commodities": "Gold vs Silver",
     "/exdates": "Corporate actions",
+    "/sessions": "Recorded sessions",
     "/system": "System",
 }
 
@@ -49,6 +50,7 @@ APIS = [
     "/api/search?q=reliance&limit=3",
     "/api/quote?symbol=RELIANCE",
     "/api/metals",
+    "/api/snapshots",
 ]
 
 NAV_MARKERS = ["nav-group", "/invest/stocks", "topSearch"]

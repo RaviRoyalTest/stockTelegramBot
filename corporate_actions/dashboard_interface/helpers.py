@@ -375,7 +375,7 @@ def parse_telegram_watchlist(text: str) -> list[dict]:
         44. VBL (NSE)
 
         Use /fundamentalanalyze 5-10 or /fundamentalreport 3-5 to get details by these numbers.
-        Saved in: subscriptions.json (your chat 862087765)
+        Saved in: data/subscriptions.json (your chat 862087765)
         Persistence: pushed to GitHub - it survives redeploys.
 
     Returns a list of dicts with 'symbol' and 'exchange' keys, preserving

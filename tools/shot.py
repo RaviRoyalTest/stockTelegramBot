@@ -42,6 +42,7 @@ PAGES = [
     "/invest/commodities",
     "/invest/ipo",
     "/exdates",
+    "/sessions",
     "/system",
 ]
 

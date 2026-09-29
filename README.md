@@ -9,9 +9,9 @@ dropdown, then continuously polls both exchanges for corporate actions
 - Multi-select dropdown to choose any number of stocks; deselect/remove anytime.
 - Type-to-filter search across ~2400 NSE equities (plus BSE when reachable).
 - Manual "Add symbol" for stocks not in the fetched list.
-- Persistent watchlist (`watchlist.json`) — survives restarts.
+- Persistent watchlist (`data/watchlist.json`) — survives restarts.
 - Background poller sends **new** corporate actions to Telegram (de-duplicated
-  via `seen_actions.json` so nothing is re-sent across restarts).
+  via `data/seen_actions.json` so nothing is re-sent across restarts).
 - **Ex-date reminders** - warned once when an action's ex-date is `REMINDER_DAYS`
   (default 5) days away, so you're alerted before the event, not just at the
   announcement.
@@ -59,9 +59,9 @@ Open the URL shown in the terminal, then:
 | `LOOKBACK_DAYS`         | `30`    | Past-days window used for BSE fetch      |
 | `REMINDER_DAYS`         | `5`     | Days ahead of ex-date to send a reminder (`0` = off) |
 | `SCHEDULED_REPORTS_ENABLED` | `true` | Run scheduled screens on a timer (always-on server only) - every user's own entries are delivered to their own chat |
-| `SCHEDULED_REPORTS_INTERVAL_MIN` | `180` | Minutes between scheduled reports (min 15) - used only when `schedule.json` has no entries |
-| `SCHEDULED_REPORTS_CHAT` | owner | Chat id for the env-default report (defaults to `TELEGRAM_CHAT_ID`); used only while the owner has no entries in `schedule.json` |
-| `SCHEDULED_COMMANDS`     | `/scan500` | Comma-separated commands run on the schedule - used only when `schedule.json` has no entries |
+| `SCHEDULED_REPORTS_INTERVAL_MIN` | `180` | Minutes between scheduled reports (min 15) - used only when `data/schedule.json` has no entries |
+| `SCHEDULED_REPORTS_CHAT` | owner | Chat id for the env-default report (defaults to `TELEGRAM_CHAT_ID`); used only while the owner has no entries in `data/schedule.json` |
+| `SCHEDULED_COMMANDS`     | `/scan500` | Comma-separated commands run on the schedule - used only when `data/schedule.json` has no entries |
 | `SCHEDULED_REPORTS_MARKET` | `in`    | Default market-hours gate for scheduled reports: `in` (India NSE/BSE 09:15-15:30 IST), `us` (NASDAQ/NYSE 09:30-16:00 ET) or `any` (no gate). An automatic report only fires while its gate's market is open; per-entry and per-user overrides exist via `/schedule add ... us` and `/market us` |
 
 ## Deploy free on GitHub Actions (24/7 polling, no server)
@@ -114,7 +114,7 @@ Send these to your bot:
 | `/scan500` | `/scan500` | Full NIFTY 500 multi-indicator CNC/MIS scanner. Computes EMAs (20/50/100/200), SMA 50/200 golden cross, RSI, MACD, Stochastic, Bollinger Bands (%B), CCI, ADX/+DI/-DI, Aroon, Parabolic SAR, CMF, MFI, OBV, TTM Squeeze, Donchian 52-week channel, weekly Supertrend, GMMA, anchored VWAP and Mansfield RS for all ~500 stocks, applies the strict "do not buy / do not show" rejection rules (weekly supertrend red, below 200 SMA, CMF < 0, MRS < 0, R:R < 1:2, SL > 8%, ADTV < ₹10cr), scores survivors /100 (≥75 qualifies) and reports: market regime + breadth, rejected stocks with reasons, #1 top trade setup, an approved-stocks matrix, then a FULL indicator card for each of the **TOP 10** (trend & structure, momentum, volume & flow, entry/SL/targets with R:R). Takes ~1–2 minutes. Delivery % is estimated from money-flow (real NSE delivery data isn't public via this feed) |
 | `/indicator SYM [NAME]` | `/indicator RELIANCE RSI` · `/indicator AAPL MACD` | Clear deep-dive for **one indicator** on one stock (Indian NSE/BSE **and** US NASDAQ/NYSE, auto-detected): current value(s) with signal, the indicator's own 5-session trend, a plain-language explanation and a "how to read the levels" legend. Works for rsi, macd, stochastic, bollinger, cci, adx, aroon, psar, supertrend, ema/sma, gmma, vwap, atr, donchian, squeeze, cmf, mfi, obv. With no name it prints the **full all-indicators card** (same format as the /scan500 TOP 10 cards) with score, breakdown and trade plan. Aliases: `/ind`, `/tech`, `/technical` |
 | `/forecast SYM` | `/forecast RELIANCE` · `/forecast AAPL` | The **forecast value** for a stock (Indian + US, auto-detected): analyst consensus & rating breakdown (Strong Buy/Buy/Hold/Sell/Strong Sell counts), the 12-month **target price with upside %**, the **top executives** (Yahoo companyOfficers) and, for NSE stocks, the **top competitors** by market cap (screener.in peer comparison with CMP / MCap / P/E / ROCE). The same sections now also appear in the deep reports (`/fundamentalreport`, `/usstock`) and a compact analyst-forecast line in the quick card (`/fundamentalanalyze`) and the dashboard. Aliases: `/analyst`, `/forecastanalysis` |
-| `/schedule [add <interval> <cmd> \| remove <n> \| clear]` | `/schedule add 3h /scan500` | Works for EVERY user - each person manages their own schedule and their reports are delivered to their own chat, never mixed with anyone else's. `/schedule` lists YOUR schedule. `/schedule add <interval> <command>` runs a command on its own timer — interval is minutes (`180`), `m` (`90m`), `h` (`3h`) or `d` (`1d`), minimum 15 minutes, e.g. `/schedule add 3h /scan500`, `/schedule add 90m /topmovers 30m`. **Market-hours gate**: by default every scheduled report only fires while the Indian market is open (09:15–15:30 IST, Mon–Fri). Append a market word after the command to change it: `/schedule add 3h /scan500 us` = only US market hours (NASDAQ/NYSE 09:30–16:00 ET), `/schedule add 3h /scan500 any` = no gate (any time). A custom run window overrides the market hours: `/schedule add 3h /scan500 in from 09:15 to 15:30`. **Pause/resume**: `/schedule pause 1d` (also `2d`, `3d`, `1w`, `2w`, `1mo` or `12h`) pauses YOUR whole schedule until the duration lapses (auto-resumes); `/schedule resume` restarts it early. `/schedule market in|us|any` (or `/market`) sets YOUR default gate for future entries. `/schedule remove <n>` deletes YOUR entry n (1-based as shown by `/schedule`), `/schedule clear` removes all of YOUR entries (other users' rows are untouched). Entries are saved to `schedule.json` (keyed per chat) and pushed to GitHub, so they survive redeploys. The owner gets the `SCHEDULED_COMMANDS` env defaults while they have no own entries; other users' entries never suppress those defaults. **Every scheduled report is attributed**: before running, the bot sends a banner naming the schedule entry, its cadence, the market-hours gate, the command and the watchlist (`watchlist.json` vs `subscriptions.json`) the results relate to - automatic reports are never anonymous. Alias: `/sched` |
+| `/schedule [add <interval> <cmd> \| remove <n> \| clear]` | `/schedule add 3h /scan500` | Works for EVERY user - each person manages their own schedule and their reports are delivered to their own chat, never mixed with anyone else's. `/schedule` lists YOUR schedule. `/schedule add <interval> <command>` runs a command on its own timer — interval is minutes (`180`), `m` (`90m`), `h` (`3h`) or `d` (`1d`), minimum 15 minutes, e.g. `/schedule add 3h /scan500`, `/schedule add 90m /topmovers 30m`. **Market-hours gate**: by default every scheduled report only fires while the Indian market is open (09:15–15:30 IST, Mon–Fri). Append a market word after the command to change it: `/schedule add 3h /scan500 us` = only US market hours (NASDAQ/NYSE 09:30–16:00 ET), `/schedule add 3h /scan500 any` = no gate (any time). A custom run window overrides the market hours: `/schedule add 3h /scan500 in from 09:15 to 15:30`. **Pause/resume**: `/schedule pause 1d` (also `2d`, `3d`, `1w`, `2w`, `1mo` or `12h`) pauses YOUR whole schedule until the duration lapses (auto-resumes); `/schedule resume` restarts it early. `/schedule market in|us|any` (or `/market`) sets YOUR default gate for future entries. `/schedule remove <n>` deletes YOUR entry n (1-based as shown by `/schedule`), `/schedule clear` removes all of YOUR entries (other users' rows are untouched). Entries are saved to `data/schedule.json` (keyed per chat) and pushed to GitHub, so they survive redeploys. The owner gets the `SCHEDULED_COMMANDS` env defaults while they have no own entries; other users' entries never suppress those defaults. **Every scheduled report is attributed**: before running, the bot sends a banner naming the schedule entry, its cadence, the market-hours gate, the command and the watchlist (`data/watchlist.json` vs `data/subscriptions.json`) the results relate to - automatic reports are never anonymous. Alias: `/sched` |
 | `/market [in\|us\|any]` | `/market us` | Market-hours gate for YOUR scheduled reports. `/market` shows live open/closed status for India and the US plus your current default gate. `/market in` = only Indian market hours, `/market us` = only US market hours, `/market any` (or `off`) = no gate. This is the per-user default; individual entries can still override with `/schedule add ... us|any` |
 
 For the universe token you can use the short forms too: `n100`/`nifty100` and `n500`/`nifty500` (e.g. `/topgainers n100` = today's top NIFTY 100 gainers, `/topmovers 1w n500`).
@@ -144,8 +144,9 @@ watchlist persists and survives restarts.
 
 ### Notes for GitHub Actions
 
-- `watchlist.json`, `seen_actions.json`, `subscriptions.json` and
-  `settings.json` are tracked on purpose: the seen cache prevents re-sending
+- `data/watchlist.json`, `data/seen_actions.json`, `data/subscriptions.json`,
+  `data/settings.json`, `data/schedule.json` and `data/snapshots.json` are
+  tracked on purpose: the seen cache prevents re-sending
   the same alert every hour, and the settings file persists per-user filters
   and alert thresholds across runs.
 - BSE will typically be 403-blocked (datacenter IPs); NSE + Yahoo prices work.
@@ -285,8 +286,9 @@ corporate_actions/
   replies and `409 Conflict` errors in the logs. The workflow sets
   `PROCESS_COMMANDS=false` so it only polls alerts; the always-on server is
   the sole command responder. Never run two `bot_server.py` processes.
-- **Where the watchlist lives.** The repo's `watchlist.json` /
-  `subscriptions.json` / `settings.json` / `seen_actions.json` are the source
+- **Where the watchlist lives.** The repo's `data/watchlist.json` /
+  `data/subscriptions.json` / `data/settings.json` / `data/seen_actions.json` /
+  `data/schedule.json` / `data/snapshots.json` are the source
   of truth, committed and pushed by the always-on server after every WRITE
   command (`/addstock`, `/removestock`, `/alertfilters`, `/pricealert`, `/schedule`
   and their short aliases) and by the workflow cron after every poll.
@@ -299,7 +301,7 @@ corporate_actions/
   `bot_server.py` warns loudly at startup if they are missing, syncs the
   latest state from GitHub on boot, and pushes after each write command.
   Run `/status` in Telegram to confirm your chat's list location
-  (`watchlist.json` for the owner, `subscriptions.json` for other users) and
+  (`data/watchlist.json` for the owner, `data/subscriptions.json` for other users) and
   whether GitHub push is configured.
 - NSE endpoints are open and tested. BSE's `api.bseindia.com` sits behind
   Cloudflare and commonly returns `403` from datacenter/VPN IPs; from a normal

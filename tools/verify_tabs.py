@@ -85,12 +85,13 @@ finally:
 
 print("== new web routes ==")
 for must in ["/api/movers", "/api/analysis", "/api/checklist", "/api/indicator",
-             "/api/harmonic", "/api/metals", "/api/dividends", "/movers", "/forecast", "/checklist",
+             "/api/harmonic", "/api/metals", "/api/dividends", "/api/snapshots",
+             "/movers", "/forecast", "/checklist",
              "/indicator", "/news", "/invest", "/invest/stocks",
              "/invest/stocks/average", "/invest/stocks/profit", "/invest/stocks/recovery",
              "/invest/stocks/pnl", "/invest/stocks/checklist",
              "/invest/mutual-funds", "/invest/bonds", "/invest/commodities",
-             "/invest/ipo"]:
+             "/invest/ipo", "/sessions", "/exdates", "/system"]:
     print(("OK  " if must in paths else "MISS"), must)
 
 print("== new web templates ==")
@@ -100,9 +101,15 @@ for name in ["movers.html", "forecast.html", "checklist.html",
              "invest_stock_profit.html", "invest_stock_recovery.html",
              "invest_stock_pnl.html", "invest_stock_checklist.html",
              "invest_mutual.html", "invest_bonds.html",
-             "invest_commodities.html", "invest_ipo.html"]:
+             "invest_commodities.html", "invest_ipo.html", "sessions.html"]:
     p = pathlib.Path("templates") / name
     print(("OK  " if p.exists() else "MISS"), name)
+
+print("== sessions content ==")
+sess = pathlib.Path("templates/sessions.html").read_text(encoding="utf-8")
+for needle in ["gapBody", "gainBody", "loseBody", "caBody", "caCsv",
+               "/api/snapshots", "snapshots/record", "Record now"]:
+    print(("OK  " if needle in sess else "MISS"), "sessions:" + needle)
 
 print("== ipo content ==")
 ipo = pathlib.Path("templates/invest_ipo.html").read_text(encoding="utf-8")
@@ -162,7 +169,7 @@ print("== nav links ==")
 nb = pathlib.Path("templates/base.html").read_text(encoding="utf-8")
 for link in ['href="/movers"', 'href="/forecast"', 'href="/checklist"',
              'href="/indicator"', 'href="/news"', 'href="/invest"',
-             'topSearchInput']:
+             'href="/sessions"', 'topSearchInput']:
     print(("OK  " if link in nb else "MISS"), link)
 for fname, needle in [("fundamentals.html", "recentPills"),
                       ("index.html", "recentPills"),

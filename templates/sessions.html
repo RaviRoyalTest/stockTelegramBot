@@ -1,0 +1,215 @@
+{% extends "base.html" %}
+{% block title %}Sessions · Royal Stock{% endblock %}
+{% block content %}
+  <div class="page-header">
+    <h1>📅 Recorded sessions</h1>
+    <p class="sub">Last session's overnight gap-downs, top movers and corporate actions — served from the recorded file, never re-fetched on view. Record with Telegram <code>/snap</code> or below.</p>
+  </div>
+
+  <section class="card" aria-labelledby="hMeta">
+    <div style="display:flex; justify-content:space-between; align-items:center; gap:12px; flex-wrap:wrap;">
+      <h2 id="hMeta" style="margin-bottom:0;">Snapshot <span class="pill" id="snapSession">—</span></h2>
+      <div class="form-row" style="align-items:center;">
+        <label class="visually-hidden" for="universe">Universe</label>
+        <select id="universe" aria-label="Universe">
+          <option value="nifty500" selected>NIFTY 500</option>
+          <option value="nifty100">NIFTY 100</option>
+        </select>
+        <button class="btn btn-primary btn-sm" type="button" id="recordBtn">📸 Record now</button>
+        <button class="btn btn-sm" type="button" id="forceBtn" title="Re-record even when current">↻ Force</button>
+      </div>
+    </div>
+    <p class="muted" id="snapMeta" style="margin:8px 0 0;">Loading…</p>
+  </section>
+
+  <section class="card section" aria-labelledby="hGaps">
+    <h2 id="hGaps">🔻 Overnight gap-downs <span class="pill" id="gapCount">0</span></h2>
+    <div class="table-scroll" style="margin-top:12px;">
+      <table class="table-mini">
+        <thead><tr><th>Symbol</th><th>Company</th><th class="num">Price</th><th class="num">Prev close</th><th class="num">Open</th><th class="num">Gap %</th><th class="num">From open</th></tr></thead>
+        <tbody id="gapBody"><tr><td colspan="7" class="empty">No snapshot recorded yet.</td></tr></tbody>
+      </table>
+    </div>
+  </section>
+
+  <div class="section-grid section">
+    <section class="card" aria-labelledby="hGain">
+      <h2 id="hGain">🟢 Top gainers <span class="pill" id="gainCount">0</span></h2>
+      <div class="table-scroll" style="margin-top:12px;">
+        <table class="table-mini">
+          <thead><tr><th>Symbol</th><th class="num">Price</th><th class="num">Change %</th></tr></thead>
+          <tbody id="gainBody"><tr><td colspan="3" class="empty">—</td></tr></tbody>
+        </table>
+      </div>
+    </section>
+    <section class="card" aria-labelledby="hLose">
+      <h2 id="hLose">🔴 Top losers <span class="pill" id="loseCount">0</span></h2>
+      <div class="table-scroll" style="margin-top:12px;">
+        <table class="table-mini">
+          <thead><tr><th>Symbol</th><th class="num">Price</th><th class="num">Change %</th></tr></thead>
+          <tbody id="loseBody"><tr><td colspan="3" class="empty">—</td></tr></tbody>
+        </table>
+      </div>
+    </section>
+  </div>
+
+  <section class="card section" aria-labelledby="hActions">
+    <div style="display:flex; justify-content:space-between; align-items:center; gap:12px; flex-wrap:wrap;">
+      <h2 id="hActions" style="margin-bottom:0;">📋 Corporate actions <span class="pill" id="caCount">0</span></h2>
+      <div class="form-row" style="align-items:center;">
+        <input id="caFilter" type="search" placeholder="Filter symbol, action…" autocomplete="off" />
+        <button class="btn btn-sm" type="button" id="caCsv">⬇️ CSV</button>
+      </div>
+    </div>
+    <div class="table-scroll" style="margin-top:12px;">
+      <table>
+        <caption class="visually-hidden">Recorded corporate actions</caption>
+        <thead><tr><th scope="col">Symbol</th><th scope="col">Company</th><th scope="col">Exch</th><th scope="col">Action</th><th scope="col">Ex-date</th><th scope="col">Record date</th><th scope="col">Announced</th></tr></thead>
+        <tbody id="caBody"><tr><td colspan="7" class="empty">No snapshot recorded yet.</td></tr></tbody>
+      </table>
+    </div>
+  </section>
+{% endblock %}
+
+{% block scripts %}
+  <script>
+    (function () {
+      'use strict';
+      var esc = RS.escapeHtml, fmtNum = RS.fmtNum;
+      var actions = [];
+      var pollTimer = null;
+
+      function num(v, d) {
+        if (v == null || v === '' || isNaN(Number(v))) return '−';
+        return fmtNum(v, d == null ? 2 : d);
+      }
+      function symLink(s) {
+        s = String(s || '');
+        return '<a href="/fundamentals?symbol=' + encodeURIComponent(s) + '"><strong>' + esc(s) + '</strong></a>';
+      }
+
+      async function load() {
+        try {
+          var res = await fetch('/api/snapshots');
+          if (!res.ok) throw new Error('API ' + res.status);
+          var doc = await res.json();
+          render(doc);
+          return doc;
+        } catch (err) {
+          document.getElementById('snapMeta').textContent = 'Could not load the snapshot file.';
+          RS.toast('Snapshots failed: ' + err.message, 'err');
+          return null;
+        }
+      }
+
+      function render(doc) {
+        doc = doc || {};
+        var session = doc.session || '—';
+        document.getElementById('snapSession').textContent = session;
+        document.getElementById('snapMeta').textContent =
+          'Session ' + session + ' · ' + (doc.universe || 'nifty500').toUpperCase() +
+          ' · recorded ' + (doc.recorded_at || 'never') + ' by ' + (doc.recorded_by || '—') +
+          (doc.recording ? ' · ⏳ recording in progress…' : '');
+
+        var gaps = doc.gap_downs || [];
+        document.getElementById('gapCount').textContent = String(gaps.length);
+        document.getElementById('gapBody').innerHTML = gaps.length ? gaps.map(function (r) {
+          return '<tr><td>' + symLink(r.symbol) + '</td><td>' + esc(r.name || '−') + '</td>' +
+            '<td class="num">' + num(r.price) + '</td><td class="num">' + num(r.prev_close) + '</td>' +
+            '<td class="num">' + num(r.open) + '</td>' +
+            '<td class="num neg">' + num(r.gap_pct) + '%</td>' +
+            '<td class="num">' + RS.fmtPct(r.move_from_open_pct) + '</td></tr>';
+        }).join('') : '<tr><td colspan="7" class="empty">No gap-downs recorded. Press “Record now”.</td></tr>';
+
+        var gainers = doc.top_gainers || [], losers = doc.top_losers || [];
+        document.getElementById('gainCount').textContent = String(gainers.length);
+        document.getElementById('loseCount').textContent = String(losers.length);
+        function moverRow(r, cls) {
+          return '<tr><td>' + symLink(r.symbol) + '</td><td class="num">' + num(r.price) + '</td>' +
+            '<td class="num ' + cls + '">' + RS.fmtPct(r.change_pct) + '</td></tr>';
+        }
+        document.getElementById('gainBody').innerHTML = gainers.length
+          ? gainers.map(function (r) { return moverRow(r, 'pos'); }).join('')
+          : '<tr><td colspan="3" class="empty">—</td></tr>';
+        document.getElementById('loseBody').innerHTML = losers.length
+          ? losers.map(function (r) { return moverRow(r, 'neg'); }).join('')
+          : '<tr><td colspan="3" class="empty">—</td></tr>';
+
+        actions = doc.corporate_actions || [];
+        renderActions('');
+      }
+
+      function renderActions(query) {
+        var q = (query || '').trim().toLowerCase();
+        var rows = !q ? actions : actions.filter(function (a) {
+          return JSON.stringify(a).toLowerCase().indexOf(q) !== -1;
+        });
+        document.getElementById('caCount').textContent = String(rows.length);
+        document.getElementById('caBody').innerHTML = rows.length ? rows.map(function (a) {
+          return '<tr><td>' + symLink(a.symbol) + '</td><td>' + esc(a.company || '−') + '</td>' +
+            '<td><span class="pill">' + esc(a.exchange || '') + '</span></td>' +
+            '<td>' + esc(a.action || '−') + '</td>' +
+            '<td>' + esc(a.ex_date || '−') + '</td><td>' + esc(a.record_date || '−') + '</td>' +
+            '<td>' + esc(a.announcement_date || '−') + '</td></tr>';
+        }).join('') : '<tr><td colspan="7" class="empty">No corporate actions recorded.</td></tr>';
+      }
+
+      document.getElementById('caFilter').addEventListener('input', function () {
+        renderActions(this.value);
+      });
+      document.getElementById('caCsv').addEventListener('click', function () {
+        if (!actions.length) { RS.toast('Nothing to download', 'err'); return; }
+        var cols = ['symbol', 'company', 'exchange', 'action', 'ex_date', 'record_date', 'announcement_date'];
+        var csv = cols.join(',') + '\n' + actions.map(function (a) {
+          return cols.map(function (c) {
+            return '"' + String(a[c] == null ? '' : a[c]).replace(/"/g, '""') + '"';
+          }).join(',');
+        }).join('\n');
+        var blob = new Blob([csv], { type: 'text/csv' });
+        var link = document.createElement('a');
+        link.href = URL.createObjectURL(blob);
+        link.download = 'session-corporate-actions.csv';
+        link.click();
+        setTimeout(function () { URL.revokeObjectURL(link.href); }, 1000);
+      });
+
+      async function record(force) {
+        var btn = document.getElementById('recordBtn');
+        btn.disabled = true;
+        try {
+          var res = await fetch('/api/snapshots/record?universe=' +
+            encodeURIComponent(document.getElementById('universe').value) + (force ? '&force=1' : ''),
+            { method: 'POST' });
+          var data = await res.json();
+          if (!data.started) {
+            RS.toast(data.reason === 'already recording' ? 'Recording already in progress…' : 'Snapshot is already current — use ↻ Force to redo.', 'ok');
+            if (data.reason !== 'already recording') return;
+          } else {
+            RS.toast('Recording started — this takes a minute or two.', 'ok');
+          }
+          var before = document.getElementById('snapSession').textContent;
+          var tries = 0;
+          clearInterval(pollTimer);
+          pollTimer = setInterval(async function () {
+            tries++;
+            var doc = await load();
+            var now = document.getElementById('snapSession').textContent;
+            if ((doc && !doc.recording) || now !== before || tries > 30) {
+              clearInterval(pollTimer);
+              if (tries > 30) RS.toast('Still recording — refresh in a bit.', 'err');
+              else RS.toast('Snapshot ready.', 'ok');
+            }
+          }, 10000);
+        } catch (err) {
+          RS.toast('Record failed: ' + err.message, 'err');
+        } finally {
+          btn.disabled = false;
+        }
+      }
+
+      document.getElementById('recordBtn').addEventListener('click', function () { record(false); });
+      document.getElementById('forceBtn').addEventListener('click', function () { record(true); });
+      load();
+    })();
+  </script>
+{% endblock %}

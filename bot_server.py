@@ -244,7 +244,7 @@ def main():
     )
     log.info(
         "Owner TELEGRAM_CHAT_ID=%s - /add from the owner updates "
-        "watchlist.json; other chats update subscriptions.json",
+        "data/watchlist.json; other chats update data/subscriptions.json",
         config.TELEGRAM_CHAT_ID or "NOT SET",
     )
     if not os.getenv("GH_TOKEN") or not os.getenv("GITHUB_REPOSITORY"):

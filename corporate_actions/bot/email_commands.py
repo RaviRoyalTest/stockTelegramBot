@@ -1,8 +1,9 @@
-"""Email (mail-id) commands: /setemail + /emailreport.
+"""Email (mail-id) commands: /setemail + /emailreport + /dailyemail.
 
 /setemail you@example.com  -> store the address + send a test mail
 /setemail off               -> forget the address
 /emailreport RELIANCE       -> mail the deep fundamental report
+/dailyemail on|off          -> daily snapshot digest to the mail id
 """
 from __future__ import annotations
 
@@ -29,6 +30,7 @@ EMAIL_USAGE = (
     "/setemail off              \u2192 forget the address\n"
     "<b>/emailreport SYMBOL</b> - mail the deep fundamental report\n"
     "/emailreport RELIANCE  \u2192 full report + snapshot in your inbox\n"
+    "<b>/dailyemail on|off</b> - daily snapshot digest to your mail id\n"
     "Needs server SMTP settings (ask the admin for SMTP_HOST/USER/PASS)."
 )
 
@@ -100,3 +102,35 @@ def handle_emailreport(chat_id, parts) -> None:
         ))
     else:
         reply(chat_id, f"📧 Mail failed: {escape(error)}")
+
+
+def handle_dailyemail(chat_id, parts) -> None:
+    """Toggle the everyday snapshot digest (/dailyemail on|off)."""
+    settings = storage.get_user_settings(chat_id) or {}
+    if len(parts) < 2:
+        state = "ON" if settings.get("daily_email") else "OFF"
+        reply(
+            chat_id,
+            f"Daily mail digest: <b>{state}</b>\n"
+            "Usage: <code>/dailyemail on</code> (needs <code>/setemail</code> first) "
+            "or <code>/dailyemail off</code>",
+        )
+        return
+    raw = parts[1].lower()
+    if raw in ("on", "enable", "start", "yes"):
+        if not (settings.get("email") or "").strip():
+            reply(chat_id, "Set your mail id first: <code>/setemail you@example.com</code>")
+            return
+        settings["daily_email"] = True
+        storage.save_user_settings(chat_id, settings)
+        reply(
+            chat_id,
+            f"📧 Daily digest <b>ON</b> - the recorded session (gap-downs, "
+            f"movers, actions) lands in <b>{escape(settings['email'])}</b> every day.",
+        )
+    elif raw in ("off", "disable", "stop", "no"):
+        settings["daily_email"] = False
+        storage.save_user_settings(chat_id, settings)
+        reply(chat_id, "📧 Daily digest <b>OFF</b>.")
+    else:
+        reply(chat_id, "Usage: <code>/dailyemail on</code> or <code>/dailyemail off</code>")
