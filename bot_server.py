@@ -91,6 +91,25 @@ _BIND_ATTEMPTS = 10
 _BIND_RETRY_DELAY = 3  # seconds between attempts
 
 
+def _push_failure_hint(reason: str) -> str:
+    """One-line self-diagnosis appended to the disk-only warning.
+
+    A 403/denied/authentication failure almost always means the host's
+    GH_TOKEN is expired, revoked, or lacks Contents:write on the repo -
+    no code change can fix that, so point at the exact remedy. Anything
+    else keeps the generic pointer.
+    """
+    lowered = (reason or "").lower()
+    if "403" in lowered or "denied" in lowered or "authentication" in lowered:
+        repo = os.getenv("GITHUB_REPOSITORY") or "owner/repo"
+        return (
+            f" Fix: create a new fine-grained PAT (repo {repo} -> "
+            "Contents: Read and write), set it as GH_TOKEN on this host "
+            "and redeploy."
+        )
+    return ""
+
+
 class _ThreadingHTTPServer(socketserver.ThreadingMixIn, http.server.HTTPServer):
     """Threaded HTTP server so a slow health probe never blocks anything."""
     daemon_threads = True
@@ -347,12 +366,13 @@ def main():
                                         "redeploy: %s",
                                         command, reason,
                                     )
+                                    hint = _push_failure_hint(reason)
                                     reply(
                                         chat_id,
                                         "⚠️ Your change was saved only on this "
                                         "server's disk, NOT pushed to GitHub. "
                                         "It will be LOST on the next redeploy. "
-                                        f"Reason: {reason}. Run "
+                                        f"Reason: {reason}.{hint} Run "
                                         "/status for details, or `python "
                                         "run_bot.py --check` on the host.",
                                     )
