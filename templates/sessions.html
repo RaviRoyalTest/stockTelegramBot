@@ -32,7 +32,7 @@
     </div>
   </section>
 
-  <div class="section-grid section">
+  <div class="section-grid section" id="flatMovers">
     <section class="card" aria-labelledby="hGain">
       <h2 id="hGain">🟢 Top gainers <span class="pill" id="gainCount">0</span></h2>
       <div class="table-scroll" style="margin-top:12px;">
@@ -138,8 +138,12 @@
           ? losers.map(function (r) { return moverRow(r, 'neg'); }).join('')
           : '<tr><td colspan="3" class="empty">—</td></tr>';
 
-        // openreport-style universe blocks (India 3×20, US Mega/Large)
+        // openreport-style universe blocks (India 3×20, US Mega/Large).
+        // When blocks exist they ARE the movers view (same 60-item shape as
+        // /openreport); the flat market-wide cards stay only as a fallback
+        // for older snapshot files without blocks.
         var blocks = doc.universes || [];
+        document.getElementById('flatMovers').hidden = blocks.length > 0;
         document.getElementById('blocksWrap').innerHTML = blocks.map(function (b) {
           function blockRows(rows, cls) {
             return (rows || []).length ? rows.map(function (r) {
