@@ -108,10 +108,12 @@ def _push_branch(remote_url: str) -> str:
 
 
 def pending_state_changes() -> str:
-    """Comma-separated names of state files with uncommitted changes.
+    """Comma-separated repo-relative paths of state files with changes.
 
     Empty string means the worktree is clean. Used by /status and by the
     always-on server's periodic flush to decide whether a push is needed.
+    Paths stay repo-relative (data/settings.json) so the label is accurate
+    after the state-file reorganization - never bare basenames.
     """
     with _state_git_lock:
         result = _git(
@@ -123,7 +125,15 @@ def pending_state_changes() -> str:
         names = []
         for line in result.stdout.splitlines():
             path = line[3:].strip().strip('"')
-            names.append(Path(path).name)
+            candidate = Path(path)
+            if candidate.is_absolute():
+                # git prints repo-relative paths when run from the repo root;
+                # absolutize-then-relativize only for absolute output.
+                try:
+                    candidate = candidate.relative_to(Path.cwd())
+                except ValueError:
+                    candidate = Path(candidate.name)
+            names.append(str(candidate).replace("\\", "/"))
         return ", ".join(sorted(set(names)))
 
 
@@ -167,6 +177,24 @@ def _redact_gh(text) -> str:
     if token:
         sanitized = sanitized.replace(token, "***")
     return sanitized
+
+
+def _tail(text, limit: int) -> str:
+    """Last `limit` chars of git stderr, cut at a word boundary.
+
+    A raw [-200:] slice can amputate the first word ("remote:" -> "emote:"),
+    which is exactly what /status showed. Starting after the first
+    whitespace/newline past the cut keeps the message readable.
+    """
+    cleaned = _redact_gh(text).strip()
+    if len(cleaned) <= limit:
+        return cleaned
+    cut = cleaned[-limit:]
+    for sep in ("\n", " "):
+        idx = cut.find(sep)
+        if idx != -1:
+            return cut[idx + 1 :].strip() or cut.strip()
+    return cut.strip()
 
 
 def push_state() -> bool:
@@ -225,7 +253,7 @@ def _push_state_locked() -> bool:
     else:
         add_result = _git("git", "add", *existing)
         if add_result.returncode != 0:
-            push_error = "git add failed: " + (_redact_gh(add_result.stderr.strip()[-200:]) or "unknown error")
+            push_error = "git add failed: " + (_tail(add_result.stderr, 200) or "unknown error")
             log.warning(
                 "git add failed - state NOT pushed (local changes kept): %s",
                 _redact_gh(add_result.stderr.strip()[-300:]),
@@ -243,7 +271,7 @@ def _push_state_locked() -> bool:
                 log.info("Pushed previously-unpushed state to %s", branch)
                 push_error = ""
                 return True
-            push_error = "git push failed: " + (_redact_gh(push_result.stderr.strip()[-200:]) or "unknown error")
+            push_error = "git push failed: " + (_tail(push_result.stderr, 200) or "unknown error")
             log.warning(
                 "Retry push of existing local commits failed: %s",
                 _redact_gh(push_result.stderr.strip()[-300:]),
@@ -260,7 +288,7 @@ def _push_state_locked() -> bool:
     if commit_result.returncode != 0:
         # Keep the changes in the worktree instead of the index so a later
         # sync (reset --hard) refuses to wipe them.
-        push_error = "git commit failed: " + (_redact_gh(commit_result.stderr.strip()[-200:]) or "unknown error")
+        push_error = "git commit failed: " + (_tail(commit_result.stderr, 200) or "unknown error")
         log.warning("State commit failed: %s", _redact_gh(commit_result.stderr.strip()[-300:]))
         _git("git", "reset")
         return False
@@ -278,7 +306,7 @@ def _push_state_locked() -> bool:
         _git("git", "rebase", "--abort")
         push_error = (
             "git push failed after rebase conflict: "
-            + (_redact_gh(push_result.stderr.strip()[-200:]) or "unknown error")
+            + (_tail(push_result.stderr, 200) or "unknown error")
         )
         log.warning(
             "Push failed and rebase aborted (conflict): %s",
@@ -292,7 +320,7 @@ def _push_state_locked() -> bool:
         return True
     push_error = (
         "git push failed after rebase: "
-        + (_redact_gh(retry_push_result.stderr.strip()[-200:]) or "unknown error")
+        + (_tail(retry_push_result.stderr, 200) or "unknown error")
     )
     log.warning("Push failed after rebase: %s", _redact_gh(retry_push_result.stderr.strip()[-500:]))
     return False

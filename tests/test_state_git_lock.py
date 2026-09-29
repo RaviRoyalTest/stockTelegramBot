@@ -84,5 +84,25 @@ def re_push_error(line: str) -> bool:
         "last_push_error" not in line
 
 
+class ErrorTailTests(unittest.TestCase):
+    def test_tail_never_amputates_first_word(self):
+        # Regression: "remote: Permission ..." was sliced to "emote: ...".
+        long_err = "x" * 300 + "\nremote: Permission to repo denied to user.\nfatal: 403"
+        tail = github._tail(long_err, 200)
+        self.assertIn("remote: Permission", tail)
+        self.assertLessEqual(len(tail), 200)
+
+    def test_tail_short_text_untouched(self):
+        self.assertEqual(github._tail("  boom  ", 200), "boom")
+
+    def test_pending_paths_are_repo_relative(self):
+        """pending_state_changes shows data/settings.json, not settings.json."""
+        fake = MagicMock()
+        fake.returncode = 0
+        fake.stdout = " M data/settings.json\n"
+        with patch.object(github, "_git", return_value=fake):
+            self.assertEqual(github.pending_state_changes(), "data/settings.json")
+
+
 if __name__ == "__main__":
     unittest.main()
