@@ -7,16 +7,16 @@
       "universe": "nifty500"
     },
     "recent_commands": [
+      "/schedule",
+      "/status",
       "/toplosers 1h",
       "/gappers today",
       "/corpactionsformylist",
       "/schedule run",
-      "/schedule",
       "/movers",
       "/news SCHNEIDER",
       "/fundamentalreport  1",
-      "/fundamentalreport",
-      "/fundamentalanalyze 1"
+      "/fundamentalreport"
     ],
     "movers_fund": "button"
   },
