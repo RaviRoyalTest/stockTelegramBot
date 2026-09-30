@@ -38,6 +38,30 @@ def _dated_path(session: str, market: str):
     return Path(_history_dir()) / f"{day}-{market_key}.json"
 
 
+def _capture_versioned(doc: dict) -> None:
+    """Best-effort timestamped audit capture of one snapshot record.
+
+    The session archive keeps its reuse contract (one file per
+    session+market, fresher record wins); this additionally lands an
+    append-only capture
+    ``data/realtime/market_snapshot/{Y}/{M}/{D}/market_snapshot_<IST-timestamp>.json``
+    per RECORD so re-records of the same session are versioned, never
+    overwritten. Never raises (logged as a warning on failure); the
+    directory derives from SNAPSHOT_FILE so patched tests stay hermetic.
+    """
+    try:
+        from .realtime import save_json_snapshot
+
+        save_json_snapshot(
+            "market_snapshot",
+            doc,
+            source="session-record",
+            base_dir=config.SNAPSHOT_FILE.parent / "realtime",
+        )
+    except Exception as error:
+        log.warning("snapshot versioned capture skipped: %s", error)
+
+
 def archive_snapshot(doc: dict) -> str | None:
     """Archive one snapshot doc under its date+market, atomically.
 
@@ -56,6 +80,7 @@ def archive_snapshot(doc: dict) -> str | None:
         with _lock, _file_lock(path):
             path.parent.mkdir(parents=True, exist_ok=True)
             write_json(path, doc)
+        _capture_versioned(doc)
         return path.stem
     except Exception as error:
         log.warning("snapshot archive skipped: %s", error)

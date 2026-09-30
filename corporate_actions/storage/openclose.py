@@ -105,6 +105,30 @@ def load_openclose(date: str | None = None) -> dict:
     return {}
 
 
+def _capture_versioned(doc: dict) -> None:
+    """Best-effort timestamped audit capture of one report build.
+
+    The dated store keeps its reuse contract (one file per session, newest
+    wins); this adds an append-only capture
+    ``data/realtime/openclose_report/{Y}/{M}/{D}/openclose_report_<IST-timestamp>.json``
+    per BUILD so same-day rebuilds never overwrite each other. Never raises:
+    a capture failure must not affect the canonical save (it is logged as a
+    warning instead). The directory is derived from OPENREPORT_DIR so tests
+    that patch it into a temp dir keep captures hermetic too.
+    """
+    try:
+        from .realtime import save_json_snapshot
+
+        save_json_snapshot(
+            "openclose_report",
+            doc,
+            source=str(doc.get("recorded_by") or "unknown"),
+            base_dir=config.OPENREPORT_DIR.parent / "realtime",
+        )
+    except Exception as error:
+        log.warning("openclose versioned capture skipped: %s", error)
+
+
 def save_openclose(doc: dict) -> None:
     """Persist one report doc under its session date, atomically."""
     if not isinstance(doc, dict) or not doc:
@@ -113,6 +137,7 @@ def save_openclose(doc: dict) -> None:
     with _lock, _file_lock(path):
         path.parent.mkdir(parents=True, exist_ok=True)
         write_json(path, doc)
+    _capture_versioned(doc)
 
 
 def migrate_openclose_file() -> str | None:
