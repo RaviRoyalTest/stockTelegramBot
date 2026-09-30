@@ -7,6 +7,7 @@
       "universe": "nifty500"
     },
     "recent_commands": [
+      "/setemail raviroyalmechai@gmail.com",
       "/schedule",
       "/openreport",
       "/gappers today",
@@ -15,15 +16,16 @@
       "/status",
       "/toplosers 1h",
       "/schedule run",
-      "/movers",
-      "/news SCHNEIDER"
+      "/movers"
     ],
-    "movers_fund": "button"
+    "movers_fund": "button",
+    "email": "raviroyalmechai@gmail.com"
   },
   "@StockVigilBot": {
     "action_filters": [],
     "price_alert_pct": 5.0,
     "recent_commands": [
+      "/openreport in",
       "/openreport us",
       "/scan500"
     ]
