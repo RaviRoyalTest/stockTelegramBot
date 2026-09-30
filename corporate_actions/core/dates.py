@@ -18,11 +18,16 @@ except Exception:  # tzdata unavailable - fall back to host local time
     IST = None
 
 
+def now_ist() -> datetime:
+    """Timezone-aware 'now' in India Standard Time (Asia/Kolkata)."""
+    if IST is not None:
+        return datetime.now(IST)
+    return datetime.now().astimezone()
+
+
 def today_ist() -> date:
     """Today's date in India Standard Time (Asia/Kolkata)."""
-    if IST is not None:
-        return datetime.now(IST).date()
-    return date.today()
+    return now_ist().date()
 
 
 def _valid_hhmm(hhmm) -> tuple | None:

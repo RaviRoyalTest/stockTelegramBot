@@ -115,6 +115,9 @@
 # persist the watchlist, subscriptions and de-duplication cache across runs.
 
 
+# Runtime captures (append-only JSON snapshots; per-file .lock handled above)
+data/realtime/
+
 # Temporary files
 *.tmp
 *.temp

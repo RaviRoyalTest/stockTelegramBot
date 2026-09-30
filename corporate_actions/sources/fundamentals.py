@@ -295,13 +295,15 @@ async def _quote_summary_async(symbol: str, suffix: str = ".NS") -> dict | None:
                     if r.status_code == 200 and (text := r.text.strip()):
                         crumb = text
                         break
-            except Exception:
+            except Exception as error:
+                log.debug("_quote_summary: %s", error)
                 continue
 
         for host in ("https://query1.finance.yahoo.com", "https://query2.finance.yahoo.com"):
             try:
                 await _throttle_fund_req_async()
-            except Exception:
+            except Exception as error:
+                log.debug("_quote_summary: %s", error)
                 pass
             url = f"{host}/v10/finance/quoteSummary/{quote(symbol)}"
             params = {"modules": "summaryDetail,financialData,defaultKeyStatistics,assetProfile,recommendationTrend,upgradesDowngrades", "crumb": crumb}
@@ -500,7 +502,8 @@ async def _chart_fundamentals_async(symbol: str, suffix: str = ".NS") -> dict:
         try:
             try:
                 await _throttle_fund_req_async()
-            except Exception:
+            except Exception as error:
+                log.debug("_chart_fundamentals: %s", error)
                 pass
             r = await client.get(url, timeout=config.HTTP_TIMEOUT)
             if r.status_code == 429:
@@ -547,7 +550,8 @@ async def _chart_fundamentals_async(symbol: str, suffix: str = ".NS") -> dict:
                 if sma_200 is not None:
                     out["sma_200"] = sma_200
             break
-        except Exception:
+        except Exception as error:
+            log.debug("_chart_fundamentals: %s", error)
             continue
     return out
 
@@ -1017,7 +1021,8 @@ async def get_fundamentals_async(symbol: str, with_screener: bool = True) -> dic
             if stooq and stooq.get("price") is not None:
                 out["price"] = stooq["price"]
         out = normalise_fundamentals(key, out, None)
-    except Exception:
+    except Exception as error:
+        log.debug("get_fundamentals: %s", error)
         pass
 
     _fill_derived_fallbacks(key, out)

@@ -7,6 +7,9 @@ symbol is not immediately found.
 """
 from __future__ import annotations
 
+import logging
+
+log = logging.getLogger(__name__)
 import io
 import math
 from typing import Any
@@ -101,7 +104,8 @@ def _candidate_rows_from_universe(universe: str) -> list[dict]:
             }
             if row["symbol"]:
                 rows.append(row)
-        except Exception:
+        except Exception as error:
+            log.debug("_candidate_rows_from_universe: %s", error)
             continue
     return rows
 

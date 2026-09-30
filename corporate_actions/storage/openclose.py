@@ -34,15 +34,18 @@ def _doc_date(doc: dict) -> str:
                 .date()
                 .isoformat()
             )
-        except Exception:
+        except Exception as error:
+            log.debug("_doc_date: %s", error)
             pass
-    except Exception:
+    except Exception as error:
+        log.debug("_doc_date: %s", error)
         pass
     try:
         from ..core.dates import today_ist
 
         return today_ist().isoformat()
-    except Exception:
+    except Exception as error:
+        log.debug("_doc_date: %s", error)
         return "unknown"
 
 
@@ -61,7 +64,8 @@ def list_openclose_dates() -> list[str]:
         return sorted(
             path.stem for path in directory.glob("*.json") if path.is_file()
         )
-    except Exception:
+    except Exception as error:
+        log.debug("list_openclose_dates: %s", error)
         return []
 
 

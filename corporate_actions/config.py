@@ -1,8 +1,11 @@
 """Central configuration loaded from environment / .env file."""
 import logging
 import os
-from datetime import date, datetime
 from pathlib import Path
+
+from .core.dates import today_ist  # re-exported: single IST calendar source
+
+__all__ = ["today_ist", "redact"]
 
 try:
     from dotenv import load_dotenv
@@ -153,21 +156,6 @@ SMTP_FROM = os.getenv("SMTP_FROM", "").strip() or SMTP_USER
 # API key from resend.com - no app password). Takes precedence over SMTP.
 RESEND_API_KEY = os.getenv("RESEND_API_KEY", "").strip()
 RESEND_FROM = os.getenv("RESEND_FROM", "").strip()
-
-
-def today_ist() -> date:
-    """Today's date in India Standard Time (Asia/Kolkata).
-
-    The host often runs on UTC, where the date flips at 18:30 IST. Reminder
-    windows, per-day alert dedupe keys and corporate-action lookback windows
-    must follow the market's calendar, not the host's local date.
-    """
-    try:
-        from zoneinfo import ZoneInfo
-
-        return datetime.now(ZoneInfo("Asia/Kolkata")).date()
-    except Exception:  # zoneinfo/tzdata unavailable - fall back to host local
-        return date.today()
 
 
 def redact(text) -> str:

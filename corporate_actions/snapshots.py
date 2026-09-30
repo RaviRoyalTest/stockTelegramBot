@@ -190,7 +190,8 @@ def build_snapshot_doc(session: str, universe: str, gaps: list[dict],
 def _fetch_gap(exchange: str, symbol: str) -> tuple[str, dict | None]:
     try:
         data = get_gap_change(exchange, symbol)
-    except Exception:
+    except Exception as error:
+        log.warning("_fetch_gap: %s", error)
         return symbol, None
     if not data or data.get("gap_pct") is None or data["gap_pct"] >= 0:
         return symbol, None
@@ -299,7 +300,8 @@ def _record_session_snapshot_impl(universe: str = "nifty500", force: bool = Fals
                 and existing.get("market", "in") == market and existing.get("gap_downs"):
             log.info("snapshots: %s/%s already recorded - skipping refetch", market, session)
             return existing
-    except Exception:
+    except Exception as error:
+        log.warning("_record_session_snapshot_impl: %s", error)
         pass
 
     blocks: list[dict] = []
@@ -362,7 +364,8 @@ def _record_session_snapshot_impl(universe: str = "nifty500", force: bool = Fals
             for future in as_completed(futures):
                 try:
                     symbol, data = future.result()
-                except Exception:
+                except Exception as error:
+                    log.warning("_record_session_snapshot_impl: %s", error)
                     continue
                 if data:
                     found.append((symbol, data))

@@ -14,6 +14,9 @@ all share exactly the same rules.
 """
 from __future__ import annotations
 
+import logging
+
+log = logging.getLogger(__name__)
 import datetime as _datetime
 import re
 
@@ -106,7 +109,8 @@ def market_timezone(market):
         return None
     try:
         return ZoneInfo(info["tz"])
-    except Exception:
+    except Exception as error:
+        log.debug("market_timezone: %s", error)
         return None
 
 

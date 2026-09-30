@@ -106,7 +106,8 @@ def handle_harmonic(chat_id, parts) -> None:
                 us_quote = get_quote("US", symbol) or {}
                 if us_quote.get("price") is not None or us_quote.get("name"):
                     exchange = "US"
-        except Exception:
+        except Exception as error:
+            log.warning("handle_harmonic: %s", error)
             pass
 
     started_at = monotonic()

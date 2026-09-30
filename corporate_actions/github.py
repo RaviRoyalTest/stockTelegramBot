@@ -87,8 +87,11 @@ def _remote_default_branch(remote_url) -> str:
                 # checkout (e.g. Render) with "You must fully qualify the
                 # ref" - the exact bug that made stocks vanish on redeploy.
                 return line.split()[1].removeprefix("refs/heads/")
-    except Exception:
-        pass
+    except Exception as error:
+        # Deliberately NOT logged at debug level: the exception text embeds
+        # the authenticated remote URL (GH_TOKEN). A downstream warning
+        # already explains the fallback to 'main' without any secret.
+        log.debug("ls-remote failed (details redacted): %s", type(error).__name__)
     if remote_url:
         log.warning(
             "Could not determine the remote default branch (git ls-remote "

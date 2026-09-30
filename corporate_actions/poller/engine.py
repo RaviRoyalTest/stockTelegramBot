@@ -101,7 +101,8 @@ def _poll_quote(exchange: str, symbol: str) -> dict | None:
         log.info("poll quote fallback chain failed for %s:%s: %s", exchange, symbol, error)
     try:
         return get_quote(exchange or "NSE", symbol or "")
-    except Exception:
+    except Exception as error:
+        log.warning("_poll_quote: %s", error)
         return None
 
 

@@ -135,11 +135,13 @@ def get_stooq_history(symbol: str, exchange: str = "NSE") -> dict | None:
                 day = datetime.strptime(row["Date"].strip(), "%Y-%m-%d").replace(
                     tzinfo=timezone.utc
                 )
-            except Exception:
+            except Exception as error:
+                log.debug("get_stooq_history: %s", error)
                 continue
             try:
                 o, h, lo, c = (float(row[k]) for k in ("Open", "High", "Low", "Close"))
-            except Exception:
+            except Exception as error:
+                log.debug("get_stooq_history: %s", error)
                 continue
             try:
                 v = int(float(row.get("Volume") or 0))

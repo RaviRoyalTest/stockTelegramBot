@@ -1,6 +1,9 @@
 """Harmonic pattern analysis: fetch OHLC, detect patterns, build the result dict."""
 from __future__ import annotations
 
+import logging
+
+log = logging.getLogger(__name__)
 from ..core.numbers import format_money
 from ..sources import _HIGHER_TIMEFRAME_LADDER, get_ohlc
 from .patterns import (
@@ -164,7 +167,8 @@ def analyze(exchange: str, symbol: str, timeframe: str = "1d", percent: float | 
                     higher_sma_20 = sma(higher_closes, 20)
                     if higher_sma_20 is not None:
                         result["higher_timeframe_note"] = f"{higher_timeframe} trend: {'up' if higher_closes[-1] > higher_sma_20 else 'down'}"
-            except Exception:
+            except Exception as error:
+                log.debug("analyze: %s", error)
                 pass
 
         # Confirmation notes

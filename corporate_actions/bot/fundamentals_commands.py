@@ -55,7 +55,8 @@ def _resolve_fund(raw_symbol: str, is_us: bool, quote: dict) -> dict:
     if not is_us:
         try:
             fund = normalise_fundamentals(raw_symbol, dict(fund), quote or {})
-        except Exception:
+        except Exception as error:
+            log.warning("_resolve_fund: %s", error)
             pass
     return fund
 
@@ -144,7 +145,8 @@ def _batch_fund(item: dict) -> dict:
     try:
         quote = get_best_quote(item.get("exchange", "NSE"), item["symbol"]) or {}
         fund = normalise_fundamentals(item["symbol"], dict(fund), quote)
-    except Exception:
+    except Exception as error:
+        log.warning("_batch_fund: %s", error)
         pass
     return fund
 
@@ -155,7 +157,8 @@ def _batch_quote(item: dict) -> dict:
         quote = get_best_quote(item.get("exchange", "NSE"), item["symbol"]) or {}
         if quote.get("price") is not None:
             return quote
-    except Exception:
+    except Exception as error:
+        log.warning("_batch_quote: %s", error)
         pass
     return get_quote(item["exchange"], item["symbol"]) or {}
 

@@ -84,7 +84,8 @@ def handle_forecast(chat_id, parts) -> None:
         fund = get_fundamentals(raw_symbol, with_screener=True) or {}
         try:
             fund = normalise_fundamentals(raw_symbol, dict(fund), quote or {})
-        except Exception:
+        except Exception as error:
+            log.warning("handle_forecast: %s", error)
             pass
 
     if quote.get("price") is None and not fund:

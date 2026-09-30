@@ -181,7 +181,8 @@ def _fetch_gap_row(exchange: str, symbol: str, mode: str,
         if mode == "window":
             return get_window_gap_change(exchange, symbol, sessions)
         return get_gap_change(exchange, symbol)
-    except Exception:
+    except Exception as error:
+        log.warning("_fetch_gap_row: %s", error)
         return None
 
 
@@ -338,7 +339,8 @@ def handle_symbol_gap(chat_id, raw_symbol: str) -> None:
             us_quote = get_quote("US", raw) or {}
             if us_quote.get("price") is not None or us_quote.get("name"):
                 exchange = "US"
-    except Exception:
+    except Exception as error:
+        log.warning("handle_symbol_gap: %s", error)
         pass
 
     history = get_gap_history(exchange, raw, days=7)

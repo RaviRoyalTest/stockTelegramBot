@@ -74,7 +74,8 @@ def _fetch_stock(symbol: str, exchange: str = "") -> tuple[dict, dict, str]:
         fund = get_fundamentals(symbol, with_screener=True) or {}
         try:
             fund = normalise_fundamentals(symbol, dict(fund), quote or {})
-        except Exception:
+        except Exception as error:
+            log.warning("_fetch_stock: %s", error)
             pass
     return quote, fund, currency
 

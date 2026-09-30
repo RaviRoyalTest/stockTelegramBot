@@ -1,4 +1,4 @@
-"""Entry point for running in a GitHub Actions cron job.
+"""Run one bot cycle as a GitHub Actions cron job (thin wrapper).
 
 Two jobs, one run:
   1. Optionally process Telegram bot commands (/addstock, /removestock, /watchlist, /help)
@@ -14,7 +14,6 @@ Local usage:  python run_bot.py
 All logic lives in corporate_actions.bot (dispatcher, command families, runner);
 this file only configures logging and calls the runner.
 """
-import logging
 import sys
 
 # The --check diagnostic only talks to git / the environment, so it must run
@@ -25,13 +24,10 @@ if any(argument.lower() == "--check" for argument in sys.argv[1:]):
 
     sys.exit(main_check())
 
-from corporate_actions.bot.runner import ImmediateStreamHandler, main
+from corporate_actions.bot.runner import main
+from corporate_actions.logging_setup import setup_logging
 
-logging.basicConfig(
-    level=logging.INFO,
-    format="%(levelname)s %(message)s",
-    handlers=[ImmediateStreamHandler(sys.stdout)],
-)
+setup_logging()
 
 if __name__ == "__main__":
     main()

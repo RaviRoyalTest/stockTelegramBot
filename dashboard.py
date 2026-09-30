@@ -21,12 +21,14 @@ import traceback
 from corporate_actions import admin as admin_service
 from corporate_actions import sources, storage
 from corporate_actions import snapshots as snapshots_service
+from corporate_actions.logging_setup import setup_logging
 from corporate_actions.screener_service import screen_universe_async
 from corporate_actions.market import hours as market_hours
 from corporate_actions.telegram import client as telegram_client
 import asyncio
 import threading
 
+setup_logging()
 log = logging.getLogger(__name__)
 
 # Fields the source layer fabricates even when nothing was found (identity
@@ -47,9 +49,9 @@ app = FastAPI(title="Royal Stock", version="2.0.0")
 app.mount("/static", StaticFiles(directory=os.path.join(BASE_DIR, "static")), name="static")
 templates = Jinja2Templates(directory=os.path.join(BASE_DIR, "templates"))
 
-# configure basic logging so exceptions are visible in the server logs
+# logging is configured centrally by setup_logging() above; the level can
+# still be tuned per environment with the LOG_LEVEL environment variable.
 LOG_LEVEL = os.getenv("LOG_LEVEL", "INFO").upper()
-logging.basicConfig(level=LOG_LEVEL)
 
 
 # middleware to catch and log unexpected exceptions (including tracebacks)
@@ -84,7 +86,8 @@ async def _startup_prewarm():
         # schedule prewarm in background with a smaller footprint to avoid
         # saturating outgoing connections on startup
         asyncio.create_task(screener_service.prewarm_universe("nifty500", limit=20))
-    except Exception:
+    except Exception as error:
+        log.warning("_exception_handler: %s", error)
         pass
 
 
@@ -169,7 +172,8 @@ def _candidate_rows_from_universe(universe: str, limit: int = 200) -> list[dict]
             }
             if row["symbol"]:
                 rows.append(row)
-        except Exception:
+        except Exception as error:
+            log.warning("_candidate_rows_from_universe: %s", error)
             continue
     return rows
 
@@ -779,7 +783,8 @@ async def api_analysis(symbol: str | None = Query(None), market: str = Query("in
                 ) or {}
             try:
                 fund = sources.normalise_fundamentals(key, dict(fund or {}), quote or {})
-            except Exception:
+            except Exception as error:
+                log.warning("gen: %s", error)
                 pass
         price = (quote or {}).get("price", (fund or {}).get("price"))
         data = await asyncio.to_thread(build_analysis, fund or {}, price)
@@ -876,7 +881,8 @@ async def api_movers(
     # first ~200 symbols (capped to keep the API responsive).
     try:
         deadline += min(75.0, len(symbols) / 50.0)
-    except Exception:
+    except Exception as error:
+        log.warning("_clean_date: %s", error)
         pass
     started = asyncio.get_event_loop().time()
 
@@ -978,7 +984,8 @@ async def api_movers(
                 "change_pct_today": move.get("change_pct_today"),
                 "name": move.get("name") or symbol,
             }
-        except Exception:
+        except Exception as error:
+            log.warning("_scan_one: %s", error)
             return None
 
     try:
@@ -1015,7 +1022,8 @@ async def api_movers(
 
     try:
         top = await asyncio.to_thread(lambda: list(map(_enrich, top)))
-    except Exception:
+    except Exception as error:
+        log.warning("_enrich: %s", error)
         pass
     return JSONResponse({
         "mode": mode, "universe": universe, "period": period_key,
@@ -1051,7 +1059,8 @@ def _scan_symbols(symbols: list[str], worker, deadline: float, started: float) -
                 break
             try:
                 row = future.result()
-            except Exception:
+            except Exception as error:
+                log.warning("_scan_symbols: %s", error)
                 continue
             if row:
                 out.append(row)
@@ -1192,7 +1201,8 @@ async def api_checklist(symbol: str | None = Query(None), market: str = Query("i
                 fund = await asyncio.to_thread(sources.get_fundamentals, key, True) or {}
                 try:
                     fund = sources.normalise_fundamentals(key, dict(fund or {}), quote or {})
-                except Exception:
+                except Exception as error:
+                    log.warning("_scan_symbols: %s", error)
                     pass
         if (quote.get("price") is None) and not fund:
             raise HTTPException(status_code=404, detail=f"no data for {key}")
@@ -1359,7 +1369,8 @@ async def api_fundamentals(symbol: str | None = Query(None), refresh: bool = Que
                 fund_source._fund_cache.pop((key, True), None)
                 fund_source._fund_cache.pop((key, False), None)
                 log.info("/api/fundamentals: cache cleared for %s (refresh=1)", key)
-            except Exception:
+            except Exception as error:
+                log.warning("_scan_symbols: %s", error)
                 pass
         if want_us:
             fund = await asyncio.to_thread(sources.get_us_fundamentals, key) or {}
@@ -1383,7 +1394,8 @@ async def api_fundamentals(symbol: str | None = Query(None), refresh: bool = Que
                 quote = quote or {}
         try:
             fund = sources.normalise_fundamentals(key, dict(fund or {}), quote or {})
-        except Exception:
+        except Exception as error:
+            log.warning("_scan_symbols: %s", error)
             pass
         # A stub-only merge (no quote, no fundamentals) means the symbol does
         # not resolve anywhere — tell the client plainly so it can gate the
@@ -1411,7 +1423,8 @@ async def api_fundamentals_csv(symbol: str | None = Query(None)):
             quote = sources.get_quote("NSE", key) or sources.get_quote("BSE", key) or {}
         try:
             fund = sources.normalise_fundamentals(key, dict(fund or {}), quote or {})
-        except Exception:
+        except Exception as error:
+            log.warning("_scan_symbols: %s", error)
             pass
         import csv, io
         si = io.StringIO()

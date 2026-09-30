@@ -5,6 +5,9 @@ series or its final value - no I/O, no side effects.
 """
 from __future__ import annotations
 
+import logging
+
+log = logging.getLogger(__name__)
 import math
 
 import numpy as np
@@ -19,7 +22,8 @@ def safe_last(series, default=None):
             return default
         value = series.iloc[-1]
         return None if (value is None or (isinstance(value, float) and (math.isnan(value) or math.isinf(value)))) else float(value)
-    except Exception:
+    except Exception as error:
+        log.debug("safe_last: %s", error)
         return default
 
 
@@ -214,7 +218,8 @@ def obv_trend(df):
         last = float(obv_series.iloc[-1])
         previous_20 = float(obv_series.iloc[-21]) if len(obv_series) > 21 else float(obv_series.iloc[0])
         return "rising" if last >= previous_20 else "falling"
-    except Exception:
+    except Exception as error:
+        log.debug("obv_trend: %s", error)
         return None
 
 
@@ -236,7 +241,8 @@ def ttm_squeeze(df, atr_series):
         if last_bollinger_width is None or last_keltner_width is None:
             return None
         return bool(last_bollinger_width < last_keltner_width)
-    except Exception:
+    except Exception as error:
+        log.debug("ttm_squeeze: %s", error)
         return None
 
 
@@ -249,7 +255,8 @@ def bb_position(df):
         if upper is None or lower is None or upper == lower:
             return None
         return (df["close"].iloc[-1] - lower) / (upper - lower) * 100.0
-    except Exception:
+    except Exception as error:
+        log.debug("bb_position: %s", error)
         return None
 
 
@@ -268,7 +275,8 @@ def daily_traded_value_crore(df):
         last20 = df.tail(20)
         value = (last20["close"] * last20["volume"]).mean()
         return round(value / 1e7, 2)  # 1 crore = 10^7
-    except Exception:
+    except Exception as error:
+        log.debug("daily_traded_value_crore: %s", error)
         return None
 
 
@@ -278,7 +286,8 @@ def daily_traded_value_musd(df):
         last20 = df.tail(20)
         value = (last20["close"] * last20["volume"]).mean()
         return round(value / 1e6, 2)  # 1 million = 10^6
-    except Exception:
+    except Exception as error:
+        log.debug("daily_traded_value_musd: %s", error)
         return None
 
 

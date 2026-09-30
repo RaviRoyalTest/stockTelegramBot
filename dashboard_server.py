@@ -10,12 +10,9 @@ import sys
 import threading
 
 from corporate_actions import config
+from corporate_actions.logging_setup import setup_logging
 
-logging.basicConfig(
-    level=logging.INFO,
-    format="%(levelname)s %(message)s",
-    handlers=[logging.StreamHandler(sys.stdout)],
-)
+setup_logging()
 log = logging.getLogger("dashboard_server")
 
 

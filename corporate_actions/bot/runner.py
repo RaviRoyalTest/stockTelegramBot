@@ -125,4 +125,14 @@ def main():
     sent = poller.run_once(force=bool(checknow_chat), only_chat=checknow_chat)
     log.info("Pushing state if changed...")
     push_state()
+    # Retention for runtime captures (data/realtime/): disabled unless
+    # JSON_RETENTION_DAYS is set - cleanup must never run by default.
+    try:
+        from corporate_actions.storage import cleanup_expired_snapshots
+
+        removed, reclaimed = cleanup_expired_snapshots()
+        if removed:
+            log.info("Snapshot retention removed %d file(s)", removed)
+    except Exception as error:
+        log.warning("Snapshot retention cleanup failed: %s", error)
     log.info("Done. Sent %s alert(s).", sent)

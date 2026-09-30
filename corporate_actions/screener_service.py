@@ -5,6 +5,9 @@ of candidate stock rows using existing `sources` primitives.
 """
 from __future__ import annotations
 
+import logging
+
+log = logging.getLogger(__name__)
 import asyncio
 import heapq
 import logging
@@ -54,14 +57,16 @@ def _build_row(symbol: str) -> dict:
     def fetch_quote():
         try:
             return sources.get_best_quote("NSE", symbol) or {}
-        except Exception:
+        except Exception as error:
+            log.warning("fetch_quote: %s", error)
             return sources.get_quote("NSE", symbol) or sources.get_quote("BSE", symbol) or {}
 
     fund = _fetch_with_retry(fetch_fund)
     quote = _fetch_with_retry(fetch_quote)
     try:
         fund = sources.normalise_fundamentals(symbol, dict(fund or {}), quote or {})
-    except Exception:
+    except Exception as error:
+        log.warning("fetch_quote: %s", error)
         pass
     price = _safe_float(quote.get("price") if quote.get("price") is not None else fund.get("price"))
     return {
@@ -105,7 +110,8 @@ def _get_cached_row(symbol: str) -> dict:
             cached = redis_cache.get(key)
             if cached:
                 return cached
-    except Exception:
+    except Exception as error:
+        log.warning("_get_cached_row: %s", error)
         pass
 
     row = _build_row(symbol)
@@ -113,7 +119,8 @@ def _get_cached_row(symbol: str) -> dict:
     try:
         if redis_cache.is_available():
             redis_cache.set(key, row, ttl=_ROW_CACHE_TTL)
-    except Exception:
+    except Exception as error:
+        log.warning("_get_cached_row: %s", error)
         pass
     return row
 
@@ -169,7 +176,8 @@ async def _build_row_async(symbol: str) -> dict:
             try:
                 if hasattr(sources, "get_best_quote"):
                     return sources.get_best_quote("NSE", symbol) or {}
-            except Exception:
+            except Exception as error:
+                log.warning("fetch_quote: %s", error)
                 pass
             return sources.get_quote("NSE", symbol) or sources.get_quote("BSE", symbol) or {}
 
@@ -188,7 +196,8 @@ async def _build_row_async(symbol: str) -> dict:
         quote = {}
     try:
         fund = sources.normalise_fundamentals(symbol, dict(fund or {}), quote or {})
-    except Exception:
+    except Exception as error:
+        log.warning("fetch_quote: %s", error)
         pass
     price = _safe_float(quote.get("price") if (quote or {}).get("price") is not None else (fund or {}).get("price"))
     fund = fund or {}
@@ -229,7 +238,8 @@ async def _get_cached_row_async(symbol: str) -> dict:
             cached = redis_cache.get(key)
             if cached:
                 return cached
-    except Exception:
+    except Exception as error:
+        log.warning("fetch_quote: %s", error)
         pass
 
     row = await _build_row_async(symbol)
@@ -237,7 +247,8 @@ async def _get_cached_row_async(symbol: str) -> dict:
     try:
         if redis_cache.is_available():
             redis_cache.set(key, row, ttl=_ROW_CACHE_TTL)
-    except Exception:
+    except Exception as error:
+        log.warning("fetch_quote: %s", error)
         pass
     return row
 
@@ -401,7 +412,8 @@ def screen_universe(
                     row = fut.result()
                     if row:
                         yield row
-                except Exception:
+                except Exception as error:
+                    log.warning("gen_rows: %s", error)
                     continue
 
     # use heapq's nlargest/nsmallest which will iterate the generator
@@ -451,7 +463,8 @@ async def screen_universe_async(
             try:
                 r = await _get_cached_row_async(sym)
                 return r
-            except Exception:
+            except Exception as error:
+                log.warning("gen_rows: %s", error)
                 return None
 
     tasks = [asyncio.create_task(worker(s)) for s in ordered_symbols]
@@ -508,11 +521,13 @@ async def prewarm_universe(universe: str = "nifty500", limit: int = 100) -> None
                     _get_cached_row_async(sym),
                     timeout=max(0.5, prewarm_deadline - time.time()),
                 )
-            except Exception:
+            except Exception as error:
+                log.warning("gen_rows: %s", error)
                 pass
 
     tasks = [asyncio.create_task(worker(s)) for s in symbols]
     try:
         await asyncio.gather(*tasks)
-    except Exception:
+    except Exception as error:
+        log.warning("gen_rows: %s", error)
         pass

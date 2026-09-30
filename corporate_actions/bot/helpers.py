@@ -58,7 +58,8 @@ def run_command_sequence(chat_id, commands: list[str], intro: str,
                     f"<code>{html.escape(command)}</code> failed: "
                     f"{html.escape(config.redact(str(error)))}",
                 )
-            except Exception:
+            except Exception as error:
+                log.warning("run_command_sequence: %s", error)
                 pass
     if done:
         reply(chat_id, done)
@@ -98,7 +99,8 @@ def close_symbols(query: str, limit: int = 3) -> list[str]:
 
         stocks = get_nse_stock_list_cached()
         symbols = [stock["symbol"] for stock in stocks]
-    except Exception:
+    except Exception as error:
+        log.warning("close_symbols: %s", error)
         return []
     return get_close_matches((query or "").upper(), symbols, n=limit, cutoff=0.72)
 

@@ -34,29 +34,11 @@ from corporate_actions.github import (
     push_state,
     sync_state,
 )
+from corporate_actions.logging_setup import setup_logging
 from corporate_actions.poller import engine, poller
 from corporate_actions.telegram.client import get_updates
 
-
-class _ImmediateStreamHandler(logging.StreamHandler):
-    """Flush after every record so Render / PaaS logs appear immediately.
-
-    When stdout is piped (not a TTY - the norm on Render), Python enables
-    block buffering, so logs written with the default StreamHandler sit in
-    the buffer and Render shows nothing for a long time. Flushing on every
-    emit makes each log line appear in the dashboard right away.
-    """
-
-    def emit(self, record):
-        super().emit(record)
-        self.flush()
-
-
-logging.basicConfig(
-    level=logging.INFO,
-    format="%(levelname)s %(message)s",
-    handlers=[_ImmediateStreamHandler(sys.stdout)],
-)
+setup_logging()
 log = logging.getLogger("bot_server")
 
 # Commands that modify state and therefore need to be pushed back to GitHub.

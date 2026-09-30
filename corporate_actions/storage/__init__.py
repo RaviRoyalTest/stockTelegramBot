@@ -56,6 +56,13 @@ from .users import (
     remove_from_user_list,
     set_user_list_exact,
 )
+from .realtime import (
+    append_snapshot,
+    cleanup_expired_snapshots,
+    generate_snapshot_filename,
+    save_json_snapshot,
+    unique_snapshot_path,
+)
 from .watchlist import (
     add_to_watchlist,
     load_watchlist,
@@ -67,6 +74,11 @@ from .watchlist import (
 
 __all__ = [
     "migrate_legacy_state_files",
+    "append_snapshot",
+    "cleanup_expired_snapshots",
+    "generate_snapshot_filename",
+    "save_json_snapshot",
+    "unique_snapshot_path",
     "list_openclose_dates",
     "load_openclose",
     "migrate_openclose_file",

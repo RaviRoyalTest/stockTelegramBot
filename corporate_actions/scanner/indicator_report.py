@@ -8,6 +8,9 @@ scanner/indicators.py); fetching the candles happens in the bot handler.
 """
 from __future__ import annotations
 
+import logging
+
+log = logging.getLogger(__name__)
 from difflib import get_close_matches
 
 import pandas as pd
@@ -84,7 +87,8 @@ def _trend_str(series, lookback: int = 5) -> str | None:
     """'rising' / 'falling' / 'flat' for the last `lookback` values (or None)."""
     try:
         values = list(series.dropna())
-    except Exception:
+    except Exception as error:
+        log.debug("_trend_str: %s", error)
         return None
     if len(values) < lookback + 1:
         return None
@@ -274,7 +278,8 @@ def _render_supertrend(df):
         direction_series, line_series = indicators.supertrend(df, 10, 3.0)
         direction = indicators.safe_last(direction_series, 1)
         line = indicators.safe_last(line_series)
-    except Exception:
+    except Exception as error:
+        log.debug("_render_supertrend: %s", error)
         return None
     bull = direction >= 1
     emoji = "\U0001F7E2" if bull else "\U0001F534"

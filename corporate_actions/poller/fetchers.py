@@ -86,7 +86,8 @@ def fetch_matching(watchlist: list[dict]) -> list[dict]:
         def _fetch_nse(symbol):
             try:
                 return get_nse_corporate_actions(symbol=symbol)
-            except Exception:
+            except Exception as error:
+                log.warning("_fetch_nse: %s", error)
                 return []
 
         with ThreadPoolExecutor(max_workers=10) as executor:
@@ -94,7 +95,8 @@ def fetch_matching(watchlist: list[dict]) -> list[dict]:
             for future in as_completed(futures):
                 try:
                     all_actions.extend(future.result())
-                except Exception:
+                except Exception as error:
+                    log.warning("_fetch_nse: %s", error)
                     pass
 
     # Query US per-symbol (parallel) - dividends/splits from Yahoo events
@@ -102,7 +104,8 @@ def fetch_matching(watchlist: list[dict]) -> list[dict]:
         def _fetch_us(symbol):
             try:
                 return get_us_corporate_actions(symbol)
-            except Exception:
+            except Exception as error:
+                log.warning("_fetch_us: %s", error)
                 return []
 
         with ThreadPoolExecutor(max_workers=10) as executor:
@@ -110,7 +113,8 @@ def fetch_matching(watchlist: list[dict]) -> list[dict]:
             for future in as_completed(futures):
                 try:
                     all_actions.extend(future.result())
-                except Exception:
+                except Exception as error:
+                    log.warning("_fetch_us: %s", error)
                     pass
 
     # Query BSE globally (when enabled)
@@ -118,7 +122,8 @@ def fetch_matching(watchlist: list[dict]) -> list[dict]:
         try:
             bse_actions = get_bse_corporate_actions()
             all_actions.extend(bse_actions)
-        except Exception:
+        except Exception as error:
+            log.warning("_fetch_us: %s", error)
             pass
 
     # Filter to only watchlist symbols

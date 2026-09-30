@@ -496,7 +496,8 @@ def recorded_covers(doc: dict, markets: tuple[str, ...]) -> bool:
 
         if recorded_day != today_ist().isoformat():
             return False
-    except Exception:
+    except Exception as error:
+        log.warning("recorded_covers: %s", error)
         return False
     return set(doc.get("markets") or []) >= set(markets)
 
@@ -518,7 +519,8 @@ def _record_is_current(doc: dict, markets: tuple[str, ...], target_date=None) ->
             ).astimezone(_ZoneInfo("Asia/Kolkata")).date().isoformat()
         except Exception:
             recorded_day = str(doc.get("recorded_at") or "")[:10]
-    except Exception:
+    except Exception as error:
+        log.warning("_record_is_current: %s", error)
         return False
     return (
         doc.get("mode") == "live"
@@ -592,7 +594,8 @@ def record_openclose(
         if not force and _record_is_current(existing, markets):
             log.info("openclose: record already current - skipping refetch")
             return {"lines": [], "recorded": False, "reason": "already current", "doc": existing}
-    except Exception:
+    except Exception as error:
+        log.warning("record_openclose: %s", error)
         pass
 
     try:

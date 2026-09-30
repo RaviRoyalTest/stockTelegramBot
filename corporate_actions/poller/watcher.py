@@ -5,6 +5,9 @@ Telegram sends; this module only answers "who to watch" and "what moved".
 """
 from __future__ import annotations
 
+import logging
+
+log = logging.getLogger(__name__)
 from concurrent.futures import ThreadPoolExecutor, as_completed
 
 from .. import storage
@@ -68,11 +71,13 @@ def _watch_quote(symbol: str) -> dict | None:
         quote = get_best_quote("NSE", symbol) or {}
         if quote.get("price") is not None:
             return quote
-    except Exception:
+    except Exception as error:
+        log.warning("_watch_quote: %s", error)
         pass
     try:
         return get_quote("NSE", symbol)
-    except Exception:
+    except Exception as error:
+        log.warning("_watch_quote: %s", error)
         return None
 
 

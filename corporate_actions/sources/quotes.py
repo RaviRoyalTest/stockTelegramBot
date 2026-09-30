@@ -89,7 +89,8 @@ def get_quote(exchange: str, symbol: str) -> dict | None:
                             _yahoo_blocked_until = time.time() + _YAHOO_BLOCK_SECONDS
                             _yahoo_fail_count = 0
                             log.warning("Yahoo appears rate-limited - pausing Yahoo calls for %s seconds", _YAHOO_BLOCK_SECONDS)
-            except Exception:
+            except Exception as error:
+                log.warning("get_quote: %s", error)
                 pass
             continue
 
@@ -144,7 +145,8 @@ async def get_quote_async(exchange: str, symbol: str) -> dict | None:
     # Use async throttle when available
     try:
         await _throttle_chart_req_async()
-    except Exception:
+    except Exception as error:
+        log.warning("get_quote: %s", error)
         pass
 
     client = _async_client()
@@ -183,7 +185,8 @@ async def get_quote_async(exchange: str, symbol: str) -> dict | None:
                             _yahoo_blocked_until = time.time() + _YAHOO_BLOCK_SECONDS
                             _yahoo_fail_count = 0
                             log.warning("Yahoo async appears rate-limited - pausing Yahoo calls for %s seconds", _YAHOO_BLOCK_SECONDS)
-            except Exception:
+            except Exception as error:
+                log.warning("get_quote: %s", error)
                 pass
             continue
 

@@ -285,7 +285,8 @@ def handle_add_remove(chat_id, parts, command) -> None:
                     symbol = exact["symbol"]
                     company = exact.get("company", "")
                     validated = True
-            except Exception:
+            except Exception as error:
+                log.warning("handle_add_remove: %s", error)
                 pass
         elif not validated and exchange == "US":
             try:
@@ -295,7 +296,8 @@ def handle_add_remove(chat_id, parts, command) -> None:
                     symbol = exact.get("symbol", symbol)
                     company = exact.get("name") or exact.get("company", "")
                     validated = True
-            except Exception:
+            except Exception as error:
+                log.warning("handle_add_remove: %s", error)
                 pass
 
         if not validated:

@@ -7,6 +7,9 @@ instead of Telegram HTML. No fetching here; fund/quote dicts are passed in.
 """
 from __future__ import annotations
 
+import logging
+
+log = logging.getLogger(__name__)
 from .formatting.stock_common import _holding_delta
 from .formatting.stock_india_report import (
     _main_question,
@@ -119,7 +122,8 @@ def build_analysis(fund: dict | None, price=None) -> dict:
 
         if _consensus_label(fund) in ("Buy", "Strong Buy"):
             positives.append("Analyst consensus is Buy")
-    except Exception:
+    except Exception as error:
+        log.debug("build_analysis: %s", error)
         pass
     if fund.get("target_mean") is not None and price:
         try:
