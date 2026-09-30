@@ -145,7 +145,9 @@ BSE_ACTIONS_URL = "https://api.bseindia.com/BseIndiaAPI/api/CorpActionAnncmentW/
 SMTP_HOST = os.getenv("SMTP_HOST", "").strip()
 SMTP_PORT = _env_int("SMTP_PORT", 587, floor=1)
 SMTP_USER = os.getenv("SMTP_USER", "").strip()
-SMTP_PASS = os.getenv("SMTP_PASS", "")
+# Gmail shows app passwords as "abcd efgh ijkl mnop" - strip any spaces the
+# user pasted so the value Google displays works as-is.
+SMTP_PASS = os.getenv("SMTP_PASS", "").replace(" ", "")
 SMTP_FROM = os.getenv("SMTP_FROM", "").strip() or SMTP_USER
 # Alternative when the host blocks SMTP ports: Resend HTTPS API (free tier,
 # API key from resend.com - no app password). Takes precedence over SMTP.
