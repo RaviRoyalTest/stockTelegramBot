@@ -8,16 +8,21 @@ the corporate-action list, all stamped with the session date.
 
 The web Sessions tab and the daily mail serve this file instead of
 re-fetching hundreds of symbols on every view. Recording is explicit
-(Telegram /snap, web "Record now", daily mail) or skipped when the file
-already covers the latest session - never repeated fetch churn.
+(Telegram /snap, web "Record now") or AUTOMATIC: the poller's
+maybe_record_session_snapshot() reuses the stored file while it covers
+the latest session and fetches a new session's screens only after that
+session ends (close + RECORD_DELAY_MINUTES, so providers have finalized
+the day's bars) - reuse first, fetch only when stale, never churn.
 """
 from __future__ import annotations
 
 import logging
+import threading
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from datetime import datetime, timezone
 
 from . import config, storage
+from .market import hours as market_hours
 from .core.dates import today_ist
 from .opening_report.data import (
     fetch_universe_moves,
@@ -38,6 +43,66 @@ log = logging.getLogger(__name__)
 GAP_TOP_N = 20
 MOVER_TOP_N = 10
 ACTIONS_TOP_N = 100
+
+# Auto-refresh: only record a session this many minutes after the market's
+# close, so Yahoo/NSE have finalized the day's bars (a record DURING the
+# session would stamp partial data as the day's final result).
+RECORD_DELAY_MINUTES = 20
+# At most this many automatic attempts per market per day (a failing source
+# must not be re-fetched every poll cycle all day long).
+MAX_AUTO_ATTEMPTS = 2
+
+# Held while ONE record runs (web button, Telegram /snap, auto-refresh) so
+# concurrent triggers never double-fetch or interleave writes.
+_recording = threading.Lock()
+
+# Per-market auto-refresh bookkeeping for the current process:
+# {market: {"date": iso, "attempts": n}} - in-process only on purpose; a
+# redeploy simply grants a fresh pair of attempts.
+_auto_state: dict[str, dict] = {}
+
+
+def is_recording() -> bool:
+    """True while a session record (any trigger) is running."""
+    return _recording.locked()
+
+
+def _minutes_since_close(market: str, now=None) -> int | None:
+    """Market-local minutes since the regular close (negative = before). Pure."""
+    market, _ = _market_key(market or "", None)
+    info = market_hours.MARKETS.get(market)
+    close = market_hours._hhmm_minutes((info or {}).get("close"))
+    if close is None:
+        return None
+    local = market_hours.local_now(market, now)
+    return local.hour * 60 + local.minute - close
+
+
+def should_auto_record(market: str, doc: dict | None, now=None,
+                       latest: "object" = "auto") -> bool:
+    """Stale verdict for the auto-refresh (pure - no network, no disk).
+
+    True only when the stored doc is for THIS market and its session is
+    older than the market's latest regular session date (or nothing is
+    stored at all). `latest` injects the latest-session lookup for tests
+    ("auto" = do the real lookup); an injected or failed lookup of None
+    deliberately returns False - an unverifiable verdict must never
+    trigger a heavy refetch.
+    """
+    market, _ = _market_key(market or "", None)
+    doc = doc or {}
+    if str(doc.get("market") or "in") != market:
+        # Never auto-replace the other market's recorded session; that
+        # stays an explicit choice (web selector / Telegram /snap us).
+        return not doc  # empty store -> allowed to bootstrap the default market
+    session = str(doc.get("session") or "")
+    if not session:
+        return True
+    if latest == "auto":
+        latest = latest_session_date(market)
+    if latest is None:
+        return False
+    return session != latest.isoformat()
 
 # Openreport-style blocks per market: (key, title, symbol-loader).
 IN_BLOCKS = (
@@ -157,10 +222,62 @@ def _market_key(market: str, universe: str | None) -> tuple[str, str]:
     return "in", (universe or "nifty500").lower() or "nifty500"
 
 
+def maybe_record_session_snapshot(market: str = "in",
+                                  recorded_by: str = "auto-refresh") -> dict:
+    """Auto-refresh entry point: reuse the file, fetch only when stale.
+
+    Called every poll cycle. In-process attempt counter caps a failing
+    source at MAX_AUTO_ATTEMPTS per market per day; the record lock makes
+    a poll cycle racing the web button a cheap no-op. Returns the doc
+    (fresh or reused); {} only when nothing could be recorded.
+    """
+    market, _ = _market_key(market or "", None)
+    today = today_ist().isoformat()
+    state = _auto_state.get(market) or {}
+    if state.get("date") != today:
+        state = {"date": today, "attempts": 0}
+        _auto_state[market] = state
+    if state["attempts"] >= MAX_AUTO_ATTEMPTS:
+        return storage.load_snapshots() or {}
+    try:
+        stale = should_auto_record(market, storage.load_snapshots())
+    except Exception as error:
+        log.info("snapshots: staleness check failed: %s", error)
+        return storage.load_snapshots() or {}
+    if not stale:
+        return storage.load_snapshots() or {}
+    # Post-close delay BEFORE burning an attempt: during market hours (and
+    # right after the bell) the day's bars are not final yet, so the record
+    # must wait - and must not consume the day's MAX_AUTO_ATTEMPTS either.
+    delay = _minutes_since_close(market)
+    if delay is not None and delay < RECORD_DELAY_MINUTES:
+        return storage.load_snapshots() or {}
+    state["attempts"] += 1
+    return record_session_snapshot(market=market, force=True,
+                                   recorded_by=recorded_by)
+
+
 def record_session_snapshot(universe: str = "nifty500", force: bool = False,
                             recorded_by: str = "manual",
                             market: str | None = None) -> dict:
     """Fetch the last session's screens and persist them. Never raises.
+
+    One record at a time, whatever the trigger (web button, /snap, auto):
+    a concurrent trigger returns the stored file instead of double-fetching.
+    """
+    if not _recording.acquire(blocking=False):
+        log.info("snapshots: record already running - skipping (%s)", recorded_by)
+        return storage.load_snapshots() or {}
+    try:
+        return _record_session_snapshot_impl(universe, force, recorded_by, market)
+    finally:
+        _recording.release()
+
+
+def _record_session_snapshot_impl(universe: str = "nifty500", force: bool = False,
+                                  recorded_by: str = "manual",
+                                  market: str | None = None) -> dict:
+    """Record body - caller must hold _recording. Never raises.
 
     market "in" records the India openreport layout (NIFTY 100 + 500 ex-100
     + Microcap 250 blocks of 20 = 60 rows); "us" records Mega + Large-cap

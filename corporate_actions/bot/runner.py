@@ -117,6 +117,11 @@ def main():
     register_commands()
     checknow_chat = process_commands()
     log.info("Running poll cycle%s...", f" (forced for {checknow_chat})" if checknow_chat else "")
+    # Auto-refresh the recorded-sessions file (reuse when current, fetch
+    # only when the stored session is older than the latest session).
+    from corporate_actions.poller import engine as poller_engine
+
+    poller_engine._snapshots_auto_enabled = poller_engine._snapshots_auto_default()
     sent = poller.run_once(force=bool(checknow_chat), only_chat=checknow_chat)
     log.info("Pushing state if changed...")
     push_state()

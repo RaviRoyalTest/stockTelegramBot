@@ -1604,12 +1604,25 @@ def _record_snapshot_thread(market: str, force: bool) -> None:
 async def api_snapshots():
     """The recorded last-session file (gap-downs, movers, actions).
 
-    Served from disk - never re-fetches. Empty {} when nothing was
-    recorded yet (use POST /api/snapshots/record or Telegram /snap).
+    Served from disk - never blocks the view. When the stored session is
+    older than the market's latest session, a background auto-refresh is
+    kicked once (reuse-first: current files are never re-fetched).
     """
     try:
         doc = await asyncio.to_thread(storage.load_snapshots)
-        return JSONResponse({**(doc or {}), "recording": _snap_state["recording"]})
+        # Fire-and-forget auto-refresh: only fires when the file is stale
+        # (snapshots.maybe_record_session_snapshot re-checks everything),
+        # so opening the page reuses the stored day and fetches only when
+        # a newer session has ended and not been recorded yet.
+        if not snapshots_service.is_recording():
+            threading.Thread(
+                target=snapshots_service.maybe_record_session_snapshot,
+                kwargs={"market": str((doc or {}).get("market") or "in"),
+                        "recorded_by": "auto-page"},
+                daemon=True, name="snapshot-auto-page",
+            ).start()
+        recording = bool(_snap_state["recording"]) or snapshots_service.is_recording()
+        return JSONResponse({**(doc or {}), "recording": recording})
     except Exception as exc:
         raise HTTPException(status_code=500, detail=str(exc))
 

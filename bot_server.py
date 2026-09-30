@@ -34,7 +34,7 @@ from corporate_actions.github import (
     push_state,
     sync_state,
 )
-from corporate_actions.poller import poller
+from corporate_actions.poller import engine, poller
 from corporate_actions.telegram.client import get_updates
 
 
@@ -289,6 +289,9 @@ def main():
         # alerts are sent, not at the next periodic flush - a redeploy in
         # between must not re-fire the same alerts (the double-send flood).
         poller.push_state_callback = flush_pending_state
+        # Auto-refresh the recorded-sessions file (reuse when current, fetch
+        # only when the stored session is older than the latest session).
+        engine._snapshots_auto_enabled = engine._snapshots_auto_default()
         poller.start()
         log.info("Background poller + sudden-move watcher started")
     log.info("Starting long-polling bot (instant responses)...")

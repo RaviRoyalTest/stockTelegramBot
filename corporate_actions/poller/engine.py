@@ -18,6 +18,8 @@ import time
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from datetime import datetime, date, timedelta
 
+import os
+
 from .. import config, storage
 from ..core.dates import today_ist
 from ..market.hours import market_active, market_for_exchange, screen_available
@@ -49,6 +51,16 @@ log = logging.getLogger(__name__)
 # as a poll error again and again (noisy "N error(s)" lines and wasted calls).
 _nse_fetch_fail: dict[str, float] = {}
 _NSE_FETCH_FAIL_CACHE_SECONDS = 3600  # seconds - re-check the symbol hourly
+
+# Recorded-sessions auto-refresh (snapshots.maybe_record_session_snapshot
+# each poll cycle). Default OFF so unit tests stay hermetic (no network,
+# no snapshots writes); bot_server.py and the cron runner (runner.py) flip
+# it on at boot. SNAPSHOTS_AUTO_REFRESH=false disables it on the host.
+def _snapshots_auto_default() -> bool:
+    return os.getenv("SNAPSHOTS_AUTO_REFRESH", "").strip().lower() not in ("0", "false", "no", "off")
+
+
+_snapshots_auto_enabled = False
 
 # Session-day verdicts for the price-alert gate, cached per market per date:
 # a mid-week exchange holiday (market hours say 'weekday, within session'
@@ -577,6 +589,20 @@ class Poller:
             # before the flush boots with the old seen-set and re-sends
             # every alert the user already received.
             self._persist_seen_to_github()
+
+        # -------------------------------------- recorded-sessions auto-refresh
+        # Keep data/snapshots.json (the web Sessions tab + daily mail data)
+        # current: reuse the stored file while it covers the latest session;
+        # fetch a new session's screens only after that session ends. Runs
+        # inline but never raises and never blocks long (the record takes the
+        # snapshots lock; a concurrent web/button record makes this a no-op).
+        if not suppress and _snapshots_auto_enabled:
+            try:
+                from .. import snapshots as snapshots_module
+
+                snapshots_module.maybe_record_session_snapshot(market="in")
+            except Exception as error:
+                log.info("poll cycle: snapshot auto-refresh skipped: %s", error)
 
         total_sent = self.status["total_sent"] + sent
         self._set("total_sent", total_sent)

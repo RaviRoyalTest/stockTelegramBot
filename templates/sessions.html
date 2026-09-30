@@ -3,7 +3,7 @@
 {% block content %}
   <div class="page-header">
     <h1>📅 Recorded sessions</h1>
-    <p class="sub">Last session's overnight gap-downs, top movers and corporate actions — served from the recorded file, never re-fetched on view. Record with Telegram <code>/snap</code> or below.</p>
+    <p class="sub">Last session's overnight gap-downs, top movers and corporate actions — served from the recorded file and refreshed automatically after each session close (reuse first, fetch only when a newer session has ended). Manual <code>/snap</code> and the buttons below still work anytime.</p>
   </div>
 
   <section class="card" aria-labelledby="hMeta">
@@ -234,9 +234,26 @@
         }
       }
 
+      // While a record (manual or automatic) is running - or the file is
+      // empty because the auto-refresh is still fetching - keep polling so
+      // fresh data appears without a manual reload.
+      var autoPoll = null;
+      function maybeAutoPoll(doc) {
+        var needs = doc && (doc.recording || !((doc.gap_downs || []).length) && !((doc.top_gainers || []).length));
+        if (needs && !autoPoll) {
+          autoPoll = setInterval(async function () {
+            var fresh = await load();
+            if (!fresh || (!fresh.recording && ((fresh.gap_downs || []).length || (fresh.top_gainers || []).length))) {
+              clearInterval(autoPoll);
+              autoPoll = null;
+            }
+          }, 15000);
+        }
+      }
+
       document.getElementById('recordBtn').addEventListener('click', function () { record(false); });
       document.getElementById('forceBtn').addEventListener('click', function () { record(true); });
-      load();
+      load().then(maybeAutoPoll);
     })();
   </script>
 {% endblock %}
