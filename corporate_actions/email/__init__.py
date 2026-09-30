@@ -6,6 +6,8 @@ smtplib + email.message from the standard library.
 """
 from .client import EmailError, is_configured, send_email
 from .daily import build_daily_lines, maybe_send_daily_email
+from .resend import is_configured as resend_configured
+from .resend import send_via_resend
 
 __all__ = [
     "EmailError",
@@ -13,4 +15,6 @@ __all__ = [
     "send_email",
     "build_daily_lines",
     "maybe_send_daily_email",
+    "resend_configured",
+    "send_via_resend",
 ]

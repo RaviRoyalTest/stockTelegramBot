@@ -147,6 +147,10 @@ SMTP_PORT = _env_int("SMTP_PORT", 587, floor=1)
 SMTP_USER = os.getenv("SMTP_USER", "").strip()
 SMTP_PASS = os.getenv("SMTP_PASS", "")
 SMTP_FROM = os.getenv("SMTP_FROM", "").strip() or SMTP_USER
+# Alternative when the host blocks SMTP ports: Resend HTTPS API (free tier,
+# API key from resend.com - no app password). Takes precedence over SMTP.
+RESEND_API_KEY = os.getenv("RESEND_API_KEY", "").strip()
+RESEND_FROM = os.getenv("RESEND_FROM", "").strip()
 
 
 def today_ist() -> date:

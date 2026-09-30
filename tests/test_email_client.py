@@ -23,10 +23,60 @@ class EmailClientTests(unittest.TestCase):
     def test_unconfigured_server_reported(self):
         with patch.object(config, "SMTP_HOST", ""), \
                 patch.object(config, "SMTP_USER", ""), \
-                patch.object(config, "SMTP_PASS", ""):
+                patch.object(config, "SMTP_PASS", ""), \
+                patch.object(config, "RESEND_API_KEY", ""):
             ok, err = client.send_email("a@b.com", "s", ["x"])
         self.assertFalse(ok)
         self.assertIn("not configured", err)
+
+    def test_resend_preferred_when_key_present(self):
+        from corporate_actions.email import resend as resend_mod
+
+        with patch.object(config, "RESEND_API_KEY", "re_test123"), \
+                patch.object(resend_mod, "send_via_resend",
+                             return_value=(True, "")) as sender, \
+                patch.object(config, "SMTP_HOST", ""), \
+                patch.object(config, "SMTP_USER", ""), \
+                patch.object(config, "SMTP_PASS", ""):
+            ok, err = client.send_email("a@b.com", "subj", ["<b>hi</b>"])
+        self.assertTrue(ok)
+        self.assertEqual(err, "")
+        sender.assert_called_once()
+        self.assertEqual(sender.call_args[0][0], "a@b.com")
+        self.assertEqual(sender.call_args[0][1], "subj")
+
+    def test_resend_http_error_reported(self):
+        import urllib.error
+
+        from corporate_actions.email import resend as resend_mod
+
+        with patch.object(config, "RESEND_API_KEY", "re_test123"), \
+                patch.object(config, "RESEND_FROM", ""):
+            fake_error = urllib.error.HTTPError(
+                "https://api.resend.com/emails", 401, "Unauthorized", {}, None)
+            with patch("urllib.request.urlopen", side_effect=fake_error):
+                ok, err = resend_mod.send_via_resend(
+                    "a@b.com", "s", "<b>hi</b>", "hi")
+        self.assertFalse(ok)
+        self.assertIn("HTTP 401", err)
+
+    def test_resend_success(self):
+        from corporate_actions.email import resend as resend_mod
+
+        response = MagicMock()
+        response.__enter__.return_value = response
+        response.status = 200
+        response.read.return_value = b'{"id":"abc"}'
+        with patch.object(config, "RESEND_API_KEY", "re_test123"), \
+                patch.object(config, "RESEND_FROM", ""):
+            with patch("urllib.request.urlopen", return_value=response) as opener:
+                ok, err = resend_mod.send_via_resend(
+                    "a@b.com", "s", "<b>hi</b>", "hi")
+        self.assertTrue(ok)
+        self.assertEqual(err, "")
+        request = opener.call_args[0][0]
+        self.assertIn("api.resend.com/emails", request.full_url)
+        self.assertEqual(request.get_header("Authorization"), "Bearer re_test123")
 
     def test_network_failure_names_endpoint_and_falls_back(self):
         host, port, user, pwd, frm = _env()

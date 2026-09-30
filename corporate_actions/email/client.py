@@ -26,8 +26,10 @@ class EmailError(Exception):
 
 
 def is_configured() -> bool:
-    """True when the SMTP sender settings are all present."""
-    return bool(
+    """True when any sender is usable (Resend key or full SMTP triple)."""
+    from . import resend as resend_mod
+
+    return resend_mod.is_configured() or bool(
         config.SMTP_HOST.strip()
         and config.SMTP_USER.strip()
         and config.SMTP_PASS
@@ -73,10 +75,9 @@ def _deliver(host: str, port: int, user: str, password: str,
 def send_email(to: str, subject: str, html_lines: list[str]) -> tuple[bool, str]:
     """Send report lines to one mail id. Returns (ok, error_message).
 
-    The error always names the endpoint (host:port), so "Network is
-    unreachable" can be told apart from wrong-host vs blocked-port. On a
-    network-level failure (not auth), the other standard submission port
-    (587 <-> 465) is tried once - many ISPs/hosts block exactly one of them.
+    Transport priority: Resend HTTPS API when RESEND_API_KEY is set (works
+    on hosts where SMTP ports are blocked), otherwise the SMTP chain with
+    587/465 fallback. SMTP errors name the endpoint (host:port).
     """
     recipient = (to or "").strip()
     if not recipient or "@" not in recipient:
@@ -84,7 +85,15 @@ def send_email(to: str, subject: str, html_lines: list[str]) -> tuple[bool, str]
     if not is_configured():
         return False, (
             "email is not configured on the server "
-            "(SMTP_HOST/SMTP_USER/SMTP_PASS missing)"
+            "(set RESEND_API_KEY, or SMTP_HOST/SMTP_USER/SMTP_PASS)"
+        )
+    from . import resend as resend_mod
+
+    if resend_mod.is_configured():
+        return resend_mod.send_via_resend(
+            recipient, subject,
+            _html_document(subject, html_lines),
+            _plain_fallback(html_lines),
         )
     message = EmailMessage()
     message["Subject"] = subject

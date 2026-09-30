@@ -31,7 +31,7 @@ EMAIL_USAGE = (
     "<b>/emailreport SYMBOL</b> - mail the deep fundamental report\n"
     "/emailreport RELIANCE  \u2192 full report + snapshot in your inbox\n"
     "<b>/dailyemail on|off</b> - daily snapshot digest to your mail id\n"
-    "Needs server SMTP settings (ask the admin for SMTP_HOST/USER/PASS)."
+    "Needs a sender on the server (RESEND_API_KEY, or SMTP_HOST/USER/PASS)."
 )
 
 
@@ -59,7 +59,8 @@ def handle_setemail(chat_id, parts) -> None:
         reply(
             chat_id,
             "The server has no SMTP settings yet, so I cannot send mail. "
-            "Ask the admin to set SMTP_HOST / SMTP_USER / SMTP_PASS, then retry.",
+            "Ask the admin to set RESEND_API_KEY (or SMTP_HOST / SMTP_USER / "
+            "SMTP_PASS), then retry.",
         )
         return
     settings["email"] = raw
