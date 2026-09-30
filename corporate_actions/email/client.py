@@ -135,25 +135,26 @@ def send_email(to: str, subject: str, html_lines: list[str]) -> tuple[bool, str]
     from . import resend as resend_mod
 
     if resend_mod.is_configured():
-        ok, error = resend_mod.send_via_resend(
+        ok, info = resend_mod.send_via_resend(
             recipient, subject,
             _html_document(subject, html_lines),
             _plain_fallback(html_lines),
         )
         if ok:
-            return True, ""
+            # info carries "resend id: ..." on success (delivery tracking).
+            return True, info
         smtp_usable = bool(
             config.SMTP_HOST.strip()
             and config.SMTP_USER.strip()
             and config.SMTP_PASS
         )
         if not smtp_usable:
-            return False, error
+            return False, info
         log.warning(
-            "resend failed (%s) - falling back to SMTP %s", error, config.SMTP_HOST
+            "resend failed (%s) - falling back to SMTP %s", info, config.SMTP_HOST
         )
         smtp_ok, smtp_error = _smtp_attempt(recipient, subject, html_lines)
         if smtp_ok:
             return True, ""
-        return False, f"{error}; smtp fallback also failed ({smtp_error})"
+        return False, f"{info}; smtp fallback also failed ({smtp_error})"
     return _smtp_attempt(recipient, subject, html_lines)

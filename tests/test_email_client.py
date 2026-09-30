@@ -73,7 +73,8 @@ class EmailClientTests(unittest.TestCase):
                 ok, err = resend_mod.send_via_resend(
                     "a@b.com", "s", "<b>hi</b>", "hi")
         self.assertTrue(ok)
-        self.assertEqual(err, "")
+        # Success info carries the Resend message id (delivery tracking).
+        self.assertEqual(err, "resend id: abc")
         request = opener.call_args[0][0]
         self.assertIn("api.resend.com/emails", request.full_url)
         self.assertEqual(request.get_header("Authorization"), "Bearer re_test123")
@@ -93,6 +94,21 @@ class EmailClientTests(unittest.TestCase):
         request = opener.call_args[0][0]
         # urllib capitalizes header keys, so "User-agent" is the lookup form.
         self.assertEqual(request.get_header("User-agent"), resend_mod.USER_AGENT)
+
+    def test_resend_success_info_carries_message_id(self):
+        """Success info carries the Resend message id for delivery tracking."""
+        from corporate_actions.email import client as client_mod
+        from corporate_actions.email import resend as resend_mod
+
+        with patch.object(config, "RESEND_API_KEY", "re_test123"), \
+                patch.object(config, "SMTP_HOST", ""), \
+                patch.object(config, "SMTP_USER", ""), \
+                patch.object(config, "SMTP_PASS", ""), \
+                patch.object(resend_mod, "send_via_resend",
+                             return_value=(True, "resend id: abc123")):
+            ok, info = client_mod.send_email("a@b.com", "subj", ["<b>hi</b>"])
+        self.assertTrue(ok)
+        self.assertEqual(info, "resend id: abc123")
 
     def test_network_failure_names_endpoint_and_falls_back(self):
         host, port, user, pwd, frm = _env()

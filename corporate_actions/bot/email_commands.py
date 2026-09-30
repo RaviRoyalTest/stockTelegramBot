@@ -65,11 +65,20 @@ def handle_setemail(chat_id, parts) -> None:
         return
     settings["email"] = raw
     storage.save_user_settings(chat_id, settings)
-    ok, error = send_email(raw, "Royal Stock: test mail", ["✅ <b>Test mail OK</b> - reports will arrive here."])
+    ok, info = send_email(raw, "Royal Stock: test mail", ["✅ <b>Test mail OK</b> - reports will arrive here."])
     if ok:
-        reply(chat_id, f"Mail id saved as <b>{escape(raw)}</b> - test mail sent. ✅")
+        # info may carry "resend id: ..." - point the user at the resend.com
+        # dashboard and the spam folder, the two places a "sent" mail hides.
+        extra = f" ({escape(info)})" if info else ""
+        reply(
+            chat_id,
+            f"Mail id saved as <b>{escape(raw)}</b> - test mail accepted by the sender. ✅{extra}\n"
+            "Not in your inbox in ~2 min? Check <b>Spam</b> (sender "
+            "<code>onboarding@resend.dev</code>) and the Emails tab on "
+            "resend.com for that message's delivery status.",
+        )
     else:
-        reply(chat_id, f"Mail id saved as <b>{escape(raw)}</b>, but the test mail failed: {escape(error)}")
+        reply(chat_id, f"Mail id saved as <b>{escape(raw)}</b>, but the test mail failed: {escape(info)}")
 
 
 def handle_emailreport(chat_id, parts) -> None:

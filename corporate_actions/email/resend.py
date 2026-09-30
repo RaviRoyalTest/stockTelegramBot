@@ -75,5 +75,12 @@ def send_via_resend(to: str, subject: str, html_body: str,
         return False, f"resend unreachable ({config.redact(str(error))})"
     if status not in (200, 201, 202):
         return False, f"resend returned HTTP {status}: {body[:200]}"
-    log.info("email sent via resend to %s: %s", recipient, subject)
-    return True, ""
+    try:
+        email_id = str(json.loads(body).get("id") or "")
+    except Exception:
+        email_id = ""
+    log.info("email sent via resend to %s: %s (id %s)", recipient, subject, email_id or "?")
+    # On success the second tuple item carries the Resend message id so
+    # callers can show it - that id is what the resend.com dashboard lists
+    # deliveries/bounces under.
+    return True, (f"resend id: {email_id}" if email_id else "")
