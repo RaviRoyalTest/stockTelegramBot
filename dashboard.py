@@ -7,6 +7,7 @@ from __future__ import annotations
 
 import math
 import os
+import re
 from typing import Any
 
 import uvicorn
@@ -17,6 +18,7 @@ from fastapi.templating import Jinja2Templates
 import logging
 import traceback
 
+from corporate_actions import admin as admin_service
 from corporate_actions import sources, storage
 from corporate_actions import snapshots as snapshots_service
 from corporate_actions.screener_service import screen_universe_async
@@ -1682,6 +1684,194 @@ async def api_telegram_test():
     except Exception as exc:
         log.warning("/api/telegram/test failed: %s", exc)
         raise HTTPException(status_code=502, detail=str(exc))
+
+
+# ------------------------------------------------------------- admin -----
+# Credential-gated management of user subscriptions, schedules and alert
+# toggles. The gate (ADMIN_KEY env) lives in corporate_actions.admin; every
+# endpoint below rejects non-admin requests BEFORE doing any work.
+
+
+@app.get("/admin", response_class=HTMLResponse)
+async def admin_page(request: Request):
+    """Admin console page (client asks /api/admin/state for the gate state)."""
+    return templates.TemplateResponse(request, "admin.html")
+
+
+@app.get("/api/admin/state")
+async def api_admin_state(token: str | None = Query(None)):
+    """Login gate status + (when authenticated) the full admin payload."""
+    if not admin_service.is_enabled():
+        return JSONResponse({"enabled": False, "authenticated": False})
+    if not admin_service.verify_session(token or ""):
+        return JSONResponse({"enabled": True, "authenticated": False})
+    users = await asyncio.to_thread(admin_service.list_users)
+    schedules = await asyncio.to_thread(storage.load_schedule)
+    return JSONResponse({
+        "enabled": True,
+        "authenticated": True,
+        "users": list(users.values()),
+        "schedules": schedules,
+    })
+
+
+@app.post("/api/admin/login")
+async def api_admin_login(payload: dict):
+    """Exchange the admin key for a session token (stored client-side)."""
+    password = str((payload or {}).get("password") or "")
+    token = await asyncio.to_thread(admin_service.create_session, password)
+    if not token:
+        await asyncio.sleep(0.3)  # blunt the brute-force rate a little
+        raise HTTPException(status_code=401, detail="wrong admin key")
+    return JSONResponse({"ok": True, "token": token})
+
+
+@app.post("/api/admin/logout")
+async def api_admin_logout(token: str | None = Query(None)):
+    await asyncio.to_thread(admin_service.end_session, token or "")
+    return JSONResponse({"ok": True})
+
+
+def _admin_guard(token: str | None) -> None:
+    """Raise 403 unless the request carries a live admin session."""
+    reason = admin_service.check_token(token or "")
+    if reason:
+        raise HTTPException(status_code=403, detail=reason)
+
+
+@app.get("/api/admin/user")
+async def api_admin_user(token: str | None = Query(None), chat: str = Query(...)):
+    """One chat's subscription list + schedule rows (admin only)."""
+    _admin_guard(token)
+    try:
+        items = await asyncio.to_thread(admin_service.user_list, chat)
+        schedule = await asyncio.to_thread(admin_service.user_schedule, chat)
+    except ValueError as error:
+        raise HTTPException(status_code=400, detail=str(error))
+    return JSONResponse({"chat": chat, "items": items, "schedule": schedule})
+
+
+@app.post("/api/admin/user/symbols")
+async def api_admin_add_symbols(payload: dict):
+    """Add symbols to a user's list (same validation as the watchlist tab)."""
+    _admin_guard(payload.get("token"))
+    chat = str(payload.get("chat") or "").strip()
+    raw = payload.get("symbols")
+    if not chat:
+        raise HTTPException(status_code=400, detail="chat is required")
+    if isinstance(raw, str):
+        symbols = [part.strip() for part in re.split(r"[,\s]+", raw) if part.strip()]
+    elif isinstance(raw, list):
+        symbols = [str(part).strip() for part in raw if str(part).strip()]
+    else:
+        symbols = []
+    if not symbols:
+        raise HTTPException(status_code=400, detail="provide symbols (list or comma/space separated string)")
+    items = [{"symbol": s} for s in symbols]
+    validated, rejected = await _resolve_watchlist_items(items)
+    if rejected:
+        raise HTTPException(status_code=422, detail="Unknown symbol(s): "
+                            + ", ".join(r["symbol"] or "(empty)" for r in rejected))
+    try:
+        result = await asyncio.to_thread(admin_service.add_user_symbols, chat, validated)
+    except ValueError as error:
+        raise HTTPException(status_code=400, detail=str(error))
+    return JSONResponse({
+        "ok": True,
+        "added": result.get("added"),
+        "skipped_duplicates": result.get("skipped_duplicates"),
+        "items": result.get("list", []),
+    })
+
+
+@app.delete("/api/admin/user/symbol")
+async def api_admin_remove_symbol(
+    token: str | None = Query(None),
+    chat: str = Query(...),
+    symbol: str = Query(...),
+    exchange: str = Query("NSE"),
+):
+    """Remove one symbol from a user's list."""
+    _admin_guard(token)
+    try:
+        remaining = await asyncio.to_thread(
+            admin_service.remove_user_symbol, chat, symbol, exchange)
+    except ValueError as error:
+        raise HTTPException(status_code=400, detail=str(error))
+    return JSONResponse({"ok": True, "items": remaining, "count": len(remaining)})
+
+
+@app.post("/api/admin/schedule")
+async def api_admin_add_schedule(payload: dict):
+    """Add a scheduled report for a user.
+
+    Body: {token, chat, commands, interval_min, run_at?, market?} - the same
+    fields /schedule add accepts, from the web instead of Telegram.
+    """
+    _admin_guard(payload.get("token"))
+    chat = str(payload.get("chat") or "").strip()
+    if not chat:
+        raise HTTPException(status_code=400, detail="chat is required")
+    raw = payload.get("commands")
+    if isinstance(raw, str):
+        commands = [part.strip() for part in re.split(r"[,\n]+", raw) if part.strip()]
+    elif isinstance(raw, list):
+        commands = [str(part).strip() for part in raw if str(part).strip()]
+    else:
+        commands = []
+    try:
+        interval = int(payload.get("interval_min") or 1440)
+    except (TypeError, ValueError):
+        raise HTTPException(status_code=400, detail="interval_min must be a whole number of minutes")
+    schedule = await asyncio.to_thread(
+        admin_service.add_schedule, chat, interval, commands,
+        payload.get("run_at"), payload.get("market"),
+    )
+    return JSONResponse({"ok": True, "schedule": schedule})
+
+
+@app.delete("/api/admin/schedule")
+async def api_admin_remove_schedule(
+    token: str | None = Query(None),
+    chat: str = Query(...),
+    index: int = Query(...),
+):
+    """Remove the index-th (0-based) schedule row of a user."""
+    _admin_guard(token)
+    try:
+        schedule = await asyncio.to_thread(
+            admin_service.remove_schedule, chat, index)
+    except ValueError as error:
+        raise HTTPException(status_code=400, detail=str(error))
+    return JSONResponse({"ok": True, "schedule": schedule})
+
+
+@app.post("/api/admin/toggle")
+async def api_admin_toggle(payload: dict):
+    """Toggle a user's alerts from the admin console.
+
+    Body: {token, chat, key, enabled} where key is one of:
+      alerts    - master switch for ALL automatic pushes (/quiet equivalent)
+      ca_alerts - corporate-action + ex-date reminder pushes only
+    """
+    _admin_guard(payload.get("token"))
+    chat = str(payload.get("chat") or "").strip()
+    key = str(payload.get("key") or "").strip()
+    enabled = bool(payload.get("enabled"))
+    if not chat:
+        raise HTTPException(status_code=400, detail="chat is required")
+    if key not in ("alerts", "ca_alerts"):
+        raise HTTPException(status_code=400, detail="key must be 'alerts' or 'ca_alerts'")
+    try:
+        if key == "alerts":
+            state = await asyncio.to_thread(
+                admin_service.set_alerts_enabled, chat, enabled)
+        else:
+            state = await asyncio.to_thread(
+                admin_service.set_ca_alerts, chat, enabled)
+    except ValueError as error:
+        raise HTTPException(status_code=400, detail=str(error))
+    return JSONResponse({"ok": True, "user": state})
 
 
 if __name__ == "__main__":

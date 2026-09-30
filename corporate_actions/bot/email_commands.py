@@ -58,9 +58,9 @@ def handle_setemail(chat_id, parts) -> None:
     if not email_configured():
         reply(
             chat_id,
-            "The server has no SMTP settings yet, so I cannot send mail. "
-            "Ask the admin to set RESEND_API_KEY (or SMTP_HOST / SMTP_USER / "
-            "SMTP_PASS), then retry.",
+            "The server has no email sender configured yet, so I cannot send "
+            "mail. Ask the admin to set RESEND_API_KEY (or SMTP_HOST / "
+            "SMTP_USER / SMTP_PASS), then retry.",
         )
         return
     settings["email"] = raw
@@ -96,7 +96,9 @@ def handle_emailreport(chat_id, parts) -> None:
         lines = _us_stock_lines(raw_symbol, quote, fund, include_tip=False)
     else:
         lines = _fund_report_lines(raw_symbol, quote, fund, include_tip=False)
-    ok, error = send_email(raw_symbol, f"Royal Stock report: {raw_symbol}", lines)
+    # Recipient is the user's stored mail id - never the symbol (a past bug
+    # mailed "RELIANCE" instead of the user, failing every /emailreport).
+    ok, error = send_email(recipient, f"Royal Stock report: {raw_symbol}", lines)
     if ok:
         reply_messages(chat_id, split_messages(
             [f"📧 Mailed <b>{escape(raw_symbol)}</b> to <b>{escape(recipient)}</b> ✅"]

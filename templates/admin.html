@@ -1,0 +1,376 @@
+{% extends "base.html" %}
+{% block title %}Admin · Royal Stock{% endblock %}
+{% block content %}
+  <div class="page-header">
+    <h1>🛡️ Admin console</h1>
+    <p class="sub">Manage every user's subscriptions, scheduled reports and alert switches. Changes take effect in Telegram immediately.</p>
+  </div>
+
+  <section class="card" id="gateCard">
+    <h2>Sign in</h2>
+    <p class="muted" id="gateInfo">Checking admin availability…</p>
+    <form id="loginForm" class="lookup-form" hidden>
+      <label class="visually-hidden" for="adminPass">Admin key</label>
+      <input type="password" id="adminPass" class="field" placeholder="Admin key (ADMIN_KEY)" autocomplete="current-password" />
+      <button class="btn btn-primary" type="submit">Unlock admin console</button>
+    </form>
+    <p class="muted" id="disabledInfo" hidden>
+      The admin console is disabled — set <code>ADMIN_KEY</code> in the host environment (Render → Environment), then redeploy.
+    </p>
+  </section>
+
+  <div id="adminBody" hidden>
+    <div class="toolbar admin-toolbar" style="display:flex; gap:8px; align-items:center; flex-wrap:wrap; margin-bottom:12px;">
+      <button class="btn btn-sm" id="reloadBtn">🔄 Reload</button>
+      <button class="btn btn-sm btn-danger" id="logoutBtn">Logout</button>
+    </div>
+
+    <section class="card" style="margin-bottom:16px;">
+      <h2>Users</h2>
+      <div class="table-scroll">
+        <table class="table-mini" id="usersTable" aria-label="Known users">
+          <thead>
+            <tr>
+              <th>Chat</th><th>Role</th><th>Subs</th><th>Mail id</th>
+              <th>Daily mail</th><th>CA alerts</th><th>Alerts</th><th></th>
+            </tr>
+          </thead>
+          <tbody></tbody>
+        </table>
+      </div>
+    </section>
+
+    <div class="grid grid-2">
+      <section class="card">
+        <h2>Subscriptions</h2>
+        <p class="muted">Pick a user above, then edit their list.</p>
+        <div class="form-row">
+          <input id="subChat" class="field field-sym" placeholder="chat id (e.g. 862087765)" aria-label="Chat id" />
+          <button class="btn btn-sm" id="subLoad">Load</button>
+        </div>
+        <div class="table-scroll" style="margin-top:8px;">
+          <table class="table-mini" id="subsTable" aria-label="User subscriptions">
+            <thead><tr><th>Symbol</th><th>Company</th><th>Exchange</th><th></th></tr></thead>
+            <tbody><tr><td colspan="4" class="muted">Load a chat to see its list.</td></tr></tbody>
+          </table>
+        </div>
+        <div class="form-row" style="margin-top:8px;">
+          <input id="subAdd" class="field field-grow" placeholder="add symbol(s): RELIANCE, TCS" aria-label="Symbols to add" />
+          <button class="btn btn-sm btn-primary" id="subAddBtn">➕ Add</button>
+        </div>
+      </section>
+
+      <section class="card">
+        <h2>Schedule</h2>
+        <p class="muted">Scheduled reports for the selected chat (0-based row numbers, same as /schedule).</p>
+        <div class="form-row">
+          <input id="schedChat" class="field field-sym" placeholder="chat id" aria-label="Chat id for schedule" />
+          <button class="btn btn-sm" id="schedLoad">Load</button>
+        </div>
+        <div class="table-scroll" style="margin-top:8px;">
+          <table class="table-mini" id="schedTable" aria-label="User schedule">
+            <thead><tr><th>#</th><th>Every</th><th>At</th><th>Market</th><th>Commands</th><th></th></tr></thead>
+            <tbody><tr><td colspan="6" class="muted">Load a chat to see its schedule.</td></tr></tbody>
+          </table>
+        </div>
+        <h3 style="margin:12px 0 6px;">Add entry</h3>
+        <div class="form-row">
+          <input id="schedChatNew" class="field field-sym" placeholder="chat id" aria-label="Chat id for new entry" />
+          <input id="schedCmds" class="field field-grow" placeholder="commands: /movers, /openreport in" aria-label="Commands" />
+        </div>
+        <div class="form-row">
+          <input id="schedEvery" class="field" style="max-width:130px;" placeholder="every (min)" aria-label="Interval minutes" />
+          <input id="schedAt" class="field" style="max-width:130px;" placeholder="at HH:MM (opt)" aria-label="Run at time" />
+          <select id="schedMarket" class="field" style="max-width:130px;" aria-label="Market gate">
+            <option value="">market: any</option>
+            <option value="in">in</option>
+            <option value="us">us</option>
+          </select>
+          <button class="btn btn-sm btn-primary" id="schedAddBtn">➕ Add</button>
+        </div>
+      </section>
+    </div>
+  </div>
+{% endblock %}
+
+{% block scripts %}
+  <script>
+    (function () {
+      'use strict';
+      var esc = RS.escapeHtml;
+      var TOKEN_KEY = 'adminToken';
+      var selectedChat = '';
+
+      function token() { return localStorage.getItem(TOKEN_KEY) || ''; }
+
+      function authHeaders() {
+        return { 'X-Admin-Token': token(), 'Content-Type': 'application/json' };
+      }
+
+      function toast(msg, kind) { RS.toast(msg, kind || 'info'); }
+
+      async function api(path, options) {
+        options = options || {};
+        options.headers = Object.assign(authHeaders(), options.headers || {});
+        // The API also accepts the token as a query/body field; send both so
+        // DELETE-with-body quirks never bite.
+        var res = await fetch(path, options);        if (res.status === 403) {
+          localStorage.removeItem(TOKEN_KEY);
+          showGate();
+          throw new Error('admin session expired');
+        }
+        var data = null;
+        try { data = await res.json(); } catch (e) { data = {}; }
+        if (!res.ok) {
+          throw new Error((data && data.detail) || ('HTTP ' + res.status));
+        }
+        return data;
+      }
+
+      function showGate() {
+        document.getElementById('adminBody').hidden = true;
+        document.getElementById('loginForm').hidden = false;
+      }
+
+      function showConsole() {
+        document.getElementById('gateCard').hidden = true;
+        document.getElementById('adminBody').hidden = false;
+      }
+
+      async function boot() {
+        var gate = await fetch('/api/admin/state').then(function (r) { return r.json(); });
+        if (!gate.enabled) {
+          document.getElementById('gateInfo').hidden = true;
+          document.getElementById('disabledInfo').hidden = false;
+          return;
+        }
+        if (gate.authenticated) {
+          showConsole();
+          await reload();
+          return;
+        }
+        showGate();
+      }
+
+      document.getElementById('loginForm').addEventListener('submit', async function (ev) {
+        ev.preventDefault();
+        var pass = document.getElementById('adminPass').value;
+        if (!pass) return;
+        try {
+          var res = await fetch('/api/admin/login', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ password: pass })
+          });
+          var data = await res.json().catch(function () { return {}; });
+          if (!res.ok) { toast(data.detail || 'Login failed', 'err'); return; }
+          localStorage.setItem(TOKEN_KEY, data.token);
+          document.getElementById('adminPass').value = '';
+          showConsole();
+          await reload();
+          toast('Admin unlocked');
+        } catch (err) {
+          toast('Login failed: ' + err.message, 'err');
+        }
+      });
+
+      document.getElementById('logoutBtn').addEventListener('click', async function () {
+        try { await api('/api/admin/logout?token=' + encodeURIComponent(token()), { method: 'POST' }); } catch (e) { /* ignore */ }
+        localStorage.removeItem(TOKEN_KEY);
+        showGate();
+      });
+
+      async function reload() {
+        var state = await api('/api/admin/state?token=' + encodeURIComponent(token()));
+        renderUsers(state.users || []);
+      }
+
+      function renderUsers(users) {
+        var tbody = document.querySelector('#usersTable tbody');
+        tbody.innerHTML = '';
+        if (!users.length) {
+          tbody.innerHTML = '<tr><td colspan="8" class="muted">No users known yet.</td></tr>';
+          return;
+        }
+        users.forEach(function (u) {
+          var tr = document.createElement('tr');
+          var role = u.is_owner ? 'owner' : 'user';
+          var mail = u.email ? esc(u.email) : '<span class="muted">—</span>';
+          tr.innerHTML =
+            '<td><code>' + esc(u.chat) + '</code></td>' +
+            '<td>' + role + '</td>' +
+            '<td class="num">' + (u.list_count || 0) + '</td>' +
+            '<td>' + mail + '</td>' +
+            '<td>' + (u.daily_email ? '✅' : '—') + '</td>' +
+            '<td><button class="link-btn" data-toggle="ca_alerts" data-chat="' + esc(u.chat) + '" data-enabled="' + (u.ca_alerts ? '0' : '1') + '">' + (u.ca_alerts ? 'ON' : 'OFF') + '</button></td>' +
+            '<td><button class="link-btn" data-toggle="alerts" data-chat="' + esc(u.chat) + '" data-enabled="' + (u.quiet ? '1' : '0') + '">' + (u.quiet ? 'OFF (quiet)' : 'ON') + '</button></td>' +
+            '<td><button class="btn btn-sm" data-manage="' + esc(u.chat) + '">Manage</button></td>';
+          tbody.appendChild(tr);
+        });
+      }
+
+      function selectChat(chat) {
+        selectedChat = chat;
+        document.getElementById('subChat').value = chat;
+        document.getElementById('schedChat').value = chat;
+        document.getElementById('schedChatNew').value = chat;
+        loadSubs();
+        loadSched();
+      }
+
+      async function loadSubs() {
+        var chat = document.getElementById('subChat').value.trim();
+        if (!chat) { toast('Enter a chat id first', 'err'); return; }
+        var tbody = document.querySelector('#subsTable tbody');
+        tbody.innerHTML = '<tr><td colspan="4" class="muted">loading…</td></tr>';
+        try {
+          var data = await api('/api/admin/user?chat=' + encodeURIComponent(chat) + '&token=' + encodeURIComponent(token()));
+          var rows = (data.items || []);
+          if (!rows.length) {
+            tbody.innerHTML = '<tr><td colspan="4" class="muted">No subscriptions for this chat.</td></tr>';
+            return;
+          }
+          tbody.innerHTML = rows.map(function (it) {
+            return '<tr>' +
+              '<td><strong>' + esc(it.symbol || '') + '</strong></td>' +
+              '<td>' + esc(it.company || '') + '</td>' +
+              '<td>' + esc(it.exchange || '') + '</td>' +
+              '<td><button class="link-btn" data-del="' + esc(it.symbol || '') + '" data-exch="' + esc(it.exchange || 'NSE') + '">✖ remove</button></td>' +
+              '</tr>';
+          }).join('');
+        } catch (err) {
+          tbody.innerHTML = '<tr><td colspan="4" class="muted">failed: ' + esc(err.message) + '</td></tr>';
+        }
+      }
+
+      async function loadSched() {
+        var chat = document.getElementById('schedChat').value.trim();
+        if (!chat) { toast('Enter a chat id first', 'err'); return; }
+        var tbody = document.querySelector('#schedTable tbody');
+        tbody.innerHTML = '<tr><td colspan="6" class="muted">loading…</td></tr>';
+        try {
+          var data = await api('/api/admin/user?chat=' + encodeURIComponent(chat) + '&token=' + encodeURIComponent(token()));
+          var rows = (data.schedule || []);
+          if (!rows.length) {
+            tbody.innerHTML = '<tr><td colspan="6" class="muted">No scheduled reports for this chat.</td></tr>';
+            return;
+          }
+          tbody.innerHTML = rows.map(function (row, idx) {
+            var paused = row.paused_until ? ' <span class="pill pill-warn">paused</span>' : '';
+            return '<tr>' +
+              '<td class="num">' + idx + '</td>' +
+              '<td class="num">' + (row.interval_min || '—') + 'm</td>' +
+              '<td>' + esc(row.run_at || '') + '</td>' +
+              '<td>' + esc(row.market || 'any') + '</td>' +
+              '<td>' + (row.commands || []).map(function (c) { return '<code>' + esc(c) + '</code>'; }).join(' ') + paused + '</td>' +
+              '<td><button class="link-btn" data-sdel="' + idx + '">✖ remove</button></td>' +
+              '</tr>';
+          }).join('');
+        } catch (err) {
+          tbody.innerHTML = '<tr><td colspan="6" class="muted">failed: ' + esc(err.message) + '</td></tr>';
+        }
+      }
+
+      document.getElementById('usersTable').addEventListener('click', async function (ev) {
+        var toggle = ev.target.closest('[data-toggle]');
+        if (toggle) {
+          try {
+            await api('/api/admin/toggle', {
+              method: 'POST',
+              body: JSON.stringify({
+                token: token(),
+                chat: toggle.dataset.chat,
+                key: toggle.dataset.toggle,
+                enabled: toggle.dataset.enabled === '1'
+              })
+            });
+            await reload();
+            toast('Alert toggle saved', 'ok');
+          } catch (err) { toast('Toggle failed: ' + err.message, 'err'); }
+          return;
+        }
+        var manage = ev.target.closest('[data-manage]');
+        if (manage) { selectChat(manage.dataset.manage); }
+      });
+
+      document.getElementById('subLoad').addEventListener('click', loadSubs);
+      document.getElementById('schedLoad').addEventListener('click', loadSched);
+      document.getElementById('reloadBtn').addEventListener('click', reload);
+
+      document.getElementById('subAddBtn').addEventListener('click', async function () {
+        var chat = document.getElementById('subChat').value.trim();
+        var symbols = document.getElementById('subAdd').value.trim();
+        if (!chat || !symbols) { toast('Chat id and symbol(s) required', 'err'); return; }
+        try {
+          var data = await api('/api/admin/user/symbols', {
+            method: 'POST',
+            body: JSON.stringify({ token: token(), chat: chat, symbols: symbols })
+          });
+          toast('Added ' + (data.added || 0) + ' symbol(s)' + (data.skipped_duplicates ? ' (' + data.skipped_duplicates + ' duplicate(s) skipped)' : ''), 'ok');
+          document.getElementById('subAdd').value = '';
+          await loadSubs();
+          await reload();
+        } catch (err) { toast('Add failed: ' + err.message, 'err'); }
+      });
+
+      document.getElementById('subsTable').addEventListener('click', async function (ev) {
+        var del = ev.target.closest('[data-del]');
+        if (!del) return;
+        var chat = document.getElementById('subChat').value.trim();
+        try {
+          await api('/api/admin/user/symbol?chat=' + encodeURIComponent(chat) +
+            '&symbol=' + encodeURIComponent(del.dataset.del) +
+            '&exchange=' + encodeURIComponent(del.dataset.exch) +
+            '&token=' + encodeURIComponent(token()), { method: 'DELETE' });
+          toast('Removed ' + del.dataset.del, 'ok');
+          await loadSubs();
+          await reload();
+        } catch (err) { toast('Remove failed: ' + err.message, 'err'); }
+      });
+
+      document.getElementById('schedAddBtn').addEventListener('click', async function () {
+        var chat = document.getElementById('schedChatNew').value.trim();
+        var commands = document.getElementById('schedCmds').value.trim();
+        var every = document.getElementById('schedEvery').value.trim();
+        var at = document.getElementById('schedAt').value.trim();
+        var market = document.getElementById('schedMarket').value;
+        if (!chat || !commands) { toast('Chat id and command(s) required', 'err'); return; }
+        try {
+          var data = await api('/api/admin/schedule', {
+            method: 'POST',
+            body: JSON.stringify({
+              token: token(), chat: chat, commands: commands,
+              interval_min: every ? parseInt(every, 10) : 1440,
+              run_at: at || null, market: market || null
+            })
+          });
+          toast('Schedule entry added', 'ok');
+          document.getElementById('schedCmds').value = '';
+          document.getElementById('schedEvery').value = '';
+          document.getElementById('schedAt').value = '';
+          document.getElementById('schedChat').value = chat;
+          await loadSched();
+          await reload();
+        } catch (err) { toast('Add failed: ' + err.message, 'err'); }
+      });
+
+      document.getElementById('schedTable').addEventListener('click', async function (ev) {
+        var del = ev.target.closest('[data-sdel]');
+        if (!del) return;
+        var chat = document.getElementById('schedChat').value.trim();
+        try {
+          await api('/api/admin/schedule?chat=' + encodeURIComponent(chat) +
+            '&index=' + encodeURIComponent(del.dataset.sdel) +
+            '&token=' + encodeURIComponent(token()), { method: 'DELETE' });
+          toast('Schedule row removed', 'ok');
+          await loadSched();
+          await reload();
+        } catch (err) { toast('Remove failed: ' + err.message, 'err'); }
+      });
+
+      boot().catch(function (err) {
+        document.getElementById('gateInfo').textContent = 'Could not reach /api/admin/state: ' + err.message;
+      });
+    })();
+  </script>
+{% endblock %}

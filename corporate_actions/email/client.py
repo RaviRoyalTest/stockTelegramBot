@@ -72,29 +72,9 @@ def _deliver(host: str, port: int, user: str, password: str,
             server.send_message(message)
 
 
-def send_email(to: str, subject: str, html_lines: list[str]) -> tuple[bool, str]:
-    """Send report lines to one mail id. Returns (ok, error_message).
-
-    Transport priority: Resend HTTPS API when RESEND_API_KEY is set (works
-    on hosts where SMTP ports are blocked), otherwise the SMTP chain with
-    587/465 fallback. SMTP errors name the endpoint (host:port).
-    """
-    recipient = (to or "").strip()
-    if not recipient or "@" not in recipient:
-        return False, "invalid recipient address"
-    if not is_configured():
-        return False, (
-            "email is not configured on the server "
-            "(set RESEND_API_KEY, or SMTP_HOST/SMTP_USER/SMTP_PASS)"
-        )
-    from . import resend as resend_mod
-
-    if resend_mod.is_configured():
-        return resend_mod.send_via_resend(
-            recipient, subject,
-            _html_document(subject, html_lines),
-            _plain_fallback(html_lines),
-        )
+def _smtp_attempt(recipient: str, subject: str,
+                  html_lines: list[str]) -> tuple[bool, str]:
+    """One full SMTP chain (with 465/587 port fallback). Never raises."""
     message = EmailMessage()
     message["Subject"] = subject
     message["From"] = config.SMTP_FROM or config.SMTP_USER
@@ -134,3 +114,46 @@ def send_email(to: str, subject: str, html_lines: list[str]) -> tuple[bool, str]
     hint = (" Check SMTP_HOST spelling, outbound firewall, and that ports "
             "587/465 are allowed from this host.")
     return False, "; ".join(failures) + "." + hint
+
+
+def send_email(to: str, subject: str, html_lines: list[str]) -> tuple[bool, str]:
+    """Send report lines to one mail id. Returns (ok, error_message).
+
+    Transport priority: Resend HTTPS API when RESEND_API_KEY is set (works
+    on hosts where SMTP ports are blocked), with the SMTP chain as a
+    fallback when Resend fails AND full SMTP credentials exist. Without a
+    Resend key the SMTP chain runs directly; its errors name host:port.
+    """
+    recipient = (to or "").strip()
+    if not recipient or "@" not in recipient:
+        return False, "invalid recipient address"
+    if not is_configured():
+        return False, (
+            "email is not configured on the server "
+            "(set RESEND_API_KEY, or SMTP_HOST/SMTP_USER/SMTP_PASS)"
+        )
+    from . import resend as resend_mod
+
+    if resend_mod.is_configured():
+        ok, error = resend_mod.send_via_resend(
+            recipient, subject,
+            _html_document(subject, html_lines),
+            _plain_fallback(html_lines),
+        )
+        if ok:
+            return True, ""
+        smtp_usable = bool(
+            config.SMTP_HOST.strip()
+            and config.SMTP_USER.strip()
+            and config.SMTP_PASS
+        )
+        if not smtp_usable:
+            return False, error
+        log.warning(
+            "resend failed (%s) - falling back to SMTP %s", error, config.SMTP_HOST
+        )
+        smtp_ok, smtp_error = _smtp_attempt(recipient, subject, html_lines)
+        if smtp_ok:
+            return True, ""
+        return False, f"{error}; smtp fallback also failed ({smtp_error})"
+    return _smtp_attempt(recipient, subject, html_lines)
