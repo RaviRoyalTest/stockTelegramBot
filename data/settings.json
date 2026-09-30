@@ -7,6 +7,7 @@
       "universe": "nifty500"
     },
     "recent_commands": [
+      "/openreport us",
       "/openreport in",
       "/schedule",
       "/openreport auto",
@@ -15,8 +16,7 @@
       "/gappers today",
       "/corpactionsformylist",
       "/schedule remove 1",
-      "/status",
-      "/toplosers 1h"
+      "/status"
     ],
     "movers_fund": "button",
     "email": "raviroyalmechai@gmail.com"
@@ -25,8 +25,8 @@
     "action_filters": [],
     "price_alert_pct": 5.0,
     "recent_commands": [
-      "/openreport in",
       "/openreport us",
+      "/openreport in",
       "/scan500"
     ]
   }
