@@ -7,9 +7,9 @@
       "universe": "nifty500"
     },
     "recent_commands": [
+      "/schedule",
       "/openreport auto",
       "/openreport",
-      "/schedule",
       "/setemail raviroyalmechai@gmail.com",
       "/gappers today",
       "/corpactionsformylist",
