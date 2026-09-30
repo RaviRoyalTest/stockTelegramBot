@@ -498,6 +498,12 @@ async def api_screener(
             screen_universe_async(universe=universe, filters=filters, sort=sort, ascending=ascending, limit=limit, offset=offset),
             timeout=service_timeout,
         )
+        # Preserve what this page view returned, timestamped (best-effort).
+        storage.capture_command_output(
+            "screener", "GET /api/screener", rows, prefix="view_",
+            universe=universe, sort=sort, ascending=ascending,
+            limit=limit, offset=offset, filters=filters,
+        )
         return JSONResponse(rows)
     except asyncio.TimeoutError:
         log.warning("/api/screener timed out after %s seconds", service_timeout)
@@ -1025,6 +1031,14 @@ async def api_movers(
     except Exception as error:
         log.warning("_enrich: %s", error)
         pass
+    # Preserve what this page view returned, timestamped (best-effort).
+    storage.capture_command_output(
+        "movers", "GET /api/movers", top, prefix="view_",
+        mode=mode, universe=universe, period=period_key,
+        date=target_date.isoformat() if target_date else None,
+        date_from=range_from.isoformat() if range_from else None,
+        date_to=range_to.isoformat() if range_to else None,
+    )
     return JSONResponse({
         "mode": mode, "universe": universe, "period": period_key,
         "date": target_date.isoformat() if target_date else None,

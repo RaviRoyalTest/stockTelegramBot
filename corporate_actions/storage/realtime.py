@@ -281,6 +281,7 @@ def capture_command_output(
     data,
     *,
     source: str = "telegram",
+    prefix: str = "cmd_",
     **context,
 ) -> Path | None:
     """Best-effort timestamped capture of what a user command produced.
@@ -288,17 +289,18 @@ def capture_command_output(
     Every command family (movers/gainers/losers, gappers, screen, scan500,
     harmonic scan, ...) calls this once with its structured result before
     rendering, so each run is preserved under
-    ``cmd_<name>/{Y}/{M}/{D}/cmd_<name>_<IST-timestamp>.json`` with the
-    command text plus any context (market, period, universe) in the
-    metadata envelope. NEVER raises: a capture failure is logged and the
-    command flow continues untouched - capturing history must never break
-    answering the user.
+    ``<prefix><name>/{Y}/{M}/{D}/<prefix><name>_<IST-timestamp>.json`` with
+    the command text plus any context (market, period, universe) in the
+    metadata envelope. Web views reuse this with ``prefix="view_"`` so a
+    page's rendered result is preserved the same way. NEVER raises: a
+    capture failure is logged and the command flow continues untouched -
+    capturing history must never break answering the user.
     """
     try:
         metadata = {"command": str(command or "").strip()}
         metadata.update(context)
         return save_json_snapshot(
-            f"cmd_{_normalize_name(data_name)}",
+            f"{prefix}{_normalize_name(data_name)}",
             data,
             source=source,
             metadata=metadata,
