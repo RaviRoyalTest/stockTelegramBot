@@ -7,12 +7,12 @@
       "universe": "nifty500"
     },
     "recent_commands": [
+      "/corpactionsformylist",
       "/schedule remove 1",
       "/schedule",
       "/status",
       "/toplosers 1h",
       "/gappers today",
-      "/corpactionsformylist",
       "/schedule run",
       "/movers",
       "/news SCHNEIDER",
