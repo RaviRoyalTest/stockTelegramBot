@@ -78,6 +78,22 @@ class EmailClientTests(unittest.TestCase):
         self.assertIn("api.resend.com/emails", request.full_url)
         self.assertEqual(request.get_header("Authorization"), "Bearer re_test123")
 
+    def test_resend_request_sends_explicit_user_agent(self):
+        """Cloudflare blocks urllib's default UA (403 err 1010) - always send ours."""
+        from corporate_actions.email import resend as resend_mod
+
+        response = MagicMock()
+        response.__enter__.return_value = response
+        response.status = 200
+        response.read.return_value = b'{"id":"abc"}'
+        with patch.object(config, "RESEND_API_KEY", "re_test123"), \
+                patch.object(config, "RESEND_FROM", ""):
+            with patch("urllib.request.urlopen", return_value=response) as opener:
+                resend_mod.send_via_resend("a@b.com", "s", "<b>hi</b>", "hi")
+        request = opener.call_args[0][0]
+        # urllib capitalizes header keys, so "User-agent" is the lookup form.
+        self.assertEqual(request.get_header("User-agent"), resend_mod.USER_AGENT)
+
     def test_network_failure_names_endpoint_and_falls_back(self):
         host, port, user, pwd, frm = _env()
         calls = []

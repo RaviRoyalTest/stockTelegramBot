@@ -25,6 +25,12 @@ log = logging.getLogger(__name__)
 
 RESEND_ENDPOINT = "https://api.resend.com/emails"
 DEFAULT_FROM = "Royal Stock <onboarding@resend.dev>"
+# api.resend.com sits behind Cloudflare, which BLOCKS urllib's default
+# "Python-urllib/3.x" User-Agent with HTTP 403 "error code: 1010" before the
+# request ever reaches Resend (reproduced and verified: any explicit UA -
+# custom, curl, python-requests - passes and gets a real API response).
+# Sending an honest bot UA fixes it; keep it non-browser-like on purpose.
+USER_AGENT = "RoyalStockBot/1.0 (+https://github.com/RaviRoyalTest/stockTelegramBot)"
 
 
 def is_configured() -> bool:
@@ -49,6 +55,7 @@ def send_via_resend(to: str, subject: str, html_body: str,
         headers={
             "Authorization": f"Bearer {config.RESEND_API_KEY.strip()}",
             "Content-Type": "application/json",
+            "User-Agent": USER_AGENT,
         },
         method="POST",
     )
