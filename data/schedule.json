@@ -26,7 +26,8 @@
     ],
     "chat": "@StockVigilBot",
     "run_at": "10:00,15:35",
-    "market": "in"
+    "market": "in",
+    "next_due": "2026-10-01T04:30:00"
   },
   {
     "interval_min": 1440,
@@ -45,7 +46,8 @@
     ],
     "chat": "862087765",
     "run_at": "10:00,15:35",
-    "market": "in"
+    "market": "in",
+    "next_due": "2026-10-01T04:30:00"
   },
   {
     "interval_min": 1440,
