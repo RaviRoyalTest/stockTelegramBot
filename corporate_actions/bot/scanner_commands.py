@@ -7,6 +7,7 @@ from time import monotonic
 
 from ..core.text import split_messages
 from ..sources import get_index_ohlc, get_ohlc
+from ..storage import capture_command_output
 from .reply import reply, reply_messages
 
 log = logging.getLogger(__name__)
@@ -145,6 +146,14 @@ def handle_scan500(chat_id, parts) -> None:
     # Approve by score threshold
     rows.sort(key=lambda row: row["score"], reverse=True)
     approved = [row for row in rows if row["score"] >= scanner.SCORE_QUALIFY]
+    # Preserve what this command produced (scores + breadth + regime),
+    # timestamped, before rendering. numpy values in findings are handled
+    # by the capture serializer.
+    capture_command_output(
+        "scan500", " ".join(parts),
+        {"approved": approved, "breadth": breadth, "regime": regime},
+        universe=universe, scanned=len(ohlc_by_symbol),
+    )
 
     lines = scanner.format_report({
         "regime": regime,

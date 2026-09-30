@@ -41,6 +41,7 @@ __all__ = [
     "save_json_snapshot",
     "append_snapshot",
     "cleanup_expired_snapshots",
+    "capture_command_output",
 ]
 
 log = logging.getLogger(__name__)
@@ -132,6 +133,12 @@ def _json_default(value):
         return value.isoformat()
     if isinstance(value, Decimal):
         return float(value)
+    if hasattr(value, "item"):
+        # numpy scalars/arrays (scan/indicator results) -> python natives
+        try:
+            return value.item()
+        except Exception:
+            pass
     raise TypeError(f"Object of type {type(value).__name__} is not JSON serializable")
 
 
@@ -266,6 +273,39 @@ def append_snapshot(
         path,
     )
     return path
+
+
+def capture_command_output(
+    data_name: str,
+    command: str,
+    data,
+    *,
+    source: str = "telegram",
+    **context,
+) -> Path | None:
+    """Best-effort timestamped capture of what a user command produced.
+
+    Every command family (movers/gainers/losers, gappers, screen, scan500,
+    harmonic scan, ...) calls this once with its structured result before
+    rendering, so each run is preserved under
+    ``cmd_<name>/{Y}/{M}/{D}/cmd_<name>_<IST-timestamp>.json`` with the
+    command text plus any context (market, period, universe) in the
+    metadata envelope. NEVER raises: a capture failure is logged and the
+    command flow continues untouched - capturing history must never break
+    answering the user.
+    """
+    try:
+        metadata = {"command": str(command or "").strip()}
+        metadata.update(context)
+        return save_json_snapshot(
+            f"cmd_{_normalize_name(data_name)}",
+            data,
+            source=source,
+            metadata=metadata,
+        )
+    except Exception as error:
+        log.warning("command capture skipped (%s): %s", data_name, error)
+        return None
 
 
 def cleanup_expired_snapshots(

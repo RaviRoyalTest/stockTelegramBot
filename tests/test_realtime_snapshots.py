@@ -206,6 +206,39 @@ class RetentionTests(unittest.TestCase):
         self.assertEqual(removed, 0)
 
 
+class CommandCaptureTests(unittest.TestCase):
+    def test_capture_writes_timestamped_file_with_command_metadata(self):
+        with TemporaryDirectory() as tmp:
+            with mock.patch.object(realtime, "REALTIME_ROOT", Path(tmp)):
+                path = realtime.capture_command_output(
+                    "movers_screen", "/topgainers",
+                    [{"symbol": "RELIANCE", "change_pct": 2.5}],
+                    universe="nifty500", direction="gainers",
+                )
+                self.assertIsNotNone(path)
+                self.assertIn("cmd_movers_screen_", path.name)
+                payload = json.loads(path.read_text(encoding="utf-8"))
+                self.assertEqual(payload["metadata"]["command"], "/topgainers")
+                self.assertEqual(payload["metadata"]["universe"], "nifty500")
+                self.assertEqual(payload["data"][0]["symbol"], "RELIANCE")
+
+    def test_capture_never_raises_on_bad_payload(self):
+        with mock.patch.object(realtime, "REALTIME_ROOT", Path("Z:\\impossible\\path")):
+            result = realtime.capture_command_output(
+                "screen_result", "/screen", {"bad": object()}
+            )
+        self.assertIsNone(result)
+
+    def test_repeated_captures_do_not_collide(self):
+        with TemporaryDirectory() as tmp:
+            with mock.patch.object(realtime, "REALTIME_ROOT", Path(tmp)):
+                paths = [
+                    realtime.capture_command_output("scan500", "/scan500", {"run": i})
+                    for i in range(3)
+                ]
+                self.assertEqual(len({p.name for p in paths}), 3)
+
+
 class UniquenessHelperTests(unittest.TestCase):
     def test_unique_path_avoids_existing_files(self):
         with TemporaryDirectory() as tmp:

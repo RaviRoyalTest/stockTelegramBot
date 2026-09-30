@@ -58,6 +58,7 @@ from .users import (
 )
 from .realtime import (
     append_snapshot,
+    capture_command_output,
     cleanup_expired_snapshots,
     generate_snapshot_filename,
     save_json_snapshot,
@@ -75,6 +76,7 @@ from .watchlist import (
 __all__ = [
     "migrate_legacy_state_files",
     "append_snapshot",
+    "capture_command_output",
     "cleanup_expired_snapshots",
     "generate_snapshot_filename",
     "save_json_snapshot",

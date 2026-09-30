@@ -18,6 +18,7 @@ import re
 
 from ..core.text import escape, split_messages
 from ..screener_service import screen_universe
+from ..storage import capture_command_output
 from .reply import reply, reply_messages
 
 log = logging.getLogger(__name__)
@@ -212,4 +213,9 @@ def handle_screen(chat_id, parts) -> None:
         lines.extend(_format_row(index, row))
     lines.append("")
     lines.append("\U0001F4A1 <i>Tip: the same screen with presets lives on the web Screener page.</i>")
+    # Preserve what this command produced, timestamped, before rendering.
+    capture_command_output(
+        "screen_result", " ".join(parts), rows,
+        universe=universe, sort=sort, limit=limit,
+    )
     reply_messages(chat_id, split_messages(lines))

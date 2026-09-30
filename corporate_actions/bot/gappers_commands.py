@@ -28,6 +28,7 @@ from concurrent.futures import ThreadPoolExecutor, as_completed
 
 from ..core.dates import date_from_parts, format_date
 from ..core.numbers import format_money
+from ..storage import capture_command_output
 from ..core.text import escape, split_messages
 from ..sources import (
     get_gap_change,
@@ -325,6 +326,12 @@ def handle_universe_scan(chat_id, parts) -> None:
     lines.append("`/gappers all` → Gap-Up + Gap-Down")
     lines.append("")
     lines.append("Use /gappers SYMBOL for that stock's recent gap history.")
+    # Preserve what this command produced, timestamped, before rendering.
+    capture_command_output(
+        "gappers_scan", " ".join(parts),
+        [{"symbol": symbol, **data} for symbol, data in rows],
+        universe=universe, direction=direction, mode=mode,
+    )
     reply_messages(chat_id, split_messages(lines))
     log.info("gappers: sent %d row(s) for %s (%d gapping)", len(shown), label, len(rows))
 

@@ -453,6 +453,13 @@ def handle_market_screen(chat_id, parts, default_direction="all",
 
     if count:
         rows = rows[:count]
+    # Preserve what this command produced, timestamped, before rendering.
+    storage.capture_command_output(
+        "movers_screen", " ".join(parts),
+        [{"symbol": symbol, **data} for symbol, data in rows],
+        universe=universe, direction=direction,
+        period="-".join(map(str, period)),
+    )
     failed = len(fetched) - sum(
         1 for _, data in fetched if data and data.get("change_pct") is not None
     )

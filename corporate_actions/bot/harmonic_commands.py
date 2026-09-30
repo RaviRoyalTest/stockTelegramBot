@@ -213,6 +213,11 @@ def handle_harmonic_scan(chat_id, universe, timeframe) -> None:
         lines.append(f"{index}. {format_scan_row(row)}")
     lines.append("")
     lines.append("Use /harmonic SYMBOL for the full report (PRZ, entry, SL & targets).")
+    # Preserve what this command produced, timestamped, before rendering.
+    storage.capture_command_output(
+        "harmonic_scan", " ".join(parts), found,
+        universe=universe_label, timeframe=timeframe,
+    )
     reply_messages(chat_id, split_messages(lines))
     log.info(
         "harmonic scan: sent %d row(s) in %.1fs",
