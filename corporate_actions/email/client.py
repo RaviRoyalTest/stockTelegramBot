@@ -56,8 +56,28 @@ def _plain_fallback(html_lines: list[str]) -> str:
     return text.strip()
 
 
+def _deliver(host: str, port: int, user: str, password: str,
+             message: EmailMessage) -> None:
+    """One SMTP attempt (raises on any failure)."""
+    if port == 465:
+        with smtplib.SMTP_SSL(host, port, timeout=20) as server:
+            server.login(user, password)
+            server.send_message(message)
+    else:
+        with smtplib.SMTP(host, port, timeout=20) as server:
+            server.starttls()
+            server.login(user, password)
+            server.send_message(message)
+
+
 def send_email(to: str, subject: str, html_lines: list[str]) -> tuple[bool, str]:
-    """Send report lines to one mail id. Returns (ok, error_message)."""
+    """Send report lines to one mail id. Returns (ok, error_message).
+
+    The error always names the endpoint (host:port), so "Network is
+    unreachable" can be told apart from wrong-host vs blocked-port. On a
+    network-level failure (not auth), the other standard submission port
+    (587 <-> 465) is tried once - many ISPs/hosts block exactly one of them.
+    """
     recipient = (to or "").strip()
     if not recipient or "@" not in recipient:
         return False, "invalid recipient address"
@@ -72,19 +92,36 @@ def send_email(to: str, subject: str, html_lines: list[str]) -> tuple[bool, str]
     message["To"] = recipient
     message.set_content(_plain_fallback(html_lines))
     message.add_alternative(_html_document(subject, html_lines), subtype="html")
-    port = config.SMTP_PORT
-    try:
-        if port == 465:
-            with smtplib.SMTP_SSL(config.SMTP_HOST, port, timeout=20) as server:
-                server.login(config.SMTP_USER, config.SMTP_PASS)
-                server.send_message(message)
-        else:
-            with smtplib.SMTP(config.SMTP_HOST, port, timeout=20) as server:
-                server.starttls()
-                server.login(config.SMTP_USER, config.SMTP_PASS)
-                server.send_message(message)
-    except Exception as error:
-        log.warning("email to %s failed: %s", recipient, error)
-        return False, config.redact(str(error))
-    log.info("email sent to %s: %s", recipient, subject)
-    return True, ""
+
+    host = config.SMTP_HOST
+    primary = config.SMTP_PORT
+    alternates = [primary] + ([465, 587] if primary != 465 else [587])
+    # de-dupe while keeping order (configured port first)
+    ports: list[int] = []
+    for port in alternates:
+        if port not in ports:
+            ports.append(port)
+
+    failures: list[str] = []
+    for port in ports:
+        try:
+            _deliver(host, port, config.SMTP_USER, config.SMTP_PASS, message)
+        except smtplib.SMTPAuthenticationError as error:
+            # Credentials rejected - another port will say the same; stop.
+            detail = config.redact(str(error))
+            log.warning("email to %s refused auth at %s:%s", recipient, host, port)
+            return False, f"{host}:{port} rejected the login ({detail}) - check SMTP_USER/SMTP_PASS"
+        except OSError as error:
+            # Network-level: DNS, refused, timeout, unreachable. Try next port.
+            failures.append(f"{host}:{port} unreachable ({config.redact(str(error))})")
+            log.info("email via %s:%s failed, trying next port: %s", host, port, error)
+            continue
+        except Exception as error:
+            detail = config.redact(str(error))
+            log.warning("email to %s failed at %s:%s: %s", recipient, host, port, error)
+            return False, f"{host}:{port} failed ({detail})"
+        log.info("email sent to %s via %s:%s: %s", recipient, host, port, subject)
+        return True, ""
+    hint = (" Check SMTP_HOST spelling, outbound firewall, and that ports "
+            "587/465 are allowed from this host.")
+    return False, "; ".join(failures) + "." + hint
