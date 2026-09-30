@@ -37,5 +37,23 @@
     "run_at": "09:40,16:05",
     "market": "us",
     "next_due": "2026-09-30T13:40:00"
+  },
+  {
+    "interval_min": 1440,
+    "commands": [
+      "/openreport in"
+    ],
+    "chat": "862087765",
+    "run_at": "10:00,15:35",
+    "market": "in"
+  },
+  {
+    "interval_min": 1440,
+    "commands": [
+      "/openreport us"
+    ],
+    "chat": "862087765",
+    "run_at": "09:40,16:05",
+    "market": "us"
   }
 ]

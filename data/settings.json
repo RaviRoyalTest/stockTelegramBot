@@ -7,16 +7,16 @@
       "universe": "nifty500"
     },
     "recent_commands": [
+      "/openreport auto",
+      "/openreport",
       "/schedule",
       "/setemail raviroyalmechai@gmail.com",
-      "/openreport",
       "/gappers today",
       "/corpactionsformylist",
       "/schedule remove 1",
       "/status",
       "/toplosers 1h",
-      "/schedule run",
-      "/movers"
+      "/schedule run"
     ],
     "movers_fund": "button",
     "email": "raviroyalmechai@gmail.com"
