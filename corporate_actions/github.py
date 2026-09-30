@@ -35,6 +35,9 @@ def github_push_configured() -> bool:
 
 
 # The state files that must reach GitHub to survive a redeploy.
+# OPENREPORT_DIR is a directory (one file per session date) - git status /
+# add accept directory pathspecs, and the missing-skip below tolerates a
+# host that has not recorded anything yet.
 STATE_FILES = (
     config.WATCHLIST_FILE,
     config.SUBSCRIPTIONS_FILE,
@@ -42,7 +45,7 @@ STATE_FILES = (
     config.SEEN_FILE,
     config.SCHEDULE_FILE,
     config.SNAPSHOT_FILE,
-    config.OPENREPORT_FILE,
+    config.OPENREPORT_DIR,
 )
 
 
@@ -117,9 +120,12 @@ def pending_state_changes() -> str:
     after the state-file reorganization - never bare basenames.
     """
     with _state_git_lock:
+        # Only existing paths: a missing dir (e.g. data/openclose/ before
+        # the first recording) as a pathspec aborts the whole status call.
+        existing = [str(state_file) for state_file in STATE_FILES if state_file.exists()]
         result = _git(
             "git", "status", "--porcelain", "--untracked-files=no",
-            *[str(state_file) for state_file in STATE_FILES],
+            *existing,
         )
         if result.returncode != 0:
             return ""

@@ -108,6 +108,8 @@ SEEN_FILE = Path(os.getenv("SEEN_FILE", str(BASE_DIR / "data" / "seen_actions.js
 SCHEDULE_FILE = Path(os.getenv("SCHEDULE_FILE", str(BASE_DIR / "data" / "schedule.json")))
 SNAPSHOT_FILE = Path(os.getenv("SNAPSHOT_FILE", str(BASE_DIR / "data" / "snapshots.json")))
 OPENREPORT_FILE = Path(os.getenv("OPENREPORT_FILE", str(BASE_DIR / "data" / "openclose.json")))
+# Date-wise history lives here: data/openclose/YYYY-MM-DD.json per session.
+OPENREPORT_DIR = Path(os.getenv("OPENREPORT_DIR", str(BASE_DIR / "data" / "openclose")))
 
 USER_AGENT = (
     "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "

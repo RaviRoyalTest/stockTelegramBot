@@ -237,18 +237,55 @@
       }
 
       document.getElementById('runBtn').addEventListener('click', run);
-      // recorded-file chip: what data/openclose.json holds (no re-fetch)
+      // recorded-file chip: date-wise history in data/openclose/ (no re-fetch).
+      // Picking a past session loads that recorded file straight into this
+      // page's tables - the heavy scan only runs via Build report.
       (function () {
-        fetch('/api/openreport/recorded').then(function (res) {
-          return res.ok ? res.json() : {};
-        }).then(function (doc) {
+        function showRecorded(doc) {
           if (!doc || !doc.report) return;
           var rep = doc.report || {};
           var el = document.getElementById('buildMeta');
           el.innerHTML = 'Recorded file: <strong>' + esc(doc.recorded_at || '?') + '</strong>' +
             ' by ' + esc(doc.recorded_by || '?') +
-            ' · verified ' + (rep.total_verified || 0) + '/' + (rep.total_target || 0) +
-            ' · <a href="/sessions">Sessions tab</a> shows it without re-fetching.';
+            ' · verified ' + (rep.total_verified || 0) + '/' + (rep.total_target || 0);
+        }
+        function renderRecorded(doc) {
+          showRecorded(doc);
+          var rep = (doc && doc.report) || {};
+          if (!rep.sections) return;
+          document.getElementById('statusStrip').innerHTML =
+            rep.sections.map(statusCard).join('');
+          document.getElementById('sections').innerHTML =
+            rep.sections.map(renderSection).join('');
+          renderSummary(rep);
+          document.querySelectorAll('[data-sort-body]').forEach(function (tbody) {
+            if (RS.makeSortable) RS.makeSortable(tbody, {});
+          });
+          document.getElementById('results').hidden = false;
+        }
+        var sel = document.createElement('select');
+        sel.id = 'recordedDate';
+        sel.setAttribute('aria-label', 'Recorded session');
+        sel.style.marginLeft = '8px';
+        fetch('/api/openreport/recorded').then(function (res) {
+          return res.ok ? res.json() : {};
+        }).then(function (doc) {
+          showRecorded(doc);
+          var dates = doc.dates || [];
+          if (!dates.length) return;
+          sel.innerHTML = '<option value="">Recorded history…</option>' + dates.map(function (d) {
+            return '<option value="' + esc(d) + '">' + esc(d) + '</option>';
+          }).join('');
+          document.getElementById('buildMeta').appendChild(sel);
+          sel.addEventListener('change', function () {
+            if (!sel.value) return;
+            fetch('/api/openreport/recorded?date=' + encodeURIComponent(sel.value)).then(function (res) {
+              if (!res.ok) throw new Error('API ' + res.status);
+              return res.json();
+            }).then(renderRecorded).catch(function (err) {
+              RS.toast('Recorded session failed: ' + err.message, 'err');
+            });
+          });
         }).catch(function () { /* chip is best-effort */ });
       })();
       // exposed for UI verification (tests inject a synthetic report payload;

@@ -1094,15 +1094,32 @@ async def api_openreport(market: str = Query("all"), date: str = Query("")):
 
 
 @app.get("/api/openreport/recorded")
-async def api_openreport_recorded():
-    """The recorded open+close file ({} when never recorded).
+async def api_openreport_recorded(date: str = Query("")):
+    """A recorded open+close session, date-wise, with no re-fetch.
 
-    Lets the web page show the saved open/close details with their
-    recorded stamp instead of rebuilding the whole scan on every view.
+    ?date=YYYY-MM-DD serves that session; omitted serves the latest.
+    Response always carries `dates` (all recorded sessions, newest first)
+    so the page can offer a history picker. {} (with dates possibly empty)
+    when nothing was ever recorded.
     """
     try:
-        doc = await asyncio.to_thread(storage.load_openclose)
-        return JSONResponse(doc or {})
+        day = (date or "").strip()
+        if day:
+            import datetime as _dt
+
+            try:
+                _dt.date.fromisoformat(day)
+            except ValueError:
+                raise HTTPException(status_code=400, detail="date must be YYYY-MM-DD")
+            doc = await asyncio.to_thread(storage.load_openclose, day)
+            if not doc:
+                raise HTTPException(status_code=404, detail=f"no recorded session for {day}")
+        else:
+            doc = await asyncio.to_thread(storage.load_openclose)
+        dates = await asyncio.to_thread(storage.list_openclose_dates)
+        return JSONResponse({**(doc or {}), "dates": dates[::-1]})
+    except HTTPException:
+        raise
     except Exception as exc:
         raise HTTPException(status_code=500, detail=str(exc))
 

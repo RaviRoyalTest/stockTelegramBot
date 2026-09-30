@@ -21,7 +21,7 @@ class StatePathsTests(unittest.TestCase):
             {path.name for path in github.STATE_FILES},
             {"watchlist.json", "subscriptions.json", "settings.json",
              "seen_actions.json", "schedule.json", "snapshots.json",
-             "openclose.json"},
+             "openclose"},
         )
         for path in github.STATE_FILES:
             self.assertEqual(path.parent.name, "data")
@@ -40,7 +40,6 @@ class StatePathsTests(unittest.TestCase):
             self.assertEqual(moved, ["watchlist.json"])
             self.assertFalse(legacy.exists())
             self.assertTrue((root / "data" / "watchlist.json").exists())
-
     def test_migration_never_overwrites_data_copy(self):
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)
@@ -57,6 +56,64 @@ class StatePathsTests(unittest.TestCase):
             self.assertEqual(
                 (root / "data" / "settings.json").read_text(encoding="utf-8"), '{"a": 1}'
             )
+
+
+class OpencloseDatedStoreTests(unittest.TestCase):
+    """data/openclose/YYYY-MM-DD.json: dated writes, latest reads, migration."""
+
+    def _patched_dir(self, root):
+        return patch.object(config, "OPENREPORT_DIR", root / "data" / "openclose"), \
+            patch.object(config, "OPENREPORT_FILE", root / "data" / "openclose.json")
+
+    def test_save_writes_dated_file_and_load_reads_latest(self):
+        from corporate_actions.storage import openclose as oc_store
+
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            dir_patch, file_patch = self._patched_dir(root)
+            with dir_patch, file_patch:
+                oc_store.save_openclose({"recorded_at": "2026-09-29T10:00:00+00:00",
+                                         "report": {"total_verified": 1}})
+                oc_store.save_openclose({"recorded_at": "2026-09-28T10:00:00+00:00",
+                                         "report": {"total_verified": 2}})
+                self.assertTrue((root / "data" / "openclose" / "2026-09-29.json").exists())
+                self.assertTrue((root / "data" / "openclose" / "2026-09-28.json").exists())
+                latest = oc_store.load_openclose()
+                self.assertEqual(latest["report"]["total_verified"], 1)
+                self.assertEqual(oc_store.list_openclose_dates(),
+                                 ["2026-09-28", "2026-09-29"])
+                specific = oc_store.load_openclose("2026-09-28")
+                self.assertEqual(specific["report"]["total_verified"], 2)
+                self.assertEqual(oc_store.load_openclose("2000-01-01"), {})
+
+    def test_legacy_single_file_seeds_dated_and_is_removed(self):
+        from corporate_actions.storage import openclose as oc_store
+
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            (root / "data").mkdir()
+            (root / "data" / "openclose.json").write_text(
+                '{"recorded_at": "2026-09-29T10:00:00+00:00", "report": {}}',
+                encoding="utf-8",
+            )
+            dir_patch, file_patch = self._patched_dir(root)
+            with dir_patch, file_patch:
+                day = oc_store.migrate_openclose_file()
+            self.assertEqual(day, "2026-09-29")
+            self.assertTrue((root / "data" / "openclose" / "2026-09-29.json").exists())
+            self.assertFalse((root / "data" / "openclose.json").exists())
+            # Second run is a no-op.
+            with dir_patch, file_patch:
+                self.assertIsNone(oc_store.migrate_openclose_file())
+
+    def test_doc_date_prefers_explicit_target(self):
+        from corporate_actions.storage import openclose as oc_store
+
+        self.assertEqual(
+            oc_store._doc_date({"target_date": "2026-09-18",
+                                "recorded_at": "2026-09-29T10:00:00+00:00"}),
+            "2026-09-18",
+        )
 
 
 if __name__ == "__main__":

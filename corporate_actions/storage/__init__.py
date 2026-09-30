@@ -17,7 +17,12 @@ from .schedule import (
     set_schedule_next_due,
 )
 from .migrate import migrate_legacy_state_files
-from .openclose import load_openclose, save_openclose
+from .openclose import (
+    list_openclose_dates,
+    load_openclose,
+    migrate_openclose_file,
+    save_openclose,
+)
 from .seen import load_seen, save_seen
 from .snapshots import load_snapshots, save_snapshots
 from .settings import (
@@ -56,7 +61,9 @@ from .watchlist import (
 
 __all__ = [
     "migrate_legacy_state_files",
+    "list_openclose_dates",
     "load_openclose",
+    "migrate_openclose_file",
     "save_openclose",
     "load_watchlist",
     "save_watchlist",
@@ -100,10 +107,14 @@ __all__ = [
 ]
 
 
-# One-time move of any leftover repo-root state files (pre-reorg copies)
-# into data/. No-op when there is nothing to move; never raises, so importing
-# the storage package can never break the bot over a filesystem quirk.
+# One-time moves of any leftover pre-reorg files into data/. No-op when
+# there is nothing to move; never raises, so importing the storage
+# package can never break the bot over a filesystem quirk.
 try:
     migrate_legacy_state_files()
+except Exception:  # pragma: no cover - defensive, best effort only
+    pass
+try:
+    migrate_openclose_file()
 except Exception:  # pragma: no cover - defensive, best effort only
     pass

@@ -146,7 +146,7 @@ watchlist persists and survives restarts.
 
 - `data/watchlist.json`, `data/seen_actions.json`, `data/subscriptions.json`,
   `data/settings.json`, `data/schedule.json`, `data/snapshots.json` and
-  `data/openclose.json` are
+  `data/openclose/YYYY-MM-DD.json` (one file per session) are
   tracked on purpose: the seen cache prevents re-sending
   the same alert every hour, and the settings file persists per-user filters
   and alert thresholds across runs.
@@ -289,7 +289,8 @@ corporate_actions/
   the sole command responder. Never run two `bot_server.py` processes.
 - **Where the watchlist lives.** The repo's `data/watchlist.json` /
   `data/subscriptions.json` / `data/settings.json` / `data/seen_actions.json` /
-  `data/schedule.json` / `data/snapshots.json` / `data/openclose.json` are the source
+  `data/schedule.json` / `data/snapshots.json` / `data/openclose/YYYY-MM-DD.json`
+  (one file per session) are the source
   of truth, committed and pushed by the always-on server after every WRITE
   command (`/addstock`, `/removestock`, `/alertfilters`, `/pricealert`, `/schedule`
   and their short aliases) and by the workflow cron after every poll.

@@ -27,7 +27,8 @@ Not acceptable: any diff inside those routes or that test file.
 - This repo is stateful: `data/watchlist.json`, `data/schedule.json`,
   `data/settings.json`, `data/seen_actions.json`, `data/subscriptions.json`
   (plus `data/snapshots.json` for recorded market screens and
-  `data/openclose.json` for the recorded open+close report) are committed and
+  `data/openclose/YYYY-MM-DD.json` - one file per session - for the recorded
+  open+close report) are committed and
   written by the always-on bot server AND the hourly GitHub Actions cron.
   Always pull first.
 

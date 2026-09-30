@@ -43,6 +43,7 @@ PAGES = [
     "/invest/ipo",
     "/exdates",
     "/sessions",
+    "/openreport",
     "/system",
 ]
 
