@@ -21,7 +21,7 @@ class StatePathsTests(unittest.TestCase):
             {path.name for path in github.STATE_FILES},
             {"watchlist.json", "subscriptions.json", "settings.json",
              "seen_actions.json", "schedule.json", "snapshots.json",
-             "openclose"},
+             "snapshots", "openclose"},
         )
         for path in github.STATE_FILES:
             self.assertEqual(path.parent.name, "data")

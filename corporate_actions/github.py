@@ -37,7 +37,9 @@ def github_push_configured() -> bool:
 # The state files that must reach GitHub to survive a redeploy.
 # OPENREPORT_DIR is a directory (one file per session date) - git status /
 # add accept directory pathspecs, and the missing-skip below tolerates a
-# host that has not recorded anything yet.
+# host that has not recorded anything yet. SNAPSHOT_DIR (derived from
+# SNAPSHOT_FILE) archives one record per session per market the same way,
+# so recorded sessions stay reusable across redeploys.
 STATE_FILES = (
     config.WATCHLIST_FILE,
     config.SUBSCRIPTIONS_FILE,
@@ -45,6 +47,7 @@ STATE_FILES = (
     config.SEEN_FILE,
     config.SCHEDULE_FILE,
     config.SNAPSHOT_FILE,
+    config.SNAPSHOT_FILE.parent / "snapshots",
     config.OPENREPORT_DIR,
 )
 

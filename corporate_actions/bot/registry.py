@@ -199,7 +199,8 @@ DISPATCHED_COMMANDS = frozenset({
     "/increase", "/ind", "/indicator", "/investcheck", "/learn", "/list",
     "/losers", "/market", "/marketmovers", "/menu", "/moverlist",
     "/movers", "/moversfund", "/moversover", "/moverwatch", "/myfavourites",
-    "/mypicks", "/news", "/next", "/openclose", "/openreport", "/pauseall", "/pricealert", "/quality",
+    "/mypicks", "/news", "/next", "/closemarket", "/openclose",
+    "/openmarket", "/openreport", "/pauseall", "/pricealert", "/quality",
     "/qualitycheck", "/quick", "/quiet", "/remove", "/removestock",
     "/sched", "/schednow", "/schedule", "/scorecard", "/scan500", "/screen",
     "/screener", "/sessionreport", "/closereport", "/setlist", "/settings", "/setwatchlist", "/shareholder",
@@ -544,6 +545,19 @@ COMMAND_USAGE = {
         "A closed market (weekend/holiday) shows MARKET CLOSED + next session.\n"
         "Aliases: /closereport \u00b7 /sessionreport \u00b7 /openclose"
     ),
+    "/openmarket": (
+        "<b>/openmarket</b> - the open/close details, INSTANTLY\n"
+        "Serves the recorded report from disk - zero fetching, zero wait.\n"
+        "The scan itself runs once (via <code>/openmarket now</code>, "
+        "/openreport, the daily schedule or the web) and is saved; after "
+        "that every /openmarket replays it for free.\n\n"
+        "/openmarket            \u2192 latest recorded report (India + US)\n"
+        "/openmarket now        \u2192 fresh scan NOW (~1 min), then saved\n"
+        "/openmarket in         \u2192 latest recorded, India only\n"
+        "/openmarket us         \u2192 latest recorded, US only\n"
+        "/openmarket 18-09-2026 \u2192 that session's saved report\n"
+        "Alias: /closemarket"
+    ),
 }
 
 
@@ -584,6 +598,7 @@ COMMAND_EXAMPLES = {
     "/removestock": ["/removestock TCS"],
     "/setlist": ["/setlist RELIANCE, INFY, CANBK, SUZLON", "/setlist check RELIANCE, INFY"],
     "/openreport": ["/openreport", "/openreport in", "/openreport us", "/openreport auto"],
+    "/openmarket": ["/openmarket", "/openmarket now", "/openmarket in", "/openmarket us"],
 }
 
 

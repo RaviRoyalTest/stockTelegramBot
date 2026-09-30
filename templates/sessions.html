@@ -15,8 +15,12 @@
           <option value="in" selected>India</option>
           <option value="us">US</option>
         </select>
+        <select id="historyPick" aria-label="Recorded session history" style="max-width:170px;">
+          <option value="">History…</option>
+        </select>
         <button class="btn btn-primary btn-sm" type="button" id="recordBtn">📸 Record now</button>
         <button class="btn btn-sm" type="button" id="forceBtn" title="Re-record even when current">↻ Force</button>
+        <button class="btn btn-sm" type="button" id="latestBtn" title="Back to the latest recorded session">⏭ Latest</button>
       </div>
     </div>
     <p class="muted" id="snapMeta" style="margin:8px 0 0;">Loading…</p>
@@ -90,9 +94,9 @@
         return '<a href="/fundamentals?symbol=' + encodeURIComponent(s) + '"><strong>' + esc(s) + '</strong></a>';
       }
 
-      async function load() {
+      async function load(params) {
         try {
-          var res = await fetch('/api/snapshots');
+          var res = await fetch('/api/snapshots' + (params || ''));
           if (!res.ok) throw new Error('API ' + res.status);
           var doc = await res.json();
           render(doc);
@@ -102,6 +106,18 @@
           RS.toast('Snapshots failed: ' + err.message, 'err');
           return null;
         }
+      }
+
+      function updateHistory(doc) {
+        // History picker: every recorded session the archive holds - pick
+        // one and it renders from disk instantly (zero fetch, zero scan).
+        var sel = document.getElementById('historyPick');
+        var current = sel.value;
+        var dates = (doc && doc.dates) || [];
+        sel.innerHTML = '<option value="">History…</option>' + dates.map(function (d) {
+          return '<option value="' + esc(d) + '">' + esc(d) + '</option>';
+        }).join('');
+        sel.value = current;
       }
 
       function render(doc) {
@@ -164,6 +180,7 @@
 
         actions = doc.corporate_actions || [];
         renderActions('');
+        updateHistory(doc);
       }
 
       function renderActions(query) {
@@ -253,7 +270,15 @@
 
       document.getElementById('recordBtn').addEventListener('click', function () { record(false); });
       document.getElementById('forceBtn').addEventListener('click', function () { record(true); });
-      load().then(maybeAutoPoll);
+      document.getElementById('latestBtn').addEventListener('click', function () {
+        document.getElementById('historyPick').value = '';
+        load('').then(maybeAutoPoll);
+      });
+      document.getElementById('historyPick').addEventListener('change', function () {
+        if (!this.value) { load('').then(maybeAutoPoll); return; }
+        load('?date=' + encodeURIComponent(this.value));
+      });
+      load('').then(maybeAutoPoll);
     })();
   </script>
 {% endblock %}

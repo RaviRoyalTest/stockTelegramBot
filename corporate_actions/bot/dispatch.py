@@ -53,6 +53,7 @@ WRITE_COMMANDS = {
     "/myfavourites", "/favorites", "/favourites", "/mypicks", "/dailybrief",
     "/fundmode", "/moversfund", "/market",
     "/openreport", "/closereport", "/sessionreport", "/openclose",
+    "/openmarket", "/closemarket",
     "/quiet", "/dnd", "/silence", "/pauseall",
 }
 
@@ -199,6 +200,9 @@ def handle_command(chat_id, text):
         opening_report_commands.handle_opening_report(chat_id, parts)
         return
 
+    if command in ("/openmarket", "/closemarket"):
+        opening_report_commands.handle_openmarket(chat_id, parts)
+        return
     if command in ("/movers", "/topmovers", "/marketmovers"):
         movers_commands.handle_movers(chat_id, parts)
         return

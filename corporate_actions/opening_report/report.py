@@ -470,6 +470,37 @@ def _json_safe(value):
     return value
 
 
+def recorded_covers(doc: dict, markets: tuple[str, ...]) -> bool:
+    """True when a recorded LIVE doc already answers this request (pure).
+
+    The doc must be today's live record and cover every requested market
+    (a recorded India+US file also answers an India-only ask). Used by the
+    web API to serve the saved file instantly instead of re-scanning 60-90s
+    of universes on every page load.
+    """
+    if not isinstance(doc, dict) or not doc.get("report"):
+        return False
+    if doc.get("mode") != "live":
+        return False
+    try:
+        from datetime import datetime as _dt
+
+        try:
+            from zoneinfo import ZoneInfo as _ZoneInfo
+            recorded_day = _dt.fromisoformat(
+                str(doc.get("recorded_at") or "").replace("Z", "+00:00")
+            ).astimezone(_ZoneInfo("Asia/Kolkata")).date().isoformat()
+        except Exception:
+            recorded_day = str(doc.get("recorded_at") or "")[:10]
+        from ..core.dates import today_ist
+
+        if recorded_day != today_ist().isoformat():
+            return False
+    except Exception:
+        return False
+    return set(doc.get("markets") or []) >= set(markets)
+
+
 def _record_is_current(doc: dict, markets: tuple[str, ...], target_date=None) -> bool:
     """True when the recorded file already covers this exact request."""
     if not isinstance(doc, dict) or not doc.get("report"):
@@ -496,12 +527,18 @@ def _record_is_current(doc: dict, markets: tuple[str, ...], target_date=None) ->
     )
 
 
-def save_openclose_report(report: dict, markets: tuple[str, ...],
-                          recorded_by: str = "manual") -> dict:
-    """Persist an already-built LIVE report doc. No fetching (pure save).
+def save_openclose_doc(
+    report: dict, markets: tuple[str, ...], target_date=None,
+    recorded_by: str = "manual",
+) -> dict:
+    """Persist ANY built report (live or historical) under its session date.
 
-    Returns the saved doc. Historical reports must never reach here -
-    callers gate on target_date is None.
+    The dated store (data/openclose/YYYY-MM-DD.json) is the reuse cache:
+    whatever was built once - live scan, Telegram run or a historical
+    rebuild - is served from disk afterwards instead of re-fetching every
+    universe again. Callers decide whether saving is wanted; the /api layer
+    never saves a historical build for TODAY (that would clobber the live
+    record with partial-session data).
     """
     from .. import storage
     from datetime import datetime, timezone
@@ -509,14 +546,28 @@ def save_openclose_report(report: dict, markets: tuple[str, ...],
     doc = {
         "recorded_at": datetime.now(timezone.utc).isoformat(timespec="seconds"),
         "recorded_by": recorded_by,
-        "mode": "live",
+        "mode": "historical" if target_date is not None else "live",
         "markets": sorted(markets),
-        "target_date": None,
+        "target_date": target_date.isoformat() if target_date is not None else None,
         "report": _json_safe(report),
     }
     storage.save_openclose(doc)
-    log.info("openclose: recorded live %s", "+".join(sorted(markets)))
+    log.info(
+        "openclose: recorded %s %s",
+        "historical " + (target_date.isoformat() if target_date else ""),
+        "+".join(sorted(markets)),
+    )
     return doc
+
+
+def save_openclose_report(report: dict, markets: tuple[str, ...],
+                          recorded_by: str = "manual") -> dict:
+    """Persist an already-built LIVE report doc. No fetching (pure save).
+
+    Returns the saved doc. Historical reports must never reach here -
+    callers gate on target_date is None.
+    """
+    return save_openclose_doc(report, markets, None, recorded_by)
 
 
 def record_openclose(

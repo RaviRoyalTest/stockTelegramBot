@@ -109,16 +109,17 @@ def handle_opening_report(chat_id, parts) -> None:
     try:
         # Single fetch shared by the shown report and the recorded file, so
         # the saved open+close details can never disagree with this chat.
-        # Historical builds are computed but never saved (live file only).
+        # Live AND historical builds are saved under their session date, so
+        # /openmarket (and the web page) can replay them instantly later -
+        # built once, reused forever.
         from ..opening_report import collect_and_render
-        from ..opening_report.report import save_openclose_report
+        from ..opening_report.report import save_openclose_doc
 
         lines, report = collect_and_render(markets, target_date)
-        if target_date is None:
-            try:
-                save_openclose_report(report, markets, recorded_by="telegram")
-            except Exception as error:
-                log.info("openclose record skipped: %s", error)
+        try:
+            save_openclose_doc(report, markets, target_date, recorded_by="telegram")
+        except Exception as error:
+            log.info("openclose record skipped: %s", error)
     except Exception as error:
         log.warning("opening report failed: %s", error, exc_info=True)
         reply(chat_id, f"Could not build the report: {error}. Please try again shortly.")
@@ -127,6 +128,103 @@ def handle_opening_report(chat_id, parts) -> None:
     log.info(
         "opening/closing report sent for chat %s (%d market(s), date=%s)",
         chat_id, len(markets), target_date or "live",
+    )
+
+
+def handle_openmarket(chat_id, parts) -> None:
+    """Instant open/close details from the recorded file (/openmarket).
+
+    The heavy scan runs once (via /openmarket now, /openreport, the schedule
+    or the web) and is saved under its session date; this command replays the
+    saved file instantly - no refetch, no wait. Only an explicit
+    "/openmarket now" spends the ~1-minute live scan.
+
+    /openmarket            -> latest recorded report (both markets)
+    /openmarket now        -> fresh live scan, both markets (~1 min), saved
+    /openmarket in | us    -> latest recorded, that market only
+    /openmarket 18-09-2026 -> that session's recorded report (if built before)
+    """
+    from .. import storage as _storage
+
+    if len(parts) > 1 and parts[1].lower() in ("now", "fresh", "run", "update", "new"):
+        handle_opening_report(chat_id, ["/openreport", *parts[2:]])
+        return
+    market = None
+    date_token = None
+    for arg in parts[1:]:
+        lowered = arg.lower().strip()
+        if lowered in ("in", "india"):
+            market = "in"
+        elif lowered in ("us", "united states"):
+            market = "us"
+        elif lowered in ("yesterday", "yday", "yd"):
+            from ..market.hours import local_now
+            import datetime as _dt
+
+            date_token = (local_now("in").date() - _dt.timedelta(days=1)).isoformat()
+        else:
+            parsed = parse_date_token(arg)
+            if parsed is not None:
+                date_token = parsed.isoformat()
+    try:
+        doc = _storage.load_openclose(date_token) or {}
+    except Exception:
+        doc = {}
+    report = doc.get("report") if isinstance(doc.get("report"), dict) else {}
+    sections = report.get("sections") or []
+    if not sections:
+        if date_token:
+            reply(
+                chat_id,
+                f"\U0001F4C1 No recorded session for <b>{date_token}</b> yet.\n"
+                f"Build it once with <code>/openreport {date_token}</code> (~1 min) - "
+                "after that <code>/openmarket</code> replays it instantly.",
+            )
+        else:
+            reply(
+                chat_id,
+                "\U0001F4C1 <b>No recorded open/close report yet.</b>\n"
+                "Run <code>/openmarket now</code> (or <code>/openreport</code>) once - "
+                "about a minute - and every <code>/openmarket</code> after that "
+                "shows the saved details instantly.",
+            )
+        return
+    if market:
+        sections = [s for s in sections if s.get("market") == market]
+        if not sections:
+            reply(
+                chat_id,
+                f"The recorded report covers only: "
+                f"{', '.join(sorted({s.get('market') for s in report.get('sections') or []}))}. "
+                f"Run <code>/openmarket now {'us' if market == 'us' else 'in'}</code> to add it.",
+            )
+            return
+    shown = dict(report)
+    shown["sections"] = sections
+    # Recompute the summary for the shown subset (the stored totals cover
+    # every market in the file, not necessarily the requested slice).
+    shown["total_verified"] = sum(
+        u.get("verified", 0) for s in sections for u in s.get("universes", [])
+    )
+    shown["total_target"] = sum(
+        u.get("target", 0) for s in sections for u in s.get("universes", [])
+    )
+    shown["volume_computed"] = sum(s.get("volume_computed", 0) for s in sections)
+    scope = ("India" if market == "in" else "US") if market else "India + US"
+    head = (
+        "\U0001F4D6 <b>Recorded open/close report</b>\n"
+        f"{scope} \u00b7 recorded <b>{doc.get('recorded_at') or '?'}</b> "
+        f"by {doc.get('recorded_by') or '?'}\n"
+        "Served instantly from the saved file - "
+        "<code>/openmarket now</code> re-scans fresh."
+    )
+    reply(chat_id, head)
+    from ..opening_report import report as openreport
+
+    reply_messages(chat_id, split_messages(openreport.render_telegram(shown)))
+    log.info(
+        "recorded open/close report sent for chat %s (market=%s, date=%s)",
+        chat_id, market or "all", date_token or "latest",
     )
 
 

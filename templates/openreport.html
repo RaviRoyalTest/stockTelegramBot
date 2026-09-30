@@ -21,10 +21,11 @@
         <label for="reportDate">Session date <span class="muted">(empty = live)</span></label>
         <input type="date" id="reportDate" autocomplete="off" />
       </div>
-      <button class="btn btn-primary" id="runBtn" type="button" style="align-self:flex-end;">▶️ Build report</button>
+      <button class="btn btn-primary" id="runBtn" type="button" style="align-self:flex-end;">▶️ Show report</button>
+      <button class="btn" id="freshBtn" type="button" style="align-self:flex-end;" title="Ignore the saved copy and re-scan the market (~60–90s)">🔄 Fresh scan</button>
       <span class="muted" id="buildMeta" aria-live="polite"></span>
     </div>
-    <p class="note" style="margin-bottom:0;">A date builds that session's completed report (this page's honest twin of the live scan: full closes, no estimates); a non-trading date is refused. Both live markets take about 60–90 seconds. Change % is vs the previous trading day's close; Volume Change % is that session's volume vs the prior session's — N/A when unavailable, never estimated.</p>
+    <p class="note" style="margin-bottom:0;">Show report serves the saved copy instantly when today's report was already built (Telegram, web or auto) — the full 60–90s scan runs once, then every view reuses it. Fresh scan forces a new live scan and overwrites the saved copy. A date shows that session's recorded report, building it first if never built. Change % is vs the previous trading day's close; Volume Change % is that session's volume vs the prior session's — N/A when unavailable, never estimated.</p>
   </section>
 
   <div id="statusStrip" style="display:flex; gap:12px; flex-wrap:wrap; margin:14px 0;"></div>
@@ -198,45 +199,63 @@
           ' (target 100 = 60 India + 40 U.S.) · Volume Change % computed for ' + report.volume_computed + ' stock(s).';
       }
 
-      async function run() {
+      function paint(report, meta) {
+        document.getElementById('statusStrip').innerHTML =
+          (report.sections || []).map(statusCard).join('');
+        document.getElementById('sections').innerHTML =
+          (report.sections || []).map(renderSection).join('');
+        renderSummary(report);
+        document.querySelectorAll('[data-sort-body]').forEach(function (tbody) {
+          if (RS.makeSortable) RS.makeSortable(tbody, {});
+        });
+        document.getElementById('results').hidden = false;
+        if (meta) document.getElementById('buildMeta').textContent = meta;
+      }
+
+      async function run(forceFresh) {
         var btn = document.getElementById('runBtn');
+        var freshBtn = document.getElementById('freshBtn');
         var market = (document.querySelector('input[name="market"]:checked') || {}).value || 'all';
         var dateVal = document.getElementById('reportDate').value;
         var historical = !!dateVal;
-        btn.disabled = true;
-        btn.textContent = historical ? '⏳ Building that session…' : '⏳ Scanning… (60–90s)';
+        btn.disabled = true; freshBtn.disabled = true;
+        btn.textContent = historical ? '⏳ Building that session…' : (forceFresh ? '⏳ Scanning… (60–90s)' : '⏳ Loading…');
         document.getElementById('buildMeta').textContent = '';
         document.getElementById('statusStrip').innerHTML = '';
         document.getElementById('sections').innerHTML = '';
         document.getElementById('results').hidden = true;
         try {
-          var res = await fetch('/api/openreport?market=' + encodeURIComponent(market) + (dateVal ? '&date=' + encodeURIComponent(dateVal) : ''));
+          var res = await fetch('/api/openreport?market=' + encodeURIComponent(market) + (dateVal ? '&date=' + encodeURIComponent(dateVal) : '') + (forceFresh ? '&refresh=1' : ''));
           if (!res.ok) {
             var detail = '';
             try { detail = (await res.json()).detail || ''; } catch (e) {}
             throw new Error(detail || ('API ' + res.status));
           }
           var report = await res.json();
-          document.getElementById('statusStrip').innerHTML =
-            report.sections.map(statusCard).join('');
-          document.getElementById('sections').innerHTML =
-            report.sections.map(renderSection).join('');
-          renderSummary(report);
-          document.querySelectorAll('[data-sort-body]').forEach(function (tbody) {
-            if (RS.makeSortable) RS.makeSortable(tbody, {});
-          });
-          document.getElementById('results').hidden = false;
-          document.getElementById('buildMeta').textContent = 'Built ' + new Date().toLocaleTimeString() + ' · source: Yahoo regular-session bars + official NSE index CSVs' + (historical ? '' : ' · saved to data/openclose.json');
-          RS.toast('Report ready', 'ok');
+          var cached = !!report.from_cache;
+          paint(report, 'Built ' + new Date().toLocaleTimeString() +
+            (cached ? ' · served instantly from the recorded file (no re-fetch)' : ' · fresh scan · source: Yahoo regular-session bars + official NSE index CSVs'));
+          RS.toast(cached ? 'Report loaded from the recorded file' : 'Fresh report ready', 'ok');
         } catch (err) {
-          RS.toast('Report failed: ' + err.message, 'err');
-        } finally {
-          btn.disabled = false;
-          btn.textContent = '▶️ Build report';
+          RS.toast('Report failed: ' + err.message, 'err');        } finally {
+          btn.disabled = false; freshBtn.disabled = false;
+          btn.textContent = '▶️ Show report';
         }
       }
 
-      document.getElementById('runBtn').addEventListener('click', run);
+      document.getElementById('runBtn').addEventListener('click', function () { run(false); });
+      document.getElementById('freshBtn').addEventListener('click', function () { run(true); });
+      // Page open: show the latest recorded session instantly (zero fetch);
+      // the user decides when to spend a fresh scan.
+      (function () {
+        fetch('/api/openreport/recorded').then(function (res) {
+          return res.ok ? res.json() : null;
+        }).then(function (doc) {
+          if (!doc || !doc.report || !doc.report.sections) return;
+          paint(doc.report, 'Recorded ' + (doc.recorded_at || '') + ' by ' + (doc.recorded_by || '?') +
+            ' · press Show report / Fresh scan for a new build');
+        }).catch(function () { /* first visit: nothing recorded yet */ });
+      })();
       // recorded-file chip: date-wise history in data/openclose/ (no re-fetch).
       // Picking a past session loads that recorded file straight into this
       // page's tables - the heavy scan only runs via Build report.
@@ -276,7 +295,9 @@
           sel.innerHTML = '<option value="">Recorded history…</option>' + dates.map(function (d) {
             return '<option value="' + esc(d) + '">' + esc(d) + '</option>';
           }).join('');
-          document.getElementById('buildMeta').appendChild(sel);
+          // Sibling of buildMeta (not a child) so status text writes can
+          // never wipe the picker.
+          document.getElementById('buildMeta').parentNode.appendChild(sel);
           sel.addEventListener('change', function () {
             if (!sel.value) return;
             fetch('/api/openreport/recorded?date=' + encodeURIComponent(sel.value)).then(function (res) {

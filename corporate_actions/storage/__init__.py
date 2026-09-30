@@ -24,7 +24,13 @@ from .openclose import (
     save_openclose,
 )
 from .seen import load_seen, save_seen
-from .snapshots import load_snapshots, save_snapshots
+from .snapshots import (
+    archive_snapshot,
+    list_snapshot_dates,
+    load_snapshot_archive,
+    load_snapshots,
+    save_snapshots,
+)
 from .settings import (
     ca_alerts_enabled,
     get_recent_commands,
@@ -94,6 +100,9 @@ __all__ = [
     "save_seen",
     "load_snapshots",
     "save_snapshots",
+    "archive_snapshot",
+    "list_snapshot_dates",
+    "load_snapshot_archive",
     "load_schedule",
     "load_schedule_for",
     "save_schedule",

@@ -1059,7 +1059,10 @@ def _scan_symbols(symbols: list[str], worker, deadline: float, started: float) -
 
 
 @app.get("/api/openreport")
-async def api_openreport(market: str = Query("all"), date: str = Query("")):
+async def api_openreport(
+    market: str = Query("all"), date: str = Query(""),
+    refresh: bool = Query(False),
+):
     """Opening/closing session screener (web twin of the bot's /openreport).
 
     market: all | in | us. date: optional YYYY-MM-DD for a historical session
@@ -1067,6 +1070,12 @@ async def api_openreport(market: str = Query("all"), date: str = Query("")):
     block - never substituted). Regular-session data only, official universes
     (Nifty 100 / Nifty 500 ex-100 / Nifty Microcap 250, US Mega/Large by
     market cap).
+
+    REUSE-FIRST: when today's live report was already built once (Telegram,
+    web or auto-refresh) the saved file is served instantly - the 60-90s
+    scan runs only when nothing current exists, or refresh=1 is passed.
+    Historical builds ARE saved under their date too, so a session built
+    once is replayed from disk forever after (never re-fetched).
     """
     from corporate_actions.opening_report import report as openreport
 
@@ -1081,18 +1090,37 @@ async def api_openreport(market: str = Query("all"), date: str = Query("")):
             target_date = _dt.date.fromisoformat(date.strip())
         except ValueError:
             raise HTTPException(status_code=400, detail="date must be YYYY-MM-DD")
-    report = await asyncio.to_thread(openreport.collect, markets, target_date)
-    # Persist live builds so data/openclose.json survives redeploys and the
-    # page can show the recorded details without re-fetching. Historical
-    # builds are served but never saved (live record only).
-    if target_date is None:
-        try:
-            from corporate_actions.opening_report.report import save_openclose_report
 
-            await asyncio.to_thread(save_openclose_report, report, markets, "web")
+    # ---- reuse-first: serve the recorded file when it answers the ask ----
+    if target_date is None and not refresh:
+        try:
+            existing = await asyncio.to_thread(storage.load_openclose)
+            if openreport.recorded_covers(existing, markets):
+                return JSONResponse(
+                    {**(existing.get("report") or {}), "from_cache": True}
+                )
         except Exception as exc:
-            log.info("/api/openreport record skipped: %s", exc)
-    return JSONResponse(report)
+            log.info("/api/openreport reuse check failed: %s", exc)
+    if target_date is not None and not refresh:
+        try:
+            existing = await asyncio.to_thread(
+                storage.load_openclose, target_date.isoformat())
+            report = existing.get("report") if isinstance(existing, dict) else None
+            if report:
+                return JSONResponse({**report, "from_cache": True})
+        except Exception as exc:
+            log.info("/api/openreport historical reuse failed: %s", exc)
+
+    report = await asyncio.to_thread(openreport.collect, markets, target_date)
+    # Persist every build under its session date so the details are built
+    # ONCE and reused afterwards (survives redeploys via the state push).
+    try:
+        from corporate_actions.opening_report.report import save_openclose_doc
+
+        await asyncio.to_thread(save_openclose_doc, report, markets, target_date, "web")
+    except Exception as exc:
+        log.info("/api/openreport record skipped: %s", exc)
+    return JSONResponse({**report, "from_cache": False})
 
 
 @app.get("/api/openreport/recorded")
@@ -1601,28 +1629,46 @@ def _record_snapshot_thread(market: str, force: bool) -> None:
 
 
 @app.get("/api/snapshots")
-async def api_snapshots():
-    """The recorded last-session file (gap-downs, movers, actions).
+async def api_snapshots(date: str = Query(""), market: str = Query("")):
+    """The recorded session file(s) - reuse-first, never blocks the view.
 
-    Served from disk - never blocks the view. When the stored session is
+    No date: the latest record (legacy single file). ?date=YYYY-MM-DD serves
+    that session's ARCHIVED record ({} -> 404 when that day was never
+    recorded) - recorded history is reusable at zero fetch cost. The
+    response always carries `dates` (all archived sessions, newest first)
+    so the page can offer a history picker. When the stored session is
     older than the market's latest session, a background auto-refresh is
     kicked once (reuse-first: current files are never re-fetched).
     """
     try:
-        doc = await asyncio.to_thread(storage.load_snapshots)
-        # Fire-and-forget auto-refresh: only fires when the file is stale
-        # (snapshots.maybe_record_session_snapshot re-checks everything),
-        # so opening the page reuses the stored day and fetches only when
-        # a newer session has ended and not been recorded yet.
-        if not snapshots_service.is_recording():
+        day = (date or "").strip()
+        if day:
+            import datetime as _dt
+
+            try:
+                _dt.date.fromisoformat(day)
+            except ValueError:
+                raise HTTPException(status_code=400, detail="date must be YYYY-MM-DD")
+            doc = await asyncio.to_thread(storage.load_snapshot_archive, day)
+            if not doc:
+                raise HTTPException(status_code=404, detail=f"no recorded session for {day}")
+        else:
+            doc = await asyncio.to_thread(storage.load_snapshots)
+        dates = await asyncio.to_thread(storage.list_snapshot_dates)
+        # Fire-and-forget auto-refresh: only fires when no explicit date was
+        # requested (history views must not trigger fresh fetches) and the
+        # file is stale (maybe_record_session_snapshot re-checks everything).
+        if not day and not snapshots_service.is_recording():
             threading.Thread(
                 target=snapshots_service.maybe_record_session_snapshot,
-                kwargs={"market": str((doc or {}).get("market") or "in"),
+                kwargs={"market": str(market or (doc or {}).get("market") or "in"),
                         "recorded_by": "auto-page"},
                 daemon=True, name="snapshot-auto-page",
             ).start()
         recording = bool(_snap_state["recording"]) or snapshots_service.is_recording()
-        return JSONResponse({**(doc or {}), "recording": recording})
+        return JSONResponse({**(doc or {}), "dates": dates[::-1], "recording": recording})
+    except HTTPException:
+        raise
     except Exception as exc:
         raise HTTPException(status_code=500, detail=str(exc))
 
@@ -1882,6 +1928,38 @@ async def api_admin_toggle(payload: dict):
         else:
             state = await asyncio.to_thread(
                 admin_service.set_ca_alerts, chat, enabled)
+    except ValueError as error:
+        raise HTTPException(status_code=400, detail=str(error))
+    return JSONResponse({"ok": True, "user": state})
+
+
+@app.post("/api/admin/user/email")
+async def api_admin_user_email(payload: dict):
+    """Save (or clear) a chat's mail id from the admin console.
+
+    Body: {token, chat, email}. An empty email clears it. Same settings key
+    the bot's /setemail uses, so the change is live in Telegram immediately.
+    """
+    _admin_guard(payload.get("token"))
+    chat = str(payload.get("chat") or "").strip()
+    email = str(payload.get("email") or "").strip()
+    if not chat:
+        raise HTTPException(status_code=400, detail="chat is required")
+    if email and ("@" not in email or "." not in email.split("@")[-1]):
+        raise HTTPException(status_code=400, detail="that does not look like an email address")
+
+    def _save():
+        settings = dict(storage.get_user_settings(chat) or {})
+        if email:
+            settings["email"] = email
+        else:
+            settings.pop("email", None)
+            settings.pop("daily_email", None)  # a digest with no address is dead weight
+        storage.save_user_settings(chat, settings)
+        return admin_service._user_state(str(chat))
+
+    try:
+        state = await asyncio.to_thread(_save)
     except ValueError as error:
         raise HTTPException(status_code=400, detail=str(error))
     return JSONResponse({"ok": True, "user": state})
