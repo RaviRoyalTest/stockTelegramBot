@@ -34,10 +34,10 @@ EMAIL_USAGE = (
     "/emailreport RELIANCE friend@gmail.com  \u2192 same report to a friend\n"
     "<b>/email to@mail | subject | message</b> - send any custom mail\n"
     "/email friend@gmail.com | Hello | My watchlist is up 2% today\n"
-    "<b>/dailyemail on|open|close|off</b> - opening + closing/EOD mails\n"
-    "/dailyemail on     \u2192 morning opening screener + evening close+EOD stores\n"
-    "/dailyemail open   \u2192 only the morning opening screener\n"
-    "/dailyemail close  \u2192 only the evening close + stored-details mail\n"
+    "<b>/dailyemail on|both|open|close|off</b> - opening + closing/EOD mails\n"
+    "/dailyemail on/both \u2192 morning opening screener + evening close+EOD stores\n"
+    "/dailyemail open    \u2192 only the morning opening screener\n"
+    "/dailyemail close   \u2192 only the evening close + stored-details mail\n"
     "<b>/emailopen</b> - send this session's opening screener now\n"
     "<b>/emailclose</b> - send the closing screener + EOD stores now\n"
     "Gmail users: it needs an App Password (not the login password) - "
@@ -246,7 +246,7 @@ def handle_dailyemail(chat_id, parts) -> None:
         reply(
             chat_id,
             f"Daily mails: <b>{state}</b>\n"
-            "Usage: <code>/dailyemail on</code> (opening + closing/EOD), "
+            "Usage: <code>/dailyemail on</code> or <code>/dailyemail both</code> (opening + closing/EOD), "
             "<code>/dailyemail open</code> (mornings only), "
             "<code>/dailyemail close</code> (evenings only), "
             "or <code>/dailyemail off</code> (needs <code>/setemail</code> first)",
@@ -288,7 +288,7 @@ def handle_dailyemail(chat_id, parts) -> None:
         storage.save_user_settings(chat_id, settings)
         reply(chat_id, "📧 Daily mails <b>OFF</b>.")
     else:
-        reply(chat_id, "Usage: <code>/dailyemail on|open|close|off</code>")
+        reply(chat_id, "Usage: <code>/dailyemail on|both|open|close|off</code>")
 
 
 def handle_emailopen(chat_id, parts) -> None:

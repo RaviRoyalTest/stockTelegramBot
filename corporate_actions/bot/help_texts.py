@@ -332,7 +332,7 @@ ALL_COMMANDS_TEXT = (
   "  /email TO|SUBJECT|MSG     \u2192 send any custom mail (Gmail App Password needed)\n"
   "  /emailreport SYM [TO] [SUBJECT] \u2192 mail the deep report, custom destination/subject\n"
   "  /emailhelp                \u2192 Gmail setup walkthrough + mail examples\n"
-  "  /dailyemail on|open|close|off \u2192 morning opening + evening close/EOD mails\n"
+  "  /dailyemail on|both|open|close|off \u2192 morning opening + evening close/EOD mails\n"
   "  /emailopen               \u2192 opening screener mail now\n"
   "  /emailclose              \u2192 closing + EOD stores mail now\n\n"
     "\U0001F6E0 <b>Automation</b>\n"
