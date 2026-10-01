@@ -19,6 +19,53 @@ except Exception:  # pragma: no cover - optional dependency
 
 _tls = threading.local()
 
+# Shared Yahoo 429 cooldown: when ANY caller sees HTTP 429 (IP-level ban),
+# every Yahoo caller backs off together via the throttles below instead of
+# each failing its own symbol and hammering on. Without this, one ban
+# empties entire reports (missing P/E, RSI, forecasts) for minutes.
+_yahoo_cooldown_lock = threading.Lock()
+_yahoo_cooldown_until = 0.0
+_YAHOO_COOLDOWN_DEFAULT = 10.0  # seconds when Yahoo gives no Retry-After
+_YAHOO_COOLDOWN_MAX = 60.0  # never freeze the app longer than this
+
+
+def _note_yahoo_429(retry_after=None):
+    """Record a Yahoo 429 so all callers cool down together.
+
+    Honors the Retry-After response header when present, else a short
+    default. Thread-safe; the latest (longest) cooldown wins.
+    """
+    try:
+        wait = float(retry_after)
+    except (TypeError, ValueError):
+        wait = _YAHOO_COOLDOWN_DEFAULT
+    wait = min(max(wait, 1.0), _YAHOO_COOLDOWN_MAX)
+    global _yahoo_cooldown_until
+    with _yahoo_cooldown_lock:
+        _yahoo_cooldown_until = max(_yahoo_cooldown_until, time.time() + wait)
+        log = __import__("logging").getLogger(__name__)
+        log.warning("Yahoo 429 observed - shared cooldown %.0fs", wait)
+
+
+def _yahoo_cooldown_sleep():
+    """Sleep (outside any throttle lock) while a shared cooldown is active."""
+    while True:
+        with _yahoo_cooldown_lock:
+            remaining = _yahoo_cooldown_until - time.time()
+        if remaining <= 0:
+            return
+        time.sleep(min(remaining, 5.0))
+
+
+async def _yahoo_cooldown_sleep_async():
+    """Async version of the shared-cooldown sleep."""
+    while True:
+        with _yahoo_cooldown_lock:
+            remaining = _yahoo_cooldown_until - time.time()
+        if remaining <= 0:
+            return
+        await asyncio.sleep(min(remaining, 5.0))
+
 _fund_req_lock = threading.Lock()
 _last_fund_req = 0.0
 _FUND_REQ_INTERVAL = 0.15  # seconds between quoteSummary requests (Yahoo 429 guard)
@@ -55,6 +102,7 @@ def _throttle_fund_req():
     double the previous), turning a 5-second scan into a multi-minute stall.
     """
     global _last_fund_req
+    _yahoo_cooldown_sleep()
     with _fund_req_lock:
         now = time.time()
         wait = _last_fund_req + _FUND_REQ_INTERVAL - now
@@ -80,6 +128,7 @@ def _throttle_chart_req():
     gap keeps the watcher/movers under the limit.
     """
     global _last_chart_req
+    _yahoo_cooldown_sleep()
     with _chart_req_lock:
         now = time.time()
         wait = _last_chart_req + _CHART_REQ_INTERVAL - now
@@ -89,25 +138,30 @@ def _throttle_chart_req():
 
 
 async def _throttle_chart_req_async():
-    """Async version of chart request throttling."""
+    """Async version of chart request throttling.
+
+    Best-effort gap without a lock (threading.Lock cannot be used with
+    `async with` - that raised TypeError on every call) plus the shared
+    429 cooldown sleep.
+    """
     global _last_chart_req
-    async with _chart_req_lock:  # type: ignore
-        now = time.time()
-        wait = _last_chart_req + _CHART_REQ_INTERVAL - now
-        if wait > 0:
-            await asyncio.sleep(wait)
-        _last_chart_req = time.time()
+    await _yahoo_cooldown_sleep_async()
+    now = time.time()
+    wait = _last_chart_req + _CHART_REQ_INTERVAL - now
+    if wait > 0:
+        await asyncio.sleep(wait)
+    _last_chart_req = time.time()
 
 
 async def _throttle_fund_req_async():
-    """Async version of fund request throttling."""
+    """Async version of fund request throttling (lock-free, see above)."""
     global _last_fund_req
-    async with _fund_req_lock:  # type: ignore
-        now = time.time()
-        wait = _last_fund_req + _FUND_REQ_INTERVAL - now
-        if wait > 0:
-            await asyncio.sleep(wait)
-        _last_fund_req = time.time()
+    await _yahoo_cooldown_sleep_async()
+    now = time.time()
+    wait = _last_fund_req + _FUND_REQ_INTERVAL - now
+    if wait > 0:
+        await asyncio.sleep(wait)
+    _last_fund_req = time.time()
 
 
 _async_client_instance = None

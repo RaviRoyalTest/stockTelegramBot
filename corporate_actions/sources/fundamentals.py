@@ -24,7 +24,7 @@ import asyncio
 
 from .. import config
 from .analyst_forecast import fill_analyst_fallback
-from .http import _quote_session, _throttle_fund_req, _throttle_fund_req_async, _async_client
+from .http import _quote_session, _throttle_fund_req, _throttle_fund_req_async, _async_client, _note_yahoo_429
 from .screener import get_competitors, parse_screener_fundamentals
 
 log = logging.getLogger(__name__)
@@ -177,6 +177,8 @@ def _fund_session():
             ):
                 try:
                     response = _global_fund_sess.get(crumb_host, timeout=config.HTTP_TIMEOUT)
+                    if response.status_code == 429:
+                        _note_yahoo_429(response.headers.get("Retry-After"))
                     if response.status_code == 200 and response.text.strip():
                         _global_fund_crumb = response.text.strip()
                         _global_fund_crumb_ts = now
@@ -225,6 +227,7 @@ def _quote_summary(symbol: str, suffix: str = ".NS") -> dict | None:
                 )
                 if response.status_code == 429:
                     log.info("_quote_summary: 429 rate-limited for %s on %s — trying other host", symbol, host)
+                    _note_yahoo_429(response.headers.get("Retry-After"))
                     with _yahoo_lock:
                         _yahoo_fail_count += 1
                         if _yahoo_fail_count >= _YAHOO_MAX_FAILS:
@@ -311,6 +314,7 @@ async def _quote_summary_async(symbol: str, suffix: str = ".NS") -> dict | None:
                 async with httpx.AsyncClient(headers={**config.BROWSER_HEADERS}, timeout=config.HTTP_TIMEOUT, cookies=persisted_cookies) as client:
                     r = await client.get(url, params=params)
                     if r.status_code == 429:
+                        _note_yahoo_429(r.headers.get("Retry-After"))
                         with _yahoo_lock:
                             _yahoo_fail_count += 1
                             if _yahoo_fail_count >= _YAHOO_MAX_FAILS:
@@ -433,6 +437,7 @@ def _chart_fundamentals(symbol: str, suffix: str = ".NS") -> dict:
             response = _quote_session().get(url, timeout=config.HTTP_TIMEOUT)
             if response.status_code == 429:
                 log.info("_chart_fundamentals: 429 rate-limited for %s on %s — trying other host", symbol, host)
+                _note_yahoo_429(response.headers.get("Retry-After"))
                 continue
             response.raise_for_status()
             payload = response.json()
@@ -507,6 +512,7 @@ async def _chart_fundamentals_async(symbol: str, suffix: str = ".NS") -> dict:
                 pass
             r = await client.get(url, timeout=config.HTTP_TIMEOUT)
             if r.status_code == 429:
+                _note_yahoo_429(r.headers.get("Retry-After"))
                 continue
             r.raise_for_status()
             payload = r.json()

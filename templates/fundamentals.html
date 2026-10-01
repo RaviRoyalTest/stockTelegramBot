@@ -845,26 +845,140 @@
               '<p class="muted">No dividend payouts in the last 5 years.</p>';
           }
         } catch (e) { document.getElementById('rDiv').innerHTML = '<p class="muted">Dividend data unavailable.</p>'; }
-        // Snapshot & verdict (same rules as the Telegram deep report).
-        try {
-          var ar = await fetch('/api/analysis?symbol=' + encodeURIComponent(symbol) + '&market=' + encodeURIComponent(market || 'in'));
-          if (ar.ok) {
-            var aj = await ar.json();
-            document.getElementById('rVerdict').innerHTML = aj.verdict
-              ? '<strong>Verdict: ' + esc(aj.verdict) + '</strong>' : '<span class="muted">No verdict available.</span>';
-            document.getElementById('rSnap').innerHTML = rows((aj.snapshot || []).map(function (s) {
-              return [s.label, esc(s.icon || '') + ' <strong>' + esc(s.word || '') + '</strong>'];
-            }));
-            document.getElementById('rPositives').innerHTML = (aj.positives || []).length
-              ? '<ul style="margin:0;padding-left:18px;">' + aj.positives.map(function (p) { return '<li>' + esc(p) + '</li>'; }).join('') + '</ul>'
-              : '<p class="muted">None flagged.</p>';
-            document.getElementById('rConcerns').innerHTML = (aj.concerns || []).length
-              ? '<ul style="margin:0;padding-left:18px;">' + aj.concerns.map(function (c) { return '<li>' + esc(c) + '</li>'; }).join('') + '</ul>'
-              : '<p class="muted">None flagged.</p>';
-            document.getElementById('rQuestion').textContent = (aj.main_question || []).length
-              ? 'Main question: ' + aj.main_question.join(' ') : '';
+        // Snapshot & verdict, computed locally from the already-loaded fund
+        // dict with the exact rules of the bot's deep report (no second
+        // fetch: /api/analysis would re-scrape everything and double the
+        // rate-limit pressure). Ratings use raw stored units: growth fields
+        // are fractions, roe/roce/DE are percents/ratios - mirrored literally.
+        (function () {
+          try {
+          var G = '🟢', Y = '🟡', R = '🔴';
+          function numOrNull(v) {
+            if (v == null || v === '') return null;
+            var n = Number(v);
+            return isFinite(n) ? n : null;
           }
-        } catch (e) { /* snapshot is best-effort */ }
+          function consensus(f) {
+            var key = String(f.rec_key || '').trim().replace(/_/g, ' ').replace(/\w\S*/g, function (w) {
+              return w.charAt(0).toUpperCase() + w.slice(1).toLowerCase();
+            });
+            if (['Strong Buy', 'Buy', 'Hold', 'Sell', 'Strong Sell'].indexOf(key) !== -1) return key;
+            var mean = numOrNull(f.rec_mean);
+            if (mean == null) return '';
+            if (mean <= 1.5) return 'Strong Buy';
+            if (mean <= 2.5) return 'Buy';
+            if (mean <= 3.5) return 'Hold';
+            if (mean <= 4.5) return 'Sell';
+            return 'Strong Sell';
+          }
+          function holdingDelta(v) {
+            var m = String(v == null ? '' : v).match(/([+-]?\d+(?:\.\d+)?)%\)/);
+            return m ? Number(m[1]) : null;
+          }
+          function fmt1(v) {
+            return Number(v).toLocaleString(undefined, { minimumFractionDigits: 1, maximumFractionDigits: 1 });
+          }
+          var ratings = {};
+          var rev = numOrNull(f.revenue_growth);
+          ratings['Business Growth'] = rev == null ? null :
+            rev >= 10 ? [G, 'Good'] : rev > 0 ? [Y, 'Moderate'] : [R, 'Weak'];
+          var roe = numOrNull(f.roe), roce = numOrNull(f.roce), margin = numOrNull(f.profit_margin);
+          ratings['Profitability'] = (roe == null && roce == null && margin == null) ? null :
+            ((roe != null && roe >= 15) || (roce != null && roce >= 15) || (margin != null && margin >= 0.15)) ? [G, 'Good'] :
+            ((roe == null || roe < 10) && (roce == null || roce < 10) && (margin != null && margin < 0.08)) ? [R, 'Weak'] : [Y, 'Moderate'];
+          var de = numOrNull(f.debt_to_equity);
+          ratings['Balance Sheet'] = de == null ? null :
+            de <= 0.5 ? [G, 'Reasonable'] : de <= 1.0 ? [Y, 'Moderate'] : [R, 'Stretched'];
+          var cf = f.cash_flow || {};
+          var fcf = numOrNull(cf.free_cash_flow);
+          ratings['Cash Flow'] = fcf == null ? null : fcf >= 0 ? [G, 'Strong'] : [R, 'Weak'];
+          var pe = numOrNull(f.pe);
+          ratings['Valuation'] = pe == null ? null :
+            pe > 40 ? [R, 'Expensive'] : pe >= 20 ? [Y, 'Moderate'] : [G, 'Cheap'];
+          var below = 0, total = 0;
+          if (price) {
+            [f.sma_50, f.sma_200].forEach(function (sma) {
+              if (sma == null) return;
+              total++;
+              if (Number(price) < Number(sma)) below++;
+            });
+          }
+          var macdBear = f.macd_line != null && f.macd_signal != null && Number(f.macd_line) < Number(f.macd_signal);
+          if (macdBear) total++;
+          ratings['Technicals'] = total === 0 ? null :
+            (macdBear || below === total) ? [R, 'Weak'] :
+            (below === 0 && !macdBear) ? [G, 'Strong'] : [Y, 'Mixed'];
+          var con = consensus(f);
+          ratings['Analyst View'] = (con === 'Strong Buy' || con === 'Buy') ? [G, 'Positive'] :
+            (con === 'Sell' || con === 'Strong Sell') ? [R, 'Negative'] : con ? [Y, 'Neutral'] : null;
+
+          var greens = 0, reds = 0;
+          Object.keys(ratings).forEach(function (k) {
+            if (ratings[k]) { if (ratings[k][0] === G) greens++; if (ratings[k][0] === R) reds++; }
+          });
+          var verdict = (greens >= 5 && reds <= 1) ? G + ' BUY' :
+            (reds >= 5 && greens <= 1) ? R + ' SELL / AVOID' : Y + ' WATCH / WAIT';
+          document.getElementById('rVerdict').innerHTML = '<strong>Verdict: ' + esc(verdict) + '</strong>';
+          document.getElementById('rSnap').innerHTML = rows(Object.keys(ratings).filter(function (k) {
+            return ratings[k];
+          }).map(function (k) { return [k, ratings[k][0] + ' <strong>' + esc(ratings[k][1]) + '</strong>']; }));
+
+          var concerns = [];
+          if (pe != null && pe > 40) concerns.push('P/E ' + fmt1(pe) + 'x — expensive vs earnings');
+          if (roe != null && roe < 10) concerns.push('ROE only ' + fmt1(roe) + '%');
+          if (roce != null && roce < 12) concerns.push('ROCE only ' + fmt1(roce) + '%');
+          var cfo = numOrNull(cf.cfo);
+          if (fcf != null && fcf < 0) concerns.push('Negative free cash flow');
+          if (cfo != null && cfo < 0) concerns.push('Operating cash flow (CFO) is negative');
+          var icr = numOrNull(f.interest_coverage_ratio);
+          if (icr != null && icr < 2.5) concerns.push('Interest coverage only ' + fmt1(icr) + 'x');
+          if (price != null && f.sma_50 != null && f.sma_200 != null &&
+              Number(price) < Number(f.sma_50) && Number(price) < Number(f.sma_200))
+            concerns.push('Price below both 50-day and 200-day averages');
+          if (macdBear) concerns.push('Bearish MACD (line below signal)');
+          var fiiD = holdingDelta(f.fii_pct);
+          if (fiiD != null && fiiD < 0) concerns.push('FII holding declined ' + Math.abs(fiiD).toFixed(2) + '% QoQ');
+          document.getElementById('rConcerns').innerHTML = concerns.length
+            ? '<ul style="margin:0;padding-left:18px;">' + concerns.map(function (c) { return '<li>' + esc(c) + '</li>'; }).join('') + '</ul>'
+            : '<p class="muted">None flagged.</p>';
+
+          var positives = [];
+          var annuals = f.annuals || [], latest = annuals.length ? annuals[annuals.length - 1] : null;
+          if (latest) {
+            if (latest.sales_growth != null && latest.sales_growth > 0)
+              positives.push('Latest FY sales +' + Number(latest.sales_growth).toFixed(1) + '% YoY');
+            if (latest.profit_growth != null && latest.profit_growth > 0)
+              positives.push('Latest FY profit +' + Number(latest.profit_growth).toFixed(1) + '% YoY');
+          }
+          if (annuals.length >= 3 && annuals.every(function (a) { return a.sales != null; }) &&
+              Number(annuals[annuals.length - 1].sales) > Number(annuals[0].sales))
+            positives.push('Multi-year sales expansion');
+          if (de != null && de <= 0.5) positives.push('Low debt (D/E ' + de.toFixed(2) + 'x)');
+          var diiD = holdingDelta(f.dii_pct);
+          if (diiD != null && diiD > 0) positives.push('DII holding increased QoQ');
+          if (con === 'Buy' || con === 'Strong Buy') positives.push('Analyst consensus is Buy');
+          var tm = numOrNull(f.target_mean);
+          if (tm != null && price && tm > Number(price))
+            positives.push('Mean target implies +' + Math.round((tm - Number(price)) / Number(price) * 100) + '% upside');
+          document.getElementById('rPositives').innerHTML = positives.length
+            ? '<ul style="margin:0;padding-left:18px;">' + positives.map(function (p) { return '<li>' + esc(p) + '</li>'; }).join('') + '</ul>'
+            : '<p class="muted">None flagged.</p>';
+
+          var mq;
+          var pg = latest ? latest.profit_growth : null;
+          if (pe != null && pe > 40 && pg != null && pg >= 0)
+            mq = 'Can future earnings growth justify the current high valuation?';
+          else if (roe != null && roe < 10)
+            mq = 'Can profitability improve from the current low ROE levels?';
+          else if (cf.free_cash_flow != null && Number(cf.free_cash_flow) < 0)
+            mq = 'Can the company turn around its negative cash flow?';
+          else
+            mq = 'Is the current growth rate sustainable over the next few years?';
+          document.getElementById('rQuestion').textContent = 'Main question: ' + mq;
+          } catch (e) {
+            document.getElementById('rVerdict').innerHTML = '<span class="muted">Verdict unavailable.</span>';
+          }
+        })();
         // News + corporate actions + price history load in parallel; each
         // degrades independently so one slow source never blanks the report.
         try {

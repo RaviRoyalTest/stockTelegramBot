@@ -6,7 +6,7 @@ import time
 import threading
 
 from .. import config
-from .http import _quote_session, _throttle_chart_req
+from .http import _quote_session, _throttle_chart_req, _note_yahoo_429
 from .http import _throttle_chart_req_async, _async_client
 import asyncio
 
@@ -71,6 +71,8 @@ def get_quote(exchange: str, symbol: str) -> dict | None:
         )
         try:
             response = _quote_session().get(url, timeout=config.HTTP_TIMEOUT)
+            if response.status_code == 429:
+                _note_yahoo_429(response.headers.get("Retry-After"))
             response.raise_for_status()
             result = response.json()
             if "chart" in result and "result" in result["chart"] and result["chart"]["result"]:
@@ -167,6 +169,8 @@ async def get_quote_async(exchange: str, symbol: str) -> dict | None:
         )
         try:
             r = await client.get(url, timeout=config.HTTP_TIMEOUT)
+            if r.status_code == 429:
+                _note_yahoo_429(r.headers.get("Retry-After"))
             r.raise_for_status()
             result = r.json()
             if "chart" in result and "result" in result["chart"] and result["chart"]["result"]:
