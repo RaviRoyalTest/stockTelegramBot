@@ -156,7 +156,7 @@ def _html_document(title: str, body_lines: list[str]) -> str:
         "<div style=\"font-size:12px;opacity:0.85;margin-top:4px;\">"
         "Royal Stock · NSE &amp; BSE · session screener + store summary</div></div>"
         f"<div style=\"background:#ffffff;border-radius:14px;padding:16px 16px;"
-        "border:1px solid #e2e8f0;\">{body}</div>"
+        f"border:1px solid #e2e8f0;\">{body}</div>"
         "<style>"
         ".rs-sec{margin:14px 0 6px;padding:10px 12px;border-radius:10px;font-weight:800;"
         "font-size:15px;color:#ffffff;background:linear-gradient(135deg,#0ea5e9,#6366f1);}"
