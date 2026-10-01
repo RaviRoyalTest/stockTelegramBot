@@ -7,6 +7,7 @@
       "universe": "nifty500"
     },
     "recent_commands": [
+      "/dailyemail on",
       "/openreport in",
       "/emailreport",
       "/gappers today",
@@ -15,11 +16,14 @@
       "/schedule",
       "/openreport auto",
       "/openreport",
-      "/setemail raviroyalmechai@gmail.com",
-      "/schedule remove 1"
+      "/setemail raviroyalmechai@gmail.com"
     ],
     "movers_fund": "button",
-    "email": "raviroyalmechai@gmail.com"
+    "email": "raviroyalmechai@gmail.com",
+    "daily_email": true,
+    "email_scope": "both",
+    "last_eod_email": "2026-10-01",
+    "last_daily_email": "2026-10-01"
   },
   "@StockVigilBot": {
     "action_filters": [],
