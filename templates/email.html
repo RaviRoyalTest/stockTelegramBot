@@ -8,6 +8,24 @@
 
   <p class="muted" id="emailStatus" aria-live="polite">Checking mail sender…</p>
 
+  <section class="card section" aria-labelledby="hLog">
+    <div style="display:flex; justify-content:space-between; align-items:center; gap:12px; flex-wrap:wrap;">
+      <h2 id="hLog" style="margin-bottom:0;">📬 Recent sends <span class="pill" id="logCount">0</span></h2>
+      <button class="btn btn-sm" id="reloadLog">🔄 Refresh</button>
+    </div>
+    <div class="table-scroll" style="margin-top:12px;">
+      <table>
+        <caption class="visually-hidden">Mail send results</caption>
+        <thead>
+          <tr><th scope="col">Time</th><th scope="col">Type</th><th scope="col">Subject</th><th scope="col">To</th><th scope="col">Result</th></tr>
+        </thead>
+        <tbody id="logBody" aria-live="polite">
+          <tr><td colspan="5" class="empty"><span class="skeleton" style="display:block;width:100%"></span></td></tr>
+        </tbody>
+      </table>
+    </div>
+  </section>
+
   <section class="card" aria-labelledby="hBoth" style="border:2px solid #7c3aed;">
     <h2 id="hBoth">🌅🌇 Open + close + EOD in one mail</h2>
     <p class="muted" style="margin-top:0;">Full session tables + watchlist / schedule / settings — one command, one email.</p>
@@ -126,6 +144,34 @@
         if (!res.ok) throw new Error((data && data.detail) || ('HTTP ' + res.status));
         return data;
       }
+      function refreshLog() {
+        var tbody = document.getElementById('logBody');
+        tbody.innerHTML = '<tr><td colspan="5" class="empty"><span class="skeleton" style="display:block;width:100%"></span></td></tr>';
+        fetch('/api/email/log?limit=10').then(function (r) {
+          return r.ok ? r.json() : { entries: [] };
+        }).then(function (j) {
+          var entries = (j && j.entries) || [];
+          document.getElementById('logCount').textContent = String(entries.length);
+          if (!entries.length) {
+            tbody.innerHTML = '<tr><td colspan="5" class="empty">No mails sent yet.</td></tr>';
+            return;
+          }
+          tbody.innerHTML = entries.map(function (e) {
+            var ok = !!e.ok;
+            var at = RS.escapeHtml(String(e.at || '?').slice(0, 16).replace('T', ' '));
+            var pill = ok ? '<span class="pill pos">✅ sent</span>' : '<span class="pill neg">❌ failed</span>';
+            var title = ok ? '' : (' title="' + RS.escapeHtml(String(e.info || '')) + '"');
+            return '<tr><td>' + at + '</td><td><span class="pill">' + RS.escapeHtml(String(e.kind || '?')) + '</span></td>' +
+              '<td>' + RS.escapeHtml(String(e.subject || '?')) + '</td>' +
+              '<td>' + RS.escapeHtml(String(e.to || '?')) + '</td>' +
+              '<td' + title + '>' + pill + '</td></tr>';
+          }).join('');
+        }).catch(function () {
+          tbody.innerHTML = '<tr><td colspan="5" class="empty">Could not load the send log.</td></tr>';
+        });
+      }
+      document.getElementById('reloadLog').addEventListener('click', refreshLog);
+      refreshLog();
       // Sender status first so a misconfigured host is obvious before typing.
       fetch('/api/email/status').then(function (r) { return r.ok ? r.json() : null; }).then(function (s) {
         var el = document.getElementById('emailStatus');
@@ -152,7 +198,7 @@
         } catch (err) {
           out.textContent = 'Failed: ' + err.message;
           RS.toast('Mail failed: ' + err.message, 'err');
-        } finally { setBusy(btn, false, '📧 Send custom mail'); }
+        } finally { refreshLog(); setBusy(btn, false, '📧 Send custom mail'); }
       });
 
       document.getElementById('sendTest').addEventListener('click', async function () {
@@ -167,7 +213,7 @@
         } catch (err) {
           out.textContent = 'Failed: ' + err.message;
           RS.toast('Test failed: ' + err.message, 'err');
-        } finally { setBusy(btn, false, '✅ Send test mail to me'); }
+        } finally { refreshLog(); setBusy(btn, false, '✅ Send test mail to me'); }
       });
 
       document.getElementById('sendReport').addEventListener('click', async function () {
@@ -187,7 +233,7 @@
         } catch (err) {
           out.textContent = 'Failed: ' + err.message;
           RS.toast('Report mail failed: ' + err.message, 'err');
-        } finally { setBusy(btn, false, '📧 Mail the deep report'); }
+        } finally { refreshLog(); setBusy(btn, false, '📧 Mail the deep report'); }
       });
 
       RS.attachSymbolAutocomplete('repSymbol', 'symbolList');
@@ -208,7 +254,7 @@
         } catch (err) {
           out.textContent = 'Failed: ' + err.message;
           RS.toast('Combined mail failed: ' + err.message, 'err');
-        } finally { setBusy(btn, false, '🌅🌇 Mail everything at once'); }
+        } finally { refreshLog(); setBusy(btn, false, '🌅🌇 Mail everything at once'); }
       });
       document.getElementById('sendOpen').addEventListener('click', async function () {
         var btn = this, out = document.getElementById('openResult');
@@ -224,7 +270,7 @@
         } catch (err) {
           out.textContent = 'Failed: ' + err.message;
           RS.toast('Opening mail failed: ' + err.message, 'err');
-        } finally { setBusy(btn, false, '🌅 Mail the opening screener'); }
+        } finally { refreshLog(); setBusy(btn, false, '🌅 Mail the opening screener'); }
       });
 
       document.getElementById('sendEod').addEventListener('click', async function () {
@@ -241,7 +287,7 @@
         } catch (err) {
           out.textContent = 'Failed: ' + err.message;
           RS.toast('EOD mail failed: ' + err.message, 'err');
-        } finally { setBusy(btn, false, '🌇 Mail close + EOD summary'); }
+        } finally { refreshLog(); setBusy(btn, false, '🌇 Mail close + EOD summary'); }
       });
     })();
   </script>

@@ -2027,6 +2027,7 @@ async def api_email_test(payload: dict):
             to,
             "Royal Stock: test mail ✅",
             ["✅ <b>Test mail OK</b> - reports will arrive here."],
+            kind="web-test", chat_id="web",
         )
     except Exception as exc:
         raise HTTPException(status_code=500, detail=str(exc))
@@ -2052,7 +2053,8 @@ async def api_email_send(payload: dict):
     if not message.strip():
         raise HTTPException(status_code=400, detail="message is required")
     try:
-        ok, info = await asyncio.to_thread(email_client.send_custom, to, subject, message)
+        ok, info = await asyncio.to_thread(
+            email_client.send_custom, to, subject, message, kind="web-custom", chat_id="web")
     except Exception as exc:
         raise HTTPException(status_code=500, detail=str(exc))
     if not ok:
@@ -2101,7 +2103,8 @@ async def api_email_report(payload: dict):
 
             lines = [f"<i>{_html.escape(subject)}</i>", ""] + lines
         ok, info = await asyncio.to_thread(
-            email_client.send_email, to, subject or f"Royal Stock report: {symbol}", lines
+            email_client.send_email, to, subject or f"Royal Stock report: {symbol}", lines,
+            kind="web-report", chat_id="web",
         )
     except HTTPException:
         raise
@@ -2152,6 +2155,7 @@ async def api_email_open(payload: dict):
         ok, info = await asyncio.to_thread(
             email_client.send_email, to,
             f"Royal Stock opening: {label}", build_open_lines(report, label),
+            kind="web-open", chat_id="web",
         )
     except HTTPException:
         raise
@@ -2201,6 +2205,7 @@ async def api_email_eod(payload: dict):
         lines.extend(await asyncio.to_thread(build_eod_store_lines, chat, quotes))
         ok, info = await asyncio.to_thread(
             email_client.send_email, to, f"Royal Stock close + EOD: {label}", lines,
+            kind="web-eod", chat_id="web",
         )
     except HTTPException:
         raise
@@ -2247,6 +2252,7 @@ async def api_email_both(payload: dict):
         lines = await asyncio.to_thread(build_combined_lines, chat, report, label, quotes)
         ok, info = await asyncio.to_thread(
             email_client.send_email, to, f"Royal Stock open + close + EOD: {label}", lines,
+            kind="web-both", chat_id="web",
         )
     except HTTPException:
         raise
@@ -2255,6 +2261,16 @@ async def api_email_both(payload: dict):
     if not ok:
         raise HTTPException(status_code=502, detail=info)
     return JSONResponse({"ok": True, "info": info, "to": to})
+
+
+@app.get("/api/email/log")
+async def api_email_log(limit: int = Query(10, ge=1, le=50)):
+    """Recent mail sends, newest first: ✅ success or ❌ failed + reason."""
+    try:
+        entries = await asyncio.to_thread(storage.load_mail_log, limit)
+        return JSONResponse({"entries": entries, "count": len(entries)})
+    except Exception as exc:
+        raise HTTPException(status_code=500, detail=str(exc))
 
 
 if __name__ == "__main__":

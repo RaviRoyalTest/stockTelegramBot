@@ -113,6 +113,9 @@ SNAPSHOT_FILE = Path(os.getenv("SNAPSHOT_FILE", str(BASE_DIR / "data" / "snapsho
 OPENREPORT_FILE = Path(os.getenv("OPENREPORT_FILE", str(BASE_DIR / "data" / "openclose.json")))
 # Date-wise history lives here: data/openclose/YYYY-MM-DD.json per session.
 OPENREPORT_DIR = Path(os.getenv("OPENREPORT_DIR", str(BASE_DIR / "data" / "openclose")))
+# Append-only mail send log (last 50 sends): every Telegram / web / auto mail
+# records ✅/❌ here so /emailstatus and the web Email page can show it.
+MAIL_LOG_FILE = Path(os.getenv("MAIL_LOG_FILE", str(BASE_DIR / "data" / "mail_log.json")))
 
 USER_AGENT = (
     "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "

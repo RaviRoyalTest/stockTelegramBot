@@ -194,6 +194,9 @@ ALIAS_TO_MAIN = {
     "/bothmail": "/emailboth",
     "/emailfull": "/emailboth",
     "/sessionmail": "/emailboth",
+    "/maillog": "/emailstatus",
+    "/maillogs": "/emailstatus",
+    "/mailstatus": "/emailstatus",
 }
 
 
@@ -208,7 +211,7 @@ DISPATCHED_COMMANDS = frozenset({
     "/corpactions", "/corpactionsformylist", "/corpactionssummary",
     "/corporate-actions", "/dailybrief", "/dailyemail", "/dailymail",
     "/dnd", "/bothmail", "/closemail", "/email", "/emailboth", "/emailclose", "/emaildaily",
-    "/emailfull", "/emailfund", "/emailhelp",
+    "/emailfull", "/emailfund", "/emailhelp", "/emailstatus",
     "/emailopen", "/emailreport", "/emailsend", "/emailsetup", "/eod", "/eodmail", "/ex-dates", "/exdate",
     "/exdates", "/explain", "/favorites", "/favourites", "/filter",
     "/filterstocks", "/forecast", "/forecastanalysis", "/fund",
@@ -216,7 +219,7 @@ DISPATCHED_COMMANDS = frozenset({
     "/fundamentalreport", "/fundmode", "/gainers", "/gap", "/gappers",
     "/gmailhelp", "/guide", "/harmonic", "/harmonicpatterns", "/help", "/howto",
     "/increase", "/ind", "/indicator", "/investcheck", "/learn", "/list",
-    "/losers", "/mail", "/market", "/marketmovers", "/menu", "/morningmail", "/moverlist",
+    "/losers", "/mail", "/maillog", "/maillogs", "/mailstatus", "/market", "/marketmovers", "/menu", "/morningmail", "/moverlist",
     "/movers", "/moversfund", "/moversover", "/moverwatch", "/myfavourites", "/openmail",
     "/mypicks", "/news", "/next", "/closemarket", "/openclose",
     "/openmarket", "/openreport", "/pauseall", "/pricealert", "/quality",
@@ -455,6 +458,11 @@ COMMAND_USAGE = {
         "/emailboth  \u2192 full session tables + watchlist/schedule/settings tables\n"
         "Needs /setemail first. Aliases: /bothmail, /emailfull, /sessionmail"
     ),
+    "/emailstatus": (
+        "<b>/emailstatus</b> - last mail sends: success or failed + reason\n"
+        "/emailstatus  \u2192 ✅/❌ per send with time, type and error\n"
+        "Aliases: /maillog, /mailstatus"
+    ),
     "/indicator": (
         "<b>/indicator</b> - clear deep-dive for ONE indicator\n"
         "/indicator RELIANCE RSI  \u2192 value, signal, trend &amp; how to read it\n"
@@ -631,6 +639,7 @@ COMMAND_EXAMPLES = {
     "/emailopen": ["/emailopen"],
     "/emailclose": ["/emailclose"],
     "/emailboth": ["/emailboth"],
+    "/emailstatus": ["/emailstatus"],
     "/indicator": ["/indicator RELIANCE RSI", "/indicator AAPL MACD", "/indicator RELIANCE"],
     "/forecast": ["/forecast RELIANCE", "/forecast AAPL", "/forecast GODREJCP"],
     "/learn": ["/learn", "/learn stocks", "/learn schedule"],
@@ -858,6 +867,7 @@ def register_commands() -> bool:
         {"command": "emailreport", "description": "Mail the deep report: /emailreport RELIANCE"},
         {"command": "dailyemail", "description": "Opening + closing/EOD mails: /dailyemail on|both|open|close|off"},
         {"command": "emailboth", "description": "Open + close + EOD in one mail: /emailboth"},
+        {"command": "emailstatus", "description": "Mail send results: success or failed: /emailstatus"},
         {"command": "emailopen", "description": "Opening screener mail now: /emailopen"},
         {"command": "emailclose", "description": "Closing + EOD stores mail now: /emailclose"},
         {"command": "harmonicpatterns", "description": "Harmonic pattern scan NIFTY 100/500: /harmonicpatterns all"},

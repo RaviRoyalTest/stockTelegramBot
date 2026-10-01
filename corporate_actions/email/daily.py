@@ -355,7 +355,8 @@ def maybe_send_open_email(chat_id, report: dict | None = None, force: bool = Fal
         if not live.get("sections"):
             log.info("open mail: no recorded openclose yet - skipping chat %s", chat_id)
             return False
-        ok, error = send_email(recipient, f"Royal Stock opening: {label}", build_open_lines(live, label))
+        ok, error = send_email(recipient, f"Royal Stock opening: {label}", build_open_lines(live, label),
+                                 kind="auto-open", chat_id=chat_id)
         if not ok:
             log.info("open mail failed for chat %s: %s", chat_id, error)
             return False
@@ -403,7 +404,8 @@ def maybe_send_eod_email(chat_id, report: dict | None = None, force: bool = Fals
             log.debug("eod quotes skipped: %s", error)
             quotes = []
         lines.extend(build_eod_store_lines(chat_id, quotes))
-        ok, error = send_email(recipient, f"Royal Stock close + EOD: {label}", lines)
+        ok, error = send_email(recipient, f"Royal Stock close + EOD: {label}", lines,
+                                 kind="auto-close", chat_id=chat_id)
         if not ok:
             log.info("eod mail failed for chat %s: %s", chat_id, error)
             return False

@@ -41,6 +41,7 @@ EMAIL_USAGE = (
     "<b>/emailopen</b> - send this session's opening screener now\n"
     "<b>/emailclose</b> - send the closing screener + EOD stores now\n"
     "<b>/emailboth</b> - open + close + EOD stores in ONE mail, one command\n"
+    "<b>/emailstatus</b> - last mail sends: ✅ success or ❌ failed + reason\n"
     "Gmail users: it needs an App Password (not the login password) - "
     "see /emailhelp. Easiest: admin sets RESEND_API_KEY once."
 )
@@ -93,6 +94,7 @@ def handle_setemail(chat_id, parts) -> None:
             "• <code>/email friend@gmail.com | Subject | your message</code> - any custom note<br>"
             "• <code>/dailyemail on</code> - automatic daily digest",
         ],
+        kind="test", chat_id=chat_id,
     )
     if ok:
         # info may carry "resend id: ..." - point the user at the resend.com
@@ -169,7 +171,7 @@ def handle_emailreport(chat_id, parts) -> None:
         lines = [f"<i>{escape(custom_subject)}</i>", ""] + lines
     # Recipient is the user's stored mail id (or their explicit override) -
     # never the symbol (a past bug mailed "RELIANCE" instead of the user).
-    ok, info = send_email(recipient, subject, lines)
+    ok, info = send_email(recipient, subject, lines, kind="report", chat_id=chat_id)
     if ok:
         extra = f"<br><i>{escape(info)}</i>" if info and "resend id" in info.lower() else ""
         reply_messages(chat_id, split_messages(
@@ -217,7 +219,7 @@ def handle_emailsend(chat_id, parts, raw_text: str = "") -> None:
         reply(chat_id, "Message too long (max 20000 characters).")
         return
     reply(chat_id, f"📧 Sending your note to <b>{escape(', '.join(recipients))}</b>...")
-    ok, info = send_custom(", ".join(recipients), subject, message)
+    ok, info = send_custom(", ".join(recipients), subject, message, kind="custom", chat_id=chat_id)
     if ok:
         extra = f"<br><i>{escape(info)}</i>" if info and "resend id" in info.lower() else ""
         reply(chat_id, f"📧 Sent to <b>{escape(', '.join(recipients))}</b> ✅{extra}")
@@ -315,9 +317,11 @@ def handle_emailopen(chat_id, parts) -> None:
         if not snapshot:
             reply(chat_id, "No recorded session yet - run /openreport or /snap first, then retry.")
             return
-        ok, info = send_email(recipient, f"Royal Stock opening: {label}", build_daily_lines(snapshot))
+        ok, info = send_email(recipient, f"Royal Stock opening: {label}", build_daily_lines(snapshot),
+                                kind="open", chat_id=chat_id)
     else:
-        ok, info = send_email(recipient, f"Royal Stock opening: {label}", build_open_lines(report, label))
+        ok, info = send_email(recipient, f"Royal Stock opening: {label}", build_open_lines(report, label),
+                                kind="open", chat_id=chat_id)
     reply(chat_id, f"🌅 Opening screener mailed ✅" if ok else f"📧 Mail failed: {escape(info)}")
 
 
@@ -354,7 +358,7 @@ def handle_emailclose(chat_id, parts) -> None:
     except Exception:
         quotes = []
     lines.extend(build_eod_store_lines(chat_id, quotes))
-    ok, info = send_email(recipient, f"Royal Stock close + EOD: {label}", lines)
+    ok, info = send_email(recipient, f"Royal Stock close + EOD: {label}", lines, kind="close", chat_id=chat_id)
     reply(chat_id, f"🌇 Close + EOD mailed ✅" if ok else f"📧 Mail failed: {escape(info)}")
 
 
@@ -386,5 +390,34 @@ def handle_emailboth(chat_id, parts) -> None:
     ok, info = send_email(
         recipient, f"Royal Stock open + close + EOD: {label}",
         build_combined_lines(chat_id, report, label, quotes),
+        kind="both", chat_id=chat_id,
     )
     reply(chat_id, f"🌅🌇 Open + close + EOD mailed ✅" if ok else f"📧 Mail failed: {escape(info)}")
+
+
+def handle_emailstatus(chat_id, parts) -> None:
+    """Show the last mail sends: success or failed + reason."""
+    from .. import config as _config
+
+    try:
+        entries = storage.load_mail_log(20) or []
+    except Exception:
+        entries = []
+    mine = [entry for entry in entries
+            if str(entry.get("chat")) in (str(chat_id), "-")]
+    if str(chat_id) == str(_config.TELEGRAM_CHAT_ID or "local"):
+        mine = entries  # owner sees every chat's sends
+    if not mine:
+        reply(chat_id, "No mails sent yet - try <code>/emailboth</code> first.")
+        return
+    lines = ["<b>📧 Last mail sends</b>"]
+    for entry in mine[:6]:
+        mark = "✅" if entry.get("ok") else "❌"
+        at = escape(str(entry.get("at") or "?")[:16].replace("T", " "))
+        kind = escape(str(entry.get("kind") or "?"))
+        subject = escape(str(entry.get("subject") or "?"))
+        to = escape(str(entry.get("to") or "?"))
+        lines.append(f"{mark} <code>{at}</code> [{kind}] <b>{subject}</b> → {to}")
+        if not entry.get("ok") and entry.get("info"):
+            lines.append(f"   └ failed: <i>{escape(str(entry['info'])[:160])}</i>")
+    reply(chat_id, "<br>".join(lines))

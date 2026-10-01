@@ -317,6 +317,10 @@ def handle_command(chat_id, text):
         email_commands.handle_emailboth(chat_id, parts)
         return
 
+    if command in ("/emailstatus", "/maillog", "/maillogs", "/mailstatus"):
+        email_commands.handle_emailstatus(chat_id, parts)
+        return
+
     if len(parts) < 2:
         if command in ("/add", "/addstock", "/remove", "/removestock"):
             reply(chat_id, "Usage: <code>/addstock SYMBOL [NSE|BSE]</code> or <code>/removestock SYMBOL [NSE|BSE]</code>")

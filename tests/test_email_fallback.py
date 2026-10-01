@@ -1,6 +1,8 @@
 """Regression tests: Resend failure must fall back to SMTP when available."""
+import tempfile
 import unittest
 import unittest.mock as mock
+from pathlib import Path
 from unittest.mock import patch
 
 from corporate_actions import config
@@ -8,6 +10,13 @@ from corporate_actions.email import client, resend as resend_mod
 
 
 class ResendFallbackTests(unittest.TestCase):
+    def setUp(self):
+        # Keep sends hermetic: the mail log must never touch data/mail_log.json.
+        tmp = Path(tempfile.mkdtemp()) / "mail_log.json"
+        self._log_patch = patch.object(config, "MAIL_LOG_FILE", tmp)
+        self._log_patch.start()
+        self.addCleanup(self._log_patch.stop)
+
     def test_resend_failure_falls_back_to_smtp_and_succeeds(self):
         server = mock.MagicMock()
         server.__enter__.return_value = server

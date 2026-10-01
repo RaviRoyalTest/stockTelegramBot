@@ -253,12 +253,25 @@ def _smtp_attempt(recipient: str, subject: str,
     return False, "; ".join(failures) + "." + hint
 
 
-def send_custom(to: str, subject: str, body_text: str) -> tuple[bool, str]:
+def _log_send(chat_id, kind: str, to: str, subject: str,
+              ok: bool, info: str) -> None:
+    """Append one entry to the mail send log (best-effort, never raises)."""
+    try:
+        from .. import storage
+
+        storage.record_mail(chat_id, kind, to, with_prefix(subject), ok, info)
+    except Exception as error:
+        log.debug("_log_send: %s", error)
+
+
+def send_custom(to: str, subject: str, body_text: str,
+               *, kind: str = "custom", chat_id=None) -> tuple[bool, str]:
     """Send a free-form customizable mail (plain text -> styled HTML).
 
     `to` may hold several comma/space separated addresses (max 5); every
     recipient gets the same mail. Subject is optional (a default is used)
     and EMAIL_SUBJECT_PREFIX is honoured. Returns (ok, error_message).
+    The send is recorded in the mail log under `kind` for /emailstatus.
     """
     recipients, invalid = parse_recipients(to)
     if invalid:
@@ -271,11 +284,13 @@ def send_custom(to: str, subject: str, body_text: str) -> tuple[bool, str]:
     if len(body) > 20000:
         return False, "message too long (max 20000 characters)"
     lines = text_to_html_lines(body)
-    ok, error = send_email(", ".join(recipients), subject or "Royal Stock note", lines)
-    return ok, error
+    # The inner send_email call does the mail-log recording (no double log).
+    return send_email(", ".join(recipients), subject or "Royal Stock note",
+                     lines, kind=kind, chat_id=chat_id)
 
 
-def send_email(to: str, subject: str, html_lines: list[str]) -> tuple[bool, str]:
+def send_email(to: str, subject: str, html_lines: list[str],
+               *, kind: str = "manual", chat_id=None) -> tuple[bool, str]:
     """Send report lines to one or more mail ids. Returns (ok, error_message).
 
     `to` accepts a single address or several comma/space separated ones
@@ -283,6 +298,7 @@ def send_email(to: str, subject: str, html_lines: list[str]) -> tuple[bool, str]
     (works on hosts where SMTP ports are blocked), with the SMTP chain as a
     fallback when Resend fails AND full SMTP credentials exist. Without a
     Resend key the SMTP chain runs directly; its errors name host:port.
+    Every send is recorded in the mail log (see /emailstatus).
     """
     recipients, invalid = parse_recipients(to)
     if invalid:
@@ -290,10 +306,12 @@ def send_email(to: str, subject: str, html_lines: list[str]) -> tuple[bool, str]
     if not recipients:
         return False, "invalid recipient address"
     if not is_configured():
-        return False, (
+        error = (
             "email is not configured on the server "
             "(set RESEND_API_KEY, or SMTP_HOST/SMTP_USER/SMTP_PASS)"
         )
+        _log_send(chat_id, kind, to, subject, False, error)
+        return False, error
     from . import resend as resend_mod
 
     subject = with_prefix(subject)
@@ -305,6 +323,10 @@ def send_email(to: str, subject: str, html_lines: list[str]) -> tuple[bool, str]
     sent: list[str] = []
     sent_info: list[str] = []
     failures: list[str] = []
+    def _finish(ok: bool, info: str) -> tuple[bool, str]:
+        _log_send(chat_id, kind, ", ".join(recipients), subject, ok, info)
+        return ok, info
+
     for recipient in recipients:
         if resend_mod.is_configured():
             ok, info = resend_mod.send_via_resend(
@@ -315,7 +337,7 @@ def send_email(to: str, subject: str, html_lines: list[str]) -> tuple[bool, str]
             if ok:
                 # info carries "resend id: ..." on success (delivery tracking).
                 if single:
-                    return True, info
+                    return _finish(True, info)
                 sent.append(recipient)
                 if info:
                     sent_info.append(f"{recipient} ({info})")
@@ -334,7 +356,7 @@ def send_email(to: str, subject: str, html_lines: list[str]) -> tuple[bool, str]
             smtp_ok, smtp_error = _smtp_attempt(recipient, subject, html_lines)
             if smtp_ok:
                 if single:
-                    return True, ""
+                    return _finish(True, "")
                 sent.append(recipient)
             else:
                 failures.append(f"{recipient}: {info}; smtp fallback also failed ({smtp_error})")
@@ -342,17 +364,17 @@ def send_email(to: str, subject: str, html_lines: list[str]) -> tuple[bool, str]
         smtp_ok, smtp_error = _smtp_attempt(recipient, subject, html_lines)
         if smtp_ok:
             if single:
-                return True, ""
+                return _finish(True, "")
             sent.append(recipient)
         else:
             failures.append(f"{recipient}: {smtp_error}")
     if single:
-        return False, "; ".join(failures)
+        return _finish(False, "; ".join(failures))
     if sent and not failures:
         detail = f"sent to {', '.join(sent)}"
         if sent_info:
             detail += f" ({'; '.join(sent_info)})"
-        return True, detail
+        return _finish(True, detail)
     if sent:
-        return True, f"sent to {', '.join(sent)}; failed: {'; '.join(failures)}"
-    return False, "; ".join(failures)
+        return _finish(True, f"sent to {', '.join(sent)}; failed: {'; '.join(failures)}")
+    return _finish(False, "; ".join(failures))

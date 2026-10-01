@@ -16,6 +16,7 @@ from .schedule import (
     schedule_next_due_ts,
     set_schedule_next_due,
 )
+from .maillog import load_mail_log, record_mail
 from .migrate import migrate_legacy_state_files
 from .openclose import (
     list_openclose_dates,
@@ -74,6 +75,8 @@ from .watchlist import (
 )
 
 __all__ = [
+    "load_mail_log",
+    "record_mail",
     "migrate_legacy_state_files",
     "append_snapshot",
     "capture_command_output",

@@ -1,5 +1,7 @@
 import smtplib
+import tempfile
 import unittest
+from pathlib import Path
 from unittest.mock import MagicMock, patch
 
 from corporate_actions import config
@@ -15,6 +17,13 @@ def _env(host="smtp.example.com", port=587):
 
 
 class EmailClientTests(unittest.TestCase):
+    def setUp(self):
+        # Keep sends hermetic: the mail log must never touch data/mail_log.json.
+        tmp = Path(tempfile.mkdtemp()) / "mail_log.json"
+        self._log_patch = patch.object(config, "MAIL_LOG_FILE", tmp)
+        self._log_patch.start()
+        self.addCleanup(self._log_patch.stop)
+
     def test_invalid_recipient_rejected_without_network(self):
         ok, err = client.send_email("not-an-address", "s", ["x"])
         self.assertFalse(ok)
