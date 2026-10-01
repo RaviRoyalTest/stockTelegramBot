@@ -8,6 +8,7 @@
     },
     "recent_commands": [
       "/dailyemail both",
+      "/emailfull",
       "/dailyemail on",
       "/openreport in",
       "/emailreport",
@@ -15,8 +16,7 @@
       "/corpactionsformylist",
       "/openreport us",
       "/schedule",
-      "/openreport auto",
-      "/openreport"
+      "/openreport auto"
     ],
     "movers_fund": "button",
     "email": "raviroyalmechai@gmail.com",
