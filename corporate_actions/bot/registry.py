@@ -717,12 +717,38 @@ def _run_openreport(chat_id) -> None:
     handle_opening_report(chat_id, ["/openreport"])
 
 
+def _run_emailopen(chat_id) -> None:
+    """Bare /emailopen: usage rides along, then the mail is actually sent."""
+    from . import email_commands  # lazy: keeps registry imports light
+
+    email_commands.handle_emailopen(chat_id, ["/emailopen"])
+
+
+def _run_emailclose(chat_id) -> None:
+    """Bare /emailclose: usage rides along, then the mail is actually sent."""
+    from . import email_commands  # lazy: keeps registry imports light
+
+    email_commands.handle_emailclose(chat_id, ["/emailclose"])
+
+
+def _run_emailboth(chat_id) -> None:
+    """Bare /emailboth: usage rides along, then the ONE combined mail is sent."""
+    from . import email_commands  # lazy: keeps registry imports light
+
+    email_commands.handle_emailboth(chat_id, ["/emailboth"])
+
+
 # Bare commands listed in COMMAND_USAGE whose default action should STILL run
 # after the usage is shown - the usage text promises "/openreport -> both
 # markets now", so the bare form must deliver it (usage rides along first so
-# the subcommands stay discoverable).
+# the subcommands stay discoverable). The three mail commands work the same
+# way: a bare /emailopen, /emailclose or /emailboth SENDS the mail instead of
+# stopping at the summary, so the single command never conflicts with its help.
 RUN_AFTER_USAGE = {
     "/openreport": _run_openreport,
+    "/emailopen": _run_emailopen,
+    "/emailclose": _run_emailclose,
+    "/emailboth": _run_emailboth,
 }
 
 

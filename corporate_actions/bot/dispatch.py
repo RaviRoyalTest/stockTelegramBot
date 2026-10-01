@@ -39,7 +39,7 @@ from . import (
     watchlist_commands,
 )
 from .help_texts import ALL_COMMANDS_TEXT, CA_HELP
-from .registry import ALIAS_TO_MAIN, _bare_command_usage, send_help
+from .registry import ALIAS_TO_MAIN, RUN_AFTER_USAGE, _bare_command_usage, send_help
 from .reply import reply, reply_messages
 
 log = logging.getLogger(__name__)
@@ -101,6 +101,11 @@ def handle_command(chat_id, text):
     if len(parts) == 1:
         canonical = ALIAS_TO_MAIN.get(command, command)
         if canonical != command and _bare_command_usage(chat_id, canonical):
+            # A bare alias of a RUN_AFTER_USAGE command (e.g. /bothmail for
+            # /emailboth) must SEND like its main name does, not stop at help.
+            runnable = RUN_AFTER_USAGE.get(canonical)
+            if runnable:
+                runnable(chat_id)
             return
         if _bare_command_usage(chat_id, command):
             return
