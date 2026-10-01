@@ -7,9 +7,9 @@
       "universe": "nifty500"
     },
     "recent_commands": [
+      "/openreport us",
       "/emailboth",
       "/emailstatus",
-      "/openreport us",
       "/dailyemail both",
       "/emailfull",
       "/dailyemail on",
