@@ -156,6 +156,12 @@ SMTP_FROM = os.getenv("SMTP_FROM", "").strip() or SMTP_USER
 # API key from resend.com - no app password). Takes precedence over SMTP.
 RESEND_API_KEY = os.getenv("RESEND_API_KEY", "").strip()
 RESEND_FROM = os.getenv("RESEND_FROM", "").strip()
+# Optional subject prefix prepended to every outgoing mail
+# (e.g. "My Stocks" -> "[My Stocks] Royal Stock report: RELIANCE").
+# Empty = no prefix.
+EMAIL_SUBJECT_PREFIX = os.getenv("EMAIL_SUBJECT_PREFIX", "").strip()
+# Friendly sender display name used when building the From header.
+EMAIL_FROM_NAME = os.getenv("EMAIL_FROM_NAME", "Royal Stock").strip() or "Royal Stock"
 
 
 def redact(text) -> str:

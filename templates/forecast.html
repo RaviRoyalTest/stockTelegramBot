@@ -92,6 +92,9 @@
         return html || '<tr><td class="empty">No analyst data from free sources right now.</td></tr>';
       }
 
+      function skel(msg) {
+        return '<p class="muted"><span class="skeleton" style="display:block;width:100%"></span>' + (msg || '') + '</p>';
+      }
       async function load(symbol, market) {
         var report = document.getElementById('report');
         var placeholder = document.getElementById('placeholder');
@@ -100,6 +103,19 @@
         placeholder.hidden = true;
         report.hidden = false;
         go.disabled = true;
+        go.textContent = '⏳ Loading…';
+        // Section-wise loading: each card skeletonises independently so a
+        // slow peers/officers fetch never blanks the analyst view.
+        document.getElementById('rTitle').textContent = symbol;
+        document.getElementById('rPrice').textContent = '…';
+        document.getElementById('rChg').textContent = '';
+        document.getElementById('rBadges').innerHTML = '<span class="pill">Loading…</span>';
+        document.getElementById('rStats').hidden = false;
+        document.getElementById('rStats').innerHTML = '<div class="stat-chip"><span class="k">Consensus</span><span class="v">…</span></div>';
+        document.getElementById('rAnalyst').innerHTML = '<tr><td class="empty">Loading analyst view…</td></tr>';
+        document.getElementById('rTrend').innerHTML = skel('Loading rating trend…');
+        document.getElementById('rPeers').innerHTML = '<tr><td colspan="4" class="empty">Loading peers…</td></tr>';
+        document.getElementById('rMgmt').innerHTML = skel('Loading management…');
         try {
           var res = await fetch('/api/fundamentals?symbol=' + encodeURIComponent(symbol) + '&market=' + encodeURIComponent(market));
           if (!res.ok) throw new Error('HTTP ' + res.status);
@@ -195,6 +211,7 @@
           report.hidden = true;
         } finally {
           go.disabled = false;
+          go.textContent = '🔭 Get forecast';
         }
       }
 

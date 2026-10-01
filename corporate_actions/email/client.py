@@ -6,6 +6,8 @@ Configuration (environment, never committed):
   SMTP_USER  sender address / login
   SMTP_PASS  password (Gmail: an App Password, not the login password)
   SMTP_FROM  display sender (defaults to SMTP_USER)
+  EMAIL_SUBJECT_PREFIX  optional "[Prefix] " prepended to every subject
+  EMAIL_FROM_NAME  friendly sender name (default "Royal Stock")
 
 Never raises for delivery problems - send_email returns (ok, error) so
 command handlers can reply the outcome in chat instead of crashing.
@@ -13,12 +15,106 @@ command handlers can reply the outcome in chat instead of crashing.
 from __future__ import annotations
 
 import logging
+import re
 import smtplib
 from email.message import EmailMessage
+from email.utils import formataddr, parseaddr
 
 from .. import config
 
 log = logging.getLogger(__name__)
+
+# Short Gmail App-Password guide shown in Telegram when mail is not working.
+# Kept here (not in the command module) so bot + web + logs share one text.
+GMAIL_SETUP_GUIDE = (
+    "Gmail setup (2 min, once):\n"
+    "1. Google Account > Security > turn ON 2-Step Verification.\n"
+    "2. Search 'App passwords' > create one for 'Mail' > copy the 16-letter code.\n"
+    "3. On the host set SMTP_HOST=smtp.gmail.com, SMTP_PORT=587, "
+    "SMTP_USER=you@gmail.com, SMTP_PASS=<16-letter code> (spaces are stripped automatically).\n"
+    "Tip: the login password will NOT work - it must be the App Password. "
+    "Easier alternative: set RESEND_API_KEY (resend.com, free) and skip SMTP entirely."
+)
+
+_EMAIL_RE = re.compile(r"^[^@\s]+@[^@\s]+\.[^@\s]+$")
+
+
+def provider_name() -> str:
+    """Human-readable active sender: 'resend' | 'smtp' | 'none'."""
+    from . import resend as resend_mod
+
+    if resend_mod.is_configured():
+        return "resend"
+    if config.SMTP_HOST.strip() and config.SMTP_USER.strip() and config.SMTP_PASS:
+        return "smtp"
+    return "none"
+
+
+def status() -> dict:
+    """Serializable sender status for /api/email/status + diagnostics."""
+    return {
+        "configured": is_configured(),
+        "provider": provider_name(),
+        "smtp_host": config.SMTP_HOST,
+        "smtp_port": config.SMTP_PORT,
+        "smtp_user_set": bool(config.SMTP_USER.strip()),
+        "resend_key_set": bool((config.RESEND_API_KEY or "").strip()),
+        "subject_prefix": config.EMAIL_SUBJECT_PREFIX,
+        "from_name": config.EMAIL_FROM_NAME,
+    }
+
+
+def parse_recipients(raw: str, limit: int = 5) -> tuple[list[str], list[str]]:
+    """Split a free-form recipient string into (valid, invalid) addresses.
+
+    Accepts comma/semicolon/whitespace separated mail ids, lower-cased and
+    de-duplicated. At most `limit` recipients are kept (spam guard).
+    """
+    seen: list[str] = []
+    invalid: list[str] = []
+    for token in re.split(r"[\s,;]+", (raw or "").strip()):
+        token = token.strip().lower()
+        if not token:
+            continue
+        if _EMAIL_RE.match(token):
+            if token not in seen:
+                seen.append(token)
+            if len(seen) >= limit:
+                break
+        else:
+            invalid.append(token)
+    return seen, invalid
+
+
+def with_prefix(subject: str) -> str:
+    """Prepend EMAIL_SUBJECT_PREFIX when set (customizable subjects)."""
+    prefix = (config.EMAIL_SUBJECT_PREFIX or "").strip()
+    subject = (subject or "").strip() or "Royal Stock report"
+    if prefix and not subject.startswith(f"[{prefix}]"):
+        return f"[{prefix}] {subject}"
+    return subject
+
+
+def _from_header() -> str:
+    """'Friendly Name <addr>' From header (falls back to bare address)."""
+    addr = config.SMTP_FROM or config.SMTP_USER
+    _, bare = parseaddr(addr)
+    bare = bare or addr
+    name = (config.EMAIL_FROM_NAME or "").strip()
+    if name and bare:
+        return formataddr((name, bare))
+    return bare
+
+
+def text_to_html_lines(text: str) -> list[str]:
+    """Turn plain custom text into safe HTML lines (blank line = paragraph gap)."""
+    import html as _html
+
+    lines: list[str] = []
+    for para in str(text or "").splitlines() or [""]:
+        para = para.strip()
+        lines.append("<br>" if not para else _html.escape(para))
+    return lines
 
 
 class EmailError(Exception):
@@ -75,9 +171,10 @@ def _deliver(host: str, port: int, user: str, password: str,
 def _smtp_attempt(recipient: str, subject: str,
                   html_lines: list[str]) -> tuple[bool, str]:
     """One full SMTP chain (with 465/587 port fallback). Never raises."""
+    subject = with_prefix(subject)
     message = EmailMessage()
     message["Subject"] = subject
-    message["From"] = config.SMTP_FROM or config.SMTP_USER
+    message["From"] = _from_header()
     message["To"] = recipient
     message.set_content(_plain_fallback(html_lines))
     message.add_alternative(_html_document(subject, html_lines), subtype="html")
@@ -116,16 +213,41 @@ def _smtp_attempt(recipient: str, subject: str,
     return False, "; ".join(failures) + "." + hint
 
 
-def send_email(to: str, subject: str, html_lines: list[str]) -> tuple[bool, str]:
-    """Send report lines to one mail id. Returns (ok, error_message).
+def send_custom(to: str, subject: str, body_text: str) -> tuple[bool, str]:
+    """Send a free-form customizable mail (plain text -> styled HTML).
 
-    Transport priority: Resend HTTPS API when RESEND_API_KEY is set (works
-    on hosts where SMTP ports are blocked), with the SMTP chain as a
+    `to` may hold several comma/space separated addresses (max 5); every
+    recipient gets the same mail. Subject is optional (a default is used)
+    and EMAIL_SUBJECT_PREFIX is honoured. Returns (ok, error_message).
+    """
+    recipients, invalid = parse_recipients(to)
+    if invalid:
+        return False, f"invalid address: {invalid[0]}"
+    if not recipients:
+        return False, "invalid recipient address"
+    body = (body_text or "").strip()
+    if not body:
+        return False, "message body is empty"
+    if len(body) > 20000:
+        return False, "message too long (max 20000 characters)"
+    lines = text_to_html_lines(body)
+    ok, error = send_email(", ".join(recipients), subject or "Royal Stock note", lines)
+    return ok, error
+
+
+def send_email(to: str, subject: str, html_lines: list[str]) -> tuple[bool, str]:
+    """Send report lines to one or more mail ids. Returns (ok, error_message).
+
+    `to` accepts a single address or several comma/space separated ones
+    (max 5). Transport priority: Resend HTTPS API when RESEND_API_KEY is set
+    (works on hosts where SMTP ports are blocked), with the SMTP chain as a
     fallback when Resend fails AND full SMTP credentials exist. Without a
     Resend key the SMTP chain runs directly; its errors name host:port.
     """
-    recipient = (to or "").strip()
-    if not recipient or "@" not in recipient:
+    recipients, invalid = parse_recipients(to)
+    if invalid:
+        return False, f"invalid recipient address: {invalid[0]}"
+    if not recipients:
         return False, "invalid recipient address"
     if not is_configured():
         return False, (
@@ -134,27 +256,63 @@ def send_email(to: str, subject: str, html_lines: list[str]) -> tuple[bool, str]
         )
     from . import resend as resend_mod
 
-    if resend_mod.is_configured():
-        ok, info = resend_mod.send_via_resend(
-            recipient, subject,
-            _html_document(subject, html_lines),
-            _plain_fallback(html_lines),
-        )
-        if ok:
-            # info carries "resend id: ..." on success (delivery tracking).
-            return True, info
-        smtp_usable = bool(
-            config.SMTP_HOST.strip()
-            and config.SMTP_USER.strip()
-            and config.SMTP_PASS
-        )
-        if not smtp_usable:
-            return False, info
-        log.warning(
-            "resend failed (%s) - falling back to SMTP %s", info, config.SMTP_HOST
-        )
+    subject = with_prefix(subject)
+    # One message per recipient so a typo in one address never blocks the rest.
+    # Single-recipient keeps the legacy contract: (True, "") on SMTP success
+    # and (True, "resend id: ...") on Resend success, so existing callers and
+    # tests are unaffected; multi-recipient returns a combined summary.
+    single = len(recipients) == 1
+    sent: list[str] = []
+    sent_info: list[str] = []
+    failures: list[str] = []
+    for recipient in recipients:
+        if resend_mod.is_configured():
+            ok, info = resend_mod.send_via_resend(
+                recipient, subject,
+                _html_document(subject, html_lines),
+                _plain_fallback(html_lines),
+            )
+            if ok:
+                # info carries "resend id: ..." on success (delivery tracking).
+                if single:
+                    return True, info
+                sent.append(recipient)
+                if info:
+                    sent_info.append(f"{recipient} ({info})")
+                continue
+            smtp_usable = bool(
+                config.SMTP_HOST.strip()
+                and config.SMTP_USER.strip()
+                and config.SMTP_PASS
+            )
+            if not smtp_usable:
+                failures.append(f"{recipient}: {info}")
+                continue
+            log.warning(
+                "resend failed (%s) - falling back to SMTP %s", info, config.SMTP_HOST
+            )
+            smtp_ok, smtp_error = _smtp_attempt(recipient, subject, html_lines)
+            if smtp_ok:
+                if single:
+                    return True, ""
+                sent.append(recipient)
+            else:
+                failures.append(f"{recipient}: {info}; smtp fallback also failed ({smtp_error})")
+            continue
         smtp_ok, smtp_error = _smtp_attempt(recipient, subject, html_lines)
         if smtp_ok:
-            return True, ""
-        return False, f"{info}; smtp fallback also failed ({smtp_error})"
-    return _smtp_attempt(recipient, subject, html_lines)
+            if single:
+                return True, ""
+            sent.append(recipient)
+        else:
+            failures.append(f"{recipient}: {smtp_error}")
+    if single:
+        return False, "; ".join(failures)
+    if sent and not failures:
+        detail = f"sent to {', '.join(sent)}"
+        if sent_info:
+            detail += f" ({'; '.join(sent_info)})"
+        return True, detail
+    if sent:
+        return True, f"sent to {', '.join(sent)}; failed: {'; '.join(failures)}"
+    return False, "; ".join(failures)

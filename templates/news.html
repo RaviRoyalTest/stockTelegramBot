@@ -53,13 +53,37 @@
         return { symbol: symbol, news: data.news || [] };
       }
 
+      function cardSkeleton(symbol, n) {
+        var rows = '';
+        for (var i = 0; i < (n || 3); i++) {
+          rows += '<li><span class="skeleton" style="display:block;width:' + (94 - i * 11) + '%"></span></li>';
+        }
+        return '<section class="card news-card" aria-busy="true"><h2 style="margin-bottom:0;">' + esc(symbol || '…') + '</h2><ul>' + rows + '</ul></section>';
+      }
       async function load() {
         var container = document.getElementById('results');
         var go = document.getElementById('go');
         var single = document.getElementById('symbol').value.trim().toUpperCase().replace(/\.NS$|\.BO$/, '');
         var limit = document.getElementById('limit').value || '3';
         go.disabled = true;
-        container.innerHTML = '<div class="card"><p class="muted"><span class="skeleton" style="display:block;width:100%"></span></p></div>';
+        go.textContent = '⏳ Loading…';
+        // Section-wise loading: one skeleton card per stock so a slow feed
+        // never blanks the whole grid.
+        (function paintInitial() {
+          if (single) {
+            container.innerHTML = '<div class="section-grid">' + cardSkeleton(single, Number(limit) || 3) + '</div>';
+            return;
+          }
+          fetch('/api/watchlist').then(function (wl) {
+            return wl.ok ? wl.json() : [];
+          }).then(function (items) {
+            var syms = (items || []).map(function (it) { return String(it.symbol || '').toUpperCase(); }).filter(Boolean).slice(0, 10);
+            if (!syms.length) syms = ['…'];
+            container.innerHTML = '<div class="section-grid">' + syms.map(function (s) { return cardSkeleton(s, Number(limit) || 3); }).join('') + '</div>';
+          }).catch(function () {
+            container.innerHTML = '<div class="card"><p class="muted"><span class="skeleton" style="display:block;width:100%"></span></p></div>';
+          });
+        })();
         try {
           var symbols = [];
           if (single) {
@@ -88,6 +112,7 @@
           RS.toast('News failed: ' + err.message, 'err');
         } finally {
           go.disabled = false;
+          go.textContent = '📰 Load news';
         }
       }
 

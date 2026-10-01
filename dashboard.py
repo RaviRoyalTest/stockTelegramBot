@@ -1992,6 +1992,136 @@ async def api_admin_user_email(payload: dict):
     return JSONResponse({"ok": True, "user": state})
 
 
+@app.get("/email", response_class=HTMLResponse)
+async def page_email(request: Request):
+    """Custom mail composer page (web twin of /email + /emailreport)."""
+    try:
+        return templates.TemplateResponse(request, "email.html")
+    except Exception as exc:
+        log.error("Template render failed: %s", exc)
+        return HTMLResponse(_fallback_index_html())
+
+
+@app.get("/api/email/status")
+async def api_email_status():
+    """Which sender is active (resend/smtp/none) - no secrets are exposed."""
+    try:
+        from corporate_actions.email import client as email_client
+
+        return JSONResponse(await asyncio.to_thread(email_client.status))
+    except Exception as exc:
+        raise HTTPException(status_code=500, detail=str(exc))
+
+
+@app.post("/api/email/test")
+async def api_email_test(payload: dict):
+    """Send the styled test mail to one address (customizable destination)."""
+    from corporate_actions.email import client as email_client
+
+    to = str(payload.get("to") or payload.get("email") or "").strip()
+    if not to:
+        raise HTTPException(status_code=400, detail="to is required")
+    try:
+        ok, info = await asyncio.to_thread(
+            email_client.send_email,
+            to,
+            "Royal Stock: test mail ✅",
+            ["✅ <b>Test mail OK</b> - reports will arrive here."],
+        )
+    except Exception as exc:
+        raise HTTPException(status_code=500, detail=str(exc))
+    if not ok:
+        raise HTTPException(status_code=502, detail=info)
+    return JSONResponse({"ok": True, "info": info})
+
+
+@app.post("/api/email/send")
+async def api_email_send(payload: dict):
+    """Send any custom mail from the web composer.
+
+    Body: {to, subject?, message} - `to` accepts comma separated mail ids
+    (max 5), subject is optional, message is plain text (max 20000 chars).
+    """
+    from corporate_actions.email import client as email_client
+
+    to = str(payload.get("to") or "").strip()
+    subject = str(payload.get("subject") or "Royal Stock note").strip()
+    message = str(payload.get("message") or payload.get("body") or "")
+    if not to:
+        raise HTTPException(status_code=400, detail="to is required")
+    if not message.strip():
+        raise HTTPException(status_code=400, detail="message is required")
+    try:
+        ok, info = await asyncio.to_thread(email_client.send_custom, to, subject, message)
+    except Exception as exc:
+        raise HTTPException(status_code=500, detail=str(exc))
+    if not ok:
+        raise HTTPException(status_code=502, detail=info)
+    return JSONResponse({"ok": True, "info": info})
+
+
+@app.post("/api/email/report")
+async def api_email_report(payload: dict):
+    """Mail the deep fundamental report for one symbol (web /emailreport).
+
+    Body: {to?, symbol, subject?} - `to` defaults to the owner's saved
+    /setemail address; subject defaults to "Royal Stock report: SYMBOL".
+    """
+    from corporate_actions.email import client as email_client
+
+    symbol = str(payload.get("symbol") or "").strip().upper().removesuffix(".NS").removesuffix(".BO")
+    to = str(payload.get("to") or "").strip()
+    subject = str(payload.get("subject") or "").strip()
+    if not symbol:
+        raise HTTPException(status_code=400, detail="symbol is required")
+    if not to:
+        try:
+            saved = await asyncio.to_thread(storage.get_user_settings, config_owner_chat())
+            to = str((saved or {}).get("email") or "").strip()
+        except Exception:
+            to = ""
+    if not to:
+        raise HTTPException(status_code=400, detail="no destination: pass to or save /setemail first")
+    try:
+        from corporate_actions.analysis_service import build_analysis  # noqa: F401 (keeps parity import cheap)
+
+        fund = await asyncio.to_thread(sources.get_fundamentals, symbol, True) or {}
+        quote = await asyncio.to_thread(sources.get_best_quote, "NSE", symbol) or {}
+        if not quote:
+            quote = await asyncio.to_thread(
+                lambda: sources.get_quote("NSE", symbol) or sources.get_quote("BSE", symbol) or {}
+            ) or {}
+        if quote.get("price") is None and not fund:
+            raise HTTPException(status_code=404, detail=f'"{symbol}" is not a valid stock symbol')
+        from corporate_actions.formatting.stock_india import _fund_report_lines
+
+        lines = _fund_report_lines(symbol, quote, fund, include_tip=False)
+        if subject:
+            import html as _html
+
+            lines = [f"<i>{_html.escape(subject)}</i>", ""] + lines
+        ok, info = await asyncio.to_thread(
+            email_client.send_email, to, subject or f"Royal Stock report: {symbol}", lines
+        )
+    except HTTPException:
+        raise
+    except Exception as exc:
+        raise HTTPException(status_code=500, detail=str(exc))
+    if not ok:
+        raise HTTPException(status_code=502, detail=info)
+    return JSONResponse({"ok": True, "info": info, "to": to})
+
+
+def config_owner_chat():
+    """Owner chat id for the default mail destination (never raises)."""
+    try:
+        from corporate_actions import config as _config
+
+        return str(_config.TELEGRAM_CHAT_ID or "local")
+    except Exception:
+        return "local"
+
+
 if __name__ == "__main__":
     port = int(os.getenv("PORT", "8000"))
     uvicorn.run(app, host="0.0.0.0", port=port, reload=False)

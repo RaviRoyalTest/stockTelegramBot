@@ -1,0 +1,147 @@
+{% extends "base.html" %}
+{% block title %}Email · Royal Stock{% endblock %}
+{% block content %}
+  <div class="page-header">
+    <h1>Email reports</h1>
+    <p class="sub">Send any custom mail or the deep stock report — the web twin of the bot's /email and /emailreport. Gmail works with an App Password; Resend works with one API key.</p>
+  </div>
+
+  <p class="muted" id="emailStatus" aria-live="polite">Checking mail sender…</p>
+
+  <div class="section-grid">
+    <section class="card" aria-labelledby="hCustom">
+      <h2 id="hCustom">✉️ Custom mail</h2>
+      <div class="field">
+        <label for="mailTo">To <span class="muted">(comma separated, max 5)</span></label>
+        <input id="mailTo" placeholder="friend@gmail.com, you@gmail.com" autocomplete="email" />
+      </div>
+      <div class="field">
+        <label for="mailSubject">Subject <span class="muted">(optional)</span></label>
+        <input id="mailSubject" placeholder="My watchlist view" />
+      </div>
+      <div class="field">
+        <label for="mailBody">Message</label>
+        <textarea id="mailBody" rows="6" placeholder="RELIANCE looks strong today…"></textarea>
+      </div>
+      <div style="display:flex; gap:8px; flex-wrap:wrap;">
+        <button class="btn btn-primary" id="sendCustom">📧 Send custom mail</button>
+        <button class="btn" id="sendTest">✅ Send test mail to me</button>
+      </div>
+      <p class="muted" id="customResult" aria-live="polite" style="margin-bottom:0;"></p>
+    </section>
+
+    <section class="card" aria-labelledby="hReport">
+      <h2 id="hReport">💹 Stock report by mail</h2>
+      <div class="field">
+        <label for="repSymbol">Symbol</label>
+        <input id="repSymbol" placeholder="RELIANCE" style="text-transform:uppercase;" list="symbolList" autocomplete="off" />
+        <datalist id="symbolList"></datalist>
+      </div>
+      <div class="field">
+        <label for="repTo">To <span class="muted">(blank = saved /setemail address)</span></label>
+        <input id="repTo" placeholder="you@gmail.com" autocomplete="email" />
+      </div>
+      <div class="field">
+        <label for="repSubject">Custom subject <span class="muted">(optional)</span></label>
+        <input id="repSubject" placeholder="My take on RELIANCE" />
+      </div>
+      <button class="btn btn-primary" id="sendReport">📧 Mail the deep report</button>
+      <p class="muted" id="reportResult" aria-live="polite" style="margin-bottom:0;"></p>
+    </section>
+  </div>
+
+  <section class="card section" aria-labelledby="hSetup">
+    <h2 id="hSetup">🔑 Gmail setup (once, 2 min)</h2>
+    <ol style="margin:0; padding-left:20px;">
+      <li>Google Account → Security → turn ON <strong>2-Step Verification</strong>.</li>
+      <li>Search <strong>App passwords</strong> → create one for <strong>Mail</strong> → copy the 16-letter code.</li>
+      <li>On the host set <code>SMTP_HOST=smtp.gmail.com</code>, <code>SMTP_PORT=587</code>, <code>SMTP_USER=you@gmail.com</code>, <code>SMTP_PASS=&lt;16-letter code&gt;</code>.</li>
+    </ol>
+    <p class="muted" style="margin-bottom:0;">The login password will NOT work — it must be the App Password (spaces are stripped automatically). Easier alternative: set <code>RESEND_API_KEY</code> from resend.com and skip SMTP entirely. Optional polish: <code>EMAIL_SUBJECT_PREFIX</code> + <code>EMAIL_FROM_NAME</code>.</p>
+  </section>
+{% endblock %}
+
+{% block scripts %}
+  <script>
+    (function () {
+      'use strict';
+      function setBusy(btn, busy, label) {
+        if (!btn) return;
+        btn.disabled = !!busy;
+        if (label) btn.textContent = label;
+      }
+      async function postJSON(path, payload) {
+        var res = await fetch(path, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) });
+        var data = {};
+        try { data = await res.json(); } catch (e) {}
+        if (!res.ok) throw new Error((data && data.detail) || ('HTTP ' + res.status));
+        return data;
+      }
+      // Sender status first so a misconfigured host is obvious before typing.
+      fetch('/api/email/status').then(function (r) { return r.ok ? r.json() : null; }).then(function (s) {
+        var el = document.getElementById('emailStatus');
+        if (!s) { el.textContent = 'Mail sender status unavailable.'; return; }
+        el.innerHTML = s.configured
+          ? 'Sender: <strong>' + RS.escapeHtml(s.provider) + '</strong>' +
+            (s.smtp_host ? ' · ' + RS.escapeHtml(s.smtp_host) + ':' + RS.escapeHtml(String(s.smtp_port)) : '') +
+            (s.subject_prefix ? ' · subject prefix [' + RS.escapeHtml(s.subject_prefix) + ']' : '')
+          : '⚠️ No mail sender configured — set <code>RESEND_API_KEY</code> or <code>SMTP_HOST/SMTP_USER/SMTP_PASS</code> on the host, then retry.';
+      }).catch(function () {});
+
+      document.getElementById('sendCustom').addEventListener('click', async function () {
+        var btn = this, out = document.getElementById('customResult');
+        var to = document.getElementById('mailTo').value.trim();
+        var subject = document.getElementById('mailSubject').value.trim();
+        var message = document.getElementById('mailBody').value;
+        if (!to || !message.trim()) { RS.toast('To + message are required', 'err'); return; }
+        setBusy(btn, true, '⏳ Sending…');
+        out.innerHTML = '<span class="skeleton" style="display:block;width:100%"></span>';
+        try {
+          var data = await postJSON('/api/email/send', { to: to, subject: subject, message: message });
+          out.textContent = 'Sent ✅ ' + (data.info || '');
+          RS.toast('Mail sent', 'ok');
+        } catch (err) {
+          out.textContent = 'Failed: ' + err.message;
+          RS.toast('Mail failed: ' + err.message, 'err');
+        } finally { setBusy(btn, false, '📧 Send custom mail'); }
+      });
+
+      document.getElementById('sendTest').addEventListener('click', async function () {
+        var btn = this, out = document.getElementById('customResult');
+        var to = document.getElementById('mailTo').value.trim();
+        if (!to) { RS.toast('Enter your mail id first', 'err'); return; }
+        setBusy(btn, true, '⏳ Sending…');
+        try {
+          var data = await postJSON('/api/email/test', { to: to });
+          out.textContent = 'Test mail sent ✅ ' + (data.info || '');
+          RS.toast('Test mail sent', 'ok');
+        } catch (err) {
+          out.textContent = 'Failed: ' + err.message;
+          RS.toast('Test failed: ' + err.message, 'err');
+        } finally { setBusy(btn, false, '✅ Send test mail to me'); }
+      });
+
+      document.getElementById('sendReport').addEventListener('click', async function () {
+        var btn = this, out = document.getElementById('reportResult');
+        var symbol = document.getElementById('repSymbol').value.trim().toUpperCase().replace(/\.NS$|\.BO$/, '');
+        if (!symbol) { RS.toast('Enter a symbol first', 'err'); return; }
+        setBusy(btn, true, '⏳ Mailing…');
+        out.innerHTML = '<span class="skeleton" style="display:block;width:100%"></span>';
+        try {
+          var data = await postJSON('/api/email/report', {
+            symbol: symbol,
+            to: document.getElementById('repTo').value.trim(),
+            subject: document.getElementById('repSubject').value.trim()
+          });
+          out.textContent = 'Mailed ' + symbol + ' to ' + (data.to || '') + ' ✅';
+          RS.toast('Report mailed', 'ok');
+        } catch (err) {
+          out.textContent = 'Failed: ' + err.message;
+          RS.toast('Report mail failed: ' + err.message, 'err');
+        } finally { setBusy(btn, false, '📧 Mail the deep report'); }
+      });
+
+      RS.attachSymbolAutocomplete('repSymbol', 'symbolList');
+    })();
+  </script>
+{% endblock %}

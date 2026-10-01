@@ -63,6 +63,14 @@
         return { pass: pass, fail: fail, manual: manual };
       }
 
+      function skeletonRows(n) {
+        var html = '';
+        for (var i = 0; i < (n || 6); i++) {
+          html += '<p style="margin:8px 0;"><span class="skeleton" style="display:block;width:' + (92 - i * 7) + '%"></span></p>';
+        }
+        return html;
+      }
+
       function load(symbol, market) {
         var report = document.getElementById('report');
         var placeholder = document.getElementById('placeholder');
@@ -70,8 +78,18 @@
         var body = document.getElementById('rBody');
         var statsEl = document.getElementById('rStats');
         placeholder.hidden = true;
+        report.hidden = false;
         go.disabled = true;
-        go.textContent = 'Scoring…';
+        go.textContent = '⏳ Scoring…';
+        // Section-wise loading: stats strip + scorecard body skeletonise
+        // independently so the layout never flashes empty.
+        statsEl.hidden = false;
+        statsEl.innerHTML = '<div class="stat-chip"><span class="k">Score</span><span class="v">…</span></div>' +
+          '<div class="stat-chip"><span class="k">Pass</span><span class="v pos">…</span></div>' +
+          '<div class="stat-chip"><span class="k">Fail</span><span class="v neg">…</span></div>';
+        document.getElementById('rTitle').textContent = symbol;
+        body.setAttribute('aria-busy', 'true');
+        body.innerHTML = skeletonRows(8);
         fetch('/api/checklist?symbol=' + encodeURIComponent(symbol) + '&market=' + encodeURIComponent(market))
           .then(function (res) {
             return res.json().catch(function () { return {}; }).then(function (data) {
@@ -104,6 +122,7 @@
             report.hidden = false;
           })
           .finally(function () {
+            body.removeAttribute('aria-busy');
             go.disabled = false;
             go.textContent = '✅ Run checklist';
           });

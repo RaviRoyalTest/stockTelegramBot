@@ -178,6 +178,14 @@ ALIAS_TO_MAIN = {
     "/dnd": "/quiet",
     "/silence": "/quiet",
     "/pauseall": "/quiet",
+    "/emailsend": "/email",
+    "/sendmail": "/email",
+    "/mail": "/email",
+    "/emailfund": "/emailreport",
+    "/dailymail": "/dailyemail",
+    "/emaildaily": "/dailyemail",
+    "/emailsetup": "/emailhelp",
+    "/gmailhelp": "/emailhelp",
 }
 
 
@@ -190,20 +198,22 @@ DISPATCHED_COMMANDS = frozenset({
     "/all", "/analyst", "/bigmover", "/bigmovers", "/buttons", "/ca",
     "/casummary", "/checklist", "/checknow", "/corp-actions",
     "/corpactions", "/corpactionsformylist", "/corpactionssummary",
-    "/corporate-actions", "/dailybrief", "/dnd", "/ex-dates", "/exdate",
+    "/corporate-actions", "/dailybrief", "/dailyemail", "/dailymail",
+    "/dnd", "/email", "/emaildaily", "/emailfund", "/emailhelp",
+    "/emailreport", "/emailsend", "/emailsetup", "/ex-dates", "/exdate",
     "/exdates", "/explain", "/favorites", "/favourites", "/filter",
     "/filterstocks", "/forecast", "/forecastanalysis", "/fund",
     "/fundamental-analysis", "/fundamentalanalyze", "/fundamentals",
     "/fundamentalreport", "/fundmode", "/gainers", "/gap", "/gappers",
-    "/guide", "/harmonic", "/harmonicpatterns", "/help", "/howto",
+    "/gmailhelp", "/guide", "/harmonic", "/harmonicpatterns", "/help", "/howto",
     "/increase", "/ind", "/indicator", "/investcheck", "/learn", "/list",
-    "/losers", "/market", "/marketmovers", "/menu", "/moverlist",
+    "/losers", "/mail", "/market", "/marketmovers", "/menu", "/moverlist",
     "/movers", "/moversfund", "/moversover", "/moverwatch", "/myfavourites",
     "/mypicks", "/news", "/next", "/closemarket", "/openclose",
     "/openmarket", "/openreport", "/pauseall", "/pricealert", "/quality",
     "/qualitycheck", "/quick", "/quiet", "/remove", "/removestock",
     "/sched", "/schednow", "/schedule", "/scorecard", "/scan500", "/screen",
-    "/screener", "/sessionreport", "/closereport", "/setlist", "/settings", "/setwatchlist", "/shareholder",
+    "/screener", "/sendmail", "/sessionreport", "/setemail", "/closereport", "/setlist", "/settings", "/setwatchlist", "/shareholder",
     "/shortcuts", "/silence", "/start", "/status", "/summary", "/tech",
     "/technical", "/topgainers", "/toplosers", "/topmovers", "/tutorial",
     "/upcoming", "/us", "/usfund", "/usquote", "/usstock", "/watcher",
@@ -397,14 +407,21 @@ COMMAND_USAGE = {
     ),
     "/setemail": (
         "<b>/setemail</b> - get bot reports in your mailbox\n"
-        "/setemail you@example.com  \u2192 save + test-mail the address\n"
-        "/setemail off              \u2192 forget the address\n"
-        "Aliases: /email"
+        "/setemail you@gmail.com  \u2192 save + test-mail the address\n"
+        "/setemail off            \u2192 forget the address\n"
+        "Gmail needs an App Password (see /emailhelp). Aliases: /email"
+    ),
+    "/email": (
+        "<b>/email</b> - send any custom mail (easy + customizable)\n"
+        "/email friend@gmail.com | Subject | your message  \u2192 one-shot note\n"
+        "/email you@gmail.com  \u2192 same as /setemail (save address)\n"
+        "Aliases: /emailsend, /sendmail, /mail"
     ),
     "/emailreport": (
         "<b>/emailreport</b> - mail the deep fundamental report\n"
-        "/emailreport RELIANCE  \u2192 full report + snapshot in your inbox\n"
-        "Needs /setemail first. Aliases: /emailfund"
+        "/emailreport RELIANCE  \u2192 full report to your saved mail id\n"
+        "/emailreport RELIANCE friend@gmail.com My title  \u2192 custom destination + subject\n"
+        "Needs /setemail first (unless you pass a to@mail). Aliases: /emailfund"
     ),
     "/dailyemail": (
         "<b>/dailyemail</b> - everyday snapshot digest to your mail id\n"
@@ -581,8 +598,9 @@ COMMAND_EXAMPLES = {
     "/checklist": ["/checklist RELIANCE", "/checklist mylist"],
     "/screen": ["/screen pe<25 roe>15", "/screen div>1.5", "/screen rsi 50-70 macd"],
     "/snap": ["/snap", "/snap us"],
-    "/setemail": ["/setemail you@example.com", "/setemail off"],
-    "/emailreport": ["/emailreport RELIANCE"],
+    "/setemail": ["/setemail you@gmail.com", "/setemail off"],
+    "/email": ["/email friend@gmail.com | Hello | My watchlist is up today"],
+    "/emailreport": ["/emailreport RELIANCE", "/emailreport RELIANCE friend@gmail.com My title"],
     "/dailyemail": ["/dailyemail on", "/dailyemail off"],
     "/indicator": ["/indicator RELIANCE RSI", "/indicator AAPL MACD", "/indicator RELIANCE"],
     "/forecast": ["/forecast RELIANCE", "/forecast AAPL", "/forecast GODREJCP"],
@@ -780,7 +798,8 @@ def register_commands() -> bool:
         {"command": "fundamentalreport", "description": "Deep report or range: /fundamentalreport mylist"},
         {"command": "usstock", "description": "US stock details: /usstock AAPL (USD fundamentals)"},
         {"command": "checklist", "description": "32-point investment scorecard: /checklist RELIANCE"},
-        {"command": "setemail", "description": "Get reports in your mailbox: /setemail you@example.com"},
+        {"command": "setemail", "description": "Get reports in your mailbox: /setemail you@gmail.com"},
+        {"command": "email", "description": "Send any custom mail: /email to | subject | message"},
         {"command": "emailreport", "description": "Mail the deep report: /emailreport RELIANCE"},
         {"command": "dailyemail", "description": "Everyday snapshot digest: /dailyemail on"},
         {"command": "harmonicpatterns", "description": "Harmonic pattern scan NIFTY 100/500: /harmonicpatterns all"},

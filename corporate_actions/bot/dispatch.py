@@ -55,6 +55,8 @@ WRITE_COMMANDS = {
     "/openreport", "/closereport", "/sessionreport", "/openclose",
     "/openmarket", "/closemarket",
     "/quiet", "/dnd", "/silence", "/pauseall",
+    "/setemail", "/email", "/emailsend", "/sendmail", "/mail",
+    "/dailyemail", "/dailymail", "/emaildaily",
 }
 
 
@@ -265,8 +267,26 @@ def handle_command(chat_id, text):
         checklist_commands.handle_checklist(chat_id, parts)
         return
 
-    if command in ("/setemail", "/email"):
+    if command in ("/setemail",):
         email_commands.handle_setemail(chat_id, parts)
+        return
+
+    if command in ("/email", "/emailsend", "/sendmail", "/mail"):
+        # "/email you@gmail.com" keeps the old setemail behaviour;
+        # "/email to | subject | message" sends a custom mail.
+        raw = (text or "")
+        if "|" in raw or ";" in raw:
+            email_commands.handle_emailsend(chat_id, parts, raw)
+        elif len(parts) >= 2 and "@" in parts[1] and len(parts) == 2:
+            email_commands.handle_setemail(chat_id, parts)
+        elif len(parts) >= 2 and "@" in raw:
+            email_commands.handle_emailsend(chat_id, parts, raw)
+        else:
+            email_commands.handle_setemail(chat_id, parts)
+        return
+
+    if command in ("/emailhelp", "/emailsetup", "/gmailhelp"):
+        email_commands.handle_emailhelp(chat_id, parts)
         return
 
     if command in ("/emailreport", "/emailfund"):

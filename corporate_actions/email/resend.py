@@ -42,8 +42,19 @@ def send_via_resend(to: str, subject: str, html_body: str,
                     text_body: str) -> tuple[bool, str]:
     """POST one email through Resend. Returns (ok, error_message)."""
     recipient = (to or "").strip()
+    configured_from = (config.RESEND_FROM or "").strip()
+    if configured_from:
+        from_header = configured_from
+    else:
+        # Honour the friendly EMAIL_FROM_NAME even on the default onboarding
+        # sender so mails read "My Name <onboarding@resend.dev>".
+        from email.utils import formataddr, parseaddr
+
+        _, bare = parseaddr(DEFAULT_FROM)
+        name = (getattr(config, "EMAIL_FROM_NAME", "") or "").strip() or "Royal Stock"
+        from_header = formataddr((name, bare or "onboarding@resend.dev"))
     payload = json.dumps({
-        "from": config.RESEND_FROM or DEFAULT_FROM,
+        "from": from_header,
         "to": [recipient],
         "subject": subject,
         "html": html_body,

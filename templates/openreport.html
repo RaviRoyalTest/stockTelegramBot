@@ -212,6 +212,14 @@
         if (meta) document.getElementById('buildMeta').textContent = meta;
       }
 
+      function sectionSkeleton(title, rows) {
+        var body = '';
+        for (var i = 0; i < (rows || 3); i++) {
+          body += '<tr><td colspan="8" class="empty"><span class="skeleton" style="display:block;width:' + (96 - i * 9) + '%"></span></td></tr>';
+        }
+        return '<section class="card section" aria-busy="true"><h2>' + esc(title) + '</h2>' +
+          '<div class="table-scroll"><table><tbody>' + body + '</tbody></table></div></section>';
+      }
       async function run(forceFresh) {
         var btn = document.getElementById('runBtn');
         var freshBtn = document.getElementById('freshBtn');
@@ -221,9 +229,16 @@
         btn.disabled = true; freshBtn.disabled = true;
         btn.textContent = historical ? '⏳ Building that session…' : (forceFresh ? '⏳ Scanning… (60–90s)' : '⏳ Loading…');
         document.getElementById('buildMeta').textContent = '';
-        document.getElementById('statusStrip').innerHTML = '';
-        document.getElementById('sections').innerHTML = '';
-        document.getElementById('results').hidden = true;
+        // Section-wise loading: status + each report part skeletonises
+        // separately (markets / gainers / losers / overview / volume /
+        // catalysts / summary) instead of one blank page.
+        document.getElementById('statusStrip').innerHTML =
+          '<div class="card section" style="flex:1 1 280px;" aria-busy="true"><h3>Market status</h3><p class="muted"><span class="skeleton" style="display:block;width:100%"></span>Checking session…</p></div>' +
+          '<div class="card section" style="flex:1 1 280px;" aria-busy="true"><h3>Universes</h3><p class="muted"><span class="skeleton" style="display:block;width:100%"></span>Verifying counts…</p></div>';
+        document.getElementById('sections').innerHTML =
+          sectionSkeleton('🟢 Top gainers', 4) + sectionSkeleton('🔴 Top losers', 4) +
+          sectionSkeleton('📊 Market overview', 3) + sectionSkeleton('🔥 Volume analysis', 2);
+        document.getElementById('results').hidden = false;
         try {
           var res = await fetch('/api/openreport?market=' + encodeURIComponent(market) + (dateVal ? '&date=' + encodeURIComponent(dateVal) : '') + (forceFresh ? '&refresh=1' : ''));
           if (!res.ok) {

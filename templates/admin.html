@@ -186,10 +186,17 @@
       var lastUsers = [];
 
       async function reload() {
-        var state = await api('/api/admin/state?token=' + encodeURIComponent(token()));
-        lastUsers = state.users || [];
-        renderUsers(lastUsers);
-        if (selectedChat) selectChat(selectedChat);  // refresh the selected card
+        var tbody = document.querySelector('#usersTable tbody');
+        tbody.innerHTML = '<tr><td colspan="8" class="muted"><span class="skeleton" style="display:block;width:100%"></span>loading users…</td></tr>';
+        try {
+          var state = await api('/api/admin/state?token=' + encodeURIComponent(token()));
+          lastUsers = state.users || [];
+          renderUsers(lastUsers);
+          if (selectedChat) selectChat(selectedChat);  // refresh the selected card
+        } catch (err) {
+          tbody.innerHTML = '<tr><td colspan="8" class="muted">failed: ' + esc(err.message) + '</td></tr>';
+          throw err;
+        }
       }
 
       function renderUsers(users) {
