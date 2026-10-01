@@ -191,6 +191,9 @@ ALIAS_TO_MAIN = {
     "/closemail": "/emailclose",
     "/eodmail": "/emailclose",
     "/eod": "/emailclose",
+    "/bothmail": "/emailboth",
+    "/emailfull": "/emailboth",
+    "/sessionmail": "/emailboth",
 }
 
 
@@ -204,7 +207,8 @@ DISPATCHED_COMMANDS = frozenset({
     "/casummary", "/checklist", "/checknow", "/corp-actions",
     "/corpactions", "/corpactionsformylist", "/corpactionssummary",
     "/corporate-actions", "/dailybrief", "/dailyemail", "/dailymail",
-    "/dnd", "/closemail", "/email", "/emailclose", "/emaildaily", "/emailfund", "/emailhelp",
+    "/dnd", "/bothmail", "/closemail", "/email", "/emailboth", "/emailclose", "/emaildaily",
+    "/emailfull", "/emailfund", "/emailhelp",
     "/emailopen", "/emailreport", "/emailsend", "/emailsetup", "/eod", "/eodmail", "/ex-dates", "/exdate",
     "/exdates", "/explain", "/favorites", "/favourites", "/filter",
     "/filterstocks", "/forecast", "/forecastanalysis", "/fund",
@@ -218,7 +222,7 @@ DISPATCHED_COMMANDS = frozenset({
     "/openmarket", "/openreport", "/pauseall", "/pricealert", "/quality",
     "/qualitycheck", "/quick", "/quiet", "/remove", "/removestock",
     "/sched", "/schednow", "/schedule", "/scorecard", "/scan500", "/screen",
-    "/screener", "/sendmail", "/sessionreport", "/setemail", "/closereport", "/setlist", "/settings", "/setwatchlist", "/shareholder",
+    "/screener", "/sendmail", "/sessionmail", "/sessionreport", "/setemail", "/closereport", "/setlist", "/settings", "/setwatchlist", "/shareholder",
     "/shortcuts", "/silence", "/start", "/status", "/summary", "/tech",
     "/technical", "/topgainers", "/toplosers", "/topmovers", "/tutorial",
     "/upcoming", "/us", "/usfund", "/usquote", "/usstock", "/watcher",
@@ -446,6 +450,11 @@ COMMAND_USAGE = {
         "/emailclose  \u2192 close tables + watchlist/schedule/settings tables\n"
         "Needs /setemail first. Aliases: /closemail, /eodmail, /eod"
     ),
+    "/emailboth": (
+        "<b>/emailboth</b> - open + close + EOD stores in ONE mail, one command\n"
+        "/emailboth  \u2192 full session tables + watchlist/schedule/settings tables\n"
+        "Needs /setemail first. Aliases: /bothmail, /emailfull, /sessionmail"
+    ),
     "/indicator": (
         "<b>/indicator</b> - clear deep-dive for ONE indicator\n"
         "/indicator RELIANCE RSI  \u2192 value, signal, trend &amp; how to read it\n"
@@ -621,6 +630,7 @@ COMMAND_EXAMPLES = {
     "/dailyemail": ["/dailyemail on", "/dailyemail both", "/dailyemail open", "/dailyemail close", "/dailyemail off"],
     "/emailopen": ["/emailopen"],
     "/emailclose": ["/emailclose"],
+    "/emailboth": ["/emailboth"],
     "/indicator": ["/indicator RELIANCE RSI", "/indicator AAPL MACD", "/indicator RELIANCE"],
     "/forecast": ["/forecast RELIANCE", "/forecast AAPL", "/forecast GODREJCP"],
     "/learn": ["/learn", "/learn stocks", "/learn schedule"],
@@ -821,6 +831,7 @@ def register_commands() -> bool:
         {"command": "email", "description": "Send any custom mail: /email to | subject | message"},
         {"command": "emailreport", "description": "Mail the deep report: /emailreport RELIANCE"},
         {"command": "dailyemail", "description": "Opening + closing/EOD mails: /dailyemail on|both|open|close|off"},
+        {"command": "emailboth", "description": "Open + close + EOD in one mail: /emailboth"},
         {"command": "emailopen", "description": "Opening screener mail now: /emailopen"},
         {"command": "emailclose", "description": "Closing + EOD stores mail now: /emailclose"},
         {"command": "harmonicpatterns", "description": "Harmonic pattern scan NIFTY 100/500: /harmonicpatterns all"},

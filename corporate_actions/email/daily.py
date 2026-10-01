@@ -135,11 +135,12 @@ def build_daily_lines(snapshot: dict) -> list[str]:
     return lines
 
 
-def build_open_lines(report: dict, session_label: str) -> list[str]:
-    """Colorful opening-session screener tables (pure - no network/disk)."""
+def _build_session_lines(report: dict, session_label: str,
+                         banner: str, tone: str, emoji: str) -> list[str]:
+    """Shared screener-table builder (pure - no network/disk)."""
     report = _as_report(report)
     lines = [
-        section(f"Opening session screener · {session_label}", "green", "🌅"),
+        section(f"{banner} · {session_label}", tone, emoji),
         f"<p>Top gainers &amp; losers across the official universes "
         f"(regular-session data only). Verified "
         f"<b>{esc(report.get('total_verified', '?'))}/{esc(report.get('total_target', '?'))}</b>.</p>",
@@ -178,12 +179,30 @@ def build_open_lines(report: dict, session_label: str) -> list[str]:
     return lines
 
 
+def build_open_lines(report: dict, session_label: str) -> list[str]:
+    """Colorful opening-session screener tables (pure - no network/disk)."""
+    return _build_session_lines(report, session_label, "Opening session screener", "green", "🌅")
+
+
 def build_close_lines(report: dict, session_label: str) -> list[str]:
     """Colorful closing-session screener tables (pure - no network/disk)."""
-    lines = build_open_lines(report, session_label)
-    # Re-title the banner from Opening -> Closing without rebuilding tables.
-    if lines:
-        lines[0] = section(f"Closing session screener · {session_label}", "red", "🌇")
+    return _build_session_lines(report, session_label, "Closing session screener", "red", "🌇")
+
+
+def build_full_session_lines(report: dict, session_label: str) -> list[str]:
+    """Combined open + close screener tables in one block (pure).
+
+    The recorded file holds one session, so the tables are rendered once
+    under a combined banner instead of duplicating them.
+    """
+    return _build_session_lines(report, session_label, "Open + Close session screener", "green", "🌅🌇")
+
+
+def build_combined_lines(chat_id, report: dict, session_label: str,
+                         quotes: list[dict] | None = None) -> list[str]:
+    """One mail body: full session tables + EOD stored-details tables."""
+    lines = build_full_session_lines(report, session_label)
+    lines.extend(build_eod_store_lines(chat_id, quotes))
     return lines
 
 

@@ -40,6 +40,7 @@ EMAIL_USAGE = (
     "/dailyemail close   \u2192 only the evening close + stored-details mail\n"
     "<b>/emailopen</b> - send this session's opening screener now\n"
     "<b>/emailclose</b> - send the closing screener + EOD stores now\n"
+    "<b>/emailboth</b> - open + close + EOD stores in ONE mail, one command\n"
     "Gmail users: it needs an App Password (not the login password) - "
     "see /emailhelp. Easiest: admin sets RESEND_API_KEY once."
 )
@@ -355,3 +356,35 @@ def handle_emailclose(chat_id, parts) -> None:
     lines.extend(build_eod_store_lines(chat_id, quotes))
     ok, info = send_email(recipient, f"Royal Stock close + EOD: {label}", lines)
     reply(chat_id, f"🌇 Close + EOD mailed ✅" if ok else f"📧 Mail failed: {escape(info)}")
+
+
+def handle_emailboth(chat_id, parts) -> None:
+    """Force-send ONE mail with open + close session + EOD stores right now."""
+    from ..email.daily import _recorded_openclose, build_combined_lines
+    from ..email.daily import fetch_watchlist_quotes
+
+    settings = storage.get_user_settings(chat_id) or {}
+    recipient = (settings.get("email") or "").strip()
+    if not recipient:
+        reply(chat_id, "Set your mail id first: <code>/setemail you@gmail.com</code>")
+        return
+    if not email_configured():
+        reply(chat_id, _server_not_ready_text())
+        return
+    reply(chat_id, f"🌅🌇 Preparing open + close + EOD in one mail - sending to <b>{escape(recipient)}</b> shortly.")
+    report, label = _recorded_openclose()
+    if not report.get("sections"):
+        reply(chat_id, "No recorded session yet - run /openreport or /snap first, then retry.")
+        return
+    try:
+        from ..email.daily import _chat_watchlist, _owner_chat
+
+        watchlist = storage.load_watchlist() if str(chat_id) == str(_owner_chat()) else _chat_watchlist(chat_id)
+        quotes = fetch_watchlist_quotes(watchlist)
+    except Exception:
+        quotes = []
+    ok, info = send_email(
+        recipient, f"Royal Stock open + close + EOD: {label}",
+        build_combined_lines(chat_id, report, label, quotes),
+    )
+    reply(chat_id, f"🌅🌇 Open + close + EOD mailed ✅" if ok else f"📧 Mail failed: {escape(info)}")

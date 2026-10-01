@@ -2211,6 +2211,52 @@ async def api_email_eod(payload: dict):
     return JSONResponse({"ok": True, "info": info, "to": to})
 
 
+@app.post("/api/email/both")
+async def api_email_both(payload: dict):
+    """Mail open + close session + EOD stores in ONE mail (web /emailboth).
+
+    Body: {to?, chat?, date?} - same defaults as /api/email/eod.
+    """
+    from corporate_actions.email import client as email_client
+    from corporate_actions.email.daily import _as_report, build_combined_lines
+    from corporate_actions.email.daily import fetch_watchlist_quotes
+
+    to = str(payload.get("to") or "").strip()
+    chat = str(payload.get("chat") or config_owner_chat()).strip()
+    date = str(payload.get("date") or "").strip()
+    if not to:
+        try:
+            saved = await asyncio.to_thread(storage.get_user_settings, chat)
+            to = str((saved or {}).get("email") or "").strip()
+        except Exception:
+            to = ""
+    if not to:
+        raise HTTPException(status_code=400, detail="no destination: pass to or save /setemail first")
+    try:
+        doc = await asyncio.to_thread(storage.load_openclose, date or None)
+        report = _as_report(doc)
+        if not report.get("sections"):
+            raise HTTPException(status_code=404, detail="no recorded session yet - run /openreport first")
+        label = str(report.get("target_date") or (doc.get("recorded_at") or "")[:10] or "session")
+        try:
+            watchlist = await asyncio.to_thread(storage.load_watchlist)
+            quotes = await asyncio.to_thread(fetch_watchlist_quotes, watchlist)
+        except Exception as error:
+            log.warning("api_email_both quotes skipped: %s", error)
+            quotes = []
+        lines = await asyncio.to_thread(build_combined_lines, chat, report, label, quotes)
+        ok, info = await asyncio.to_thread(
+            email_client.send_email, to, f"Royal Stock open + close + EOD: {label}", lines,
+        )
+    except HTTPException:
+        raise
+    except Exception as exc:
+        raise HTTPException(status_code=500, detail=str(exc))
+    if not ok:
+        raise HTTPException(status_code=502, detail=info)
+    return JSONResponse({"ok": True, "info": info, "to": to})
+
+
 if __name__ == "__main__":
     port = int(os.getenv("PORT", "8000"))
     uvicorn.run(app, host="0.0.0.0", port=port, reload=False)

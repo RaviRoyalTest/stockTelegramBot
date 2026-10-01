@@ -59,6 +59,7 @@ WRITE_COMMANDS = {
     "/dailyemail", "/dailymail", "/emaildaily",
     "/emailopen", "/openmail", "/morningmail",
     "/emailclose", "/closemail", "/eodmail", "/eod",
+    "/emailboth", "/bothmail", "/emailfull", "/sessionmail",
 }
 
 
@@ -305,6 +306,10 @@ def handle_command(chat_id, text):
 
     if command in ("/emailclose", "/closemail", "/eodmail", "/eod"):
         email_commands.handle_emailclose(chat_id, parts)
+        return
+
+    if command in ("/emailboth", "/bothmail", "/emailfull", "/sessionmail"):
+        email_commands.handle_emailboth(chat_id, parts)
         return
 
     if len(parts) < 2:

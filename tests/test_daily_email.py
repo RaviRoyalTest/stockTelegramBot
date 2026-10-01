@@ -1,7 +1,8 @@
 import unittest
 from unittest.mock import patch
 
-from corporate_actions.email.daily import build_daily_lines, build_eod_store_lines
+from corporate_actions.email.daily import build_combined_lines, build_daily_lines
+from corporate_actions.email.daily import build_eod_store_lines, build_full_session_lines
 from corporate_actions.email.daily import build_open_lines, get_scope
 
 
@@ -57,6 +58,51 @@ class DailyEmailTests(unittest.TestCase):
         self.assertEqual(get_scope({"daily_email": True, "email_scope": "open"}), "open")
         self.assertEqual(get_scope({"daily_email": True, "email_scope": "close"}), "close")
         self.assertEqual(get_scope({"daily_email": False}), "off")
+
+    def test_full_session_single_banner(self):
+        report = {
+            "total_verified": 10, "total_target": 20,
+            "sections": [{
+                "market": "in",
+                "snapshot": {"date": "01-Oct-2026", "time_local": "15:30", "state": "CLOSED"},
+                "universes": [{
+                    "title": "NIFTY 100", "verified": 10, "target": 20,
+                    "gainers": [{"symbol": "RELIANCE", "price": 100.0, "change_pct": 1.0}],
+                    "losers": [],
+                }],
+                "indices": [],
+            }],
+        }
+        text = "\n".join(build_full_session_lines(report, "01-Oct-2026"))
+        self.assertIn("Open + Close session screener", text)
+        self.assertIn("RELIANCE", text)
+        self.assertEqual(text.count("Open + Close session screener"), 1)
+
+    def test_combined_lines_session_plus_stores(self):
+        report = {
+            "total_verified": 10, "total_target": 20,
+            "sections": [{
+                "market": "in",
+                "snapshot": {"date": "01-Oct-2026", "time_local": "15:30", "state": "CLOSED"},
+                "universes": [{
+                    "title": "NIFTY 100", "verified": 10, "target": 20,
+                    "gainers": [{"symbol": "RELIANCE", "price": 100.0, "change_pct": 1.0}],
+                    "losers": [],
+                }],
+                "indices": [],
+            }],
+        }
+        with patch("corporate_actions.email.daily.storage") as store:
+            store.get_user_settings.return_value = {"email": "a@b.com", "daily_email": True}
+            store.load_watchlist.return_value = []
+            store.load_schedule_for.return_value = []
+            store.load_snapshots.return_value = {}
+            store.list_snapshot_dates.return_value = []
+            store.list_openclose_dates.return_value = []
+            text = "\n".join(build_combined_lines("123", report, "01-Oct-2026", []))
+        self.assertIn("Open + Close session screener", text)
+        self.assertIn("stored details", text)
+        self.assertIn("RELIANCE", text)
 
     def test_eod_store_tables(self):
         with patch("corporate_actions.email.daily.storage") as store:

@@ -8,6 +8,23 @@
 
   <p class="muted" id="emailStatus" aria-live="polite">Checking mail sender…</p>
 
+  <section class="card" aria-labelledby="hBoth" style="border:2px solid #7c3aed;">
+    <h2 id="hBoth">🌅🌇 Open + close + EOD in one mail</h2>
+    <p class="muted" style="margin-top:0;">Full session tables + watchlist / schedule / settings — one command, one email.</p>
+    <div class="form-row">
+      <div class="field">
+        <label for="bothTo">To <span class="muted">(blank = saved /setemail address)</span></label>
+        <input id="bothTo" placeholder="you@gmail.com" autocomplete="email" />
+      </div>
+      <div class="field">
+        <label for="bothDate">Session <span class="muted">(blank = latest recorded)</span></label>
+        <input id="bothDate" type="date" />
+      </div>
+      <button class="btn btn-primary" id="sendBoth" style="align-self:flex-end;">🌅🌇 Mail everything at once</button>
+    </div>
+    <p class="muted" id="bothResult" aria-live="polite" style="margin-bottom:0;"></p>
+  </section>
+
   <div class="section-grid">
     <section class="card" aria-labelledby="hOpen">
       <h2 id="hOpen">🌅 Opening screener mail</h2>
@@ -177,6 +194,22 @@
 
       // Section-wise loading: each mail button skeletonises only its own
       // result line, so the other cards stay interactive while one sends.
+      document.getElementById('sendBoth').addEventListener('click', async function () {
+        var btn = this, out = document.getElementById('bothResult');
+        setBusy(btn, true, '⏳ Mailing…');
+        out.innerHTML = '<span class="skeleton" style="display:block;width:100%"></span>Building session tables…<br><span class="skeleton" style="display:block;width:82%"></span>Tabulating stored details…';
+        try {
+          var data = await postJSON('/api/email/both', {
+            to: document.getElementById('bothTo').value.trim(),
+            date: document.getElementById('bothDate').value
+          });
+          out.textContent = 'Open + close + EOD mailed to ' + (data.to || '') + ' ✅';
+          RS.toast('Combined mail sent', 'ok');
+        } catch (err) {
+          out.textContent = 'Failed: ' + err.message;
+          RS.toast('Combined mail failed: ' + err.message, 'err');
+        } finally { setBusy(btn, false, '🌅🌇 Mail everything at once'); }
+      });
       document.getElementById('sendOpen').addEventListener('click', async function () {
         var btn = this, out = document.getElementById('openResult');
         setBusy(btn, true, '⏳ Mailing…');
