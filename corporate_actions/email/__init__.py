@@ -7,7 +7,9 @@ smtplib + email.message from the standard library.
 from .client import EmailError, is_configured, send_custom, send_email
 from .client import GMAIL_SETUP_GUIDE, parse_recipients, provider_name, status
 from .client import text_to_html_lines, with_prefix
-from .daily import build_daily_lines, maybe_send_daily_email
+from .daily import build_close_lines, build_daily_lines, build_eod_store_lines
+from .daily import build_open_lines, get_scope
+from .daily import maybe_send_daily_email, maybe_send_eod_email, maybe_send_open_email
 from .resend import is_configured as resend_configured
 from .resend import send_via_resend
 
@@ -22,8 +24,14 @@ __all__ = [
     "status",
     "text_to_html_lines",
     "with_prefix",
+    "build_close_lines",
     "build_daily_lines",
+    "build_eod_store_lines",
+    "build_open_lines",
+    "get_scope",
     "maybe_send_daily_email",
+    "maybe_send_eod_email",
+    "maybe_send_open_email",
     "resend_configured",
     "send_via_resend",
 ]

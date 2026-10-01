@@ -2122,6 +2122,95 @@ def config_owner_chat():
         return "local"
 
 
+@app.post("/api/email/open")
+async def api_email_open(payload: dict):
+    """Mail the opening-session screener tables (recorded file, colorful).
+
+    Body: {to?, date?} - `to` defaults to the owner's saved /setemail
+    address; `date` (YYYY-MM-DD) mails that recorded session, otherwise the
+    latest recorded session.
+    """
+    from corporate_actions.email import client as email_client
+    from corporate_actions.email.daily import _as_report, build_open_lines
+
+    to = str(payload.get("to") or "").strip()
+    date = str(payload.get("date") or "").strip()
+    if not to:
+        try:
+            saved = await asyncio.to_thread(storage.get_user_settings, config_owner_chat())
+            to = str((saved or {}).get("email") or "").strip()
+        except Exception:
+            to = ""
+    if not to:
+        raise HTTPException(status_code=400, detail="no destination: pass to or save /setemail first")
+    try:
+        doc = await asyncio.to_thread(storage.load_openclose, date or None)
+        report = _as_report(doc)
+        if not report.get("sections"):
+            raise HTTPException(status_code=404, detail="no recorded session yet - run /openreport first")
+        label = str(report.get("target_date") or (doc.get("recorded_at") or "")[:10] or "session")
+        ok, info = await asyncio.to_thread(
+            email_client.send_email, to,
+            f"Royal Stock opening: {label}", build_open_lines(report, label),
+        )
+    except HTTPException:
+        raise
+    except Exception as exc:
+        raise HTTPException(status_code=500, detail=str(exc))
+    if not ok:
+        raise HTTPException(status_code=502, detail=info)
+    return JSONResponse({"ok": True, "info": info, "to": to})
+
+
+@app.post("/api/email/eod")
+async def api_email_eod(payload: dict):
+    """Mail the closing screener + end-of-day stored-details tables.
+
+    Body: {to?, chat?, date?} - `to` defaults to the owner's /setemail
+    address; `chat` picks whose watchlist/schedule/settings are tabulated
+    (defaults to the owner); `date` picks a recorded session.
+    """
+    from corporate_actions.email import client as email_client
+    from corporate_actions.email.daily import _as_report, build_close_lines, build_eod_store_lines
+    from corporate_actions.email.daily import fetch_watchlist_quotes
+
+    to = str(payload.get("to") or "").strip()
+    chat = str(payload.get("chat") or config_owner_chat()).strip()
+    date = str(payload.get("date") or "").strip()
+    if not to:
+        try:
+            saved = await asyncio.to_thread(storage.get_user_settings, chat)
+            to = str((saved or {}).get("email") or "").strip()
+        except Exception:
+            to = ""
+    if not to:
+        raise HTTPException(status_code=400, detail="no destination: pass to or save /setemail first")
+    try:
+        doc = await asyncio.to_thread(storage.load_openclose, date or None)
+        report = _as_report(doc)
+        lines: list = []
+        label = str(report.get("target_date") or (doc.get("recorded_at") or "")[:10] or "session")
+        if report.get("sections"):
+            lines.extend(build_close_lines(report, label))
+        try:
+            watchlist = await asyncio.to_thread(storage.load_watchlist)
+            quotes = await asyncio.to_thread(fetch_watchlist_quotes, watchlist)
+        except Exception as error:
+            log.warning("api_email_eod quotes skipped: %s", error)
+            quotes = []
+        lines.extend(await asyncio.to_thread(build_eod_store_lines, chat, quotes))
+        ok, info = await asyncio.to_thread(
+            email_client.send_email, to, f"Royal Stock close + EOD: {label}", lines,
+        )
+    except HTTPException:
+        raise
+    except Exception as exc:
+        raise HTTPException(status_code=500, detail=str(exc))
+    if not ok:
+        raise HTTPException(status_code=502, detail=info)
+    return JSONResponse({"ok": True, "info": info, "to": to})
+
+
 if __name__ == "__main__":
     port = int(os.getenv("PORT", "8000"))
     uvicorn.run(app, host="0.0.0.0", port=port, reload=False)

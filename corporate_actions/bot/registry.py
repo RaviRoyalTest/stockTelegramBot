@@ -186,6 +186,11 @@ ALIAS_TO_MAIN = {
     "/emaildaily": "/dailyemail",
     "/emailsetup": "/emailhelp",
     "/gmailhelp": "/emailhelp",
+    "/openmail": "/emailopen",
+    "/morningmail": "/emailopen",
+    "/closemail": "/emailclose",
+    "/eodmail": "/emailclose",
+    "/eod": "/emailclose",
 }
 
 
@@ -199,16 +204,16 @@ DISPATCHED_COMMANDS = frozenset({
     "/casummary", "/checklist", "/checknow", "/corp-actions",
     "/corpactions", "/corpactionsformylist", "/corpactionssummary",
     "/corporate-actions", "/dailybrief", "/dailyemail", "/dailymail",
-    "/dnd", "/email", "/emaildaily", "/emailfund", "/emailhelp",
-    "/emailreport", "/emailsend", "/emailsetup", "/ex-dates", "/exdate",
+    "/dnd", "/closemail", "/email", "/emailclose", "/emaildaily", "/emailfund", "/emailhelp",
+    "/emailopen", "/emailreport", "/emailsend", "/emailsetup", "/eod", "/eodmail", "/ex-dates", "/exdate",
     "/exdates", "/explain", "/favorites", "/favourites", "/filter",
     "/filterstocks", "/forecast", "/forecastanalysis", "/fund",
     "/fundamental-analysis", "/fundamentalanalyze", "/fundamentals",
     "/fundamentalreport", "/fundmode", "/gainers", "/gap", "/gappers",
     "/gmailhelp", "/guide", "/harmonic", "/harmonicpatterns", "/help", "/howto",
     "/increase", "/ind", "/indicator", "/investcheck", "/learn", "/list",
-    "/losers", "/mail", "/market", "/marketmovers", "/menu", "/moverlist",
-    "/movers", "/moversfund", "/moversover", "/moverwatch", "/myfavourites",
+    "/losers", "/mail", "/market", "/marketmovers", "/menu", "/morningmail", "/moverlist",
+    "/movers", "/moversfund", "/moversover", "/moverwatch", "/myfavourites", "/openmail",
     "/mypicks", "/news", "/next", "/closemarket", "/openclose",
     "/openmarket", "/openreport", "/pauseall", "/pricealert", "/quality",
     "/qualitycheck", "/quick", "/quiet", "/remove", "/removestock",
@@ -424,10 +429,22 @@ COMMAND_USAGE = {
         "Needs /setemail first (unless you pass a to@mail). Aliases: /emailfund"
     ),
     "/dailyemail": (
-        "<b>/dailyemail</b> - everyday snapshot digest to your mail id\n"
-        "/dailyemail on   \u2192 gap-downs, movers + actions mailed daily\n"
-        "/dailyemail off  \u2192 stop the daily mail\n"
+        "<b>/dailyemail</b> - opening screener + closing/EOD mails\n"
+        "/dailyemail on     \u2192 morning opening + evening close/EOD stores\n"
+        "/dailyemail open   \u2192 mornings only (07:30-12:00 IST)\n"
+        "/dailyemail close  \u2192 evenings only (after 15:45 IST)\n"
+        "/dailyemail off    \u2192 stop all daily mails\n"
         "Needs /setemail first. Aliases: /dailymail, /emaildaily"
+    ),
+    "/emailopen": (
+        "<b>/emailopen</b> - opening screener mail right now\n"
+        "/emailopen  \u2192 this session's recorded gainers/losers tables\n"
+        "Needs /setemail first. Aliases: /openmail, /morningmail"
+    ),
+    "/emailclose": (
+        "<b>/emailclose</b> - closing screener + EOD stores mail now\n"
+        "/emailclose  \u2192 close tables + watchlist/schedule/settings tables\n"
+        "Needs /setemail first. Aliases: /closemail, /eodmail, /eod"
     ),
     "/indicator": (
         "<b>/indicator</b> - clear deep-dive for ONE indicator\n"
@@ -601,7 +618,9 @@ COMMAND_EXAMPLES = {
     "/setemail": ["/setemail you@gmail.com", "/setemail off"],
     "/email": ["/email friend@gmail.com | Hello | My watchlist is up today"],
     "/emailreport": ["/emailreport RELIANCE", "/emailreport RELIANCE friend@gmail.com My title"],
-    "/dailyemail": ["/dailyemail on", "/dailyemail off"],
+    "/dailyemail": ["/dailyemail on", "/dailyemail open", "/dailyemail close", "/dailyemail off"],
+    "/emailopen": ["/emailopen"],
+    "/emailclose": ["/emailclose"],
     "/indicator": ["/indicator RELIANCE RSI", "/indicator AAPL MACD", "/indicator RELIANCE"],
     "/forecast": ["/forecast RELIANCE", "/forecast AAPL", "/forecast GODREJCP"],
     "/learn": ["/learn", "/learn stocks", "/learn schedule"],
@@ -801,7 +820,9 @@ def register_commands() -> bool:
         {"command": "setemail", "description": "Get reports in your mailbox: /setemail you@gmail.com"},
         {"command": "email", "description": "Send any custom mail: /email to | subject | message"},
         {"command": "emailreport", "description": "Mail the deep report: /emailreport RELIANCE"},
-        {"command": "dailyemail", "description": "Everyday snapshot digest: /dailyemail on"},
+        {"command": "dailyemail", "description": "Opening + closing/EOD mails: /dailyemail on|open|close|off"},
+        {"command": "emailopen", "description": "Opening screener mail now: /emailopen"},
+        {"command": "emailclose", "description": "Closing + EOD stores mail now: /emailclose"},
         {"command": "harmonicpatterns", "description": "Harmonic pattern scan NIFTY 100/500: /harmonicpatterns all"},
         {"command": "indicator", "description": "One-indicator deep-dive: /indicator RELIANCE RSI (US works too)"},
         {"command": "forecast", "description": "Analyst forecast + executives + competitors: /forecast RELIANCE"},

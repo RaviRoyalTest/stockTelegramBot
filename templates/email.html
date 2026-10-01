@@ -3,10 +3,42 @@
 {% block content %}
   <div class="page-header">
     <h1>Email reports</h1>
-    <p class="sub">Send any custom mail or the deep stock report — the web twin of the bot's /email and /emailreport. Gmail works with an App Password; Resend works with one API key.</p>
+    <p class="sub">Opening screener (morning) + closing/EOD stores (evening) in colorful tables — the web twin of /dailyemail, /emailopen and /emailclose. Gmail works with an App Password; Resend works with one API key.</p>
   </div>
 
   <p class="muted" id="emailStatus" aria-live="polite">Checking mail sender…</p>
+
+  <div class="section-grid">
+    <section class="card" aria-labelledby="hOpen">
+      <h2 id="hOpen">🌅 Opening screener mail</h2>
+      <p class="muted" style="margin-top:0;">Recorded gainers/losers tables per universe (no live 60-90s scan here).</p>
+      <div class="field">
+        <label for="openTo">To <span class="muted">(blank = saved /setemail address)</span></label>
+        <input id="openTo" placeholder="you@gmail.com" autocomplete="email" />
+      </div>
+      <div class="field">
+        <label for="openDate">Session <span class="muted">(blank = latest recorded)</span></label>
+        <input id="openDate" type="date" />
+      </div>
+      <button class="btn btn-primary" id="sendOpen">🌅 Mail the opening screener</button>
+      <p class="muted" id="openResult" aria-live="polite" style="margin-bottom:0;"></p>
+    </section>
+
+    <section class="card" aria-labelledby="hEod">
+      <h2 id="hEod">🌇 Closing + EOD stores mail</h2>
+      <p class="muted" style="margin-top:0;">Close tables + watchlist / schedule / settings / file counts.</p>
+      <div class="field">
+        <label for="eodTo">To <span class="muted">(blank = saved /setemail address)</span></label>
+        <input id="eodTo" placeholder="you@gmail.com" autocomplete="email" />
+      </div>
+      <div class="field">
+        <label for="eodDate">Session <span class="muted">(blank = latest recorded)</span></label>
+        <input id="eodDate" type="date" />
+      </div>
+      <button class="btn btn-primary" id="sendEod">🌇 Mail close + EOD summary</button>
+      <p class="muted" id="eodResult" aria-live="polite" style="margin-bottom:0;"></p>
+    </section>
+  </div>
 
   <div class="section-grid">
     <section class="card" aria-labelledby="hCustom">
@@ -142,6 +174,42 @@
       });
 
       RS.attachSymbolAutocomplete('repSymbol', 'symbolList');
+
+      // Section-wise loading: each mail button skeletonises only its own
+      // result line, so the other cards stay interactive while one sends.
+      document.getElementById('sendOpen').addEventListener('click', async function () {
+        var btn = this, out = document.getElementById('openResult');
+        setBusy(btn, true, '⏳ Mailing…');
+        out.innerHTML = '<span class="skeleton" style="display:block;width:100%"></span>Building the opening tables…';
+        try {
+          var data = await postJSON('/api/email/open', {
+            to: document.getElementById('openTo').value.trim(),
+            date: document.getElementById('openDate').value
+          });
+          out.textContent = 'Opening screener mailed to ' + (data.to || '') + ' ✅';
+          RS.toast('Opening mail sent', 'ok');
+        } catch (err) {
+          out.textContent = 'Failed: ' + err.message;
+          RS.toast('Opening mail failed: ' + err.message, 'err');
+        } finally { setBusy(btn, false, '🌅 Mail the opening screener'); }
+      });
+
+      document.getElementById('sendEod').addEventListener('click', async function () {
+        var btn = this, out = document.getElementById('eodResult');
+        setBusy(btn, true, '⏳ Mailing…');
+        out.innerHTML = '<span class="skeleton" style="display:block;width:100%"></span>Mailed close tables…<br><span class="skeleton" style="display:block;width:82%"></span>Tabulating stored details…';
+        try {
+          var data = await postJSON('/api/email/eod', {
+            to: document.getElementById('eodTo').value.trim(),
+            date: document.getElementById('eodDate').value
+          });
+          out.textContent = 'Close + EOD mailed to ' + (data.to || '') + ' ✅';
+          RS.toast('EOD mail sent', 'ok');
+        } catch (err) {
+          out.textContent = 'Failed: ' + err.message;
+          RS.toast('EOD mail failed: ' + err.message, 'err');
+        } finally { setBusy(btn, false, '🌇 Mail close + EOD summary'); }
+      });
     })();
   </script>
 {% endblock %}

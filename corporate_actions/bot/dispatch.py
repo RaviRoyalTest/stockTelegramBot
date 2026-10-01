@@ -57,6 +57,8 @@ WRITE_COMMANDS = {
     "/quiet", "/dnd", "/silence", "/pauseall",
     "/setemail", "/email", "/emailsend", "/sendmail", "/mail",
     "/dailyemail", "/dailymail", "/emaildaily",
+    "/emailopen", "/openmail", "/morningmail",
+    "/emailclose", "/closemail", "/eodmail", "/eod",
 }
 
 
@@ -295,6 +297,14 @@ def handle_command(chat_id, text):
 
     if command in ("/dailyemail", "/dailymail", "/emaildaily"):
         email_commands.handle_dailyemail(chat_id, parts)
+        return
+
+    if command in ("/emailopen", "/openmail", "/morningmail"):
+        email_commands.handle_emailopen(chat_id, parts)
+        return
+
+    if command in ("/emailclose", "/closemail", "/eodmail", "/eod"):
+        email_commands.handle_emailclose(chat_id, parts)
         return
 
     if len(parts) < 2:

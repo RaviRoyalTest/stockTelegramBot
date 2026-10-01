@@ -34,7 +34,12 @@ EMAIL_USAGE = (
     "/emailreport RELIANCE friend@gmail.com  \u2192 same report to a friend\n"
     "<b>/email to@mail | subject | message</b> - send any custom mail\n"
     "/email friend@gmail.com | Hello | My watchlist is up 2% today\n"
-    "<b>/dailyemail on|off</b> - daily snapshot digest to your mail id\n"
+    "<b>/dailyemail on|open|close|off</b> - opening + closing/EOD mails\n"
+    "/dailyemail on     \u2192 morning opening screener + evening close+EOD stores\n"
+    "/dailyemail open   \u2192 only the morning opening screener\n"
+    "/dailyemail close  \u2192 only the evening close + stored-details mail\n"
+    "<b>/emailopen</b> - send this session's opening screener now\n"
+    "<b>/emailclose</b> - send the closing screener + EOD stores now\n"
     "Gmail users: it needs an App Password (not the login password) - "
     "see /emailhelp. Easiest: admin sets RESEND_API_KEY once."
 )
@@ -231,32 +236,122 @@ def handle_emailhelp(chat_id, _parts=None) -> None:
 
 
 def handle_dailyemail(chat_id, parts) -> None:
-    """Toggle the everyday snapshot digest (/dailyemail on|off)."""
+    """Toggle the everyday mails: opening screener + closing/EOD stores."""
+    from ..email.daily import get_scope
+
     settings = storage.get_user_settings(chat_id) or {}
     if len(parts) < 2:
-        state = "ON" if settings.get("daily_email") else "OFF"
+        scope = get_scope(settings)
+        state = "OFF" if scope == "off" else f"ON ({scope})"
         reply(
             chat_id,
-            f"Daily mail digest: <b>{state}</b>\n"
-            "Usage: <code>/dailyemail on</code> (needs <code>/setemail</code> first) "
-            "or <code>/dailyemail off</code>",
+            f"Daily mails: <b>{state}</b>\n"
+            "Usage: <code>/dailyemail on</code> (opening + closing/EOD), "
+            "<code>/dailyemail open</code> (mornings only), "
+            "<code>/dailyemail close</code> (evenings only), "
+            "or <code>/dailyemail off</code> (needs <code>/setemail</code> first)",
         )
         return
     raw = parts[1].lower()
-    if raw in ("on", "enable", "start", "yes"):
+    if raw in ("on", "enable", "start", "yes", "both", "all"):
         if not (settings.get("email") or "").strip():
             reply(chat_id, "Set your mail id first: <code>/setemail you@gmail.com</code>")
             return
         settings["daily_email"] = True
+        settings["email_scope"] = "both"
         storage.save_user_settings(chat_id, settings)
         reply(
             chat_id,
-            f"📧 Daily digest <b>ON</b> - the recorded session (gap-downs, "
-            f"movers, actions) lands in <b>{escape(settings['email'])}</b> every day.",
+            f"📧 Daily mails <b>ON (both)</b> - morning opening screener "
+            f"(07:30-12:00 IST) + evening close &amp; EOD stores (after 15:45 IST) "
+            f"land in <b>{escape(settings['email'])}</b> every day.",
         )
+    elif raw in ("open", "opening", "morning"):
+        if not (settings.get("email") or "").strip():
+            reply(chat_id, "Set your mail id first: <code>/setemail you@gmail.com</code>")
+            return
+        settings["daily_email"] = True
+        settings["email_scope"] = "open"
+        storage.save_user_settings(chat_id, settings)
+        reply(chat_id, "📧 Daily mails <b>ON (opening only)</b> - morning screener lands every day.")
+    elif raw in ("close", "closing", "eod", "evening"):
+        if not (settings.get("email") or "").strip():
+            reply(chat_id, "Set your mail id first: <code>/setemail you@gmail.com</code>")
+            return
+        settings["daily_email"] = True
+        settings["email_scope"] = "close"
+        storage.save_user_settings(chat_id, settings)
+        reply(chat_id, "📧 Daily mails <b>ON (closing/EOD only)</b> - evening close + stored details land every day.")
     elif raw in ("off", "disable", "stop", "no"):
         settings["daily_email"] = False
+        settings["email_scope"] = "off"
         storage.save_user_settings(chat_id, settings)
-        reply(chat_id, "📧 Daily digest <b>OFF</b>.")
+        reply(chat_id, "📧 Daily mails <b>OFF</b>.")
     else:
-        reply(chat_id, "Usage: <code>/dailyemail on</code> or <code>/dailyemail off</code>")
+        reply(chat_id, "Usage: <code>/dailyemail on|open|close|off</code>")
+
+
+def handle_emailopen(chat_id, parts) -> None:
+    """Force-send the opening screener mail right now (uses recorded file)."""
+    from ..email.daily import _recorded_openclose, build_open_lines
+
+    settings = storage.get_user_settings(chat_id) or {}
+    recipient = (settings.get("email") or "").strip()
+    if not recipient:
+        reply(chat_id, "Set your mail id first: <code>/setemail you@gmail.com</code>")
+        return
+    if not email_configured():
+        reply(chat_id, _server_not_ready_text())
+        return
+    reply(chat_id, f"🌅 Preparing the opening screener - mailing it to <b>{escape(recipient)}</b> shortly.")
+    report, label = _recorded_openclose()
+    if not report.get("sections"):
+        # No recorded session: build a light snapshot fallback instead of a
+        # 60-90s live scan inside the Telegram handler.
+        from ..email.daily import build_daily_lines
+
+        snapshot = storage.load_snapshots() or {}
+        if not snapshot:
+            reply(chat_id, "No recorded session yet - run /openreport or /snap first, then retry.")
+            return
+        ok, info = send_email(recipient, f"Royal Stock opening: {label}", build_daily_lines(snapshot))
+    else:
+        ok, info = send_email(recipient, f"Royal Stock opening: {label}", build_open_lines(report, label))
+    reply(chat_id, f"🌅 Opening screener mailed ✅" if ok else f"📧 Mail failed: {escape(info)}")
+
+
+def handle_emailclose(chat_id, parts) -> None:
+    """Force-send the closing screener + EOD stored-details mail right now."""
+    from ..email.daily import _recorded_openclose, build_close_lines, build_eod_store_lines
+    from ..email.daily import fetch_watchlist_quotes
+
+    settings = storage.get_user_settings(chat_id) or {}
+    recipient = (settings.get("email") or "").strip()
+    if not recipient:
+        reply(chat_id, "Set your mail id first: <code>/setemail you@gmail.com</code>")
+        return
+    if not email_configured():
+        reply(chat_id, _server_not_ready_text())
+        return
+    reply(chat_id, f"🌇 Preparing the close + EOD summary - mailing it to <b>{escape(recipient)}</b> shortly.")
+    report, label = _recorded_openclose()
+    lines: list[str] = []
+    if report.get("sections"):
+        lines.extend(build_close_lines(report, label))
+    else:
+        from ..email.daily import build_daily_lines
+
+        snapshot = storage.load_snapshots() or {}
+        if snapshot:
+            lines.extend(build_daily_lines(snapshot))
+            label = str(snapshot.get("session") or label)
+    try:
+        from ..email.daily import _chat_watchlist, _owner_chat
+
+        watchlist = storage.load_watchlist() if str(chat_id) == str(_owner_chat()) else _chat_watchlist(chat_id)
+        quotes = fetch_watchlist_quotes(watchlist)
+    except Exception:
+        quotes = []
+    lines.extend(build_eod_store_lines(chat_id, quotes))
+    ok, info = send_email(recipient, f"Royal Stock close + EOD: {label}", lines)
+    reply(chat_id, f"🌇 Close + EOD mailed ✅" if ok else f"📧 Mail failed: {escape(info)}")
