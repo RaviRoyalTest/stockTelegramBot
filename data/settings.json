@@ -30,8 +30,8 @@
     "action_filters": [],
     "price_alert_pct": 5.0,
     "recent_commands": [
-      "/openreport in",
       "/openreport us",
+      "/openreport in",
       "/scan500"
     ]
   }
