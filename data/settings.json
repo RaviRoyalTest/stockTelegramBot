@@ -7,6 +7,7 @@
       "universe": "nifty500"
     },
     "recent_commands": [
+      "/openreport in",
       "/gappers today",
       "/corpactionsformylist",
       "/openreport us",
@@ -15,7 +16,6 @@
       "/dailyemail both",
       "/emailfull",
       "/dailyemail on",
-      "/openreport in",
       "/emailreport"
     ],
     "movers_fund": "button",
@@ -30,8 +30,8 @@
     "action_filters": [],
     "price_alert_pct": 5.0,
     "recent_commands": [
-      "/openreport us",
       "/openreport in",
+      "/openreport us",
       "/scan500"
     ]
   }
