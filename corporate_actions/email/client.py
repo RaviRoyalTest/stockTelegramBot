@@ -133,54 +133,92 @@ def is_configured() -> bool:
 
 
 def _html_document(title: str, body_lines: list[str]) -> str:
-    """Wrap report lines in a colorful, readable, mobile-friendly document.
+    """Wrap report lines in a modern, light, mobile-friendly document.
 
-    Body lines may contain full <table class="rs-table"> blocks (built by
-    corporate_actions.email.tables) as well as plain Telegram-style HTML.
-    Tables render with striped rows, green/red move badges and a dark
-    gradient header; everything is inline-CSS so Gmail/Outlook keep it.
+    Clean SaaS-mail look: soft grey backdrop, white card with a slim accent
+    bar, airy tables with light headers, green/red move badges. Critical
+    colours are inline (Gmail/Outlook keep them); the <style> block only
+    enhances clients that honour it. Body lines may contain full
+    <table class="rs-table"> blocks (see corporate_actions.email.tables).
     """
     import html as _html
+    import re as _re
 
     safe_title = _html.escape(str(title or "Royal Stock report"))
     body = "<br>\n".join(body_lines)
+    preheader = _re.sub(r"<[^>]+>", "", " ".join(body_lines))
+    preheader = _html.escape(" ".join(preheader.split())[:120])
     return (
-        "<!DOCTYPE html><html><head><meta charset=\"utf-8\">"
+        "<!DOCTYPE html><html lang=\"en\"><head><meta charset=\"utf-8\">"
         "<meta name=\"viewport\" content=\"width=device-width,initial-scale=1\">"
-        "</head><body style=\"margin:0;padding:0;background:#0f172a;"
-        "font-family:Arial,Helvetica,sans-serif;font-size:14px;color:#0f172a;\">"
-        "<div style=\"max-width:720px;margin:0 auto;padding:16px;\">"
-        f"<div style=\"background:linear-gradient(135deg,#1d4ed8,#7c3aed);"
-        "color:#ffffff;border-radius:14px;padding:18px 20px;margin-bottom:14px;\">"
-        f"<div style=\"font-size:20px;font-weight:800;\">📈 {safe_title}</div>"
-        "<div style=\"font-size:12px;opacity:0.85;margin-top:4px;\">"
-        "Royal Stock · NSE &amp; BSE · session screener + store summary</div></div>"
-        f"<div style=\"background:#ffffff;border-radius:14px;padding:16px 16px;"
-        f"border:1px solid #e2e8f0;\">{body}</div>"
+        "<meta name=\"color-scheme\" content=\"light\">"
+        "<meta name=\"supported-color-schemes\" content=\"light\">"
+        f"<title>{safe_title}</title>"
+        "</head><body style=\"margin:0;padding:0;background-color:#edf1f7;"
+        "font-family:-apple-system,'Segoe UI',Arial,Helvetica,sans-serif;"
+        "font-size:14px;line-height:1.55;color:#1e293b;\">"
+        f"<div style=\"display:none;max-height:0;overflow:hidden;opacity:0;"
+        f"color:transparent;\">{preheader}</div>"
+        "<table role=\"presentation\" width=\"100%\" cellpadding=\"0\" cellspacing=\"0\" "
+        "style=\"background-color:#edf1f7;\"><tr><td align=\"center\" "
+        "style=\"padding:28px 12px;\">"
+        "<table role=\"presentation\" width=\"680\" cellpadding=\"0\" cellspacing=\"0\" "
+        "style=\"width:100%;max-width:680px;\">"
+        "<tr><td style=\"padding:0 4px 14px;font-size:13px;font-weight:800;"
+        "color:#475569;letter-spacing:0.4px;\">"
+        "📈 Royal Stock"
+        "<span style=\"font-weight:400;color:#94a3b8;\"> · NSE &amp; BSE</span>"
+        "</td></tr>"
+        "<tr><td style=\"background-color:#ffffff;border:1px solid #e2e8f0;"
+        "border-radius:16px;overflow:hidden;\">"
+        "<div style=\"height:5px;line-height:5px;font-size:0;"
+        "background:linear-gradient(90deg,#6366f1,#10b981,#f59e0b);\">&nbsp;</div>"
+        "<div style=\"padding:26px 28px 8px;\">"
+        f"<div style=\"font-size:22px;font-weight:800;color:#0f172a;"
+        f"letter-spacing:-0.3px;\">{safe_title}</div>"
+        "<div style=\"font-size:13px;color:#64748b;margin-top:4px;\">"
+        "Session screener + your stored summary</div>"
+        "</div>"
+        f"<div style=\"padding:6px 28px 26px;\">{body}</div>"
+        "</td></tr>"
+        "<tr><td align=\"center\" style=\"padding:16px 4px 0;font-size:12px;"
+        "color:#94a3b8;\">"
+        "Sent by Royal Stock bot · manage with /dailyemail off"
+        "</td></tr>"
+        "</table></td></tr></table>"
         "<style>"
-        ".rs-sec{margin:14px 0 6px;padding:10px 12px;border-radius:10px;font-weight:800;"
-        "font-size:15px;color:#ffffff;background:linear-gradient(135deg,#0ea5e9,#6366f1);}"
-        ".rs-sec.green{background:linear-gradient(135deg,#059669,#10b981);}"
-        ".rs-sec.red{background:linear-gradient(135deg,#dc2626,#f59e0b);}"
-        ".rs-sec.amber{background:linear-gradient(135deg,#d97706,#f59e0b);}"
-        ".rs-sec.slate{background:linear-gradient(135deg,#334155,#64748b);}"
-        ".rs-table{width:100%;border-collapse:collapse;margin:8px 0 12px;font-size:13px;}"
-        ".rs-table th{background:#1e293b;color:#fff;padding:8px 6px;text-align:left;"
-        "font-size:12px;white-space:nowrap;}"
-        ".rs-table th.num,.rs-table td.num{text-align:right;white-space:nowrap;}"
-        ".rs-table td{padding:7px 6px;border-bottom:1px solid #e2e8f0;}"
-        ".rs-table tr:nth-child(even) td{background:#f8fafc;}"
+        ".rs-sec{margin:24px 0 10px;padding:10px 14px;background:#f8fafc;"
+        "border-left:4px solid #6366f1;border-radius:0 10px 10px 0;"
+        "font-size:15px;font-weight:800;color:#0f172a;}"
+        ".rs-sec.green{border-left-color:#10b981;}"
+        ".rs-sec.red{border-left-color:#f43f5e;}"
+        ".rs-sec.amber{border-left-color:#f59e0b;}"
+        ".rs-sec.slate{border-left-color:#6366f1;}"
+        ".rs-table{width:100%;border-collapse:collapse;margin:10px 0 14px;"
+        "font-size:13px;background:#ffffff;border:1px solid #eef2f7;"
+        "border-radius:10px;overflow:hidden;}"
+        ".rs-table th{background:#f1f5f9;color:#64748b;padding:9px 10px;"
+        "text-align:left;font-size:11px;font-weight:800;letter-spacing:0.6px;"
+        "text-transform:uppercase;white-space:nowrap;border-bottom:1px solid #e2e8f0;}"
+        ".rs-table th.num,.rs-table td.num{text-align:right;white-space:nowrap;"
+        "font-variant-numeric:tabular-nums;}"
+        ".rs-table td{padding:9px 10px;border-bottom:1px solid #f1f5f9;color:#1e293b;}"
+        ".rs-table tr:last-child td{border-bottom:none;}"
         ".pos{color:#059669;font-weight:700;}"
-        ".neg{color:#dc2626;font-weight:700;}"
-        ".pill{display:inline-block;padding:2px 8px;border-radius:999px;font-size:12px;"
-        "font-weight:700;background:#eef2ff;color:#3730a3;}"
-        ".pill.pos{background:#dcfce7;color:#166534;}"
-        ".pill.neg{background:#fee2e2;color:#991b1b;}"
+        ".neg{color:#e11d48;font-weight:700;}"
+        ".pill{display:inline-block;padding:3px 10px;border-radius:999px;font-size:12px;"
+        "font-weight:700;background:#eef2ff;color:#4f46e5;}"
+        ".pill.pos{background:#dcfce7;color:#15803d;}"
+        ".pill.neg{background:#ffe4e6;color:#be123c;}"
+        ".chip{display:inline-block;padding:6px 12px;margin:0 6px 6px 0;border-radius:10px;"
+        "font-size:13px;font-weight:700;background:#f1f5f9;color:#334155;"
+        "border:1px solid #e2e8f0;}"
+        ".chip b{color:#0f172a;}"
         ".muted{color:#64748b;font-size:12px;}"
+        "@media only screen and (max-width:480px){"
+        ".rs-table th,.rs-table td{padding:7px 6px;font-size:12px;}}"
         "</style>"
-        "<p class=\"muted\" style=\"color:#94a3b8;font-size:12px;text-align:center;\">"
-        "Sent by Royal Stock bot · manage with /dailyemail off</p>"
-        "</div></body></html>"
+        "</body></html>"
     )
 
 

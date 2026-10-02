@@ -1,12 +1,31 @@
-"""Pure HTML table builders for colorful, readable mails.
+"""Pure HTML table builders for modern, readable mails.
 
 No network, no disk, no Telegram - every function takes plain dicts/lists
-and returns HTML strings (table / section / badge). Gmail strips <style>
-classes inconsistently, so all critical colours are ALSO inline.
+and returns HTML strings (table / section / badge). Critical colours are
+ALSO inline (Outlook ignores <style>), the document <style> only enhances.
 """
 from __future__ import annotations
 
 import html as _html
+
+# Accent per section tone (left border + auto-tinted strip).
+_TONE = {
+    "green": "#10b981",
+    "red": "#f43f5e",
+    "amber": "#f59e0b",
+    "slate": "#6366f1",
+    "": "#6366f1",
+}
+
+_TH = ("style=\"background:#f1f5f9;color:#64748b;padding:9px 10px;text-align:left;"
+       "font-size:11px;font-weight:800;letter-spacing:0.6px;white-space:nowrap;"
+       "border-bottom:1px solid #e2e8f0;\"")
+_TH_NUM = ("style=\"background:#f1f5f9;color:#64748b;padding:9px 10px;text-align:right;"
+           "font-size:11px;font-weight:800;letter-spacing:0.6px;white-space:nowrap;"
+           "border-bottom:1px solid #e2e8f0;\"")
+_TD = "style=\"padding:9px 10px;border-bottom:1px solid #f1f5f9;color:#1e293b;\""
+_TD_NUM = ("style=\"padding:9px 10px;border-bottom:1px solid #f1f5f9;color:#1e293b;"
+           "text-align:right;white-space:nowrap;\"")
 
 
 def esc(value) -> str:
@@ -49,10 +68,26 @@ def price_cell(value, currency: str = "₹") -> str:
 
 
 def section(title: str, tone: str = "", emoji: str = "") -> str:
-    """Colored section banner: tone in (green, red, amber, slate, '')."""
+    """Modern section header: light strip + colored accent bar."""
+    accent = _TONE.get(tone, _TONE[""])
     cls = f"rs-sec {tone}".strip()
     prefix = f"{emoji} " if emoji else ""
-    return f'<div class="{cls}">{prefix}{esc(title)}</div>'
+    return (
+        f'<div class="{cls}" style="margin:24px 0 10px;padding:10px 14px;'
+        f"background:#f8fafc;border-left:4px solid {accent};"
+        f'border-radius:0 10px 10px 0;font-size:15px;font-weight:800;color:#0f172a;">'
+        f"{prefix}{esc(title)}</div>"
+    )
+
+
+def stat_chips(stats: list[tuple[str, str]]) -> str:
+    """Small stat chips row, e.g. [("Verified", "20/20"), ("Markets", "2")]."""
+    chips = "".join(
+        f"<span class=\"chip\"><span style=\"color:#64748b;font-weight:400;\">{esc(label)}</span> "
+        f"<b>{esc(value)}</b></span>"
+        for label, value in stats
+    )
+    return f"<div style=\"margin:10px 0 4px;\">{chips}</div>"
 
 
 def stock_table(rows: list[dict], currency: str = "₹", caption: str = "") -> str:
@@ -60,9 +95,9 @@ def stock_table(rows: list[dict], currency: str = "₹", caption: str = "") -> s
     if not rows:
         return '<p class="muted">No verified stocks.</p>'
     head = (
-        "<tr><th>#</th><th>Symbol</th><th>Company</th>"
-        '<th class="num">Price</th><th class="num">Chg%</th>'
-        '<th class="num">Volume</th><th class="num">Vol Chg%</th></tr>'
+        f"<tr><th {_TH}>#</th><th {_TH}>Symbol</th><th {_TH}>Company</th>"
+        f'<th class="num" {_TH_NUM}>Price</th><th class="num" {_TH_NUM}>Chg%</th>'
+        f'<th class="num" {_TH_NUM}>Volume</th><th class="num" {_TH_NUM}>Vol Chg%</th></tr>'
     )
     body_rows = []
     for i, row in enumerate(rows[:10], 1):
@@ -73,9 +108,9 @@ def stock_table(rows: list[dict], currency: str = "₹", caption: str = "") -> s
         vol = esc(_num(row.get("volume"), 0)) if row.get("volume") is not None else "-"
         vol_chg = move_cell(row.get("volume_change_pct"))
         body_rows.append(
-            f"<tr><td>{i}</td><td><b>{symbol}</b></td><td>{company}</td>"
-            f'<td class="num">{price}</td><td class="num">{chg}</td>'
-            f'<td class="num">{vol}</td><td class="num">{vol_chg}</td></tr>'
+            f"<tr><td {_TD}>{i}</td><td {_TD}><b>{symbol}</b></td><td {_TD}>{company}</td>"
+            f'<td class="num" {_TD_NUM}>{price}</td><td class="num" {_TD_NUM}>{chg}</td>'
+            f'<td class="num" {_TD_NUM}>{vol}</td><td class="num" {_TD_NUM}>{vol_chg}</td></tr>'
         )
     cap = f"<caption style='text-align:left;font-weight:700;'>{esc(caption)}</caption>" if caption else ""
     return f'<table class="rs-table">{cap}<thead>{head}</thead><tbody>{"".join(body_rows)}</tbody></table>'
@@ -89,10 +124,13 @@ def index_table(levels: list[dict]) -> str:
         label = esc(row.get("label") or "?")
         level = esc(_num(row.get("level")))
         chg = move_cell(row.get("change_pct"))
-        rows.append(f"<tr><td><b>{label}</b></td><td class='num'>{level}</td><td class='num'>{chg}</td></tr>")
+        rows.append(
+            f"<tr><td {_TD}><b>{label}</b></td>"
+            f"<td class='num' {_TD_NUM}>{level}</td><td class='num' {_TD_NUM}>{chg}</td></tr>"
+        )
     return (
-        '<table class="rs-table"><thead><tr><th>Index</th>'
-        '<th class="num">Level</th><th class="num">Change%</th></tr></thead>'
+        f'<table class="rs-table"><thead><tr><th {_TH}>Index</th>'
+        f'<th class="num" {_TH_NUM}>Level</th><th class="num" {_TH_NUM}>Change%</th></tr></thead>'
         f"<tbody>{''.join(rows)}</tbody></table>"
     )
 
@@ -114,20 +152,21 @@ def watchlist_table(items: list[dict]) -> str:
         except (TypeError, ValueError):
             pill, mark = "", "⚪"
         rows.append(
-            f"<tr><td><b>{symbol}</b><br><span class='muted'>{company}</span></td>"
-            f"<td class='num'>{price}</td><td class='num'>{chg}</td>"
-            f"<td><span class='pill {pill}'>{mark}</span></td></tr>"
+            f"<tr><td {_TD}><b>{symbol}</b><br><span class='muted'>{company}</span></td>"
+            f"<td class='num' {_TD_NUM}>{price}</td><td class='num' {_TD_NUM}>{chg}</td>"
+            f"<td {_TD}><span class='pill {pill}'>{mark}</span></td></tr>"
         )
     return (
-        '<table class="rs-table"><thead><tr><th>Stock</th>'
-        '<th class="num">Price</th><th class="num">Day Chg</th><th>Signal</th></tr></thead>'
+        f'<table class="rs-table"><thead><tr><th {_TH}>Stock</th>'
+        f'<th class="num" {_TH_NUM}>Price</th><th class="num" {_TH_NUM}>Day Chg</th>'
+        f"<th {_TH}>Signal</th></tr></thead>"
         f"<tbody>{''.join(rows)}</tbody></table>"
     )
 
 
 def kv_table(pairs: list[tuple[str, str]], caption: str = "") -> str:
     rows = "".join(
-        f"<tr><th style='text-align:left;background:#f1f5f9;color:#0f172a;'>{esc(k)}</th><td>{v}</td></tr>"
+        f"<tr><th {_TH}>{esc(k)}</th><td {_TD}>{v}</td></tr>"
         for k, v in pairs
     )
     cap = f"<caption style='text-align:left;font-weight:700;'>{esc(caption)}</caption>" if caption else ""
@@ -140,12 +179,12 @@ def actions_table(actions: list[dict], limit: int = 12) -> str:
     rows = []
     for action in actions[:limit]:
         rows.append(
-            f"<tr><td><b>{esc(action.get('symbol') or '?')}</b></td>"
-            f"<td>{esc(action.get('subject') or action.get('action') or '')}</td>"
-            f"<td class='num'>{esc(action.get('ex_date') or action.get('record_date') or '?')}</td></tr>"
+            f"<tr><td {_TD}><b>{esc(action.get('symbol') or '?')}</b></td>"
+            f"<td {_TD}>{esc(action.get('subject') or action.get('action') or '')}</td>"
+            f"<td class='num' {_TD_NUM}>{esc(action.get('ex_date') or action.get('record_date') or '?')}</td></tr>"
         )
     return (
-        '<table class="rs-table"><thead><tr><th>Symbol</th><th>Action</th>'
-        '<th class="num">Ex-date</th></tr></thead>'
+        f'<table class="rs-table"><thead><tr><th {_TH}>Symbol</th><th {_TH}>Action</th>'
+        f'<th class="num" {_TH_NUM}>Ex-date</th></tr></thead>'
         f"<tbody>{''.join(rows)}</tbody></table>"
     )

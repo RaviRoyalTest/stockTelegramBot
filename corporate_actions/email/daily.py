@@ -20,8 +20,8 @@ from ..core.dates import now_ist, today_ist
 from ..core.text import escape
 from .client import is_configured as email_configured
 from .client import send_email
-from .tables import actions_table, esc, index_table, kv_table, section, stock_table
-from .tables import watchlist_table
+from .tables import actions_table, esc, index_table, kv_table, section, stat_chips
+from .tables import stock_table, watchlist_table
 
 log = logging.getLogger(__name__)
 
@@ -139,11 +139,16 @@ def _build_session_lines(report: dict, session_label: str,
                          banner: str, tone: str, emoji: str) -> list[str]:
     """Shared screener-table builder (pure - no network/disk)."""
     report = _as_report(report)
+    markets = [str(block.get("market") or "").upper()
+               for block in (report.get("sections") or []) if not block.get("closed")]
     lines = [
         section(f"{banner} · {session_label}", tone, emoji),
-        f"<p>Top gainers &amp; losers across the official universes "
-        f"(regular-session data only). Verified "
-        f"<b>{esc(report.get('total_verified', '?'))}/{esc(report.get('total_target', '?'))}</b>.</p>",
+        stat_chips([
+            ("Verified", f"{report.get('total_verified', '?')}/{report.get('total_target', '?')}"),
+            ("Markets", " · ".join(markets) or "-"),
+        ]),
+        "<p class='muted'>Top gainers &amp; losers across the official universes "
+        "(regular-session data only).</p>",
     ]
     sections = report.get("sections") or []
     if not sections:
