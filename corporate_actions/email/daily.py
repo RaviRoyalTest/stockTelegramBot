@@ -20,8 +20,8 @@ from ..core.dates import now_ist, today_ist
 from ..core.text import escape
 from .client import is_configured as email_configured
 from .client import send_email
-from .tables import actions_table, esc, index_table, kv_table, section, stat_chips
-from .tables import stock_table, watchlist_table
+from .tables import actions_table, esc, index_table, kv_table, muted
+from .tables import section, stat_chips, stock_table, watchlist_table
 
 log = logging.getLogger(__name__)
 
@@ -147,17 +147,17 @@ def _build_session_lines(report: dict, session_label: str,
             ("Verified", f"{report.get('total_verified', '?')}/{report.get('total_target', '?')}"),
             ("Markets", " · ".join(markets) or "-"),
         ]),
-        "<p class='muted'>Top gainers &amp; losers across the official universes "
-        "(regular-session data only).</p>",
+        muted("Top gainers &amp; losers across the official universes "
+              "(regular-session data only)."),
     ]
     sections = report.get("sections") or []
     if not sections:
-        lines.append('<p class="muted">No recorded session yet - run /openreport first.</p>')
+        lines.append(muted("No recorded session yet - run /openreport first."))
         return lines
     for block in sections:
         if block.get("closed"):
             lines.append(section(f"{block.get('label', block.get('market', ''))} market closed", "slate", "🔴"))
-            lines.append(f"<p class='muted'>{esc(block.get('reason') or '')}</p>")
+            lines.append(muted(esc(block.get("reason") or "")))
             continue
         flag = "🇮🇳" if block.get("market") == "in" else "🇺🇸"
         snap = block.get("snapshot") or {}
@@ -171,7 +171,7 @@ def _build_session_lines(report: dict, session_label: str,
             pill = f"{universe.get('verified', 0)}/{universe.get('target', 20)} verified"
             lines.append(section(f"{title} · {pill}", "slate", "📦"))
             if universe.get("unavailable"):
-                lines.append('<p class="muted">Universe unavailable - no rows fabricated.</p>')
+                lines.append(muted("Universe unavailable - no rows fabricated."))
                 continue
             lines.append("<b>🟢 Top gainers</b>")
             lines.append(stock_table(universe.get("gainers") or [], "₹" if block.get("market") == "in" else "$"))
@@ -180,7 +180,9 @@ def _build_session_lines(report: dict, session_label: str,
         if block.get("indices"):
             lines.append(section("Market overview", "slate", "📈"))
             lines.append(index_table(block["indices"]))
-    lines.append("<p class='muted'>Change % is vs the previous close. Open /openreport on the web for sortable tables.</p>")
+    lines.append(muted(
+        "Change % is vs the previous close. Open /openreport on the web "
+        "for sortable tables."))
     return lines
 
 
@@ -264,7 +266,7 @@ def build_eod_store_lines(chat_id, quotes: list[dict] | None = None) -> list[str
         lines.append("<b>⏰ Your schedule</b>")
         lines.append(kv_table(pairs))
     else:
-        lines.append('<p class="muted">No scheduled reports - add one with /schedule add 3h /scan500.</p>')
+        lines.append(muted("No scheduled reports - add one with /schedule add 3h /scan500."))
     scope = get_scope(settings)
     lines.append("<b>⚙️ Mail settings</b>")
     lines.append(kv_table([
@@ -289,7 +291,7 @@ def build_eod_store_lines(chat_id, quotes: list[dict] | None = None) -> list[str
     if snapshot.get("corporate_actions"):
         lines.append("<b>📋 Corporate actions (recorded)</b>")
         lines.append(actions_table(snapshot["corporate_actions"]))
-    lines.append("<p class='muted'>Manage with /dailyemail off · full tables on the web Sessions tab.</p>")
+    lines.append(muted("Manage with /dailyemail off · full tables on the web Sessions tab."))
     return lines
 
 

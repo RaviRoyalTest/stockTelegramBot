@@ -136,10 +136,14 @@ def _html_document(title: str, body_lines: list[str]) -> str:
     """Wrap report lines in a modern, light, mobile-friendly document.
 
     Clean SaaS-mail look: soft grey backdrop, white card with a slim accent
-    bar, airy tables with light headers, green/red move badges. Critical
-    colours are inline (Gmail/Outlook keep them); the <style> block only
-    enhances clients that honour it. Body lines may contain full
-    <table class="rs-table"> blocks (see corporate_actions.email.tables).
+    bar, airy tables with light headers, green/red move badges. Every
+    critical colour/spacing is INLINE on the element (see email/tables.py -
+    Outlook desktop and several gateways strip the <style> block or ignore
+    unknown properties); the <style> block only enhances clients that
+    honour it. The accent bar pairs background-color with background-image
+    so gradient-ignorant clients still show a solid bar. Body lines may
+    contain full <table class="rs-table"> blocks (see
+    corporate_actions.email.tables).
     """
     import html as _html
     import re as _re
@@ -172,7 +176,8 @@ def _html_document(title: str, body_lines: list[str]) -> str:
         "<tr><td style=\"background-color:#ffffff;border:1px solid #e2e8f0;"
         "border-radius:16px;overflow:hidden;\">"
         "<div style=\"height:5px;line-height:5px;font-size:0;"
-        "background:linear-gradient(90deg,#6366f1,#10b981,#f59e0b);\">&nbsp;</div>"
+        "background-color:#6366f1;"
+        "background-image:linear-gradient(90deg,#6366f1,#10b981,#f59e0b);\">&nbsp;</div>"
         "<div style=\"padding:26px 28px 8px;\">"
         f"<div style=\"font-size:22px;font-weight:800;color:#0f172a;"
         f"letter-spacing:-0.3px;\">{safe_title}</div>"

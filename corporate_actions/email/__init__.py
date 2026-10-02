@@ -8,7 +8,7 @@ from .client import EmailError, is_configured, send_custom, send_email
 from .client import GMAIL_SETUP_GUIDE, parse_recipients, provider_name, status
 from .client import text_to_html_lines, with_prefix
 from .tables import esc as tables_esc
-from .tables import stat_chips
+from .tables import muted, stat_chips
 from .daily import build_close_lines, build_combined_lines, build_daily_lines
 from .daily import build_eod_store_lines, build_full_session_lines
 from .daily import build_open_lines, get_scope
@@ -29,6 +29,7 @@ __all__ = [
     "tables_esc",
     "text_to_html_lines",
     "with_prefix",
+    "muted",
     "build_close_lines",
     "build_combined_lines",
     "build_daily_lines",
