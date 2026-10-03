@@ -45,17 +45,19 @@ _TABLE_STYLE = ("style=\"width:100%;border-collapse:collapse;"
 _TH = ("style=\"background-color:" + _TH_BG + ";color:" + _TH_FG + ";"
        "padding:9px 10px;text-align:left;font-size:11px;font-weight:800;"
        "letter-spacing:0.6px;white-space:nowrap;"
-       "border-bottom:1px solid " + _TH_LINE + ";\"")
+       "border:none;\"")
 _TH_NUM = ("style=\"background-color:" + _TH_BG + ";color:" + _TH_FG + ";"
            "padding:9px 10px;text-align:right;font-size:11px;font-weight:800;"
            "letter-spacing:0.6px;white-space:nowrap;"
-           "border-bottom:1px solid " + _TH_LINE + ";\"")
+           "border:none;\"")
 
 
 def _td(num: bool = False, bg: str = "") -> str:
-    """Inline style for a body cell (optionally right-aligned / tinted)."""
-    style = ("padding:9px 10px;border-bottom:1px solid " + _LINE + ";"
-             "color:" + _INK + ";")
+    """Inline style for a body cell (optionally right-aligned / tinted).
+
+    Borderless by design - row separation comes from the header strip and
+    the even-row tint, never grid lines."""
+    style = "padding:9px 10px;border:none;color:" + _INK + ";"
     if num:
         style += ("text-align:right;white-space:nowrap;"
                   "font-variant-numeric:tabular-nums;")
