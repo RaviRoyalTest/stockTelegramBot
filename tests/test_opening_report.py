@@ -5,9 +5,12 @@ never guessed), top-gainer/loser selection, the market-closed gate
 (weekend + exchange holiday) and the batched Yahoo market-cap parser
 including its 401 crumb-refresh retry. No network access.
 """
+import json
 import re
+import tempfile
 import unittest
 from datetime import datetime
+from pathlib import Path
 from unittest.mock import patch
 
 from corporate_actions.opening_report import data as d
@@ -120,6 +123,14 @@ class GetUsMarketCapsTests(unittest.TestCase):
     no marketCap - the previous implementation read a field that never
     exists and silently excluded every US stock)."""
 
+    def setUp(self):
+        # Isolate the on-disk caps cache: these tests must never touch the
+        # real data/us_caps.json.
+        tmp = Path(tempfile.mkdtemp()) / "us_caps.json"
+        patcher = patch("corporate_actions.config.US_CAPS_FILE", tmp)
+        patcher.start()
+        self.addCleanup(patcher.stop)
+
     def _quote_payload(self, caps):
         return {"quoteResponse": {"result": [
             {"symbol": sym, "marketCap": cap} for sym, cap in caps.items()
@@ -160,6 +171,54 @@ class GetUsMarketCapsTests(unittest.TestCase):
                    return_value=(session, "crumb")):
             caps = d.get_us_market_caps(["X", "Y"])
         self.assertEqual(caps, {"Y": 2e10})
+
+
+class UsCapsCacheTests(unittest.TestCase):
+    """data/us_caps.json fills tickers the live batch misses, so one crumb
+    failure can never blank the whole US block (the 0/40 outage) again."""
+
+    def setUp(self):
+        self.tmp = Path(tempfile.mkdtemp())
+        patcher = patch("corporate_actions.config.US_CAPS_FILE",
+                        self.tmp / "us_caps.json")
+        patcher.start()
+        self.addCleanup(patcher.stop)
+
+    def _seed_cache(self, caps: dict):
+        (self.tmp / "us_caps.json").write_text(json.dumps(caps), encoding="utf-8")
+
+    def _quote_payload(self, caps):
+        return {"quoteResponse": {"result": [
+            {"symbol": sym, "marketCap": cap} for sym, cap in caps.items()
+        ]}}
+
+    def test_cache_serves_when_crumb_missing(self):
+        self._seed_cache({"AAPL": 3e12})
+        with patch("corporate_actions.sources.fundamentals._fund_session",
+                   return_value=(None, "")):
+            caps = d.get_us_market_caps(["AAPL"])
+        self.assertEqual(caps, {"AAPL": 3e12})
+
+    def test_fresh_results_merge_and_persist(self):
+        session = _FakeSession([
+            _FakeResponse(payload=self._quote_payload({"MSFT": 4e12})),
+        ])
+        self._seed_cache({"AAPL": 3e12})
+        with patch("corporate_actions.sources.fundamentals._fund_session",
+                   return_value=(session, "crumb")):
+            caps = d.get_us_market_caps(["AAPL", "MSFT"])
+        self.assertEqual(caps, {"AAPL": 3e12, "MSFT": 4e12})
+        # Only the missing ticker hit the network, and fresh caps persisted.
+        self.assertEqual(len(session.calls), 1)
+        saved = json.loads((self.tmp / "us_caps.json").read_text(encoding="utf-8"))
+        self.assertEqual(saved, {"AAPL": 3e12, "MSFT": 4e12})
+
+    def test_empty_batch_and_empty_cache_stays_honest(self):
+        session = _FakeSession([_FakeResponse(payload={"quoteResponse": {"result": []}})])
+        with patch("corporate_actions.sources.fundamentals._fund_session",
+                   return_value=(session, "crumb")):
+            caps = d.get_us_market_caps(["ZZZ"])
+        self.assertEqual(caps, {})
 
 
 class HistoricalSnapshotTests(unittest.TestCase):

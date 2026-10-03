@@ -357,6 +357,42 @@ def get_index_levels(
     return out
 
 
+def _us_caps_path():
+    """US_CAPS_FILE, read at call time so patched tests stay hermetic."""
+    return config.US_CAPS_FILE
+
+
+def _load_us_caps() -> dict:
+    """Last-known {symbol: market_cap_usd} ({} when never recorded)."""
+    try:
+        from ..storage.json_file import _file_lock, _lock, read_json
+
+        path = _us_caps_path()
+        with _lock, _file_lock(path):
+            data = read_json(path, {})
+        return {str(k): float(v) for k, v in (data or {}).items() if v} \
+            if isinstance(data, dict) else {}
+    except Exception as error:
+        log.debug("us caps cache read skipped: %s", error)
+        return {}
+
+
+def _save_us_caps(caps: dict) -> None:
+    """Persist fresh caps merged over the cache (never raises)."""
+    try:
+        from ..storage.json_file import _file_lock, _lock, read_json, write_json
+
+        path = _us_caps_path()
+        with _lock, _file_lock(path):
+            merged = read_json(path, {})
+            if not isinstance(merged, dict):
+                merged = {}
+            merged.update({str(k): float(v) for k, v in (caps or {}).items() if v})
+            write_json(path, merged)
+    except Exception as error:
+        log.debug("us caps cache save skipped: %s", error)
+
+
 def get_us_market_caps(symbols: list[str], max_workers: int = 12) -> dict:
     """Market cap in USD per ticker via Yahoo's batched v7/quote endpoint.
 
@@ -365,40 +401,59 @@ def get_us_market_caps(symbols: list[str], max_workers: int = 12) -> dict:
     implementation read a field that never exists and returned nothing).
     Returns {symbol: market_cap_usd}. Tickers with no reliable market cap are
     simply absent - callers must treat them as unclassified, never guessed.
+
+    Resilience: fresh caps are cached to data/us_caps.json and the cache
+    fills any tickers the live batch misses (crumb denied, 429, partial
+    window). Caps only decide the wide Mega ($200B+) vs Large ($10B-$200B)
+    buckets, so a days-old cap is far better than dropping the stock - a
+    single crumb failure previously blanked all ~518 US rows to 0/40.
     """
-    caps: dict = {}
     wanted = [s for s in symbols if s]
     if not wanted:
-        return caps
-    # Imported here (not at module top) so importing opening_report.data never
-    # drags the whole fundamentals chain in for the Indian-only runs.
-    from ..sources import fundamentals as _fund
+        return {}
+    cached = _load_us_caps()
+    # Only the tickers missing from the cache hit the network - fewer calls,
+    # less 429 pressure, and a total batch failure still leaves cached caps.
+    missing = [s for s in wanted if s not in cached]
+    fresh: dict = {}
+    if missing:
+        # Imported here (not at module top) so importing opening_report.data
+        # never drags the whole fundamentals chain in for Indian-only runs.
+        from ..sources import fundamentals as _fund
 
-    chunks = [wanted[i:i + 100] for i in range(0, len(wanted), 100)]
-    for chunk in chunks:
-        for attempt in range(2):  # second attempt after a 401 crumb refresh
-            try:
-                session, crumb = _fund._fund_session()
-                if not crumb:
-                    return caps
-                response = session.get(
-                    "https://query1.finance.yahoo.com/v7/finance/quote",
-                    params={"symbols": ",".join(chunk), "crumb": crumb},
-                    timeout=config.HTTP_TIMEOUT,
-                )
-                if response.status_code == 401 and not attempt:
-                    _fund._invalidate_crumb()
-                    continue
-                response.raise_for_status()
-                for item in response.json().get("quoteResponse", {}).get("result", []):
-                    cap = item.get("marketCap")
-                    if cap:
-                        caps[item.get("symbol")] = float(cap)
-                break
-            except Exception as error:
-                if attempt:
-                    log.warning("us market-cap batch failed (%d tickers): %s", len(chunk), error)
-    return caps
+        chunks = [missing[i:i + 100] for i in range(0, len(missing), 100)]
+        for chunk in chunks:
+            for attempt in range(2):  # second attempt after a 401 crumb refresh
+                try:
+                    session, crumb = _fund._fund_session()
+                    if not crumb:
+                        log.warning("us market caps: no crumb - using cache for %d tickers", len(chunk))
+                        break
+                    response = session.get(
+                        "https://query1.finance.yahoo.com/v7/finance/quote",
+                        params={"symbols": ",".join(chunk), "crumb": crumb},
+                        timeout=config.HTTP_TIMEOUT,
+                    )
+                    if response.status_code == 401 and not attempt:
+                        _fund._invalidate_crumb()
+                        continue
+                    response.raise_for_status()
+                    for item in response.json().get("quoteResponse", {}).get("result", []):
+                        cap = item.get("marketCap")
+                        if cap:
+                            fresh[item.get("symbol")] = float(cap)
+                    break
+                except Exception as error:
+                    if attempt:
+                        log.warning("us market-cap batch failed (%d tickers): %s", len(chunk), error)
+        if fresh:
+            _save_us_caps(fresh)
+    caps = dict(cached)
+    caps.update(fresh)
+    if missing and not fresh:
+        log.warning("us market caps: live batch empty - %d/%d tickers served from cache",
+                    len(caps), len(wanted))
+    return {s: caps[s] for s in wanted if s in caps}
 
 
 def split_us_by_cap(rows: list[dict], caps: dict | None = None) -> tuple[list[dict], list[dict], int]:

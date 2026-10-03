@@ -113,6 +113,9 @@ SNAPSHOT_FILE = Path(os.getenv("SNAPSHOT_FILE", str(BASE_DIR / "data" / "snapsho
 OPENREPORT_FILE = Path(os.getenv("OPENREPORT_FILE", str(BASE_DIR / "data" / "openclose.json")))
 # Date-wise history lives here: data/openclose/YYYY-MM-DD.json per session.
 OPENREPORT_DIR = Path(os.getenv("OPENREPORT_DIR", str(BASE_DIR / "data" / "openclose")))
+# Last-known US market caps ({symbol: cap_usd}) - fills tickers the live
+# Yahoo batch misses so one crumb failure cannot blank the whole US block.
+US_CAPS_FILE = Path(os.getenv("US_CAPS_FILE", str(BASE_DIR / "data" / "us_caps.json")))
 # Append-only mail send log (last 50 sends): every Telegram / web / auto mail
 # records ✅/❌ here so /emailstatus and the web Email page can show it.
 MAIL_LOG_FILE = Path(os.getenv("MAIL_LOG_FILE", str(BASE_DIR / "data" / "mail_log.json")))

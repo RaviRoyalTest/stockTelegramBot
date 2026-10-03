@@ -49,6 +49,9 @@ STATE_FILES = (
     config.SNAPSHOT_FILE,
     config.SNAPSHOT_FILE.parent / "snapshots",
     config.OPENREPORT_DIR,
+    # Disposable but valuable: last-known US market caps. Without it a fresh
+    # host that cannot fetch a Yahoo crumb blanks the whole US block (0/40).
+    config.US_CAPS_FILE,
 )
 
 
