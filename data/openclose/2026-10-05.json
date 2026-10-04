@@ -1,0 +1,25 @@
+{
+  "recorded_at": "2026-10-04T20:05:19+00:00",
+  "recorded_by": "telegram",
+  "mode": "live",
+  "markets": [
+    "us"
+  ],
+  "target_date": null,
+  "report": {
+    "sections": [
+      {
+        "market": "us",
+        "closed": true,
+        "reason": "Weekend - the exchange does not trade on Saturday/Sunday.",
+        "next_session": "Mon 05-Oct-2026 09:30 ET",
+        "label": "U.S."
+      }
+    ],
+    "total_verified": 0,
+    "total_target": 0,
+    "mode": "live",
+    "volume_computed": 0,
+    "source": "Yahoo Finance regular-session bars (includePrePost=false); Indian universes: official NSE index constituent CSVs."
+  }
+}
