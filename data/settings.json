@@ -7,10 +7,10 @@
       "universe": "nifty500"
     },
     "recent_commands": [
-      "/openreport us",
       "/openreport in",
       "/gappers today",
       "/corpactionsformylist",
+      "/openreport us",
       "/emailboth",
       "/emailstatus",
       "/dailyemail both",
@@ -22,16 +22,16 @@
     "email": "raviroyalmechai@gmail.com",
     "daily_email": true,
     "email_scope": "both",
-    "last_eod_email": "2026-10-02",
-    "last_daily_email": "2026-10-03",
-    "last_open_email": "2026-10-03"
+    "last_eod_email": "2026-10-04",
+    "last_daily_email": "2026-10-05",
+    "last_open_email": "2026-10-05"
   },
   "@StockVigilBot": {
     "action_filters": [],
     "price_alert_pct": 5.0,
     "recent_commands": [
-      "/openreport us",
       "/openreport in",
+      "/openreport us",
       "/scan500"
     ]
   }
