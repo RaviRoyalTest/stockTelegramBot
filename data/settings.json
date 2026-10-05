@@ -23,8 +23,8 @@
     "daily_email": true,
     "email_scope": "both",
     "last_eod_email": "2026-10-04",
-    "last_daily_email": "2026-10-04",
-    "last_open_email": "2026-10-04"
+    "last_daily_email": "2026-10-05",
+    "last_open_email": "2026-10-05"
   },
   "@StockVigilBot": {
     "action_filters": [],
