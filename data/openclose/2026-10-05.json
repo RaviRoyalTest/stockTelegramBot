@@ -1,5 +1,5 @@
 {
-  "recorded_at": "2026-10-05T10:06:56+00:00",
+  "recorded_at": "2026-10-05T10:10:51+00:00",
   "recorded_by": "telegram",
   "mode": "live",
   "markets": [
@@ -14,7 +14,7 @@
           "market": "in",
           "mode": "live",
           "date": "05-Oct-2026",
-          "time_local": "15:36",
+          "time_local": "15:40",
           "tz_label": "IST",
           "state": "CLOSED"
         },
@@ -662,9 +662,9 @@
           },
           {
             "label": "Sensex",
-            "level": 72530.28,
-            "change": 620.5768749999988,
-            "change_pct": 0.862994628028509
+            "level": 72421.81,
+            "change": 512.1068749999977,
+            "change_pct": 0.7121526758493313
           },
           {
             "label": "Nifty Bank",
