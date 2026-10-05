@@ -7,10 +7,10 @@
       "universe": "nifty500"
     },
     "recent_commands": [
+      "/openreport us",
       "/openreport in",
       "/gappers today",
       "/corpactionsformylist",
-      "/openreport us",
       "/emailboth",
       "/emailstatus",
       "/dailyemail both",
@@ -30,8 +30,8 @@
     "action_filters": [],
     "price_alert_pct": 5.0,
     "recent_commands": [
-      "/openreport in",
       "/openreport us",
+      "/openreport in",
       "/scan500"
     ]
   }
