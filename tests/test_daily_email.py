@@ -1,9 +1,13 @@
 import unittest
+from datetime import date, timedelta
 from unittest.mock import patch
 
+from corporate_actions import storage as storage_mod
+from corporate_actions.email import daily as daily_mod
 from corporate_actions.email.daily import build_combined_lines, build_daily_lines
 from corporate_actions.email.daily import build_eod_store_lines, build_full_session_lines
 from corporate_actions.email.daily import build_open_lines, get_scope
+from corporate_actions.email.daily import maybe_send_eod_email, maybe_send_open_email
 
 
 class DailyEmailTests(unittest.TestCase):
@@ -117,6 +121,95 @@ class DailyEmailTests(unittest.TestCase):
         self.assertIn("RELIANCE", text)
         self.assertIn("rs-table", text)
         self.assertIn("Watchlist", text)
+
+
+def _live_report(label="2099-01-05"):
+    return {
+        "sections": [{
+            "market": "in",
+            "snapshot": {"date": label, "time_local": "10:00", "state": "OPEN"},
+            "universes": [{
+                "title": "NIFTY 100", "verified": 10, "target": 20,
+                "gainers": [{"symbol": "RELIANCE", "price": 100.0, "change_pct": 1.0}],
+                "losers": [],
+            }],
+            "indices": [],
+        }],
+        "total_verified": 10, "total_target": 20,
+    }
+
+
+class MarketGatedMailTests(unittest.TestCase):
+    """No automatic mail when the market is closed; the morning mail builds
+    a live opening scan when the recorded file is stale."""
+
+    def setUp(self):
+        daily_mod._TRADED_DAY_CACHE.clear()
+        self.settings = {"email": "a@b.com", "daily_email": True, "email_scope": "both"}
+        patches = [
+            patch.object(daily_mod, "in_open_window", return_value=True),
+            patch.object(daily_mod, "in_close_window", return_value=True),
+            patch.object(daily_mod, "email_configured", return_value=True),
+            patch.object(storage_mod, "get_user_settings", return_value=dict(self.settings)),
+            patch.object(storage_mod, "save_user_settings"),
+        ]
+        for patcher in patches:
+            patcher.start()
+            self.addCleanup(patcher.stop)
+        sender = patch.object(daily_mod, "send_email", return_value=(True, ""))
+        self.send = sender.start()
+        self.addCleanup(sender.stop)
+
+    def test_open_skipped_when_market_closed(self):
+        with patch("corporate_actions.market.hours.is_market_open", return_value=False):
+            self.assertFalse(maybe_send_open_email("123"))
+        self.send.assert_not_called()
+
+    def test_open_builds_live_when_recorded_stale(self):
+        stale = {"recorded_at": "2020-01-01T00:00:00+00:00",
+                 "report": _live_report("old")}
+        live = _live_report()
+        with patch("corporate_actions.market.hours.is_market_open", return_value=True), \
+                patch.object(storage_mod, "load_openclose", return_value=stale), \
+                patch("corporate_actions.opening_report.report.collect", return_value=live) as collect, \
+                patch("corporate_actions.opening_report.report.save_openclose_doc") as save:
+            self.assertTrue(maybe_send_open_email("123"))
+        collect.assert_called_once()
+        save.assert_called_once()
+        subject = self.send.call_args[0][1]
+        self.assertIn("opening", subject)
+
+    def test_open_reuses_current_recorded_without_rebuild(self):
+        from corporate_actions.core.dates import today_ist
+
+        # Fixed mid-morning IST stamp: immune to UTC/IST midnight edges.
+        stamped = f"{today_ist().isoformat()}T10:00:00+05:30"
+        current = {"recorded_at": stamped, "report": _live_report()}
+        with patch("corporate_actions.market.hours.is_market_open", return_value=True), \
+                patch.object(storage_mod, "load_openclose", return_value=current), \
+                patch("corporate_actions.opening_report.report.collect",
+                      side_effect=AssertionError("must not refetch")):
+            self.assertTrue(maybe_send_open_email("123"))
+        self.send.assert_called_once()
+
+    def test_eod_skipped_when_no_session_today(self):
+        yesterday = date.today() - timedelta(days=1)
+        with patch("corporate_actions.opening_report.data.latest_session_date",
+                   return_value=yesterday):
+            self.assertFalse(maybe_send_eod_email("123"))
+        self.send.assert_not_called()
+
+    def test_eod_sends_when_traded_today(self):
+        from corporate_actions.core.dates import today_ist
+
+        stamped = f"{today_ist().isoformat()}T16:00:00+05:30"
+        current = {"recorded_at": stamped, "report": _live_report()}
+        with patch("corporate_actions.opening_report.data.latest_session_date",
+                   return_value=date.today()), \
+                patch.object(storage_mod, "load_openclose", return_value=current), \
+                patch.object(storage_mod, "load_watchlist", return_value=[]):
+            self.assertTrue(maybe_send_eod_email("123"))
+        self.send.assert_called_once()
 
 
 if __name__ == "__main__":
