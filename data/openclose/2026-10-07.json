@@ -1,0 +1,80 @@
+{
+  "recorded_at": "2026-10-06T20:05:53+00:00",
+  "recorded_by": "telegram",
+  "mode": "live",
+  "markets": [
+    "us"
+  ],
+  "target_date": null,
+  "report": {
+    "sections": [
+      {
+        "market": "us",
+        "snapshot": {
+          "market": "us",
+          "mode": "live",
+          "date": "06-Oct-2026",
+          "time_local": "16:05",
+          "tz_label": "ET",
+          "state": "CLOSED",
+          "time_ist": "01:35"
+        },
+        "universes": [
+          {
+            "key": "usmega",
+            "title": "MEGA CAP ($200B+)",
+            "unavailable": false,
+            "gainers": [],
+            "losers": [],
+            "verified": 0,
+            "target": 20
+          },
+          {
+            "key": "uslarge",
+            "title": "LARGE CAP ($10B-$200B)",
+            "unavailable": false,
+            "gainers": [],
+            "losers": [],
+            "verified": 0,
+            "target": 20
+          }
+        ],
+        "indices": [
+          {
+            "label": "S&P 500",
+            "level": 7818.93,
+            "change": 44.97980468750029,
+            "change_pct": 0.5785965121647165
+          },
+          {
+            "label": "Nasdaq Composite",
+            "level": 27599.791,
+            "change": 122.48045312500108,
+            "change_pct": 0.4457512423424963
+          },
+          {
+            "label": "Dow Jones",
+            "level": 51521.28,
+            "change": 253.38156249999884,
+            "change_pct": 0.494230444824831
+          },
+          {
+            "label": "Russell 2000",
+            "level": 2827.646,
+            "change": -19.493892578124814,
+            "change_pct": -0.6846833423584544
+          }
+        ],
+        "volume_buckets": [],
+        "catalysts": [],
+        "volume_computed": 0,
+        "unclassified": 518
+      }
+    ],
+    "total_verified": 0,
+    "total_target": 40,
+    "mode": "live",
+    "volume_computed": 0,
+    "source": "Yahoo Finance regular-session bars (includePrePost=false); Indian universes: official NSE index constituent CSVs."
+  }
+}
