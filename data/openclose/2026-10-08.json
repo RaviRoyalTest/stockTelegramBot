@@ -1,5 +1,5 @@
 {
-  "recorded_at": "2026-10-07T20:05:50+00:00",
+  "recorded_at": "2026-10-07T20:08:18+00:00",
   "recorded_by": "telegram",
   "mode": "live",
   "markets": [
@@ -14,10 +14,10 @@
           "market": "us",
           "mode": "live",
           "date": "07-Oct-2026",
-          "time_local": "16:05",
+          "time_local": "16:08",
           "tz_label": "ET",
           "state": "CLOSED",
-          "time_ist": "01:35"
+          "time_ist": "01:38"
         },
         "universes": [
           {
@@ -60,9 +60,9 @@
           },
           {
             "label": "Russell 2000",
-            "level": 2793.547,
-            "change": -36.753048828124975,
-            "change_pct": -1.298556626296298
+            "level": 2791.7073,
+            "change": -38.59274882812497,
+            "change_pct": -1.3635568018346376
           }
         ],
         "volume_buckets": [],
