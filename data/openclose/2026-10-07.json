@@ -1,80 +1,856 @@
 {
-  "recorded_at": "2026-10-06T20:09:14+00:00",
+  "recorded_at": "2026-10-07T04:31:21+00:00",
   "recorded_by": "telegram",
   "mode": "live",
   "markets": [
-    "us"
+    "in"
   ],
   "target_date": null,
   "report": {
     "sections": [
       {
-        "market": "us",
+        "market": "in",
         "snapshot": {
-          "market": "us",
+          "market": "in",
           "mode": "live",
-          "date": "06-Oct-2026",
-          "time_local": "16:09",
-          "tz_label": "ET",
-          "state": "CLOSED",
-          "time_ist": "01:39"
+          "date": "07-Oct-2026",
+          "time_local": "10:01",
+          "tz_label": "IST",
+          "state": "OPEN"
         },
         "universes": [
           {
-            "key": "usmega",
-            "title": "MEGA CAP ($200B+)",
+            "key": "in100",
+            "title": "NIFTY 100",
             "unavailable": false,
-            "gainers": [],
-            "losers": [],
-            "verified": 0,
+            "gainers": [
+              {
+                "symbol": "ADANIGREEN",
+                "name": "Adani Green Energy Limited",
+                "price": 1357.0,
+                "prev_close": 1284.0,
+                "change": 73.0,
+                "change_pct": 5.685358255451713,
+                "volume": 2361238,
+                "volume_change_pct": 132.79666999246763
+              },
+              {
+                "symbol": "DIVISLAB",
+                "name": "Divi's Laboratories Limited",
+                "price": 9544.5,
+                "prev_close": 9196.0,
+                "change": 348.5,
+                "change_pct": 3.789691170073945,
+                "volume": 40861,
+                "volume_change_pct": -91.49328181405593
+              },
+              {
+                "symbol": "INDIGO",
+                "name": "InterGlobe Aviation Limited",
+                "price": 5060.5,
+                "prev_close": 4935.0,
+                "change": 125.5,
+                "change_pct": 2.5430597771023304,
+                "volume": 127264,
+                "volume_change_pct": -68.5634392877963
+              },
+              {
+                "symbol": "NESTLEIND",
+                "name": "Nestlé India Limited",
+                "price": 1324.5999755859375,
+                "prev_close": 1297.0999755859375,
+                "change": 27.5,
+                "change_pct": 2.12011414059101,
+                "volume": 84188,
+                "volume_change_pct": -94.97725721540495
+              },
+              {
+                "symbol": "CUMMINSIND",
+                "name": "Cummins India Limited",
+                "price": 4926.60009765625,
+                "prev_close": 4832.2998046875,
+                "change": 94.30029296875,
+                "change_pct": 1.9514578312644304,
+                "volume": 94567,
+                "volume_change_pct": -86.63178786602244
+              },
+              {
+                "symbol": "PFC",
+                "name": "Power Finance Corporation Limited",
+                "price": 328.0,
+                "prev_close": 322.0,
+                "change": 6.0,
+                "change_pct": 1.8633540372670807,
+                "volume": 2346680,
+                "volume_change_pct": -79.33078451646158
+              },
+              {
+                "symbol": "TATACONSUM",
+                "name": "Tata Consumer Products Limited",
+                "price": 970.4000244140625,
+                "prev_close": 953.75,
+                "change": 16.6500244140625,
+                "change_pct": 1.7457430578309305,
+                "volume": 81647,
+                "volume_change_pct": -94.6994204530036
+              },
+              {
+                "symbol": "ZYDUSLIFE",
+                "name": "Zydus Lifesciences Limited",
+                "price": 1156.0999755859375,
+                "prev_close": 1139.0,
+                "change": 17.0999755859375,
+                "change_pct": 1.5013148012236612,
+                "volume": 103983,
+                "volume_change_pct": -93.4723940707093
+              },
+              {
+                "symbol": "BAJFINANCE",
+                "name": "Bajaj Finance Limited",
+                "price": 975.9500122070312,
+                "prev_close": 963.0999755859375,
+                "change": 12.85003662109375,
+                "change_pct": 1.3342370415154414,
+                "volume": 1537048,
+                "volume_change_pct": -64.91083246621432
+              },
+              {
+                "symbol": "AXISBANK",
+                "name": "Axis Bank Limited",
+                "price": 1236.4000244140625,
+                "prev_close": 1222.199951171875,
+                "change": 14.2000732421875,
+                "change_pct": 1.1618453452376696,
+                "volume": 431386,
+                "volume_change_pct": -94.22675870427345
+              }
+            ],
+            "losers": [
+              {
+                "symbol": "TITAN",
+                "name": "Titan Company Limited",
+                "price": 4378.0,
+                "prev_close": 4550.0,
+                "change": -172.0,
+                "change_pct": -3.7802197802197806,
+                "volume": 1250101,
+                "volume_change_pct": 56.24055602146198
+              },
+              {
+                "symbol": "JINDALSTEL",
+                "name": "Jindal Steel Limited",
+                "price": 1065.9000244140625,
+                "prev_close": 1097.300048828125,
+                "change": -31.4000244140625,
+                "change_pct": -2.8615714040655096,
+                "volume": 179932,
+                "volume_change_pct": -59.47523113478452
+              },
+              {
+                "symbol": "AMBUJACEM",
+                "name": "Ambuja Cements Limited",
+                "price": 358.54998779296875,
+                "prev_close": 366.5,
+                "change": -7.95001220703125,
+                "change_pct": -2.169171134251364,
+                "volume": 546997,
+                "volume_change_pct": -70.41041039958066
+              },
+              {
+                "symbol": "HINDALCO",
+                "name": "Hindalco Industries Limited",
+                "price": 920.4000244140625,
+                "prev_close": 940.5,
+                "change": -20.0999755859375,
+                "change_pct": -2.1371584886695905,
+                "volume": 621289,
+                "volume_change_pct": -79.23122411587397
+              },
+              {
+                "symbol": "ASIANPAINT",
+                "name": "Asian Paints Limited",
+                "price": 2373.10009765625,
+                "prev_close": 2424.199951171875,
+                "change": -51.099853515625,
+                "change_pct": -2.1079058883291775,
+                "volume": 108265,
+                "volume_change_pct": -75.3648119452162
+              },
+              {
+                "symbol": "TATAPOWER",
+                "name": "The Tata Power Company Limited",
+                "price": 345.1499938964844,
+                "prev_close": 351.6499938964844,
+                "change": -6.5,
+                "change_pct": -1.8484288675726275,
+                "volume": 809978,
+                "volume_change_pct": -85.89241928590016
+              },
+              {
+                "symbol": "GAIL",
+                "name": "GAIL (India) Limited",
+                "price": 168.9600067138672,
+                "prev_close": 172.0800018310547,
+                "change": -3.1199951171875,
+                "change_pct": -1.8131073244935574,
+                "volume": 720520,
+                "volume_change_pct": -89.62556454872315
+              },
+              {
+                "symbol": "BEL",
+                "name": "Bharat Electronics Limited",
+                "price": 380.5,
+                "prev_close": 387.3999938964844,
+                "change": -6.899993896484375,
+                "change_pct": -1.7811032537930538,
+                "volume": 1956674,
+                "volume_change_pct": -80.50767778774195
+              },
+              {
+                "symbol": "BAJAJ-AUTO",
+                "name": "Bajaj Auto Limited",
+                "price": 9851.0,
+                "prev_close": 10017.0,
+                "change": -166.0,
+                "change_pct": -1.657182789258261,
+                "volume": 48525,
+                "volume_change_pct": -69.49437036757632
+              },
+              {
+                "symbol": "HYUNDAI",
+                "name": "Hyundai Motor India Limited",
+                "price": 1970.0,
+                "prev_close": 2000.0,
+                "change": -30.0,
+                "change_pct": -1.5,
+                "volume": 78679,
+                "volume_change_pct": -76.02412245283536
+              }
+            ],
+            "verified": 20,
             "target": 20
           },
           {
-            "key": "uslarge",
-            "title": "LARGE CAP ($10B-$200B)",
+            "key": "in500x",
+            "title": "NIFTY 500 EX-NIFTY 100",
             "unavailable": false,
-            "gainers": [],
-            "losers": [],
-            "verified": 0,
+            "gainers": [
+              {
+                "symbol": "PTCIL",
+                "name": "PTC Industries Limited",
+                "price": 24050.0,
+                "prev_close": 22530.0,
+                "change": 1520.0,
+                "change_pct": 6.746560142032846,
+                "volume": 39376,
+                "volume_change_pct": 111.41476510067115
+              },
+              {
+                "symbol": "HFCL",
+                "name": "HFCL Limited",
+                "price": 266.6000061035156,
+                "prev_close": 250.27000427246094,
+                "change": 16.330001831054688,
+                "change_pct": 6.524953670946814,
+                "volume": 7150117,
+                "volume_change_pct": -25.46302859921157
+              },
+              {
+                "symbol": "SUPREMEIND",
+                "name": "The Supreme Industries Limited",
+                "price": 3619.10009765625,
+                "prev_close": 3398.89990234375,
+                "change": 220.2001953125,
+                "change_pct": 6.4785725275598285,
+                "volume": 92513,
+                "volume_change_pct": 73.58012646115166
+              },
+              {
+                "symbol": "CLEANMAX",
+                "name": "Clean Max Enviro Energy Solutions Limited",
+                "price": 1383.0,
+                "prev_close": 1303.300048828125,
+                "change": 79.699951171875,
+                "change_pct": 6.115241938610989,
+                "volume": 41203,
+                "volume_change_pct": -73.60085086207448
+              },
+              {
+                "symbol": "PVRINOX",
+                "name": "PVR INOX Limited",
+                "price": 1304.300048828125,
+                "prev_close": 1231.4000244140625,
+                "change": 72.9000244140625,
+                "change_pct": 5.920092818639543,
+                "volume": 695774,
+                "volume_change_pct": 149.30719535048712
+              },
+              {
+                "symbol": "ASTRAL",
+                "name": "Astral Limited",
+                "price": 1440.300048828125,
+                "prev_close": 1362.0999755859375,
+                "change": 78.2000732421875,
+                "change_pct": 5.74114049216894,
+                "volume": 184476,
+                "volume_change_pct": -43.37857498020294
+              },
+              {
+                "symbol": "KPIL",
+                "name": "Kalpataru Projects International Limited",
+                "price": 1455.0,
+                "prev_close": 1378.800048828125,
+                "change": 76.199951171875,
+                "change_pct": 5.526541084520497,
+                "volume": 23632,
+                "volume_change_pct": -81.95768851970897
+              },
+              {
+                "symbol": "CHENNPETRO",
+                "name": "Chennai Petroleum Corporation Limited",
+                "price": 1480.0,
+                "prev_close": 1405.699951171875,
+                "change": 74.300048828125,
+                "change_pct": 5.2856264785514195,
+                "volume": 2026931,
+                "volume_change_pct": 113.50116971445485
+              },
+              {
+                "symbol": "WOCKPHARMA",
+                "name": "Wockhardt Limited",
+                "price": 2167.39990234375,
+                "prev_close": 2063.5,
+                "change": 103.89990234375,
+                "change_pct": 5.035129747698086,
+                "volume": 161721,
+                "volume_change_pct": -79.86423508347724
+              },
+              {
+                "symbol": "BALRAMCHIN",
+                "name": "Balrampur Chini Mills Limited",
+                "price": 701.7999877929688,
+                "prev_close": 671.5,
+                "change": 30.29998779296875,
+                "change_pct": 4.5122841091539465,
+                "volume": 473256,
+                "volume_change_pct": -55.16757593469565
+              }
+            ],
+            "losers": [
+              {
+                "symbol": "RAINBOW",
+                "name": "Rainbow Children's Medicare Limited",
+                "price": 1211.5999755859375,
+                "prev_close": 1269.300048828125,
+                "change": -57.7000732421875,
+                "change_pct": -4.545818248054021,
+                "volume": 22873,
+                "volume_change_pct": -83.31363623099594
+              },
+              {
+                "symbol": "CANHLIFE",
+                "name": "Canara HSBC Life Insurance Company Limited",
+                "price": 137.02000427246094,
+                "prev_close": 142.36000061035156,
+                "change": -5.339996337890625,
+                "change_pct": -3.7510510782495268,
+                "volume": 1325357,
+                "volume_change_pct": 244.2798695985349
+              },
+              {
+                "symbol": "NATIONALUM",
+                "name": "National Aluminium Company Limited",
+                "price": 326.20001220703125,
+                "prev_close": 337.25,
+                "change": -11.04998779296875,
+                "change_pct": -3.2764974923554484,
+                "volume": 3036747,
+                "volume_change_pct": -54.684102330239995
+              },
+              {
+                "symbol": "PFOCUS",
+                "name": "Prime Focus Limited",
+                "price": 276.29998779296875,
+                "prev_close": 285.6499938964844,
+                "change": -9.350006103515625,
+                "change_pct": -3.2732386848584842,
+                "volume": 1805363,
+                "volume_change_pct": -56.8539442383038
+              },
+              {
+                "symbol": "IKS",
+                "name": "Inventurus Knowledge Solutions Limited",
+                "price": 1714.5,
+                "prev_close": 1766.800048828125,
+                "change": -52.300048828125,
+                "change_pct": -2.960156632484493,
+                "volume": 77448,
+                "volume_change_pct": -35.3986286972624
+              },
+              {
+                "symbol": "COROMANDEL",
+                "name": "Coromandel International Limited",
+                "price": 1749.0999755859375,
+                "prev_close": 1801.4000244140625,
+                "change": -52.300048828125,
+                "change_pct": -2.9033001065455477,
+                "volume": 20055,
+                "volume_change_pct": -89.39999365743823
+              },
+              {
+                "symbol": "ZENSARTECH",
+                "name": "Zensar Technologies Limited",
+                "price": 439.45001220703125,
+                "prev_close": 451.5,
+                "change": -12.04998779296875,
+                "change_pct": -2.668878802429402,
+                "volume": 85229,
+                "volume_change_pct": -97.39313821148158
+              },
+              {
+                "symbol": "ACMESOLAR",
+                "name": "ACME Solar Holdings Limited",
+                "price": 436.29998779296875,
+                "prev_close": 448.20001220703125,
+                "change": -11.9000244140625,
+                "change_pct": -2.6550700780806036,
+                "volume": 310740,
+                "volume_change_pct": -64.98680554460087
+              },
+              {
+                "symbol": "MEDANTA",
+                "name": "Global Health Limited",
+                "price": 1270.9000244140625,
+                "prev_close": 1300.800048828125,
+                "change": -29.9000244140625,
+                "change_pct": -2.2985872764226194,
+                "volume": 42593,
+                "volume_change_pct": -88.74020223382459
+              },
+              {
+                "symbol": "FEDERALBNK",
+                "name": "The Federal Bank Limited",
+                "price": 320.25,
+                "prev_close": 327.3500061035156,
+                "change": -7.100006103515625,
+                "change_pct": -2.168934159503403,
+                "volume": 245201,
+                "volume_change_pct": -96.74895886229935
+              }
+            ],
+            "verified": 20,
+            "target": 20
+          },
+          {
+            "key": "inmicro",
+            "title": "NIFTY MICROCAP 250",
+            "unavailable": false,
+            "gainers": [
+              {
+                "symbol": "INDIAGLYCO",
+                "name": "India Glycols Limited",
+                "price": 341.6499938964844,
+                "prev_close": 303.3500061035156,
+                "change": 38.29998779296875,
+                "change_pct": 12.625675629589143,
+                "volume": 2382861,
+                "volume_change_pct": 733.3400946349072
+              },
+              {
+                "symbol": "E2E",
+                "name": "E2E Networks Limited",
+                "price": 723.2999877929688,
+                "prev_close": 656.0999755859375,
+                "change": 67.20001220703125,
+                "change_pct": 10.242343348209626,
+                "volume": 326679,
+                "volume_change_pct": -36.41693088327173
+              },
+              {
+                "symbol": "JAIBALAJI",
+                "name": "Jai Balaji Industries Limited",
+                "price": 67.37000274658203,
+                "prev_close": 61.119998931884766,
+                "change": 6.250003814697266,
+                "change_pct": 10.22579176034114,
+                "volume": 348654,
+                "volume_change_pct": -7.219819843793658
+              },
+              {
+                "symbol": "CAPILLARY",
+                "name": "Capillary Technologies India Limited",
+                "price": 598.7999877929688,
+                "prev_close": 546.0999755859375,
+                "change": 52.70001220703125,
+                "change_pct": 9.650249874207889,
+                "volume": 251661,
+                "volume_change_pct": 132.65323102523806
+              },
+              {
+                "symbol": "ELLEN",
+                "name": "Ellenbarrie Industrial Gases Limited",
+                "price": 356.54998779296875,
+                "prev_close": 332.54998779296875,
+                "change": 24.0,
+                "change_pct": 7.216960120576328,
+                "volume": 179528,
+                "volume_change_pct": -75.19875888802777
+              },
+              {
+                "symbol": "KRN",
+                "name": "KRN Heat Exchanger and Refrigeration Limited",
+                "price": 1489.5,
+                "prev_close": 1392.699951171875,
+                "change": 96.800048828125,
+                "change_pct": 6.950531501539399,
+                "volume": 196269,
+                "volume_change_pct": -11.68800197979707
+              },
+              {
+                "symbol": "SENORES",
+                "name": "Senores Pharmaceuticals Limited",
+                "price": 1402.699951171875,
+                "prev_close": 1321.199951171875,
+                "change": 81.5,
+                "change_pct": 6.168634802605867,
+                "volume": 52311,
+                "volume_change_pct": -80.81597476895995
+              },
+              {
+                "symbol": "OMNI",
+                "name": "Omnitech Engineering Limited",
+                "price": 671.0,
+                "prev_close": 632.1500244140625,
+                "change": 38.8499755859375,
+                "change_pct": 6.145689169583976,
+                "volume": 446275,
+                "volume_change_pct": -71.8351770134906
+              },
+              {
+                "symbol": "NEOGEN",
+                "name": "Neogen Chemicals Limited",
+                "price": 2453.10009765625,
+                "prev_close": 2311.199951171875,
+                "change": 141.900146484375,
+                "change_pct": 6.139674172822031,
+                "volume": 18887,
+                "volume_change_pct": -83.85491909080807
+              },
+              {
+                "symbol": "GOKULAGRO",
+                "name": "Gokul Agro Resources Limited",
+                "price": 216.35000610351562,
+                "prev_close": 205.27000427246094,
+                "change": 11.080001831054688,
+                "change_pct": 5.397769571996439,
+                "volume": 337570,
+                "volume_change_pct": 34.24027804841192
+              }
+            ],
+            "losers": [
+              {
+                "symbol": "THYROCARE",
+                "name": "Thyrocare Technologies Limited",
+                "price": 517.5,
+                "prev_close": 542.0499877929688,
+                "change": -24.54998779296875,
+                "change_pct": -4.529100331304758,
+                "volume": 47406,
+                "volume_change_pct": -77.1098299388707
+              },
+              {
+                "symbol": "MANYAVAR",
+                "name": "Vedant Fashions Limited",
+                "price": 499.79998779296875,
+                "prev_close": 521.2999877929688,
+                "change": -21.5,
+                "change_pct": -4.124304719634599,
+                "volume": 94122,
+                "volume_change_pct": -89.73944723700261
+              },
+              {
+                "symbol": "PTC",
+                "name": "PTC India Limited",
+                "price": 151.3800048828125,
+                "prev_close": 157.13999938964844,
+                "change": -5.7599945068359375,
+                "change_pct": -3.6655177098183036,
+                "volume": 945525,
+                "volume_change_pct": -72.51311297698517
+              },
+              {
+                "symbol": "BALAMINES",
+                "name": "Balaji Amines Limited",
+                "price": 2206.300048828125,
+                "prev_close": 2287.699951171875,
+                "change": -81.39990234375,
+                "change_pct": -3.5581546566914457,
+                "volume": 329242,
+                "volume_change_pct": -87.26686287325339
+              },
+              {
+                "symbol": "HAPPYFORGE",
+                "name": "Happy Forgings Limited",
+                "price": 1945.300048828125,
+                "prev_close": 2013.199951171875,
+                "change": -67.89990234375,
+                "change_pct": -3.3727351475557983,
+                "volume": 17361,
+                "volume_change_pct": -87.89077212806026
+              },
+              {
+                "symbol": "ALKYLAMINE",
+                "name": "Alkyl Amines Chemicals Limited",
+                "price": 1900.0,
+                "prev_close": 1962.199951171875,
+                "change": -62.199951171875,
+                "change_pct": -3.169908914467541,
+                "volume": 106022,
+                "volume_change_pct": -96.61779436628704
+              },
+              {
+                "symbol": "SUDEEPPHRM",
+                "name": "Sudeep Pharma Limited",
+                "price": 1140.5,
+                "prev_close": 1173.4000244140625,
+                "change": -32.9000244140625,
+                "change_pct": -2.803819987177104,
+                "volume": 55533,
+                "volume_change_pct": -65.23603538183207
+              },
+              {
+                "symbol": "REFEX",
+                "name": "Refex Industries Limited",
+                "price": 263.95001220703125,
+                "prev_close": 271.29998779296875,
+                "change": -7.3499755859375,
+                "change_pct": -2.7091691546799206,
+                "volume": 20410,
+                "volume_change_pct": -95.48342410005954
+              },
+              {
+                "symbol": "WEBELSOLAR",
+                "name": "Websol Energy System Limited",
+                "price": 69.08999633789062,
+                "prev_close": 70.88999938964844,
+                "change": -1.8000030517578125,
+                "change_pct": -2.539149481246369,
+                "volume": 608507,
+                "volume_change_pct": -79.1458212956242
+              },
+              {
+                "symbol": "GREAVESCOT",
+                "name": "Greaves Cotton Limited",
+                "price": 217.58999633789062,
+                "prev_close": 222.77999877929688,
+                "change": -5.19000244140625,
+                "change_pct": -2.3296536806914467,
+                "volume": 457180,
+                "volume_change_pct": -55.11995531432622
+              }
+            ],
+            "verified": 20,
             "target": 20
           }
         ],
         "indices": [
           {
-            "label": "S&P 500",
-            "level": 7818.93,
-            "change": 44.97980468750029,
-            "change_pct": 0.5785965121647165
+            "label": "Nifty 50",
+            "level": 22611.1,
+            "change": -164.99960937500146,
+            "change_pct": -0.7244419027175532
           },
           {
-            "label": "Nasdaq Composite",
-            "level": 27599.791,
-            "change": 122.48045312500108,
-            "change_pct": 0.4457512423424963
+            "label": "Sensex",
+            "level": 72658.95,
+            "change": -408.8625000000029,
+            "change_pct": -0.5595658142906672
           },
           {
-            "label": "Dow Jones",
-            "level": 51521.28,
-            "change": 253.38156249999884,
-            "change_pct": 0.494230444824831
+            "label": "Nifty Bank",
+            "level": 54836.75,
+            "change": -291.6484375,
+            "change_pct": -0.5290348454991791
           },
           {
-            "label": "Russell 2000",
-            "level": 2827.278,
-            "change": -19.861892578125207,
-            "change_pct": -0.6976085941509528
+            "label": "Nifty Midcap 150",
+            "level": 21913.05,
+            "change": -66.39921875000073,
+            "change_pct": -0.302096827309747
+          },
+          {
+            "label": "Nifty Smallcap 100",
+            "level": 19472.25,
+            "change": null,
+            "change_pct": null
+          },
+          {
+            "label": "Nifty Microcap 250",
+            "level": 26210.0,
+            "change": null,
+            "change_pct": null
           }
         ],
-        "volume_buckets": [],
-        "catalysts": [],
-        "volume_computed": 0,
-        "unclassified": 518
+        "volume_buckets": [
+          {
+            "label": "+200% or more",
+            "rows": [
+              {
+                "symbol": "INDIAGLYCO",
+                "name": "India Glycols Limited",
+                "price": 341.6499938964844,
+                "prev_close": 303.3500061035156,
+                "change": 38.29998779296875,
+                "change_pct": 12.625675629589143,
+                "volume": 2382861,
+                "volume_change_pct": 733.3400946349072
+              },
+              {
+                "symbol": "TBOTEK",
+                "name": "TBO Tek Limited",
+                "price": 1728.800048828125,
+                "prev_close": 1657.0,
+                "change": 71.800048828125,
+                "change_pct": 4.333135113344901,
+                "volume": 363101,
+                "volume_change_pct": 596.7570471859229
+              },
+              {
+                "symbol": "CANHLIFE",
+                "name": "Canara HSBC Life Insurance Company Limited",
+                "price": 137.02000427246094,
+                "prev_close": 142.36000061035156,
+                "change": -5.339996337890625,
+                "change_pct": -3.7510510782495268,
+                "volume": 1325357,
+                "volume_change_pct": 244.2798695985349
+              }
+            ]
+          },
+          {
+            "label": "+100% to +200%",
+            "rows": [
+              {
+                "symbol": "PVRINOX",
+                "name": "PVR INOX Limited",
+                "price": 1304.300048828125,
+                "prev_close": 1231.4000244140625,
+                "change": 72.9000244140625,
+                "change_pct": 5.920092818639543,
+                "volume": 695774,
+                "volume_change_pct": 149.30719535048712
+              },
+              {
+                "symbol": "ADANIGREEN",
+                "name": "Adani Green Energy Limited",
+                "price": 1357.0,
+                "prev_close": 1284.0,
+                "change": 73.0,
+                "change_pct": 5.685358255451713,
+                "volume": 2361238,
+                "volume_change_pct": 132.79666999246763
+              },
+              {
+                "symbol": "CAPILLARY",
+                "name": "Capillary Technologies India Limited",
+                "price": 598.7999877929688,
+                "prev_close": 546.0999755859375,
+                "change": 52.70001220703125,
+                "change_pct": 9.650249874207889,
+                "volume": 251661,
+                "volume_change_pct": 132.65323102523806
+              },
+              {
+                "symbol": "CHENNPETRO",
+                "name": "Chennai Petroleum Corporation Limited",
+                "price": 1480.0,
+                "prev_close": 1405.699951171875,
+                "change": 74.300048828125,
+                "change_pct": 5.2856264785514195,
+                "volume": 2026931,
+                "volume_change_pct": 113.50116971445485
+              },
+              {
+                "symbol": "PTCIL",
+                "name": "PTC Industries Limited",
+                "price": 24050.0,
+                "prev_close": 22530.0,
+                "change": 1520.0,
+                "change_pct": 6.746560142032846,
+                "volume": 39376,
+                "volume_change_pct": 111.41476510067115
+              }
+            ]
+          },
+          {
+            "label": "+50% to +100%",
+            "rows": [
+              {
+                "symbol": "JSWCEMENT",
+                "name": "JSW Cement Limited",
+                "price": 112.5,
+                "prev_close": 113.19999694824219,
+                "change": -0.6999969482421875,
+                "change_pct": -0.6183718790754413,
+                "volume": 2296441,
+                "volume_change_pct": 82.66778982602166
+              },
+              {
+                "symbol": "SUPREMEIND",
+                "name": "The Supreme Industries Limited",
+                "price": 3619.10009765625,
+                "prev_close": 3398.89990234375,
+                "change": 220.2001953125,
+                "change_pct": 6.4785725275598285,
+                "volume": 92513,
+                "volume_change_pct": 73.58012646115166
+              },
+              {
+                "symbol": "TITAN",
+                "name": "Titan Company Limited",
+                "price": 4378.0,
+                "prev_close": 4550.0,
+                "change": -172.0,
+                "change_pct": -3.7802197802197806,
+                "volume": 1250101,
+                "volume_change_pct": 56.24055602146198
+              }
+            ]
+          }
+        ],
+        "catalysts": [
+          {
+            "symbol": "INDIAGLYCO",
+            "change_pct": 12.625675629589143,
+            "headline": "Investors Shouldn't Be Too Comfortable With India Glycols' (NSE:INDIAGLYCO) Earnings - Simply Wall Street",
+            "publisher": "Simply Wall Street"
+          },
+          {
+            "symbol": "E2E",
+            "change_pct": 10.242343348209626,
+            "headline": "E2E Networks (NSE:E2E): Why Has the Trading Window Been Shut from October 1, 2026? - Kalkine India",
+            "publisher": "Kalkine India"
+          },
+          {
+            "symbol": "JAIBALAJI",
+            "change_pct": 10.22579176034114,
+            "headline": "Jai Balaji Industries to join GIA Metals Day on September 29 - scanx.trade",
+            "publisher": "scanx.trade"
+          },
+          {
+            "symbol": "CAPILLARY",
+            "change_pct": 9.650249874207889,
+            "headline": "Analysts Have Made A Financial Statement On Capillary Technologies India Limited's (NSE:CAPILLARY) First-Quarter Report - Simply Wall Street",
+            "publisher": "Simply Wall Street"
+          }
+        ],
+        "volume_computed": 749
       }
     ],
-    "total_verified": 0,
-    "total_target": 40,
+    "total_verified": 60,
+    "total_target": 60,
     "mode": "live",
-    "volume_computed": 0,
+    "volume_computed": 749,
     "source": "Yahoo Finance regular-session bars (includePrePost=false); Indian universes: official NSE index constituent CSVs."
   }
 }
