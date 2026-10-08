@@ -226,6 +226,7 @@ DISPATCHED_COMMANDS = frozenset({
     "/qualitycheck", "/quick", "/quiet", "/remove", "/removestock",
     "/sched", "/schednow", "/schedule", "/scorecard", "/scan500", "/screen",
     "/screener", "/sendmail", "/sessionmail", "/sessionreport", "/setemail", "/closereport", "/setlist", "/settings", "/setwatchlist", "/shareholder",
+    "/snap", "/snapnow", "/snapshot",
     "/shortcuts", "/silence", "/start", "/status", "/summary", "/tech",
     "/technical", "/topgainers", "/toplosers", "/topmovers", "/tutorial",
     "/upcoming", "/us", "/usfund", "/usquote", "/usstock", "/watcher",

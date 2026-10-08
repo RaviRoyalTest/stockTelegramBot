@@ -173,6 +173,37 @@ def user_schedule(chat_id: str) -> list[dict]:
     return storage.load_schedule_for(_clean_chat(chat_id))
 
 
+# Commands worth scheduling (report producers - the web Add Entry dropdown
+# and validation share this single list). Values are runnable examples.
+_SCHEDULE_SUGGESTIONS = (
+    ("/openreport", "Opening/closing screener, both markets"),
+    ("/openreport in", "India screener only"),
+    ("/openreport us", "US screener only"),
+    ("/openmarket", "Recorded report, instant replay"),
+    ("/topmovers", "Top gainers + losers"),
+    ("/topgainers", "Top rising stocks"),
+    ("/toplosers", "Top falling stocks"),
+    ("/moversover", "All stocks over N% today"),
+    ("/gappers", "Overnight gaps"),
+    ("/scan500", "NIFTY 500 technical scanner"),
+    ("/screen", "Fundamental screener"),
+    ("/myfavourites", "Your favourites bundle"),
+    ("/corpactionsformylist", "Corporate actions for your list"),
+    ("/corpactionssummary", "Corporate-action snapshot"),
+    ("/news", "Latest watchlist headlines"),
+    ("/checklist", "Investment scorecard"),
+    ("/snap", "Record the last session"),
+    ("/emailboth", "Open + close + EOD in one mail"),
+    ("/emailopen", "Opening screener mail"),
+    ("/emailclose", "Closing + EOD mail"),
+)
+
+
+def schedule_command_suggestions() -> list[dict]:
+    """Dropdown suggestions for schedule commands: [{value, hint}]."""
+    return [{"value": value, "hint": hint} for value, hint in _SCHEDULE_SUGGESTIONS]
+
+
 def add_schedule(chat_id: str, interval_min: int, commands: list[str],
                  run_at: str | None = None, market: str | None = None) -> list[dict]:
     """Add a scheduled report for a chat. Returns the chat's new schedule."""

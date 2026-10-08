@@ -178,11 +178,28 @@
           </div>
           <h3 style="margin:12px 0 6px;">Add Entry</h3>
           <div class="form-row">
-            <input id="schedCmds" class="field field-grow" placeholder="commands: /movers, /openreport in" aria-label="Commands" />
+            <input id="schedCmds" class="field field-grow" placeholder="commands: /movers, /openreport in" aria-label="Commands" list="schedCmdList" autocomplete="off" />
+            <datalist id="schedCmdList"></datalist>
           </div>
+          <p class="muted" id="schedHint" style="margin:0 0 8px; font-size:0.78rem;">Pick a command above — type to filter the suggestions.</p>
           <div class="form-row">
-            <input id="schedEvery" class="field" style="max-width:130px;" placeholder="every (min)" aria-label="Interval minutes" />
-            <input id="schedAt" class="field" style="max-width:130px;" placeholder="at HH:MM (opt)" aria-label="Run at time" />
+            <input id="schedEvery" class="field" style="max-width:130px;" placeholder="every (min)" aria-label="Interval minutes" list="schedEveryList" autocomplete="off" />
+            <datalist id="schedEveryList">
+              <option value="60"></option>
+              <option value="180"></option>
+              <option value="360"></option>
+              <option value="720"></option>
+              <option value="1440"></option>
+            </datalist>
+            <input id="schedAt" class="field" style="max-width:130px;" placeholder="at HH:MM (opt)" aria-label="Run at time" list="schedAtList" autocomplete="off" />
+            <datalist id="schedAtList">
+              <option value="09:15"></option>
+              <option value="09:30"></option>
+              <option value="10:00"></option>
+              <option value="15:30"></option>
+              <option value="15:35"></option>
+              <option value="16:05"></option>
+            </datalist>
             <select id="schedMarket" class="field" style="max-width:130px;" aria-label="Market gate">
               <option value="">market: any</option>
               <option value="in">in</option>
@@ -315,6 +332,7 @@
           var state = await api('/api/admin/state?token=' + encodeURIComponent(token()));
           lastUsers = state.users || [];
           renderUsers(lastUsers);
+          loadCmdSuggestions();
           if (selectedChat) selectChat(selectedChat);  // refresh the selected card
         } catch (err) {
           list.innerHTML = '<p class="muted">failed: ' + esc(err.message) + '</p>';
@@ -386,6 +404,29 @@
       document.getElementById('usersSearch').addEventListener('input', function () {
         renderUsers(lastUsers);
       });
+
+      // Schedule command suggestions (same curated list the server validates
+      // against). Falls back to a built-in list if the API is unreachable.
+      var CMD_FALLBACK = ['/openreport', '/openreport in', '/openreport us', '/openmarket',
+        '/topmovers', '/topgainers', '/toplosers', '/moversover', '/gappers', '/scan500',
+        '/screen', '/myfavourites', '/corpactionsformylist', '/corpactionssummary',
+        '/news', '/checklist', '/snap', '/emailboth', '/emailopen', '/emailclose'];
+      function paintCmdSuggestions(suggestions) {
+        var list = document.getElementById('schedCmdList');
+        list.innerHTML = (suggestions || []).map(function (s) {
+          var value = typeof s === 'string' ? s : (s.value || '');
+          var hint = typeof s === 'string' ? '' : (s.hint || '');
+          return '<option value="' + esc(value) + '"' + (hint ? ' label="' + esc(hint) + '"' : '') + '></option>';
+        }).join('');
+      }
+      async function loadCmdSuggestions() {
+        try {
+          var data = await api('/api/admin/schedule/commands?token=' + encodeURIComponent(token()));
+          paintCmdSuggestions(data.suggestions && data.suggestions.length ? data.suggestions : CMD_FALLBACK);
+        } catch (err) {
+          paintCmdSuggestions(CMD_FALLBACK);
+        }
+      }
 
       // Sidebar toggles act immediately (same endpoints as the old table:
       // checked = alerts ON, unchecked = OFF, for both switches).

@@ -154,6 +154,17 @@ class AdminOpsTests(unittest.TestCase):
         self.assertFalse(state["quiet"])
         self.assertFalse(admin.storage.is_quiet(self.owner))
 
+    def test_schedule_suggestions_are_all_known_commands(self):
+        from corporate_actions.bot.registry import is_known_command
+
+        suggestions = admin.schedule_command_suggestions()
+        self.assertTrue(len(suggestions) >= 10)
+        for item in suggestions:
+            self.assertTrue(item["value"].startswith("/"), item)
+            self.assertTrue(item["hint"], item)
+            self.assertTrue(is_known_command(item["value"]),
+                            item["value"] + " should pass schedule validation")
+
     def test_ca_alert_toggle(self):
         state = admin.set_ca_alerts(self.owner, False)
         self.assertFalse(state["ca_alerts"])

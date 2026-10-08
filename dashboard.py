@@ -1909,11 +1909,36 @@ async def api_admin_add_schedule(payload: dict):
         interval = int(payload.get("interval_min") or 1440)
     except (TypeError, ValueError):
         raise HTTPException(status_code=400, detail="interval_min must be a whole number of minutes")
+    # Same validation as Telegram /schedule add: unknown commands would sit
+    # in the schedule failing forever, so refuse them with a helpful error.
+    try:
+        from corporate_actions.bot.registry import is_known_command
+    except Exception:
+        is_known_command = None
+    if is_known_command is not None:
+        bad = [command for command in commands if not is_known_command(command)]
+        if bad:
+            raise HTTPException(
+                status_code=422,
+                detail="Unknown command(s): " + ", ".join(bad)
+                + " - pick one from the suggestions list",
+            )
     schedule = await asyncio.to_thread(
         admin_service.add_schedule, chat, interval, commands,
         payload.get("run_at"), payload.get("market"),
     )
     return JSONResponse({"ok": True, "schedule": schedule})
+
+
+@app.get("/api/admin/schedule/commands")
+async def api_admin_schedule_commands(token: str | None = Query(None)):
+    """Dropdown suggestions for schedule commands (admin only)."""
+    _admin_guard(token)
+    try:
+        suggestions = await asyncio.to_thread(admin_service.schedule_command_suggestions)
+        return JSONResponse({"suggestions": suggestions})
+    except Exception as exc:
+        raise HTTPException(status_code=500, detail=str(exc))
 
 
 @app.delete("/api/admin/schedule")
