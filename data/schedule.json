@@ -58,5 +58,14 @@
     "run_at": "09:40,16:05",
     "market": "us",
     "next_due": "2026-10-08T13:40:00"
+  },
+  {
+    "interval_min": 1440,
+    "commands": [
+      "/corpactionssummary"
+    ],
+    "chat": "862087765",
+    "run_at": "09:15",
+    "market": "in"
   }
 ]
