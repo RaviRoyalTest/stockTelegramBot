@@ -283,6 +283,67 @@ class MarketGatedMailTests(unittest.TestCase):
         self.send.assert_called_once()
 
 
+class WatchlistActionsMailTests(unittest.TestCase):
+    def _actions(self):
+        from datetime import date, timedelta
+
+        future = (date.today() + timedelta(days=3)).isoformat()
+        past = (date.today() - timedelta(days=2)).isoformat()
+        return [
+            {"symbol": "DIV", "subject": "Dividend Rs 10", "exchange": "NSE",
+             "ex_date": future},
+            {"symbol": "BONUS", "subject": "Bonus 1:1", "exchange": "NSE",
+             "ex_date": past},
+            {"symbol": "RIGHTS", "subject": "Rights issue", "exchange": "NSE",
+             "ex_date": ""},
+        ]
+
+    def test_all_watchlist_actions_grouped_in_mail(self):
+        from corporate_actions.email.daily import build_watchlist_actions_lines
+
+        text = "\n".join(build_watchlist_actions_lines(self._actions()))
+        for symbol in ("DIV", "BONUS", "RIGHTS"):
+            self.assertIn(symbol, text)
+        self.assertIn("Upcoming", text)
+        self.assertIn("Announced", text)
+
+    def test_eod_prefers_live_actions_over_snapshot(self):
+        from corporate_actions.email import daily as dm
+
+        with patch("corporate_actions.email.daily.storage") as store, \
+                patch("corporate_actions.poller.fetch_matching",
+                      return_value=self._actions()) as fetch:
+            store.get_user_settings.return_value = {"email": "a@b.com", "daily_email": True}
+            store.load_watchlist.return_value = [
+                {"symbol": "DIV", "company": "D", "exchange": "NSE"}]
+            store.load_schedule_for.return_value = []
+            store.load_snapshots.return_value = {
+                "corporate_actions": [{"symbol": "OLD", "action": "X"}]}
+            store.list_snapshot_dates.return_value = []
+            store.list_openclose_dates.return_value = []
+            text = "\n".join(dm.build_eod_store_lines("123", []))
+        fetch.assert_called_once()
+        for symbol in ("DIV", "BONUS", "RIGHTS"):
+            self.assertIn(symbol, text)
+        self.assertNotIn("OLD", text)
+
+    def test_eod_falls_back_to_snapshot_when_fetch_empty(self):
+        from corporate_actions.email import daily as dm
+
+        with patch("corporate_actions.email.daily.storage") as store, \
+                patch("corporate_actions.poller.fetch_matching",
+                      return_value=[]):
+            store.get_user_settings.return_value = {"email": "a@b.com", "daily_email": True}
+            store.load_watchlist.return_value = []
+            store.load_schedule_for.return_value = []
+            store.load_snapshots.return_value = {
+                "corporate_actions": [{"symbol": "OLD", "action": "X"}]}
+            store.list_snapshot_dates.return_value = []
+            store.list_openclose_dates.return_value = []
+            text = "\n".join(dm.build_eod_store_lines("123", []))
+        self.assertIn("OLD", text)
+
+
 class ManualMailTests(unittest.TestCase):
     def setUp(self):
         from corporate_actions.bot import email_commands as ec

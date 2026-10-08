@@ -235,6 +235,73 @@ def fetch_watchlist_quotes(watchlist: list[dict], limit: int = 30) -> list[dict]
     return out
 
 
+def fetch_watchlist_actions(watchlist: list[dict], limit: int = 40) -> list[dict]:
+    """Live corporate actions for EVERY watchlist stock (best-effort).
+
+    Per-symbol NSE history + BSE/US feeds, sorted by ex-date (undated last),
+    capped at `limit`. Never raises - failures degrade to [] so the mail
+    still goes out with whatever else was gathered.
+    """
+    try:
+        from ..poller import fetch_matching, parse_ex_date
+
+        actions = fetch_matching(watchlist or []) or []
+    except Exception as error:
+        log.debug("watchlist actions fetch skipped: %s", error)
+        return []
+
+    def _sort_key(action: dict):
+        # Dated first (chronological), undated at the end.
+        day = None
+        try:
+            day = parse_ex_date(action.get("ex_date"))
+        except Exception:
+            day = None
+        return (day is None, str(day or "9999-99-99"))
+
+    actions.sort(key=_sort_key)
+    return actions[: max(1, limit)]
+
+
+def build_watchlist_actions_lines(actions: list[dict]) -> list[str]:
+    """Colorful corporate-action tables grouped by state (pure - no I/O)."""
+    from ..poller import action_is_completed, parse_ex_date
+    from ..poller import recently_passed, within_reminder_window
+
+    upcoming, recent, pending = [], [], []
+    for action in actions or []:
+        try:
+            if within_reminder_window(action.get("ex_date")):
+                upcoming.append(action)
+            elif recently_passed(action.get("ex_date")) \
+                    and not action_is_completed(action):
+                recent.append(action)
+            elif not parse_ex_date(action.get("ex_date")):
+                pending.append(action)
+            else:
+                recent.append(action)
+        except Exception:
+            pending.append(action)
+    lines = [section("Corporate actions · your full watchlist", "slate", "📋")]
+    total = len(actions or [])
+    if not total:
+        lines.append('<p class="muted">No corporate actions found for your watchlist stocks.</p>')
+        return lines
+    if upcoming:
+        lines.append(f"<b>📅 Upcoming ex-dates ({len(upcoming)})</b>")
+        lines.append(actions_table(upcoming, limit=15))
+    if recent:
+        lines.append(f"<b>🔄 Recently passed / in progress ({len(recent)})</b>")
+        lines.append(actions_table(recent, limit=10))
+    if pending:
+        lines.append(f"<b>📢 Announced · ex-date not fixed ({len(pending)})</b>")
+        lines.append(actions_table(pending, limit=10))
+    shown = min(total, 15 + 10 + 10)
+    if total > shown:
+        lines.append(f"<p class='muted'>…and {total - shown} more in Telegram /corpactionsformylist.</p>")
+    return lines
+
+
 def build_eod_store_lines(chat_id, quotes: list[dict] | None = None) -> list[str]:
     """End-of-day stored-details tables for one chat (pure except storage reads)."""
     settings = storage.get_user_settings(chat_id) or {}
@@ -287,10 +354,21 @@ def build_eod_store_lines(chat_id, quotes: list[dict] | None = None) -> list[str
         ("Recorded sessions", esc(", ".join(snap_dates[-5:]) or "-")),
         ("Open/close reports", esc(", ".join(oc_dates[-5:]) or "-")),
     ]))
-    snapshot = storage.load_snapshots() or {}
-    if snapshot.get("corporate_actions"):
-        lines.append("<b>📋 Corporate actions (recorded)</b>")
-        lines.append(actions_table(snapshot["corporate_actions"]))
+    # Corporate actions for ALL watchlist stocks (live fetch). Falls back to
+    # the recorded snapshot only when the live fetch comes back empty.
+    try:
+        watchlist = storage.load_watchlist() if str(chat_id) == str(_owner_chat()) \
+            else _chat_watchlist(chat_id)
+    except Exception:
+        watchlist = []
+    actions = fetch_watchlist_actions(watchlist)
+    if actions:
+        lines.extend(build_watchlist_actions_lines(actions))
+    else:
+        snapshot = storage.load_snapshots() or {}
+        if snapshot.get("corporate_actions"):
+            lines.append("<b>📋 Corporate actions (recorded)</b>")
+            lines.append(actions_table(snapshot["corporate_actions"]))
     lines.append(muted("Manage with /dailyemail off · full tables on the web Sessions tab."))
     return lines
 
