@@ -3,7 +3,31 @@
 {% block content %}
   <style>
     .adm-layout { display: grid; grid-template-columns: 290px minmax(0, 1fr); gap: 16px; align-items: start; }
-    @media (max-width: 900px) { .adm-layout { grid-template-columns: 1fr; } }
+    .adm-grid2 { display: grid; grid-template-columns: minmax(0, 1.15fr) minmax(0, 1fr); gap: 16px; align-items: start; }
+    /* Laptop: stack the two tables before they start clipping. */
+    @media (max-width: 1280px) {
+      .adm-grid2 { grid-template-columns: minmax(0, 1fr); }
+      .adm-layout { grid-template-columns: 250px minmax(0, 1fr); }
+    }
+    /* Tablet portrait and below: single column throughout. */
+    @media (max-width: 900px) {
+      .adm-layout { grid-template-columns: minmax(0, 1fr); }
+      .adm-head h1 { font-size: 1.4rem; }
+    }
+    /* Mobile: compact tables, full-width inputs, no page-level sideways scroll. */
+    @media (max-width: 640px) {
+      .adm-head { align-items: stretch; flex-direction: column; }
+      .adm-actions { width: 100%; }
+      .adm-actions .btn { flex: 1; }
+      .adm-mailrow .field { max-width: none !important; width: 100%; }
+      .table-mini { font-size: 0.78rem; }
+      .table-mini th, .table-mini td { padding: 6px; }
+      .adm-toggles { gap: 10px; }
+    }
+    .table-scroll { max-width: 100%; }
+    .table-mini { table-layout: auto; width: 100%; }
+    .table-mini code { overflow-wrap: anywhere; word-break: break-word; white-space: normal; }
+    .table-mini td, .table-mini th { vertical-align: top; }
     .adm-head { display: flex; justify-content: space-between; align-items: center; gap: 12px; flex-wrap: wrap; margin-bottom: 14px; }
     .adm-head h1 { margin: 0; }
     .adm-actions { display: flex; gap: 8px; }
@@ -24,8 +48,7 @@
     .adm-knob::after { content: ""; position: absolute; top: 2px; left: 2px; width: 16px; height: 16px; border-radius: 50%; background: #fff; transition: transform 0.15s; box-shadow: 0 1px 2px rgba(0,0,0,0.25); }
     .adm-switch input:checked + .adm-knob { background: #6366f1; }
     .adm-switch input:checked + .adm-knob::after { transform: translateX(14px); }
-    .adm-grid2 { display: grid; grid-template-columns: minmax(0, 1.35fr) minmax(0, 1fr); gap: 16px; }
-    @media (max-width: 1100px) { .adm-grid2 { grid-template-columns: 1fr; } }
+
     .adm-card-head { display: flex; justify-content: space-between; align-items: center; gap: 10px; flex-wrap: wrap; }
     .adm-card-head h2 { margin-bottom: 0; }
     .adm-pager { display: flex; align-items: center; justify-content: center; gap: 10px; margin-top: 8px; }
@@ -267,7 +290,14 @@
 
       function avatarFor(u) {
         var src = String(u.email || u.chat || '?');
-        return esc(src.charAt(0).toUpperCase());
+        var m = src.match(/[A-Za-z0-9]/);
+        return esc((m ? m[0] : '?').toUpperCase());
+      }
+
+      function titleFor(u) {
+        // Primary line: masked mail, or the chat id when no mail is set.
+        // Never shows the same text twice (the sub-line owns the Chat ID).
+        return u.email ? maskMail(u.email) : String(u.chat || '—');
       }
 
       function renderUsers(users) {
@@ -291,11 +321,11 @@
           card.innerHTML =
             '<div class="adm-user-top">' +
               '<span class="adm-avatar">' + avatarFor(u) + '</span>' +
-              '<div style="min-width:0;"><div class="adm-mail">' + esc(maskMail(u.email) === '—' ? u.chat : maskMail(u.email)) + '</div>' +
-              '<div class="adm-sub">' + (u.email ? esc(maskMail(u.email)) : esc('Chat ID: ' + u.chat)) + '</div></div>' +
+              '<div style="min-width:0;"><div class="adm-mail">' + esc(titleFor(u)) + '</div>' +
+              '<div class="adm-sub">Chat ID: ' + esc(u.chat) + '</div></div>' +
               '<span class="adm-role">' + role + '</span>' +
             '</div>' +
-            '<div class="adm-sub" style="margin-top:2px;">Chat ID: ' + esc(u.chat) + ' · ' + (u.list_count || 0) + ' subs</div>' +
+            '<div class="adm-sub" style="margin-top:2px;">' + (u.list_count || 0) + ' subscription(s)' + (u.daily_email ? ' · 📧 daily' : '') + '</div>' +
             '<div class="adm-toggles">' +
               '<label class="adm-toggle" title="Master switch: all automatic pushes on/off">WA ALERTS ' +
                 '<span class="adm-switch"><input type="checkbox" data-toggle="alerts" data-chat="' + esc(u.chat) + '"' + (u.quiet ? '' : ' checked') + ' /><span class="adm-knob"></span></span></label>' +
@@ -355,7 +385,7 @@
         var u = (lastUsers || []).find(function (x) { return String(x.chat) === String(selectedChat); }) || {};
         document.getElementById('selChat').textContent = selectedChat;
         document.getElementById('selMailMask').textContent = u.email ? maskMail(u.email) : 'no mail id';
-        document.getElementById('selEmail').textContent = u.email || '—';
+        document.getElementById('selEmail').textContent = u.email ? maskMail(u.email) : '—';
         document.getElementById('selChatId').textContent = selectedChat;
         var flags = [];
         if (u.is_owner) flags.push('owner · app watchlist');
@@ -437,10 +467,12 @@
       }
 
       function timingOf(row) {
-        var bits = [];
-        if (row.interval_min) bits.push('every ' + row.interval_min + 'm');
-        if (row.run_at) bits.push('at ' + row.run_at);
-        return esc(bits.join(' · ') || '—');
+        var every = parseInt(row.interval_min, 10);
+        var at = String(row.run_at || '').replace(/,/g, ', ');
+        if (at && every === 1440) return esc('daily at ' + at);
+        if (at) return esc('every ' + (row.interval_min || '?') + 'm · at ' + at);
+        if (row.interval_min) return esc('every ' + row.interval_min + 'm');
+        return '—';
       }
 
       function renderSched(rows) {
@@ -451,7 +483,11 @@
         }
         tbody.innerHTML = rows.map(function (row, idx) {
           var paused = row.paused_until ? ' <span class="pill pill-warn">paused</span>' : '';
-          var entry = (row.commands || []).map(function (c) { return '<code>' + esc(c) + '</code>'; }).join(' ') || '—';
+          var cmds = row.commands || [];
+          var entry = cmds.length
+            ? '<code title="' + esc(cmds.join(' ')) + '">' + esc(cmds[0]) + '</code>' +
+              (cmds.length > 1 ? ' <span class="muted" title="' + esc(cmds.slice(1).join(' ')) + '">+' + (cmds.length - 1) + '</span>' : '')
+            : '—';
           return '<tr>' +
             '<td class="num">' + idx + '</td>' +
             '<td>' + entry + paused + '</td>' +
