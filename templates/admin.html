@@ -1,9 +1,46 @@
 {% extends "base.html" %}
 {% block title %}Admin · Royal Stock{% endblock %}
 {% block content %}
-  <div class="page-header">
-    <h1>🛡️ Admin console</h1>
-    <p class="sub">Manage every user's subscriptions, scheduled reports and alert switches. Changes take effect in Telegram immediately.</p>
+  <style>
+    .adm-layout { display: grid; grid-template-columns: 290px minmax(0, 1fr); gap: 16px; align-items: start; }
+    @media (max-width: 900px) { .adm-layout { grid-template-columns: 1fr; } }
+    .adm-head { display: flex; justify-content: space-between; align-items: center; gap: 12px; flex-wrap: wrap; margin-bottom: 14px; }
+    .adm-head h1 { margin: 0; }
+    .adm-actions { display: flex; gap: 8px; }
+    .adm-users { display: flex; flex-direction: column; gap: 10px; }
+    .adm-search { width: 100%; box-sizing: border-box; }
+    .adm-user { border: 1px solid var(--line, #e2e8f0); border-radius: 12px; padding: 10px 12px; cursor: pointer; background: var(--card, #fff); }
+    .adm-user[aria-selected="true"] { border-color: #6366f1; box-shadow: 0 0 0 2px rgba(99, 102, 241, 0.25); }
+    .adm-user-top { display: flex; align-items: center; gap: 8px; }
+    .adm-avatar { width: 28px; height: 28px; border-radius: 50%; background: #e0e7ff; color: #4338ca; font-weight: 800; font-size: 13px; display: inline-flex; align-items: center; justify-content: center; flex: none; }
+    .adm-mail { font-weight: 700; font-size: 0.85rem; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .adm-sub { font-size: 0.75rem; color: #64748b; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .adm-role { margin-left: auto; flex: none; }
+    .adm-toggles { display: flex; gap: 14px; margin-top: 8px; }
+    .adm-toggle { display: flex; align-items: center; gap: 6px; font-size: 0.68rem; font-weight: 700; color: #64748b; }
+    .adm-switch { position: relative; width: 34px; height: 20px; flex: none; }
+    .adm-switch input { opacity: 0; width: 0; height: 0; }
+    .adm-knob { position: absolute; inset: 0; border-radius: 999px; background: #cbd5e1; transition: background 0.15s; }
+    .adm-knob::after { content: ""; position: absolute; top: 2px; left: 2px; width: 16px; height: 16px; border-radius: 50%; background: #fff; transition: transform 0.15s; box-shadow: 0 1px 2px rgba(0,0,0,0.25); }
+    .adm-switch input:checked + .adm-knob { background: #6366f1; }
+    .adm-switch input:checked + .adm-knob::after { transform: translateX(14px); }
+    .adm-grid2 { display: grid; grid-template-columns: minmax(0, 1.35fr) minmax(0, 1fr); gap: 16px; }
+    @media (max-width: 1100px) { .adm-grid2 { grid-template-columns: 1fr; } }
+    .adm-card-head { display: flex; justify-content: space-between; align-items: center; gap: 10px; flex-wrap: wrap; }
+    .adm-card-head h2 { margin-bottom: 0; }
+    .adm-pager { display: flex; align-items: center; justify-content: center; gap: 10px; margin-top: 8px; }
+    .adm-sel-rows { display: grid; gap: 4px; margin: 8px 0 0; }
+    .adm-mailrow { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; margin-top: 10px; }
+    .adm-hidden { display: none !important; }
+  </style>
+
+  <div class="adm-head">
+    <h1>Admin Console</h1>
+    <div class="adm-actions" id="adminToolbar" hidden>
+      <button class="btn btn-sm" id="reloadBtn">🔄 Reload</button>
+      <button class="btn btn-sm" id="discardBtn">Discard</button>
+      <button class="btn btn-sm btn-danger" id="logoutBtn">Logout</button>
+    </div>
   </div>
 
   <section class="card" id="gateCard">
@@ -19,79 +56,79 @@
     </p>
   </section>
 
-  <div id="adminBody" hidden>
-    <div class="toolbar admin-toolbar" style="display:flex; gap:8px; align-items:center; flex-wrap:wrap; margin-bottom:12px;">
-      <button class="btn btn-sm" id="reloadBtn">🔄 Reload</button>
-      <button class="btn btn-sm btn-danger" id="logoutBtn">Logout</button>
-    </div>
-
-    <section class="card" style="margin-bottom:16px;">
-      <h2>Users <span class="pill" id="userCount">0</span></h2>
-      <p class="muted" style="margin-bottom:0;">Everyone the bot knows. <strong>Manage</strong> selects the user for the editors below; toggles act immediately.</p>
-      <div class="table-scroll">
-        <table class="table-mini" id="usersTable" aria-label="Known users">
-          <thead>
-            <tr>
-              <th>Chat</th><th>Role</th><th class="num">Subs</th><th>Mail id</th>
-              <th>Daily mail</th><th>CA alerts</th><th>Alerts</th><th></th>
-            </tr>
-          </thead>
-          <tbody></tbody>
-        </table>
-      </div>
-    </section>
-
-    <section class="card" id="selectedCard" style="margin-bottom:16px;" hidden>
-      <h2 style="margin-bottom:4px;">Selected user <span class="pill" id="selChat">—</span></h2>
-      <p class="muted" id="selMeta" style="margin:0 0 10px;">—</p>
-      <div class="form-row" style="align-items:center;">
-        <button class="btn btn-sm" id="selAlerts" title="Master switch: all automatic pushes on/off">Alerts: —</button>
-        <button class="btn btn-sm" id="selCa" title="Corporate-action + reminder pushes on/off">CA alerts: —</button>
-        <input id="selMail" class="field" style="max-width:260px;" placeholder="mail id" aria-label="Mail id" />
-        <button class="btn btn-sm" id="selMailSave">Save mail</button>
-      </div>
-    </section>
-
-    <div class="grid grid-2">
+  <div id="adminBody" class="adm-layout" hidden>
+    <aside aria-label="Users">
       <section class="card">
-        <h2>Subscriptions</h2>
-        <p class="muted">Watchlist of the selected user — pick one above.</p>
-        <div class="table-scroll" style="margin-top:8px;">
-          <table class="table-mini" id="subsTable" aria-label="User subscriptions">
-            <thead><tr><th>Symbol</th><th>Company</th><th>Exchange</th><th></th></tr></thead>
-            <tbody><tr><td colspan="4" class="muted">Pick a user above, then their list shows here.</td></tr></tbody>
-          </table>
+        <h2 style="margin-bottom:8px;">Users (<span id="userCount">0</span>)</h2>
+        <input id="usersSearch" class="field adm-search" type="search" placeholder="🔍 Search" aria-label="Search users" autocomplete="off" />
+        <div class="adm-users" id="usersList" style="margin-top:10px;" role="listbox" aria-label="Known users"></div>
+      </section>
+    </aside>
+
+    <div>
+      <section class="card" id="selectedCard" style="margin-bottom:16px;" hidden>
+        <h2 style="margin-bottom:4px;">Selected User: <span id="selChat">—</span> <span class="pill" id="selMailMask">—</span></h2>
+        <div class="adm-sel-rows">
+          <div>Email: <strong id="selEmail">—</strong></div>
+          <div class="muted">Chat ID: <code id="selChatId">—</code> <span id="selFlags"></span></div>
         </div>
-        <div class="form-row" style="margin-top:8px;">
-          <input id="subAdd" class="field field-grow" placeholder="add symbol(s): RELIANCE, TCS" aria-label="Symbols to add" />
-          <button class="btn btn-sm btn-primary" id="subAddBtn">➕ Add</button>
+        <div class="adm-mailrow">
+          <input id="selMail" class="field" style="max-width:260px;" placeholder="mail id" aria-label="Mail id" />
+          <button class="btn btn-sm btn-primary" id="selMailSave">Save mail</button>
+          <button class="btn btn-sm" id="selAlerts" title="Master switch: all automatic pushes on/off">Alerts: —</button>
+          <button class="btn btn-sm" id="selCa" title="Corporate-action + reminder pushes on/off">CA alerts: —</button>
         </div>
       </section>
 
-      <section class="card">
-        <h2>Schedule</h2>
-        <p class="muted">Scheduled reports of the selected user (0-based rows, same as /schedule).</p>
-        <div class="table-scroll" style="margin-top:8px;">
-          <table class="table-mini" id="schedTable" aria-label="User schedule">
-            <thead><tr><th>#</th><th>Every</th><th>At</th><th>Market</th><th>Commands</th><th></th></tr></thead>
-            <tbody><tr><td colspan="6" class="muted">Pick a user above, then their schedule shows here.</td></tr></tbody>
-          </table>
-        </div>
-        <h3 style="margin:12px 0 6px;">Add entry</h3>
-        <div class="form-row">
-          <input id="schedCmds" class="field field-grow" placeholder="commands: /movers, /openreport in" aria-label="Commands" />
-        </div>
-        <div class="form-row">
-          <input id="schedEvery" class="field" style="max-width:130px;" placeholder="every (min)" aria-label="Interval minutes" />
-          <input id="schedAt" class="field" style="max-width:130px;" placeholder="at HH:MM (opt)" aria-label="Run at time" />
-          <select id="schedMarket" class="field" style="max-width:130px;" aria-label="Market gate">
-            <option value="">market: any</option>
-            <option value="in">in</option>
-            <option value="us">us</option>
-          </select>
-          <button class="btn btn-sm btn-primary" id="schedAddBtn">➕ Add</button>
-        </div>
-      </section>
+      <div class="adm-grid2">
+        <section class="card">
+          <div class="adm-card-head">
+            <h2>Subscriptions (<span id="subCount">0</span>)</h2>
+            <button class="btn btn-sm btn-primary" id="subAddToggle">＋ Add Subscription</button>
+          </div>
+          <div id="subAddRow" class="adm-mailrow adm-hidden">
+            <input id="subAdd" class="field field-grow" placeholder="add symbol(s): RELIANCE, TCS" aria-label="Symbols to add" />
+            <button class="btn btn-sm btn-primary" id="subAddBtn">➕ Add</button>
+          </div>
+          <div class="table-scroll" style="margin-top:8px;">
+            <table class="table-mini" id="subsTable" aria-label="User subscriptions">
+              <thead><tr><th>Symbol</th><th>Company</th><th>Exchange</th><th>Actions</th></tr></thead>
+              <tbody><tr><td colspan="4" class="muted">Pick a user on the left, then their list shows here.</td></tr></tbody>
+            </table>
+          </div>
+          <div class="adm-pager">
+            <button class="btn btn-sm" id="subPrev" aria-label="Previous page">‹</button>
+            <span class="muted" id="subPage">1 / 1</span>
+            <button class="btn btn-sm" id="subNext" aria-label="Next page">›</button>
+          </div>
+        </section>
+
+        <section class="card">
+          <div class="adm-card-head">
+            <h2>Schedules</h2>
+          </div>
+          <div class="table-scroll" style="margin-top:8px;">
+            <table class="table-mini" id="schedTable" aria-label="User schedule">
+              <thead><tr><th>#</th><th>Entry</th><th>Market</th><th>Days/Timing</th><th></th></tr></thead>
+              <tbody><tr><td colspan="5" class="muted">Pick a user on the left, then their schedule shows here.</td></tr></tbody>
+            </table>
+          </div>
+          <h3 style="margin:12px 0 6px;">Add Entry</h3>
+          <div class="form-row">
+            <input id="schedCmds" class="field field-grow" placeholder="commands: /movers, /openreport in" aria-label="Commands" />
+          </div>
+          <div class="form-row">
+            <input id="schedEvery" class="field" style="max-width:130px;" placeholder="every (min)" aria-label="Interval minutes" />
+            <input id="schedAt" class="field" style="max-width:130px;" placeholder="at HH:MM (opt)" aria-label="Run at time" />
+            <select id="schedMarket" class="field" style="max-width:130px;" aria-label="Market gate">
+              <option value="">market: any</option>
+              <option value="in">in</option>
+              <option value="us">us</option>
+            </select>
+            <button class="btn btn-sm btn-primary" id="schedAddBtn">Add</button>
+          </div>
+        </section>
+      </div>
     </div>
   </div>
 {% endblock %}
@@ -103,21 +140,30 @@
       var esc = RS.escapeHtml;
       var TOKEN_KEY = 'adminToken';
       var selectedChat = '';
+      var SUB_PAGE_SIZE = 10;
+      var subPage = 0;
+      var lastSubs = [];
 
       function token() { return localStorage.getItem(TOKEN_KEY) || ''; }
-
       function authHeaders() {
         return { 'X-Admin-Token': token(), 'Content-Type': 'application/json' };
       }
-
       function toast(msg, kind) { RS.toast(msg, kind || 'info'); }
+
+      function maskMail(mail) {
+        mail = String(mail || '');
+        var at = mail.indexOf('@');
+        if (at < 1) return '—';
+        var local = mail.slice(0, at), domain = mail.slice(at + 1);
+        var shown = local.length <= 2 ? local.charAt(0) + '***' : local.charAt(0) + '***' + local.charAt(local.length - 1);
+        return shown + '@' + domain;
+      }
 
       async function api(path, options) {
         options = options || {};
         options.headers = Object.assign(authHeaders(), options.headers || {});
-        // The API also accepts the token as a query/body field; send both so
-        // DELETE-with-body quirks never bite.
-        var res = await fetch(path, options);        if (res.status === 403) {
+        var res = await fetch(path, options);
+        if (res.status === 403) {
           localStorage.removeItem(TOKEN_KEY);
           showGate();
           throw new Error('admin session expired');
@@ -132,12 +178,15 @@
 
       function showGate() {
         document.getElementById('adminBody').hidden = true;
+        document.getElementById('adminToolbar').hidden = true;
+        document.getElementById('gateCard').hidden = false;
         document.getElementById('loginForm').hidden = false;
       }
 
       function showConsole() {
         document.getElementById('gateCard').hidden = true;
         document.getElementById('adminBody').hidden = false;
+        document.getElementById('adminToolbar').hidden = false;
       }
 
       async function boot() {
@@ -183,56 +232,136 @@
         showGate();
       });
 
+      // Discard: clear the selection and reset every editor to its empty
+      // state. (Saves apply instantly via the API, so there is nothing
+      // half-written to roll back - this just resets the workspace view.)
+      document.getElementById('discardBtn').addEventListener('click', function () {
+        selectChat('');
+        document.getElementById('usersSearch').value = '';
+        renderUsers(lastUsers);
+        toast('Selection cleared');
+      });
+
       var lastUsers = [];
 
       async function reload() {
-        var tbody = document.querySelector('#usersTable tbody');
-        tbody.innerHTML = '<tr><td colspan="8" class="muted"><span class="skeleton" style="display:block;width:100%"></span>loading users…</td></tr>';
+        var list = document.getElementById('usersList');
+        list.innerHTML = '<div class="card"><p class="muted" style="margin:0;"><span class="skeleton" style="display:block;width:100%"></span>loading users…</p></div>';
         try {
           var state = await api('/api/admin/state?token=' + encodeURIComponent(token()));
           lastUsers = state.users || [];
           renderUsers(lastUsers);
           if (selectedChat) selectChat(selectedChat);  // refresh the selected card
         } catch (err) {
-          tbody.innerHTML = '<tr><td colspan="8" class="muted">failed: ' + esc(err.message) + '</td></tr>';
+          list.innerHTML = '<p class="muted">failed: ' + esc(err.message) + '</p>';
           throw err;
         }
       }
 
+      function userMatches(u, q) {
+        if (!q) return true;
+        q = q.toLowerCase();
+        return String(u.chat || '').toLowerCase().indexOf(q) !== -1 ||
+          String(u.email || '').toLowerCase().indexOf(q) !== -1;
+      }
+
+      function avatarFor(u) {
+        var src = String(u.email || u.chat || '?');
+        return esc(src.charAt(0).toUpperCase());
+      }
+
       function renderUsers(users) {
-        var tbody = document.querySelector('#usersTable tbody');
-        tbody.innerHTML = '';
-        document.getElementById('userCount').textContent = String(users.length);
-        if (!users.length) {
-          tbody.innerHTML = '<tr><td colspan="8" class="muted">No users known yet.</td></tr>';
+        var list = document.getElementById('usersList');
+        var q = document.getElementById('usersSearch').value.trim();
+        var shown = (users || []).filter(function (u) { return userMatches(u, q); });
+        document.getElementById('userCount').textContent = String((users || []).length);
+        if (!shown.length) {
+          list.innerHTML = '<p class="muted">No users match.</p>';
           return;
         }
-        users.forEach(function (u) {
-          var tr = document.createElement('tr');
-          var role = u.is_owner ? 'owner' : 'user';
-          var mail = u.email ? esc(u.email) : '<span class="muted">—</span>';
-          tr.innerHTML =
-            '<td><code>' + esc(u.chat) + '</code></td>' +
-            '<td>' + role + '</td>' +
-            '<td class="num">' + (u.list_count || 0) + '</td>' +
-            '<td>' + mail + '</td>' +
-            '<td>' + (u.daily_email ? '✅' : '—') + '</td>' +
-            '<td><button class="link-btn" data-toggle="ca_alerts" data-chat="' + esc(u.chat) + '" data-enabled="' + (u.ca_alerts ? '0' : '1') + '">' + (u.ca_alerts ? 'ON' : 'OFF') + '</button></td>' +
-            '<td><button class="link-btn" data-toggle="alerts" data-chat="' + esc(u.chat) + '" data-enabled="' + (u.quiet ? '1' : '0') + '">' + (u.quiet ? 'OFF (quiet)' : 'ON') + '</button></td>' +
-            '<td><button class="btn btn-sm" data-manage="' + esc(u.chat) + '">Manage</button></td>';
-          tbody.appendChild(tr);
+        list.innerHTML = '';
+        shown.forEach(function (u) {
+          var card = document.createElement('div');
+          card.className = 'adm-user';
+          card.setAttribute('role', 'option');
+          card.setAttribute('tabindex', '0');
+          card.setAttribute('aria-selected', String(u.chat) === String(selectedChat) ? 'true' : 'false');
+          card.dataset.chat = u.chat;
+          var role = u.is_owner ? '<span class="pill" style="font-size:0.68rem;">Admin</span>' : '';
+          card.innerHTML =
+            '<div class="adm-user-top">' +
+              '<span class="adm-avatar">' + avatarFor(u) + '</span>' +
+              '<div style="min-width:0;"><div class="adm-mail">' + esc(maskMail(u.email) === '—' ? u.chat : maskMail(u.email)) + '</div>' +
+              '<div class="adm-sub">' + (u.email ? esc(maskMail(u.email)) : esc('Chat ID: ' + u.chat)) + '</div></div>' +
+              '<span class="adm-role">' + role + '</span>' +
+            '</div>' +
+            '<div class="adm-sub" style="margin-top:2px;">Chat ID: ' + esc(u.chat) + ' · ' + (u.list_count || 0) + ' subs</div>' +
+            '<div class="adm-toggles">' +
+              '<label class="adm-toggle" title="Master switch: all automatic pushes on/off">WA ALERTS ' +
+                '<span class="adm-switch"><input type="checkbox" data-toggle="alerts" data-chat="' + esc(u.chat) + '"' + (u.quiet ? '' : ' checked') + ' /><span class="adm-knob"></span></span></label>' +
+              '<label class="adm-toggle" title="Corporate-action + reminder pushes on/off">CA ALERTS ' +
+                '<span class="adm-switch"><input type="checkbox" data-toggle="ca_alerts" data-chat="' + esc(u.chat) + '"' + (u.ca_alerts ? ' checked' : '') + ' /><span class="adm-knob"></span></span></label>' +
+            '</div>';
+          card.addEventListener('click', function (ev) {
+            if (ev.target.closest('.adm-switch')) return;  // toggle handles itself
+            selectChat(u.chat);
+          });
+          card.addEventListener('keydown', function (ev) {
+            if (ev.key === 'Enter' || ev.key === ' ') { ev.preventDefault(); selectChat(u.chat); }
+          });
+          list.appendChild(card);
         });
       }
 
+      document.getElementById('usersSearch').addEventListener('input', function () {
+        renderUsers(lastUsers);
+      });
+
+      // Sidebar toggles act immediately (same endpoints as the old table:
+      // checked = alerts ON, unchecked = OFF, for both switches).
+      document.getElementById('usersList').addEventListener('change', async function (ev) {
+        var toggle = ev.target.closest('[data-toggle]');
+        if (!toggle) return;
+        var enabled = toggle.checked;
+        try {
+          await api('/api/admin/toggle', {
+            method: 'POST',
+            body: JSON.stringify({
+              token: token(),
+              chat: toggle.dataset.chat,
+              key: toggle.dataset.toggle,
+              enabled: enabled
+            })
+          });
+          await reload();
+          toast('Alert toggle saved', 'ok');
+        } catch (err) {
+          toggle.checked = !enabled;  // roll the switch back on failure
+          toast('Toggle failed: ' + err.message, 'err');
+        }
+      });
+
       function selectChat(chat) {
-        selectedChat = chat;
-        document.getElementById('selectedCard').hidden = !chat;
-        if (!chat) return;
-        document.getElementById('selChat').textContent = chat;
-        var u = (lastUsers || []).find(function (x) { return String(x.chat) === String(chat); }) || {};
-        document.getElementById('selMeta').textContent =
-          (u.is_owner ? 'owner · app watchlist' : 'user') + ' · ' + (u.list_count || 0) +
-          ' subscription(s)' + (u.email ? ' · ' + u.email : '');
+        selectedChat = chat || '';
+        subPage = 0;
+        document.getElementById('selectedCard').hidden = !selectedChat;
+        renderUsers(lastUsers);  // refresh aria-selected
+        if (!selectedChat) {
+          lastSubs = [];
+          renderSubs([]);
+          renderSched([]);
+          return;
+        }
+        var u = (lastUsers || []).find(function (x) { return String(x.chat) === String(selectedChat); }) || {};
+        document.getElementById('selChat').textContent = selectedChat;
+        document.getElementById('selMailMask').textContent = u.email ? maskMail(u.email) : 'no mail id';
+        document.getElementById('selEmail').textContent = u.email || '—';
+        document.getElementById('selChatId').textContent = selectedChat;
+        var flags = [];
+        if (u.is_owner) flags.push('owner · app watchlist');
+        if (u.daily_email) flags.push('📧 daily mail ON');
+        if (u.quiet) flags.push('🔕 quiet');
+        document.getElementById('selFlags').textContent = flags.length ? '· ' + flags.join(' · ') : '';
         document.getElementById('selMail').value = u.email || '';
         var alertsBtn = document.getElementById('selAlerts');
         alertsBtn.textContent = 'Alerts: ' + (u.quiet ? 'OFF' : 'ON');
@@ -248,76 +377,90 @@
         var chat = selectedChat;
         if (!chat) { toast('Pick a user first', 'err'); return; }
         var tbody = document.querySelector('#subsTable tbody');
-        tbody.innerHTML = '<tr><td colspan="4" class="muted">loading…</td></tr>';
+        tbody.innerHTML = '<tr><td colspan="4" class="muted"><span class="skeleton" style="display:block;width:100%"></span>loading…</td></tr>';
         try {
           var data = await api('/api/admin/user?chat=' + encodeURIComponent(chat) + '&token=' + encodeURIComponent(token()));
-          var rows = (data.items || []);
-          if (!rows.length) {
-            tbody.innerHTML = '<tr><td colspan="4" class="muted">No subscriptions for this user.</td></tr>';
-            return;
-          }
-          tbody.innerHTML = rows.map(function (it) {
-            return '<tr>' +
-              '<td><strong>' + esc(it.symbol || '') + '</strong></td>' +
-              '<td>' + esc(it.company || '') + '</td>' +
-              '<td>' + esc(it.exchange || '') + '</td>' +
-              '<td><button class="link-btn" data-del="' + esc(it.symbol || '') + '" data-exch="' + esc(it.exchange || 'NSE') + '">✖ remove</button></td>' +
-              '</tr>';
-          }).join('');
+          lastSubs = data.items || [];
+          subPage = 0;
+          renderSubs(lastSubs);
         } catch (err) {
           tbody.innerHTML = '<tr><td colspan="4" class="muted">failed: ' + esc(err.message) + '</td></tr>';
         }
       }
 
+      function renderSubs(rows) {
+        var tbody = document.querySelector('#subsTable tbody');
+        document.getElementById('subCount').textContent = String(rows.length);
+        var pages = Math.max(1, Math.ceil(rows.length / SUB_PAGE_SIZE));
+        if (subPage >= pages) subPage = pages - 1;
+        var slice = rows.slice(subPage * SUB_PAGE_SIZE, subPage * SUB_PAGE_SIZE + SUB_PAGE_SIZE);
+        document.getElementById('subPage').textContent = (subPage + 1) + ' / ' + pages;
+        if (!slice.length) {
+          tbody.innerHTML = '<tr><td colspan="4" class="muted">No subscriptions for this user.</td></tr>';
+          return;
+        }
+        tbody.innerHTML = slice.map(function (it) {
+          return '<tr>' +
+            '<td><strong>' + esc(it.symbol || '') + '</strong></td>' +
+            '<td>' + esc(it.company || '') + '</td>' +
+            '<td>' + esc(it.exchange || '') + '</td>' +
+            '<td><button class="link-btn" data-del="' + esc(it.symbol || '') + '" data-exch="' + esc(it.exchange || 'NSE') + '" title="Remove">🗑</button></td>' +
+            '</tr>';
+        }).join('');
+      }
+
+      document.getElementById('subPrev').addEventListener('click', function () {
+        if (subPage > 0) { subPage -= 1; renderSubs(lastSubs); }
+      });
+      document.getElementById('subNext').addEventListener('click', function () {
+        var pages = Math.max(1, Math.ceil(lastSubs.length / SUB_PAGE_SIZE));
+        if (subPage < pages - 1) { subPage += 1; renderSubs(lastSubs); }
+      });
+
+      document.getElementById('subAddToggle').addEventListener('click', function () {
+        var row = document.getElementById('subAddRow');
+        row.classList.toggle('adm-hidden');
+        if (!row.classList.contains('adm-hidden')) document.getElementById('subAdd').focus();
+      });
+
       async function loadSched() {
         var chat = selectedChat;
         if (!chat) { toast('Pick a user first', 'err'); return; }
         var tbody = document.querySelector('#schedTable tbody');
-        tbody.innerHTML = '<tr><td colspan="6" class="muted">loading…</td></tr>';
+        tbody.innerHTML = '<tr><td colspan="5" class="muted"><span class="skeleton" style="display:block;width:100%"></span>loading…</td></tr>';
         try {
           var data = await api('/api/admin/user?chat=' + encodeURIComponent(chat) + '&token=' + encodeURIComponent(token()));
-          var rows = (data.schedule || []);
-          if (!rows.length) {
-            tbody.innerHTML = '<tr><td colspan="6" class="muted">No scheduled reports for this chat.</td></tr>';
-            return;
-          }
-          tbody.innerHTML = rows.map(function (row, idx) {
-            var paused = row.paused_until ? ' <span class="pill pill-warn">paused</span>' : '';
-            return '<tr>' +
-              '<td class="num">' + idx + '</td>' +
-              '<td class="num">' + (row.interval_min || '—') + 'm</td>' +
-              '<td>' + esc(row.run_at || '') + '</td>' +
-              '<td>' + esc(row.market || 'any') + '</td>' +
-              '<td>' + (row.commands || []).map(function (c) { return '<code>' + esc(c) + '</code>'; }).join(' ') + paused + '</td>' +
-              '<td><button class="link-btn" data-sdel="' + idx + '">✖ remove</button></td>' +
-              '</tr>';
-          }).join('');
+          renderSched(data.schedule || []);
         } catch (err) {
-          tbody.innerHTML = '<tr><td colspan="6" class="muted">failed: ' + esc(err.message) + '</td></tr>';
+          tbody.innerHTML = '<tr><td colspan="5" class="muted">failed: ' + esc(err.message) + '</td></tr>';
         }
       }
 
-      document.getElementById('usersTable').addEventListener('click', async function (ev) {
-        var toggle = ev.target.closest('[data-toggle]');
-        if (toggle) {
-          try {
-            await api('/api/admin/toggle', {
-              method: 'POST',
-              body: JSON.stringify({
-                token: token(),
-                chat: toggle.dataset.chat,
-                key: toggle.dataset.toggle,
-                enabled: toggle.dataset.enabled === '1'
-              })
-            });
-            await reload();
-            toast('Alert toggle saved', 'ok');
-          } catch (err) { toast('Toggle failed: ' + err.message, 'err'); }
+      function timingOf(row) {
+        var bits = [];
+        if (row.interval_min) bits.push('every ' + row.interval_min + 'm');
+        if (row.run_at) bits.push('at ' + row.run_at);
+        return esc(bits.join(' · ') || '—');
+      }
+
+      function renderSched(rows) {
+        var tbody = document.querySelector('#schedTable tbody');
+        if (!rows.length) {
+          tbody.innerHTML = '<tr><td colspan="5" class="muted">No scheduled reports for this chat.</td></tr>';
           return;
         }
-        var manage = ev.target.closest('[data-manage]');
-        if (manage) { selectChat(manage.dataset.manage); }
-      });
+        tbody.innerHTML = rows.map(function (row, idx) {
+          var paused = row.paused_until ? ' <span class="pill pill-warn">paused</span>' : '';
+          var entry = (row.commands || []).map(function (c) { return '<code>' + esc(c) + '</code>'; }).join(' ') || '—';
+          return '<tr>' +
+            '<td class="num">' + idx + '</td>' +
+            '<td>' + entry + paused + '</td>' +
+            '<td>' + esc(row.market || 'any') + '</td>' +
+            '<td>' + timingOf(row) + '</td>' +
+            '<td><button class="link-btn" data-sdel="' + idx + '" title="Remove">🗑</button></td>' +
+            '</tr>';
+        }).join('');
+      }
 
       document.getElementById('reloadBtn').addEventListener('click', reload);
 
@@ -397,7 +540,7 @@
         var market = document.getElementById('schedMarket').value;
         if (!chat || !commands) { toast('Chat id and command(s) required', 'err'); return; }
         try {
-          var data = await api('/api/admin/schedule', {
+          await api('/api/admin/schedule', {
             method: 'POST',
             body: JSON.stringify({
               token: token(), chat: chat, commands: commands,
