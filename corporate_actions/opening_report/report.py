@@ -502,6 +502,31 @@ def recorded_covers(doc: dict, markets: tuple[str, ...]) -> bool:
     return set(doc.get("markets") or []) >= set(markets)
 
 
+def recent_record(doc: dict, markets: tuple[str, ...], max_age_min: int = 45) -> dict | None:
+    """The recorded doc when it answers this request AND is minutes fresh.
+
+    recorded_covers() answers in days (today's file); this answers in
+    minutes, so a second identical scan minutes later (another chat's auto-
+    plan, a double-tap, a retry) replays instantly instead of re-scanning
+    60-90s of universes. Returns the doc, or None when a fresh build is due.
+    """
+    if not recorded_covers(doc, markets):
+        return None
+    try:
+        from datetime import datetime as _dt
+        from datetime import timezone as _tz
+
+        recorded = _dt.fromisoformat(
+            str(doc.get("recorded_at") or "").replace("Z", "+00:00"))
+        if recorded.tzinfo is None:
+            return None
+        age_min = (_dt.now(_tz.utc) - recorded).total_seconds() / 60.0
+        return doc if 0 <= age_min <= max_age_min else None
+    except Exception as error:
+        log.debug("recent_record: %s", error)
+        return None
+
+
 def _record_is_current(doc: dict, markets: tuple[str, ...], target_date=None) -> bool:
     """True when the recorded file already covers this exact request."""
     if not isinstance(doc, dict) or not doc.get("report"):

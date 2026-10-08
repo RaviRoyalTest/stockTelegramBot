@@ -264,6 +264,12 @@ class MarketGatedMailTests(unittest.TestCase):
             self.assertFalse(maybe_send_eod_email("123"))
         self.send.assert_not_called()
 
+    def test_cron_host_never_mails(self):
+        with patch("corporate_actions.config.PROCESS_COMMANDS", False):
+            self.assertFalse(maybe_send_open_email("123"))
+            self.assertFalse(maybe_send_eod_email("123"))
+        self.send.assert_not_called()
+
     def test_eod_sends_when_traded_today(self):
         from corporate_actions.core.dates import today_ist
 
@@ -275,6 +281,66 @@ class MarketGatedMailTests(unittest.TestCase):
                 patch.object(storage_mod, "load_watchlist", return_value=[]):
             self.assertTrue(maybe_send_eod_email("123"))
         self.send.assert_called_once()
+
+
+class ManualMailTests(unittest.TestCase):
+    def setUp(self):
+        from corporate_actions.bot import email_commands as ec
+
+        self.ec = ec
+        self.sent = []
+        patches = [
+            patch.object(ec, "reply", lambda chat, msg, **kw: self.sent.append(msg)),
+            patch.object(ec, "reply_messages",
+                         lambda chat, msgs, **kw: self.sent.extend(msgs)),
+            patch.object(ec, "send_email", return_value=(True, "")),
+            patch.object(ec, "email_configured", return_value=True),
+            patch("corporate_actions.email.daily.fetch_watchlist_quotes",
+                  return_value=[]),
+            patch.object(storage_mod, "get_user_settings",
+                         return_value={"email": "a@b.com", "daily_email": True}),
+        ]
+        for patcher in patches:
+            patcher.start()
+            self.addCleanup(patcher.stop)
+
+    def test_emailboth_falls_back_to_snapshot_when_nothing_recorded(self):
+        snapshot = {"session": "2026-10-08",
+                    "gap_downs": [{"symbol": "X", "gap_pct": -2.0, "price": 10.0}]}
+        with patch.object(storage_mod, "load_openclose", return_value={}), \
+                patch.object(storage_mod, "load_snapshots", return_value=snapshot), \
+                patch.object(storage_mod, "load_watchlist", return_value=[]), \
+                patch.object(storage_mod, "load_schedule_for", return_value=[]), \
+                patch.object(storage_mod, "list_snapshot_dates", return_value=[]), \
+                patch.object(storage_mod, "list_openclose_dates", return_value=[]):
+            self.ec.handle_emailboth("123", ["/emailboth"])
+        self.assertTrue(any("mailed" in str(m).lower() for m in self.sent))
+
+    def test_emailstatus_hides_foreign_and_unattributed_entries(self):
+        entries = [
+            {"at": "2026-10-08T10:00:00", "chat": "123", "kind": "both",
+             "to": "a@b.com", "subject": "mine", "ok": True, "info": ""},
+            {"at": "2026-10-08T10:01:00", "chat": "999", "kind": "both",
+             "to": "other@x.com", "subject": "theirs", "ok": False, "info": "boom"},
+            {"at": "2026-10-08T10:02:00", "chat": "-", "kind": "test",
+             "to": "anon@y.com", "subject": "anon", "ok": False, "info": "x"},
+        ]
+        with patch.object(storage_mod, "load_mail_log", return_value=entries):
+            self.ec.handle_emailstatus("123", ["/emailstatus"])
+        text = " ".join(str(m) for m in self.sent)
+        self.assertIn("mine", text)
+        self.assertNotIn("other@x.com", text)
+        self.assertNotIn("anon@y.com", text)
+
+    def test_emailstatus_owner_sees_everything(self):
+        entries = [
+            {"at": "2026-10-08T10:01:00", "chat": "999", "kind": "both",
+             "to": "other@x.com", "subject": "theirs", "ok": False, "info": "boom"},
+        ]
+        with patch.object(storage_mod, "load_mail_log", return_value=entries), \
+                patch("corporate_actions.config.TELEGRAM_CHAT_ID", "owner1"):
+            self.ec.handle_emailstatus("owner1", ["/emailstatus"])
+        self.assertIn("other@x.com", " ".join(str(m) for m in self.sent))
 
 
 if __name__ == "__main__":

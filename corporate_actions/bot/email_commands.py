@@ -378,8 +378,19 @@ def handle_emailboth(chat_id, parts) -> None:
     reply(chat_id, f"🌅🌇 Preparing open + close + EOD in one mail - sending to <b>{escape(recipient)}</b> shortly.")
     report, label = _recorded_openclose()
     if not report.get("sections"):
-        reply(chat_id, "No recorded session yet - run /openreport or /snap first, then retry.")
-        return
+        # Same honest fallback as /emailclose: snapshot digest + stores
+        # instead of refusing, so one command always delivers one mail.
+        from ..email.daily import build_daily_lines
+
+        snapshot = storage.load_snapshots() or {}
+        if not snapshot:
+            reply(chat_id, "No recorded session yet - run /openreport or /snap first, then retry.")
+            return
+        label = str(snapshot.get("session") or label)
+        report = {}
+        lines = list(build_daily_lines(snapshot))
+    else:
+        lines = None
     try:
         from ..email.daily import _chat_watchlist, _owner_chat
 
@@ -387,9 +398,15 @@ def handle_emailboth(chat_id, parts) -> None:
         quotes = fetch_watchlist_quotes(watchlist)
     except Exception:
         quotes = []
+    from ..email.daily import build_eod_store_lines
+
+    if lines is None:
+        lines = build_combined_lines(chat_id, report, label, quotes)
+    else:
+        lines = lines + build_eod_store_lines(chat_id, quotes)
     ok, info = send_email(
         recipient, f"Royal Stock open + close + EOD: {label}",
-        build_combined_lines(chat_id, report, label, quotes),
+        lines,
         kind="both", chat_id=chat_id,
     )
     reply(chat_id, f"🌅🌇 Open + close + EOD mailed ✅" if ok else f"📧 Mail failed: {escape(info)}")
@@ -403,9 +420,13 @@ def handle_emailstatus(chat_id, parts) -> None:
         entries = storage.load_mail_log(20) or []
     except Exception:
         entries = []
+    is_owner = str(chat_id) == str(_config.TELEGRAM_CHAT_ID or "local")
+    # Unattributed ("-") entries can carry another chat's address - only the
+    # owner ever sees those; everyone else sees strictly their own sends.
     mine = [entry for entry in entries
-            if str(entry.get("chat")) in (str(chat_id), "-")]
-    if str(chat_id) == str(_config.TELEGRAM_CHAT_ID or "local"):
+            if str(entry.get("chat")) == str(chat_id)
+            or (is_owner and str(entry.get("chat")) == "-")]
+    if is_owner:
         mine = entries  # owner sees every chat's sends
     if not mine:
         reply(chat_id, "No mails sent yet - try <code>/emailboth</code> first.")

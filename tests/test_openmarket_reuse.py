@@ -118,6 +118,67 @@ class OpenmarketCommandTests(unittest.TestCase):
         self.assertEqual(shown["total_target"], 20)
 
 
+class RecentRecordTests(unittest.TestCase):
+    def _fresh_doc(self, markets=("in",)):
+        recorded_at = (dt.datetime.now(dt.timezone.utc)
+                       - dt.timedelta(minutes=10)).isoformat()
+        return _doc(recorded_at=recorded_at, markets=list(markets),
+                    report={"sections": _sections("in"),
+                            "total_verified": 7, "total_target": 20,
+                            "volume_computed": 3})
+
+    def test_minutes_fresh_doc_reused(self):
+        self.assertIsNotNone(openreport.recent_record(self._fresh_doc(), ("in",)))
+
+    def test_stale_doc_rebuilds(self):
+        doc = self._fresh_doc()
+        doc["recorded_at"] = "2020-01-01T00:00:00+00:00"
+        self.assertIsNone(openreport.recent_record(doc, ("in",)))
+
+    def test_partial_coverage_rebuilds(self):
+        self.assertIsNone(openreport.recent_record(self._fresh_doc(("in",)), ("in", "us")))
+
+
+class OpenreportReuseWindowTests(unittest.TestCase):
+    def _fresh_doc(self):
+        recorded_at = (dt.datetime.now(dt.timezone.utc)
+                       - dt.timedelta(minutes=10)).isoformat()
+        return _doc(recorded_at=recorded_at,
+                    report={"sections": _sections("in"),
+                            "total_verified": 7, "total_target": 20,
+                            "volume_computed": 3})
+
+    def test_fresh_scan_replays_without_refetch(self):
+        sent = []
+        with patch.object(orc, "reply", lambda chat, msg, **kw: sent.append(msg)), \
+                patch.object(orc, "reply_messages", lambda chat, msgs, **kw: sent.extend(msgs)), \
+                patch("corporate_actions.storage.load_openclose",
+                      return_value=self._fresh_doc()), \
+                patch.object(orc, "split_messages", lambda lines: lines), \
+                patch("corporate_actions.opening_report.report.render_telegram",
+                      return_value=["line"]), \
+                patch("corporate_actions.opening_report.collect_and_render",
+                      side_effect=AssertionError("must not refetch")):
+            orc.handle_opening_report(1, ["/openreport", "in"])
+        self.assertTrue(any("Reusing" in str(m) for m in sent))
+
+    def test_now_bypasses_reuse(self):
+        sent = []
+        with patch.object(orc, "reply", lambda chat, msg, **kw: sent.append(msg)), \
+                patch.object(orc, "reply_messages", lambda chat, msgs, **kw: sent.extend(msgs)), \
+                patch("corporate_actions.storage.load_openclose",
+                      return_value=self._fresh_doc()), \
+                patch.object(orc, "split_messages", lambda lines: lines), \
+                patch("corporate_actions.opening_report.report.render_telegram",
+                      return_value=["L2"]), \
+                patch("corporate_actions.opening_report.collect_and_render",
+                      return_value=(["L1"], {"sections": []})) as collect, \
+                patch("corporate_actions.storage.save_openclose"):
+            orc.handle_opening_report(1, ["/openreport", "in", "now"])
+        collect.assert_called_once()
+        self.assertTrue(any("Building" in str(m) for m in sent))
+
+
 class SnapshotArchiveTests(unittest.TestCase):
     def setUp(self):
         tmp = tempfile.TemporaryDirectory()

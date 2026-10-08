@@ -72,8 +72,15 @@ def handle_opening_report(chat_id, parts) -> None:
     if len(parts) > 1 and parts[1].lower() in ("auto", "schedule", "daily", "everyday"):
         handle_openreport_auto(chat_id, parts)
         return
+    # Freshness words (same set /openmarket honours) force a brand-new scan.
+    # They are stripped before market/date parsing so "now" is never read as
+    # a (bad) date token.
+    force = any(str(arg or "").lower() in ("now", "fresh", "run", "update", "new")
+                for arg in parts[1:])
+    query = [parts[0]] + [p for p in parts[1:]
+                          if str(p or "").lower() not in ("now", "fresh", "run", "update", "new")]
     try:
-        target_date = _requested_date(parts)
+        target_date = _requested_date(query)
     except ValueError as bad:
         reply(
             chat_id,
@@ -82,12 +89,31 @@ def handle_opening_report(chat_id, parts) -> None:
             "or <code>/openreport in 18-09-2026</code>.",
         )
         return
-    markets = _requested_markets(parts)
+    markets = _requested_markets(query)
     labels = ", ".join(
         f"{'India' if market == 'in' else 'US'} "
         f"({'OPEN' if is_market_open(market) else 'CLOSED'})"
         for market in markets
     )
+    # Reuse-first: an identical scan minutes ago (another chat's auto-plan,
+    # a double-tap) replays instantly instead of re-scanning 60-90s of
+    # universes. Historical asks never reuse (a past session must be built
+    # for its own date).
+    if target_date is None and not force:
+        try:
+            from .. import storage as _storage
+            from ..opening_report.report import recent_record
+
+            recent = recent_record(_storage.load_openclose() or {}, markets)
+        except Exception:
+            recent = None
+        if recent:
+            when = str(recent.get("recorded_at") or "")[:16].replace("T", " ")
+            reply(chat_id, f"\u267b\ufe0f <b>Reusing the scan from {when}</b> - identical "
+                           f"markets, minutes fresh, no re-scan. For a brand-new scan "
+                           f"reply <code>/openmarket now</code>.")
+            market_arg = [markets[0]] if len(markets) == 1 else []
+            return handle_openmarket(chat_id, ["/openmarket", *market_arg])
     if target_date is not None:
         head = (
             "\U0001F4DC <b>Building the historical session report</b>\n"

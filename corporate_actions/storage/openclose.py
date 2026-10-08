@@ -129,14 +129,70 @@ def _capture_versioned(doc: dict) -> None:
         log.warning("openclose versioned capture skipped: %s", error)
 
 
+def merge_sections(base_report: dict, new_sections: list) -> dict:
+    """Recorded report with sections replaced per-market (pure).
+
+    One dated file accumulates every market built for that session: a fresh
+    India scan replaces only the India section(s) while the US block stays
+    until the US plan rebuilds it (and vice versa). Without this, each save
+    wiped the other market and readers saw single-market files flip-flopping
+    through the day. Totals recompute over all sections; an empty `new`
+    never wipes existing content.
+    """
+    base = base_report if isinstance(base_report, dict) else {}
+    fresh = [dict(s) for s in (new_sections or []) if isinstance(s, dict)]
+    if not fresh:
+        return dict(base)
+    kept = [dict(s) for s in (base.get("sections") or [])
+            if isinstance(s, dict) and s.get("market") not in
+            {s.get("market") for s in fresh}]
+    order = {"in": 0, "us": 1}
+    sections = sorted(kept + fresh,
+                      key=lambda s: order.get(s.get("market"), 99))
+    merged = dict(base)
+    merged["sections"] = sections
+    merged["total_verified"] = sum(
+        u.get("verified", 0) for s in sections for u in s.get("universes", []))
+    merged["total_target"] = sum(
+        u.get("target", 0) for s in sections for u in s.get("universes", []))
+    merged["volume_computed"] = sum(s.get("volume_computed", 0) or 0 for s in sections)
+    return merged
+
+
 def save_openclose(doc: dict) -> None:
-    """Persist one report doc under its session date, atomically."""
+    """Persist one report doc under its session date, atomically.
+
+    Merges (never overwrites): the incoming build's sections replace only
+    their own markets in the dated file, so an India scan at 10:00 and a US
+    scan at 19:10 accumulate into one both-markets file instead of wiping
+    each other. Wrapper fields (recorded_at/by, markets union) come from the
+    latest writer.
+    """
     if not isinstance(doc, dict) or not doc:
         return
     path = _dated_path(_doc_date(doc) or "unknown")
     with _lock, _file_lock(path):
         path.parent.mkdir(parents=True, exist_ok=True)
-        write_json(path, doc)
+        existing = read_json(path, {})
+        base_report = existing.get("report") if isinstance(existing, dict) else {}
+        incoming_report = doc.get("report") if isinstance(doc.get("report"), dict) else {}
+        incoming_sections = (incoming_report or {}).get("sections") or []
+        base_sections = (base_report.get("sections") or []) if isinstance(base_report, dict) else []
+        if incoming_sections and base_sections:
+            merged_report = merge_sections(base_report, incoming_sections)
+        elif incoming_sections:
+            # First tables of the day: keep byte-exact old behavior.
+            merged_report = incoming_report
+        elif base_sections:
+            # Never wipe recorded tables with an empty/failed build.
+            merged_report = base_report
+        else:
+            merged_report = incoming_report
+        merged = dict(doc)
+        merged["report"] = merged_report
+        base_markets = (existing.get("markets") or []) if isinstance(existing, dict) else []
+        merged["markets"] = sorted({*(base_markets or []), *((doc.get("markets") or []))})
+        write_json(path, merged)
     _capture_versioned(doc)
 
 

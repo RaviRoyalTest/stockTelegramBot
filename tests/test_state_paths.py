@@ -111,10 +111,91 @@ class OpencloseDatedStoreTests(unittest.TestCase):
         from corporate_actions.storage import openclose as oc_store
 
         self.assertEqual(
-            oc_store._doc_date({"target_date": "2026-09-18",
-                                "recorded_at": "2026-09-29T10:00:00+00:00"}),
-            "2026-09-18",
+            oc_store._doc_date({"target_date": "2026-10-18",
+                                 "recorded_at": "2026-09-29T10:00:00+00:00"}),
+            "2026-10-18",
         )
+
+    def _report(self, market, verified):
+        return {
+            "sections": [{
+                "market": market,
+                "snapshot": {"date": "2026-10-08", "time_local": "10:00", "state": "OPEN"},
+                "universes": [{"key": "k", "title": "T", "verified": verified,
+                               "target": 20, "gainers": [], "losers": []}],
+                "volume_computed": 1,
+            }],
+            "total_verified": verified, "total_target": 20, "volume_computed": 1,
+        }
+
+    def test_saves_merge_per_market_instead_of_wiping(self):
+        from corporate_actions.storage import openclose as oc_store
+
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            dir_patch, file_patch = self._patched_dir(root)
+            with dir_patch, file_patch:
+                oc_store.save_openclose({
+                    "recorded_at": "2026-10-08T04:00:00+00:00", "recorded_by": "a",
+                    "mode": "live", "markets": ["in"],
+                    "report": self._report("in", 60)})
+                oc_store.save_openclose({
+                    "recorded_at": "2026-10-08T14:00:00+00:00", "recorded_by": "b",
+                    "mode": "live", "markets": ["us"],
+                    "report": self._report("us", 40)})
+                doc = oc_store.load_openclose("2026-10-08")
+        sections = doc["report"]["sections"]
+        self.assertEqual([s["market"] for s in sections], ["in", "us"])
+        self.assertEqual(
+            (doc["report"]["total_verified"], doc["report"]["total_target"]),
+            (100, 40))
+        self.assertEqual(doc["markets"], ["in", "us"])
+
+    def test_rescan_replaces_only_its_market(self):
+        from corporate_actions.storage import openclose as oc_store
+
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            dir_patch, file_patch = self._patched_dir(root)
+            with dir_patch, file_patch:
+                oc_store.save_openclose({
+                    "recorded_at": "2026-10-08T04:00:00+00:00", "recorded_by": "a",
+                    "mode": "live", "markets": ["in", "us"],
+                    "report": {"sections": [
+                        {"market": "in", "universes": [
+                            {"key": "k", "verified": 1, "target": 20}],
+                         "volume_computed": 0},
+                        {"market": "us", "universes": [
+                            {"key": "u", "verified": 2, "target": 20}],
+                         "volume_computed": 0},
+                    ], "total_verified": 3, "total_target": 40,
+                        "volume_computed": 0}})
+                oc_store.save_openclose({
+                    "recorded_at": "2026-10-08T10:00:00+00:00", "recorded_by": "b",
+                    "mode": "live", "markets": ["in"],
+                    "report": self._report("in", 60)})
+                doc = oc_store.load_openclose("2026-10-08")
+        by_market = {s["market"]: s for s in doc["report"]["sections"]}
+        self.assertEqual(by_market["in"]["universes"][0]["verified"], 60)
+        self.assertEqual(by_market["us"]["universes"][0]["verified"], 2)
+
+    def test_empty_build_never_wipes_tables(self):
+        from corporate_actions.storage import openclose as oc_store
+
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            dir_patch, file_patch = self._patched_dir(root)
+            with dir_patch, file_patch:
+                oc_store.save_openclose({
+                    "recorded_at": "2026-10-08T04:00:00+00:00", "recorded_by": "a",
+                    "mode": "live", "markets": ["in"],
+                    "report": self._report("in", 60)})
+                oc_store.save_openclose({
+                    "recorded_at": "2026-10-08T05:00:00+00:00", "recorded_by": "b",
+                    "mode": "live", "markets": ["in"],
+                    "report": {"sections": []}})
+                doc = oc_store.load_openclose("2026-10-08")
+        self.assertEqual(len(doc["report"]["sections"]), 1)
 
 
 if __name__ == "__main__":

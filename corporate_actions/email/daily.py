@@ -15,7 +15,7 @@ from __future__ import annotations
 
 import logging
 
-from .. import storage
+from .. import config, storage
 from ..core.dates import now_ist, today_ist
 from ..core.text import escape
 from .client import is_configured as email_configured
@@ -406,22 +406,11 @@ def _recorded_doc_is_current(doc: dict, today_iso: str) -> bool:
 def _merge_reports(base: dict, india_section: dict) -> dict:
     """Recorded report with its India section replaced by a live one (pure).
 
-    Recorded docs are per-market (US-only after the US auto-plan runs, India-
-    only after the India plan) - without the merge the mail would show only
-    whichever market was recorded last. Totals are recomputed over all
-    sections so the Verified counts stay honest.
+    Single shared implementation lives in storage.openclose.merge_sections
+    (the save layer merges the same way) - this stays as a thin alias so
+    existing callers and tests keep working.
     """
-    base = _as_report(base)
-    sections = [dict(s) for s in (base.get("sections") or []) if s.get("market") != "in"]
-    sections.insert(0, dict(india_section))
-    merged = dict(base)
-    merged["sections"] = sections
-    merged["total_verified"] = sum(
-        u.get("verified", 0) for s in sections for u in s.get("universes", []))
-    merged["total_target"] = sum(
-        u.get("target", 0) for s in sections for u in s.get("universes", []))
-    merged["volume_computed"] = sum(s.get("volume_computed", 0) or 0 for s in sections)
-    return merged
+    return storage.merge_sections(_as_report(base), [india_section])
 
 
 def _ensure_fresh_india(today_iso: str) -> tuple[dict, str, bool]:
@@ -479,6 +468,12 @@ def maybe_send_open_email(chat_id, report: dict | None = None, force: bool = Fal
     the mail carries this morning's details instead of yesterday's file.
     """
     try:
+        # Single sender: the GitHub Actions cron (PROCESS_COMMANDS=false) runs
+        # the same poll cycle - without this gate BOTH hosts would mail (and
+        # both would run the live India build). Only the always-on server
+        # sends automatic mails. Explicit force sends always go through.
+        if not force and not config.PROCESS_COMMANDS:
+            return False
         settings = storage.get_user_settings(chat_id) or {}
         recipient = (settings.get("email") or "").strip()
         if not recipient or not settings.get("daily_email") or not wants_open(settings):
@@ -529,6 +524,9 @@ def maybe_send_eod_email(chat_id, report: dict | None = None, force: bool = Fals
     the snapshot digest fills in instead.
     """
     try:
+        # Single sender (see maybe_send_open_email): cron hosts never mail.
+        if not force and not config.PROCESS_COMMANDS:
+            return False
         settings = storage.get_user_settings(chat_id) or {}
         recipient = (settings.get("email") or "").strip()
         if not recipient or not settings.get("daily_email") or not wants_close(settings):

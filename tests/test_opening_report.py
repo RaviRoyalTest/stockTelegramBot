@@ -220,6 +220,30 @@ class UsCapsCacheTests(unittest.TestCase):
             caps = d.get_us_market_caps(["ZZZ"])
         self.assertEqual(caps, {})
 
+    def test_stale_cache_forces_live_reverify(self):
+        import os
+        import time
+
+        self._seed_cache({"AAPL": 1e12})  # stale value on a stale file
+        path = self.tmp / "us_caps.json"
+        old = time.time() - 31 * 86400
+        os.utime(path, (old, old))
+        session = _FakeSession([
+            _FakeResponse(payload=self._quote_payload({"AAPL": 3e12})),
+        ])
+        with patch("corporate_actions.sources.fundamentals._fund_session",
+                   return_value=(session, "crumb")):
+            caps = d.get_us_market_caps(["AAPL"])
+        self.assertEqual(caps, {"AAPL": 3e12})
+        self.assertEqual(len(session.calls), 1)
+
+    def test_fresh_cache_skips_network_entirely(self):
+        self._seed_cache({"AAPL": 3e12})
+        with patch("corporate_actions.sources.fundamentals._fund_session",
+                   side_effect=AssertionError("no network when cache is fresh")):
+            caps = d.get_us_market_caps(["AAPL"])
+        self.assertEqual(caps, {"AAPL": 3e12})
+
 
 class HistoricalSnapshotTests(unittest.TestCase):
     """Historical mode picks the bar ON the target date and the nearest

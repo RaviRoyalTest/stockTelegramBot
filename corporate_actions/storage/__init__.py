@@ -21,6 +21,7 @@ from .migrate import migrate_legacy_state_files
 from .openclose import (
     list_openclose_dates,
     load_openclose,
+    merge_sections,
     migrate_openclose_file,
     save_openclose,
 )
@@ -86,6 +87,7 @@ __all__ = [
     "unique_snapshot_path",
     "list_openclose_dates",
     "load_openclose",
+    "merge_sections",
     "migrate_openclose_file",
     "save_openclose",
     "load_watchlist",

@@ -393,6 +393,35 @@ def _save_us_caps(caps: dict) -> None:
         log.debug("us caps cache save skipped: %s", error)
 
 
+def _touch_us_caps() -> None:
+    """Restart the cache TTL after a full live re-verification (never raises).
+
+    Needed because the atomic writer skips identical content (no mtime bump)
+    - without this, a stable universe would refetch every ticker on every
+    call once the TTL first lapsed.
+    """
+    try:
+        path = _us_caps_path()
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.touch(exist_ok=True)
+    except Exception as error:
+        log.debug("us caps touch skipped: %s", error)
+
+
+_CAPS_CACHE_TTL_DAYS = 30
+
+
+def _us_caps_cache_fresh() -> bool:
+    """True when the cache file was written within the TTL (never raises)."""
+    try:
+        import time as _time
+
+        mtime = _us_caps_path().stat().st_mtime
+        return (_time.time() - mtime) < _CAPS_CACHE_TTL_DAYS * 86400
+    except Exception:
+        return False
+
+
 def get_us_market_caps(symbols: list[str], max_workers: int = 12) -> dict:
     """Market cap in USD per ticker via Yahoo's batched v7/quote endpoint.
 
@@ -411,7 +440,10 @@ def get_us_market_caps(symbols: list[str], max_workers: int = 12) -> dict:
     wanted = [s for s in symbols if s]
     if not wanted:
         return {}
-    cached = _load_us_caps()
+    # Caps only decide wide Mega/Large buckets, but they still drift (splits,
+    # listings) - a cache older than the TTL is ignored so every ticker is
+    # re-verified live at least monthly.
+    cached = _load_us_caps() if _us_caps_cache_fresh() else {}
     # Only the tickers missing from the cache hit the network - fewer calls,
     # less 429 pressure, and a total batch failure still leaves cached caps.
     missing = [s for s in wanted if s not in cached]
@@ -448,6 +480,8 @@ def get_us_market_caps(symbols: list[str], max_workers: int = 12) -> dict:
                         log.warning("us market-cap batch failed (%d tickers): %s", len(chunk), error)
         if fresh:
             _save_us_caps(fresh)
+        if missing and set(missing) <= set(fresh):
+            _touch_us_caps()
     caps = dict(cached)
     caps.update(fresh)
     if missing and not fresh:
