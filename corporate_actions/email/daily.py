@@ -263,8 +263,76 @@ def fetch_watchlist_actions(watchlist: list[dict], limit: int = 40) -> list[dict
     return actions[: max(1, limit)]
 
 
-def build_watchlist_actions_lines(actions: list[dict]) -> list[str]:
-    """Colorful corporate-action tables grouped by state (pure - no I/O)."""
+def fetch_nifty_actions(limit: int = 80) -> list[dict]:
+    """ALL Nifty-500 corporate actions currently in progress (best-effort).
+
+    NSE + BSE feeds filtered to Nifty 500 constituents, NSE/BSE duplicates
+    merged, sorted ex-date first. "In progress" = upcoming ex-date, recently
+    passed but not completed, or announced awaiting dates. Never raises.
+    """
+    try:
+        from ..poller import (
+            action_is_completed,
+            fetch_all_actions,
+            parse_ex_date,
+            recently_passed,
+            within_reminder_window,
+        )
+        from ..sources.universe import get_index_universe
+
+        universe = {str(s or "").strip().upper()
+                    for s in (get_index_universe("nifty500") or [])}
+    except Exception as error:
+        log.debug("nifty actions setup skipped: %s", error)
+        return []
+    if not universe:
+        return []
+    try:
+        all_actions, _errors, _warnings = fetch_all_actions()
+    except Exception as error:
+        log.debug("nifty actions fetch skipped: %s", error)
+        return []
+
+    def _is_inprogress(action: dict) -> bool:
+        try:
+            if within_reminder_window(action.get("ex_date")):
+                return True
+            if recently_passed(action.get("ex_date")) \
+                    and not action_is_completed(action):
+                return True
+            return not parse_ex_date(action.get("ex_date"))
+        except Exception:
+            return False
+
+    seen: set = set()
+    rows: list[dict] = []
+    for action in all_actions or []:
+        symbol = str(action.get("symbol") or "").strip().upper()
+        if not symbol or symbol not in universe:
+            continue
+        key = (symbol, str(action.get("subject") or "").strip()[:60],
+               str(action.get("ex_date") or ""))
+        if key in seen:
+            continue
+        seen.add(key)
+        if _is_inprogress(action):
+            rows.append(action)
+
+    def _sort_key(action: dict):
+        try:
+            day = parse_ex_date(action.get("ex_date"))
+        except Exception:
+            day = None
+        return (day is None, str(day or "9999-99-99"))
+
+    rows.sort(key=_sort_key)
+    return rows[: max(1, limit)]
+
+
+def _build_grouped_action_tables(actions: list[dict], heading: str,
+                                 cap_upcoming: int = 15, cap_rest: int = 10,
+                                 more_hint: str = "") -> list[str]:
+    """Shared grouped-tables renderer for watchlist + Nifty mails (pure)."""
     from ..poller import action_is_completed, parse_ex_date
     from ..poller import recently_passed, within_reminder_window
 
@@ -282,24 +350,42 @@ def build_watchlist_actions_lines(actions: list[dict]) -> list[str]:
                 recent.append(action)
         except Exception:
             pending.append(action)
-    lines = [section("Corporate actions · your full watchlist", "slate", "📋")]
+    lines = [section(heading, "slate", "📋")]
     total = len(actions or [])
     if not total:
-        lines.append('<p class="muted">No corporate actions found for your watchlist stocks.</p>')
+        lines.append('<p class="muted">No corporate actions in progress right now.</p>')
         return lines
     if upcoming:
         lines.append(f"<b>📅 Upcoming ex-dates ({len(upcoming)})</b>")
-        lines.append(actions_table(upcoming, limit=15))
+        lines.append(actions_table(upcoming, limit=cap_upcoming))
     if recent:
         lines.append(f"<b>🔄 Recently passed / in progress ({len(recent)})</b>")
-        lines.append(actions_table(recent, limit=10))
+        lines.append(actions_table(recent, limit=cap_rest))
     if pending:
         lines.append(f"<b>📢 Announced · ex-date not fixed ({len(pending)})</b>")
-        lines.append(actions_table(pending, limit=10))
-    shown = min(total, 15 + 10 + 10)
-    if total > shown:
-        lines.append(f"<p class='muted'>…and {total - shown} more in Telegram /corpactionsformylist.</p>")
+        lines.append(actions_table(pending, limit=cap_rest))
+    shown = min(total, cap_upcoming + 2 * cap_rest)
+    if total > shown and more_hint:
+        lines.append(f"<p class='muted'>…and {total - shown} more - {more_hint}.</p>")
     return lines
+
+
+def build_nifty_actions_lines(actions: list[dict]) -> list[str]:
+    """Colorful tables for Nifty-wide in-progress actions (pure - no I/O)."""
+    return _build_grouped_action_tables(
+        actions, "Nifty 500 · corporate actions in progress",
+        cap_upcoming=25, cap_rest=15,
+        more_hint="full list on the web /exdates page")
+
+
+def build_watchlist_actions_lines(actions: list[dict]) -> list[str]:
+    """Colorful corporate-action tables grouped by state (pure - no I/O)."""
+    if not actions:
+        return [section("Corporate actions · your full watchlist", "slate", "📋"),
+                '<p class="muted">No corporate actions found for your watchlist stocks.</p>']
+    return _build_grouped_action_tables(
+        actions, "Corporate actions · your full watchlist",
+        more_hint="more in Telegram /corpactionsformylist")
 
 
 def build_eod_store_lines(chat_id, quotes: list[dict] | None = None) -> list[str]:
@@ -369,6 +455,15 @@ def build_eod_store_lines(chat_id, quotes: list[dict] | None = None) -> list[str
         if snapshot.get("corporate_actions"):
             lines.append("<b>📋 Corporate actions (recorded)</b>")
             lines.append(actions_table(snapshot["corporate_actions"]))
+    # ALL Nifty-500 corporate actions currently in progress (not just the
+    # watchlist). Best-effort: a feed outage skips the block, never the mail.
+    try:
+        nifty_actions = fetch_nifty_actions()
+    except Exception as error:
+        log.debug("nifty actions skipped: %s", error)
+        nifty_actions = []
+    if nifty_actions:
+        lines.extend(build_nifty_actions_lines(nifty_actions))
     lines.append(muted("Manage with /dailyemail off · full tables on the web Sessions tab."))
     return lines
 

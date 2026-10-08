@@ -11,8 +11,9 @@ from .tables import esc as tables_esc
 from .tables import muted, stat_chips
 from .daily import build_close_lines, build_combined_lines, build_daily_lines
 from .daily import build_eod_store_lines, build_full_session_lines
-from .daily import build_open_lines, build_watchlist_actions_lines
-from .daily import fetch_watchlist_actions, get_scope
+from .daily import build_nifty_actions_lines, build_open_lines
+from .daily import build_watchlist_actions_lines
+from .daily import fetch_nifty_actions, fetch_watchlist_actions, get_scope
 from .daily import maybe_send_daily_email, maybe_send_eod_email, maybe_send_open_email
 from .resend import is_configured as resend_configured
 from .resend import send_via_resend
@@ -36,8 +37,10 @@ __all__ = [
     "build_daily_lines",
     "build_eod_store_lines",
     "build_full_session_lines",
+    "build_nifty_actions_lines",
     "build_open_lines",
     "build_watchlist_actions_lines",
+    "fetch_nifty_actions",
     "fetch_watchlist_actions",
     "get_scope",
     "maybe_send_daily_email",

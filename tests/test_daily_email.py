@@ -109,7 +109,8 @@ class DailyEmailTests(unittest.TestCase):
         self.assertIn("RELIANCE", text)
 
     def test_eod_store_tables(self):
-        with patch("corporate_actions.email.daily.storage") as store:
+        with patch("corporate_actions.email.daily.storage") as store, \
+                patch("corporate_actions.poller.fetch_matching", return_value=[]):
             store.get_user_settings.return_value = {"email": "a@b.com", "daily_email": True}
             store.load_watchlist.return_value = [{"symbol": "RELIANCE", "company": "Reliance", "exchange": "NSE"}]
             store.load_schedule_for.return_value = [{"interval_min": 180, "commands": ["/scan500"]}]
@@ -152,6 +153,9 @@ class MarketGatedMailTests(unittest.TestCase):
             patch.object(daily_mod, "email_configured", return_value=True),
             patch.object(storage_mod, "get_user_settings", return_value=dict(self.settings)),
             patch.object(storage_mod, "save_user_settings"),
+            # Live action fetches stay hermetic (no network in unit tests).
+            patch("corporate_actions.poller.fetch_matching", return_value=[]),
+            patch.object(daily_mod, "fetch_nifty_actions", return_value=[]),
         ]
         for patcher in patches:
             patcher.start()
@@ -344,6 +348,67 @@ class WatchlistActionsMailTests(unittest.TestCase):
         self.assertIn("OLD", text)
 
 
+class NiftyActionsMailTests(unittest.TestCase):
+    def _feed(self):
+        from datetime import date, timedelta
+
+        future = (date.today() + timedelta(days=3)).isoformat()
+        past = (date.today() - timedelta(days=2)).isoformat()
+        old = (date.today() - timedelta(days=60)).isoformat()
+        return [
+            {"symbol": "DIV", "subject": "Dividend Rs 10", "exchange": "NSE",
+             "ex_date": future},
+            {"symbol": "DIV", "subject": "Dividend Rs 10", "exchange": "BSE",
+             "ex_date": future},  # NSE/BSE double - dedupes to one
+            {"symbol": "BONUS", "subject": "Bonus 1:1", "exchange": "NSE",
+             "ex_date": past},
+            {"symbol": "SMALL", "subject": "Dividend Rs 1", "exchange": "NSE",
+             "ex_date": future},  # not Nifty - excluded
+            {"symbol": "OLD", "subject": "Dividend Rs 2", "exchange": "NSE",
+             "ex_date": old},  # long completed - excluded
+        ]
+
+    def test_fetch_filters_universe_dedupes_and_keeps_inprogress(self):
+        from corporate_actions.email import daily as dm
+
+        with patch("corporate_actions.sources.universe.get_index_universe",
+                   return_value=["DIV", "BONUS", "OLD"]), \
+                patch("corporate_actions.poller.fetch_all_actions",
+                      return_value=(self._feed(), [], [])):
+            rows = dm.fetch_nifty_actions()
+        symbols = [row["symbol"] for row in rows]
+        self.assertIn("DIV", symbols)
+        self.assertIn("BONUS", symbols)
+        self.assertEqual(symbols.count("DIV"), 1)
+        self.assertNotIn("SMALL", symbols)
+        self.assertNotIn("OLD", symbols)
+
+    def test_nifty_tables_list_everything(self):
+        from corporate_actions.email.daily import build_nifty_actions_lines
+
+        text = "\n".join(build_nifty_actions_lines(self._feed()[:3]))
+        for symbol in ("DIV", "BONUS"):
+            self.assertIn(symbol, text)
+        self.assertIn("Nifty 500", text)
+
+    def test_eod_contains_nifty_block(self):
+        from corporate_actions.email import daily as dm
+
+        with patch("corporate_actions.email.daily.storage") as store, \
+                patch("corporate_actions.poller.fetch_matching", return_value=[]), \
+                patch.object(dm, "fetch_nifty_actions",
+                             return_value=self._feed()[:1]):
+            store.get_user_settings.return_value = {"email": "a@b.com", "daily_email": True}
+            store.load_watchlist.return_value = []
+            store.load_schedule_for.return_value = []
+            store.load_snapshots.return_value = {}
+            store.list_snapshot_dates.return_value = []
+            store.list_openclose_dates.return_value = []
+            text = "\n".join(dm.build_eod_store_lines("123", []))
+        self.assertIn("Nifty 500", text)
+        self.assertIn("DIV", text)
+
+
 class ManualMailTests(unittest.TestCase):
     def setUp(self):
         from corporate_actions.bot import email_commands as ec
@@ -356,6 +421,9 @@ class ManualMailTests(unittest.TestCase):
                          lambda chat, msgs, **kw: self.sent.extend(msgs)),
             patch.object(ec, "send_email", return_value=(True, "")),
             patch.object(ec, "email_configured", return_value=True),
+            patch("corporate_actions.poller.fetch_matching", return_value=[]),
+            patch("corporate_actions.email.daily.fetch_nifty_actions",
+                  return_value=[]),
             patch("corporate_actions.email.daily.fetch_watchlist_quotes",
                   return_value=[]),
             patch.object(storage_mod, "get_user_settings",
