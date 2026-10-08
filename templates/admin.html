@@ -2,6 +2,27 @@
 {% block title %}Admin · Royal Stock{% endblock %}
 {% block content %}
   <style>
+    /* Mockup palette: page #eef2f7, cards #fff + #e5e7eb border, primary #2563eb,
+       danger #dc2626, badge #e0e7ff/#3730a1, header strip #f8fafc. */
+    #adminBody .card, #gateCard { background: #fff; border: 1px solid #e5e7eb; border-radius: 14px;
+      box-shadow: 0 1px 3px rgba(15, 23, 42, 0.06); }
+    #adminBody h1, #adminBody h2, #adminBody h3 { color: #0f172a; }
+    #adminBody .muted { color: #64748b; }
+    #adminBody .field { background: #fff; border: 1px solid #e2e8f0; border-radius: 8px; color: #0f172a; }
+    #adminBody .field:focus { outline: 2px solid rgba(37, 99, 235, 0.35); border-color: #2563eb; }
+    #adminBody .btn-primary { background: #2563eb; border-color: #2563eb; border-radius: 8px; }
+    #adminBody .btn-primary:hover { background: #1d4ed8; border-color: #1d4ed8; }
+    #adminBody .btn:not(.btn-primary):not(.btn-danger):not(.adm-discard) { background: #fff; border: 1px solid #e2e8f0; color: #0f172a; border-radius: 8px; }
+    .adm-discard { background: #dc2626 !important; border: 1px solid #dc2626 !important; color: #fff !important; border-radius: 8px !important; }
+    .adm-discard:hover { background: #b91c1c !important; border-color: #b91c1c !important; }
+    .table-mini thead th { background: #f8fafc; color: #64748b; font-size: 11px; font-weight: 800;
+      text-transform: uppercase; letter-spacing: 0.5px; border-bottom: 1px solid #eef2f7; padding: 10px; }
+    .table-mini tbody td { border-bottom: 1px solid #f1f5f9; padding: 10px; color: #0f172a; }
+    .table-mini tbody tr:last-child td { border-bottom: none; }
+    .table-mini td strong { color: #0f172a; }
+    .table-mini th.num, .table-mini td.num { text-align: right; }
+    .pill { background: #e0e7ff !important; color: #3730a1 !important; border-radius: 6px !important; font-weight: 700; }
+    .pill-warn { background: #fef3c7 !important; color: #92400e !important; }
     .adm-layout { display: grid; grid-template-columns: 290px minmax(0, 1fr); gap: 16px; align-items: start; }
     .adm-grid2 { display: grid; grid-template-columns: minmax(0, 1.15fr) minmax(0, 1fr); gap: 16px; align-items: start; }
     /* Laptop: stack the two tables before they start clipping. */
@@ -25,6 +46,17 @@
       .adm-toggles { gap: 10px; }
     }
     .table-scroll { max-width: 100%; }
+    /* Dark theme: keep the console readable instead of forcing light cards. */
+    [data-theme="dark"] #adminBody .card, [data-theme="dark"] #gateCard { background: #0f172a; border-color: #1e293b; }
+    [data-theme="dark"] #adminBody h1, [data-theme="dark"] #adminBody h2, [data-theme="dark"] #adminBody h3 { color: #e2e8f0; }
+    [data-theme="dark"] #adminBody .field { background: #1e293b; border-color: #334155; color: #e2e8f0; }
+    [data-theme="dark"] .adm-user { background: #0f172a; border-color: #1e293b; }
+    [data-theme="dark"] .adm-user[aria-selected="true"] { background: #172554; }
+    [data-theme="dark"] .adm-mail { color: #e2e8f0; }
+    [data-theme="dark"] .table-mini thead th { background: #1e293b; color: #94a3b8; border-bottom-color: #0f172a; }
+    [data-theme="dark"] .table-mini tbody td { border-bottom-color: #1e293b; color: #e2e8f0; }
+    [data-theme="dark"] .table-mini td strong { color: #f1f5f9; }
+    [data-theme="dark"] #adminBody .btn:not(.btn-primary):not(.btn-danger):not(.adm-discard) { background: #1e293b; border-color: #334155; color: #e2e8f0; }
     .table-mini { table-layout: auto; width: 100%; }
     .table-mini code { overflow-wrap: anywhere; word-break: break-word; white-space: normal; }
     .table-mini td, .table-mini th { vertical-align: top; }
@@ -33,10 +65,13 @@
     .adm-actions { display: flex; gap: 8px; }
     .adm-users { display: flex; flex-direction: column; gap: 10px; }
     .adm-search { width: 100%; box-sizing: border-box; }
-    .adm-user { border: 1px solid var(--line, #e2e8f0); border-radius: 12px; padding: 10px 12px; cursor: pointer; background: var(--card, #fff); }
-    .adm-user[aria-selected="true"] { border-color: #6366f1; box-shadow: 0 0 0 2px rgba(99, 102, 241, 0.25); }
+    .adm-user { border: 1.5px solid #e5e7eb; border-radius: 12px; padding: 12px; cursor: pointer; background: #fff;
+      box-shadow: 0 1px 2px rgba(15, 23, 42, 0.05); }
+    .adm-user:hover { border-color: #c7d2fe; }
+    .adm-user[aria-selected="true"] { border-color: #3b82f6; background: #f8faff;
+      box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.15); }
     .adm-user-top { display: flex; align-items: center; gap: 8px; }
-    .adm-avatar { width: 28px; height: 28px; border-radius: 50%; background: #e0e7ff; color: #4338ca; font-weight: 800; font-size: 13px; display: inline-flex; align-items: center; justify-content: center; flex: none; }
+    .adm-avatar { width: 30px; height: 30px; border-radius: 50%; background: #e0e7ff; color: #4338ca; font-weight: 800; font-size: 14px; display: inline-flex; align-items: center; justify-content: center; flex: none; }
     .adm-mail { font-weight: 700; font-size: 0.85rem; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
     .adm-sub { font-size: 0.75rem; color: #64748b; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
     .adm-role { margin-left: auto; flex: none; }
@@ -46,8 +81,13 @@
     .adm-switch input { opacity: 0; width: 0; height: 0; }
     .adm-knob { position: absolute; inset: 0; border-radius: 999px; background: #cbd5e1; transition: background 0.15s; }
     .adm-knob::after { content: ""; position: absolute; top: 2px; left: 2px; width: 16px; height: 16px; border-radius: 50%; background: #fff; transition: transform 0.15s; box-shadow: 0 1px 2px rgba(0,0,0,0.25); }
-    .adm-switch input:checked + .adm-knob { background: #6366f1; }
+    .adm-switch input:checked + .adm-knob { background: #3b82f6; }
     .adm-switch input:checked + .adm-knob::after { transform: translateX(14px); }
+    .adm-del { width: 30px; height: 30px; border-radius: 50%; border: none; background: #fee2e2; color: #dc2626;
+      display: inline-flex; align-items: center; justify-content: center; cursor: pointer; padding: 0; }
+    .adm-del:hover { background: #fecaca; color: #b91c1c; }
+    .adm-del svg { display: block; }
+    td.adm-act, th.adm-act { text-align: center; width: 64px; }
 
     .adm-card-head { display: flex; justify-content: space-between; align-items: center; gap: 10px; flex-wrap: wrap; }
     .adm-card-head h2 { margin-bottom: 0; }
@@ -61,8 +101,8 @@
     <h1>Admin Console</h1>
     <div class="adm-actions" id="adminToolbar" hidden>
       <button class="btn btn-sm" id="reloadBtn">🔄 Reload</button>
-      <button class="btn btn-sm" id="discardBtn">Discard</button>
-      <button class="btn btn-sm btn-danger" id="logoutBtn">Logout</button>
+      <button class="btn btn-sm adm-discard" id="discardBtn">Discard</button>
+      <button class="btn btn-sm" id="logoutBtn">Logout</button>
     </div>
   </div>
 
@@ -115,7 +155,7 @@
           </div>
           <div class="table-scroll" style="margin-top:8px;">
             <table class="table-mini" id="subsTable" aria-label="User subscriptions">
-              <thead><tr><th>Symbol</th><th>Company</th><th>Exchange</th><th>Actions</th></tr></thead>
+              <thead><tr><th>Symbol</th><th>Company</th><th>Exchange</th><th class="adm-act">Actions</th></tr></thead>
               <tbody><tr><td colspan="4" class="muted">Pick a user on the left, then their list shows here.</td></tr></tbody>
             </table>
           </div>
@@ -132,7 +172,7 @@
           </div>
           <div class="table-scroll" style="margin-top:8px;">
             <table class="table-mini" id="schedTable" aria-label="User schedule">
-              <thead><tr><th>#</th><th>Entry</th><th>Market</th><th>Days/Timing</th><th></th></tr></thead>
+              <thead><tr><th class="num">#</th><th>Entry</th><th>Market</th><th>Days/Timing</th><th class="adm-act"><span class="visually-hidden">Actions</span></th></tr></thead>
               <tbody><tr><td colspan="5" class="muted">Pick a user on the left, then their schedule shows here.</td></tr></tbody>
             </table>
           </div>
@@ -172,6 +212,7 @@
         return { 'X-Admin-Token': token(), 'Content-Type': 'application/json' };
       }
       function toast(msg, kind) { RS.toast(msg, kind || 'info'); }
+      var TRASH_SVG = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 6h18"/><path d="M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/></svg>';
 
       function maskMail(mail) {
         mail = String(mail || '');
@@ -322,10 +363,9 @@
             '<div class="adm-user-top">' +
               '<span class="adm-avatar">' + avatarFor(u) + '</span>' +
               '<div style="min-width:0;"><div class="adm-mail">' + esc(titleFor(u)) + '</div>' +
-              '<div class="adm-sub">Chat ID: ' + esc(u.chat) + '</div></div>' +
+              '<div class="adm-sub">Chat ID: ' + esc(u.chat) + ' · ' + (u.list_count || 0) + ' subs' + (u.daily_email ? ' · 📧 daily' : '') + '</div></div>' +
               '<span class="adm-role">' + role + '</span>' +
             '</div>' +
-            '<div class="adm-sub" style="margin-top:2px;">' + (u.list_count || 0) + ' subscription(s)' + (u.daily_email ? ' · 📧 daily' : '') + '</div>' +
             '<div class="adm-toggles">' +
               '<label class="adm-toggle" title="Master switch: all automatic pushes on/off">WA ALERTS ' +
                 '<span class="adm-switch"><input type="checkbox" data-toggle="alerts" data-chat="' + esc(u.chat) + '"' + (u.quiet ? '' : ' checked') + ' /><span class="adm-knob"></span></span></label>' +
@@ -434,7 +474,7 @@
             '<td><strong>' + esc(it.symbol || '') + '</strong></td>' +
             '<td>' + esc(it.company || '') + '</td>' +
             '<td>' + esc(it.exchange || '') + '</td>' +
-            '<td><button class="link-btn" data-del="' + esc(it.symbol || '') + '" data-exch="' + esc(it.exchange || 'NSE') + '" title="Remove">🗑</button></td>' +
+            '<td class="adm-act"><button class="adm-del" data-del="' + esc(it.symbol || '') + '" data-exch="' + esc(it.exchange || 'NSE') + '" title="Remove ' + esc(it.symbol || '') + '" aria-label="Remove ' + esc(it.symbol || '') + '">' + TRASH_SVG + '</button></td>' +
             '</tr>';
         }).join('');
       }
@@ -493,7 +533,7 @@
             '<td>' + entry + paused + '</td>' +
             '<td>' + esc(row.market || 'any') + '</td>' +
             '<td>' + timingOf(row) + '</td>' +
-            '<td><button class="link-btn" data-sdel="' + idx + '" title="Remove">🗑</button></td>' +
+            '<td class="adm-act"><button class="adm-del" data-sdel="' + idx + '" title="Remove schedule row" aria-label="Remove schedule row">' + TRASH_SVG + '</button></td>' +
             '</tr>';
         }).join('');
       }
