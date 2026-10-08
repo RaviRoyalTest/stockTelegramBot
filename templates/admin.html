@@ -24,10 +24,10 @@
     .pill { background: #e0e7ff !important; color: #3730a1 !important; border-radius: 6px !important; font-weight: 700; }
     .pill-warn { background: #fef3c7 !important; color: #92400e !important; }
     .adm-layout { display: grid; grid-template-columns: 290px minmax(0, 1fr); gap: 16px; align-items: start; }
-    .adm-grid2 { display: grid; grid-template-columns: minmax(0, 1.15fr) minmax(0, 1fr); gap: 16px; align-items: start; }
-    /* Laptop: stack the two tables before they start clipping. */
+    /* Subscriptions and Schedules always stack one below the other, full
+       width - side-by-side squeezed the schedule entries unreadably. */
+    .adm-grid2 { display: grid; grid-template-columns: minmax(0, 1fr); gap: 16px; align-items: start; }
     @media (max-width: 1280px) {
-      .adm-grid2 { grid-template-columns: minmax(0, 1fr); }
       .adm-layout { grid-template-columns: 250px minmax(0, 1fr); }
     }
     /* Tablet portrait and below: single column throughout. */
