@@ -501,6 +501,13 @@ def maybe_send_open_email(chat_id, report: dict | None = None, force: bool = Fal
         if not live.get("sections"):
             log.info("open mail: no recorded openclose yet - skipping chat %s", chat_id)
             return False
+        # An opening mail without the India list is a broken mail (e.g. a
+        # US-only record). Skip without marking sent so the next cycle retries
+        # instead of delivering a list-less "opening" mail.
+        if not any(s.get("market") == "in" and s.get("universes")
+                   for s in live.get("sections") or []):
+            log.info("open mail: no India section - skipping chat %s (retry next cycle)", chat_id)
+            return False
         ok, error = send_email(recipient, f"Royal Stock opening: {label}", build_open_lines(live, label),
                                  kind="auto-open", chat_id=chat_id)
         if not ok:

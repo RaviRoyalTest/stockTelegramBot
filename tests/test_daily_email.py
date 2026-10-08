@@ -217,6 +217,19 @@ class MarketGatedMailTests(unittest.TestCase):
         self.assertEqual(saved_report["total_target"], 40)
         self.assertIn("opening", self.send.call_args[0][1])
 
+    def test_open_skipped_when_no_india_section(self):
+        """US-only report (recorded or live) is never mailed as 'opening'."""
+        from corporate_actions.core.dates import today_ist
+
+        stamped = f"{today_ist().isoformat()}T10:00:00+05:30"
+        with patch("corporate_actions.market.hours.is_market_open", return_value=True), \
+                patch.object(storage_mod, "load_openclose",
+                             return_value=self._us_only_doc(stamped)), \
+                patch("corporate_actions.opening_report.report.collect",
+                      return_value=self._us_only_doc(stamped)["report"]):
+            self.assertFalse(maybe_send_open_email("123"))
+        self.send.assert_not_called()
+
     def test_merge_reports_replaces_stale_india(self):
         from corporate_actions.email.daily import _merge_reports
 
