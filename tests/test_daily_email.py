@@ -179,6 +179,58 @@ class MarketGatedMailTests(unittest.TestCase):
         subject = self.send.call_args[0][1]
         self.assertIn("opening", subject)
 
+    def _us_only_doc(self, stamped):
+        return {
+            "recorded_at": stamped, "markets": ["us"],
+            "report": {
+                "sections": [{
+                    "market": "us",
+                    "snapshot": {"date": "x", "time_local": "09:41", "state": "OPEN"},
+                    "universes": [{
+                        "title": "MEGA CAP ($200B+)", "verified": 0, "target": 20,
+                        "gainers": [], "losers": [],
+                    }],
+                    "indices": [],
+                }],
+                "total_verified": 0, "total_target": 20,
+            },
+        }
+
+    def test_open_rebuilds_when_recorded_lacks_india(self):
+        """A US-only doc recorded today must NOT pass as the opening mail -
+        India is live-built and merged alongside instead."""
+        from corporate_actions.core.dates import today_ist
+        from corporate_actions.email import daily as dm
+
+        stamped = f"{today_ist().isoformat()}T10:00:00+05:30"
+        live = _live_report()
+        with patch("corporate_actions.market.hours.is_market_open", return_value=True), \
+                patch.object(storage_mod, "load_openclose",
+                             return_value=self._us_only_doc(stamped)), \
+                patch("corporate_actions.opening_report.report.collect",
+                      return_value=live) as collect, \
+                patch("corporate_actions.opening_report.report.save_openclose_doc") as save:
+            self.assertTrue(maybe_send_open_email("123"))
+        collect.assert_called_once_with(("in",))
+        saved_report = save.call_args[0][0]
+        self.assertEqual([s["market"] for s in saved_report["sections"]], ["in", "us"])
+        self.assertEqual(saved_report["total_target"], 40)
+        self.assertIn("opening", self.send.call_args[0][1])
+
+    def test_merge_reports_replaces_stale_india(self):
+        from corporate_actions.email.daily import _merge_reports
+
+        base = self._us_only_doc("2026-10-07T10:00:00+05:30")
+        base["report"]["sections"].append({
+            "market": "in", "universes": [{"key": "in100", "verified": 0, "target": 20}],
+            "volume_computed": 0,
+        })
+        base["report"]["total_verified"] = 0
+        base["report"]["total_target"] = 40
+        merged = _merge_reports(base["report"], _live_report()["sections"][0])
+        self.assertEqual([s["market"] for s in merged["sections"]], ["in", "us"])
+        self.assertEqual((merged["total_verified"], merged["total_target"]), (10, 40))
+
     def test_open_reuses_current_recorded_without_rebuild(self):
         from corporate_actions.core.dates import today_ist
 

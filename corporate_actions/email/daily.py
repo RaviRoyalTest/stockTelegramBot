@@ -403,14 +403,38 @@ def _recorded_doc_is_current(doc: dict, today_iso: str) -> bool:
         return False
 
 
+def _merge_reports(base: dict, india_section: dict) -> dict:
+    """Recorded report with its India section replaced by a live one (pure).
+
+    Recorded docs are per-market (US-only after the US auto-plan runs, India-
+    only after the India plan) - without the merge the mail would show only
+    whichever market was recorded last. Totals are recomputed over all
+    sections so the Verified counts stay honest.
+    """
+    base = _as_report(base)
+    sections = [dict(s) for s in (base.get("sections") or []) if s.get("market") != "in"]
+    sections.insert(0, dict(india_section))
+    merged = dict(base)
+    merged["sections"] = sections
+    merged["total_verified"] = sum(
+        u.get("verified", 0) for s in sections for u in s.get("universes", []))
+    merged["total_target"] = sum(
+        u.get("target", 0) for s in sections for u in s.get("universes", []))
+    merged["volume_computed"] = sum(s.get("volume_computed", 0) or 0 for s in sections)
+    return merged
+
+
 def _ensure_fresh_india(today_iso: str) -> tuple[dict, str, bool]:
     """Recorded report + label + current-flag, building a live India scan first.
 
-    When the recorded file is stale/missing AND India is OPEN right now, a
-    live India-only scan runs (~30-45s) and is saved, so the morning mail
-    carries opening-market details instead of yesterday's file. When the
-    market is closed no scan runs (the caller skips the mail instead).
-    Returns (report, label, is_current). Never raises.
+    "Current" means recorded today AND carrying an India section - a US-only
+    doc recorded today must never pass as the morning opening mail. When the
+    record lacks a current India section AND India is OPEN right now, a live
+    India-only scan runs (~30-45s) and is MERGED over the recorded doc (other
+    markets' sections are kept), so the mail always lists India first with
+    the US block alongside. When the market is closed no scan runs (the
+    caller skips the mail instead). Returns (report, label, is_current).
+    Never raises.
     """
     try:
         doc = storage.load_openclose() or {}
@@ -419,7 +443,9 @@ def _ensure_fresh_india(today_iso: str) -> tuple[dict, str, bool]:
         return {}, today_iso, False
     report = _as_report(doc)
     label = _session_label(report, str(doc.get("recorded_at") or today_iso)[:10])
-    if report.get("sections") and _recorded_doc_is_current(doc, today_iso):
+    has_india = any(s.get("market") == "in" and s.get("universes")
+                    for s in report.get("sections") or [])
+    if has_india and _recorded_doc_is_current(doc, today_iso):
         return report, label, True
     try:
         from ..market.hours import is_market_open
@@ -428,13 +454,18 @@ def _ensure_fresh_india(today_iso: str) -> tuple[dict, str, bool]:
         if not bool(is_market_open("in")):
             return report, label, False
         live = collect(("in",))
-        if isinstance(live, dict) and live.get("sections"):
-            try:
-                save_openclose_doc(live, ("in",), None, recorded_by="auto-mail")
-            except Exception as error:
-                log.debug("_ensure_fresh_india save: %s", error)
-            return live, _session_label(live, today_iso), True
-        return report, label, False
+        live_sections = (live.get("sections") or []) if isinstance(live, dict) else []
+        india_sections = [s for s in live_sections
+                          if s.get("market") == "in" and s.get("universes")]
+        if not india_sections:
+            return report, label, False
+        merged = _merge_reports(report, india_sections[0])
+        try:
+            markets = tuple(sorted({*(doc.get("markets") or []), "in"}))
+            save_openclose_doc(merged, markets, None, recorded_by="auto-mail")
+        except Exception as error:
+            log.debug("_ensure_fresh_india save: %s", error)
+        return merged, _session_label(merged, today_iso), True
     except Exception as error:
         log.info("_ensure_fresh_india live build skipped: %s", error)
         return report, label, False
