@@ -136,6 +136,23 @@ class AdminOpsTests(unittest.TestCase):
         with self.assertRaises(ValueError):
             admin.add_schedule(self.owner, 60, ["   "])
 
+    def test_undeliverable_chat_detection(self):
+        storage = admin.storage
+        with patch.object(config, "BOT_USERNAME", "StockVigilBot"):
+            self.assertTrue(storage.is_undeliverable_chat(""))
+            self.assertTrue(storage.is_undeliverable_chat("@StockVigilBot"))
+            self.assertTrue(storage.is_undeliverable_chat("stockvigilbot"))
+            self.assertFalse(storage.is_undeliverable_chat("862087765"))
+            self.assertFalse(storage.is_undeliverable_chat("-1001234567890"))
+
+    def test_schedule_rejects_bot_own_username(self):
+        with patch.object(config, "BOT_USERNAME", "StockVigilBot"):
+            with self.assertRaises(ValueError):
+                admin.storage.add_schedule_entry(60, ["/movers"], "@StockVigilBot")
+        # Numeric chats (users, groups, channels) still save fine.
+        sched = admin.storage.add_schedule_entry(60, ["/movers"], "862087765")
+        self.assertEqual(sched[-1]["chat"], "862087765")
+
     def test_pause_and_resume_schedule(self):
         admin.add_schedule(self.owner, 60, ["/movers"])
         sched = admin.pause_schedule(self.owner, 2)

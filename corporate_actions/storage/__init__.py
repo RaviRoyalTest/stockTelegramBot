@@ -7,6 +7,7 @@ One module per state file on top of a shared atomic-JSON base layer
 from .schedule import (
     add_schedule_entry,
     clear_schedule,
+    is_undeliverable_chat,
     load_schedule,
     load_schedule_for,
     pause_schedule,
@@ -128,6 +129,7 @@ __all__ = [
     "add_schedule_entry",
     "remove_schedule_entry",
     "clear_schedule",
+    "is_undeliverable_chat",
     "set_schedule_next_due",
     "schedule_next_due_ts",
     "pause_schedule",

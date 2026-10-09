@@ -299,6 +299,9 @@ def start_scheduled_reports(run_command) -> None:
     # Keyed on the entry's identity (not its list index) so one user adding
     # or removing their entries never changes another user's timing.
     next_due: dict = {}
+    # Chats already warned about (undeliverable targets log once per process,
+    # not every 30s loop iteration).
+    _warned_bad_chats: set = set()
 
     def _loop():
         while True:
@@ -325,6 +328,18 @@ def start_scheduled_reports(run_command) -> None:
                     commands = [command for command in entry.get("commands") or [] if command.strip()]
                     chat = str(entry.get("chat") or default_chat)
                     if not commands:
+                        continue
+                    # Undeliverable targets (e.g. the bot's own username from
+                    # a misconfigured TELEGRAM_CHAT_ID) can never receive a
+                    # report - skip instead of erroring every day.
+                    if storage.is_undeliverable_chat(chat):
+                        if chat not in _warned_bad_chats:
+                            _warned_bad_chats.add(chat)
+                            log.warning(
+                                "scheduled report: chat %r can never receive "
+                                "messages - skipping (fix the entry's chat id)",
+                                chat,
+                            )
                         continue
                     key = (chat, tuple(commands))
                     market = entry_market(entry, default=config.SCHEDULED_REPORTS_MARKET)

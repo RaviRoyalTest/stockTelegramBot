@@ -1923,10 +1923,13 @@ async def api_admin_add_schedule(payload: dict):
                 detail="Unknown command(s): " + ", ".join(bad)
                 + " - pick one from the suggestions list",
             )
-    schedule = await asyncio.to_thread(
-        admin_service.add_schedule, chat, interval, commands,
-        payload.get("run_at"), payload.get("market"),
-    )
+    try:
+        schedule = await asyncio.to_thread(
+            admin_service.add_schedule, chat, interval, commands,
+            payload.get("run_at"), payload.get("market"),
+        )
+    except ValueError as error:
+        raise HTTPException(status_code=422, detail=str(error))
     return JSONResponse({"ok": True, "schedule": schedule})
 
 

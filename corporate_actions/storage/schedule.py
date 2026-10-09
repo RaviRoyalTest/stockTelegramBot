@@ -69,6 +69,23 @@ def save_schedule(entries: list[dict]) -> None:
     log.info("schedule.json: %d scheduled report entry(s)", len(entries))
 
 
+def is_undeliverable_chat(chat) -> bool:
+    """True when no Telegram message can ever reach `chat`.
+
+    The Bot API only delivers to numeric chat ids (users/groups) or channel
+    usernames where the bot is admin - the bot's OWN username is never a
+    valid target, yet it ends up in schedule rows whenever owner-addressed
+    flows run with TELEGRAM_CHAT_ID misconfigured as @BotName instead of a
+    numeric id. Such rows fail every day with an API error and are invisible
+    in the admin Users list, so refuse them at the single save choke point.
+    """
+    key = str(chat or "").strip()
+    if not key:
+        return True
+    own = str(getattr(config, "BOT_USERNAME", "") or "").strip().lstrip("@").lower()
+    return bool(own) and key.lstrip("@").lower() == own
+
+
 def add_schedule_entry(
     interval_min: int, commands: list[str], chat: str, run_at: str | None = None,
     market: str | None = None, window_start: str | None = None,
@@ -81,8 +98,12 @@ def add_schedule_entry(
     interval_min; without it the entry is plain interval-based (as before).
     market is the optional market-hours gate ('in'/'us'/'any') and
     window_start/window_end an optional explicit run window ("HH:MM") in the
-    market's timezone.
+    market's timezone. Raises ValueError for an undeliverable chat id.
     """
+    if is_undeliverable_chat(chat):
+        raise ValueError(
+            f"refusing schedule for {str(chat).strip()!r} - no Telegram message "
+            "can reach the bot itself; use a numeric user/group chat id")
     with _lock, _file_lock(config.SCHEDULE_FILE):
         current = read_json(config.SCHEDULE_FILE, [])
         if not isinstance(current, list):
