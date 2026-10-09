@@ -17,27 +17,29 @@ from __future__ import annotations
 
 import html as _html
 
-# Critical palette - keep in sync with client.py's <style> block.
-_POS = "#059669"    # gains (emerald 600)
-_NEG = "#e11d48"    # losses (rose 600)
-_INK = "#1e293b"    # body text
-_MUTED = "#64748b"  # secondary text
-_LINE = "#f1f5f9"   # row separators
-_ZEBRA = "#f8fafc"  # even-row tint
-_TH_BG = "#f1f5f9"  # header strip
-_TH_FG = "#64748b"
-_TH_LINE = "#e2e8f0"
+from . import theme
 
+# Critical palette re-exported from theme.py - the single source of truth.
+# Dark-mode overlay in theme.css() targets exactly these styles.
+_POS = theme.POS      # gains (emerald 600)
+_NEG = theme.NEG      # losses (rose 600)
+_INK = theme.INK      # body text
+_MUTED = theme.MUTED  # secondary text
+_LINE = theme.LINE    # row separators
+_ZEBRA = theme.ZEBRA  # even-row tint
+_TH_BG = theme.TH_BG  # header strip
+_TH_FG = theme.TH_FG
+_TH_LINE = theme.TH_LINE
 _PILL_STYLES = {
     "pos": ("display:inline-block;padding:3px 10px;border-radius:999px;"
-            "font-size:12px;font-weight:700;background-color:#dcfce7;"
-            "color:#15803d;"),
+            "font-size:12px;font-weight:700;background-color:" + theme.PILL_POS_BG + ";"
+            "color:" + theme.PILL_POS_FG + ";"),
     "neg": ("display:inline-block;padding:3px 10px;border-radius:999px;"
-            "font-size:12px;font-weight:700;background-color:#ffe4e6;"
-            "color:#be123c;"),
+            "font-size:12px;font-weight:700;background-color:" + theme.PILL_NEG_BG + ";"
+            "color:" + theme.PILL_NEG_FG + ";"),
     "": ("display:inline-block;padding:3px 10px;border-radius:999px;"
-         "font-size:12px;font-weight:700;background-color:#f1f5f9;"
-         "color:#64748b;"),
+         "font-size:12px;font-weight:700;background-color:" + theme.CHIP_BG + ";"
+         "color:" + theme.MUTED + ";"),
 }
 
 _TABLE_STYLE = ("style=\"width:100%;border-collapse:collapse;"
@@ -134,9 +136,9 @@ def section(title: str, tone: str = "", emoji: str = "") -> str:
     prefix = f"{emoji} " if emoji else ""
     return (
         f'<div class="{cls}" style="margin:24px 0 10px;padding:10px 14px;'
-        f"background-color:#f8fafc;border-left:4px solid {accent};"
+        f"background-color:{theme.SECTION_BG};border-left:4px solid {accent};"
         f'border-radius:0 10px 10px 0;font-size:15px;font-weight:800;'
-        f'color:#0f172a;">{prefix}{esc(title)}</div>'
+        f'color:{theme.TITLE_FG};">{prefix}{esc(title)}</div>'
     )
 
 
@@ -145,12 +147,12 @@ def stat_chips(stats: list[tuple[str, str]]) -> str:
     Chip box styling is inline (the class only adds polish)."""
     chip_box = ("display:inline-block;padding:6px 12px;margin:0 6px 6px 0;"
                 "border-radius:10px;font-size:13px;font-weight:700;"
-                "background-color:#f1f5f9;color:#334155;"
-                "border:1px solid #e2e8f0;")
+                "background-color:" + theme.CHIP_BG + ";color:" + theme.CHIP_FG + ";"
+                "border:1px solid " + theme.TH_LINE + ";")
     chips = "".join(
         f'<span class="chip" style="{chip_box}">'
         f'<span style="color:{_MUTED};font-weight:400;">{esc(label)}</span> '
-        f'<b style="color:#0f172a;">{esc(value)}</b></span>'
+        f'<b style="color:{theme.TITLE_FG};">{esc(value)}</b></span>'
         for label, value in stats
     )
     return f'<div style="margin:10px 0 4px;">{chips}</div>'
