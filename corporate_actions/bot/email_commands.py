@@ -265,9 +265,10 @@ def handle_dailyemail(chat_id, parts) -> None:
         storage.save_user_settings(chat_id, settings)
         reply(
             chat_id,
-            f"📧 Daily mails <b>ON (both)</b> - morning opening screener "
-            f"(07:30-12:00 IST) + evening close &amp; EOD stores (after 15:45 IST) "
-            f"land in <b>{escape(settings['email'])}</b> every day.",
+            f"📧 Daily mails <b>ON (both)</b> in <b>{escape(settings['email'])}</b> every day.<br>"
+            "🌅 Morning (07:30-12:00 IST, market open): open screener + last close, "
+            "Nifty actions with buy-by dates, U.S. tables, overnight gappers, watchlist actions.<br>"
+            "🌇 Evening (after 15:45 IST): close screener + EOD stores.",
         )
     elif raw in ("open", "opening", "morning"):
         if not (settings.get("email") or "").strip():

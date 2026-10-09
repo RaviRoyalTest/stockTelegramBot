@@ -331,7 +331,7 @@ def fetch_nifty_actions(limit: int = 80) -> list[dict]:
 
 def _build_grouped_action_tables(actions: list[dict], heading: str,
                                  cap_upcoming: int = 15, cap_rest: int = 10,
-                                 more_hint: str = "") -> list[str]:
+                                 more_hint: str = "", buy_by: bool = False) -> list[str]:
     """Shared grouped-tables renderer for watchlist + Nifty mails (pure)."""
     from ..poller import action_is_completed, parse_ex_date
     from ..poller import recently_passed, within_reminder_window
@@ -357,13 +357,17 @@ def _build_grouped_action_tables(actions: list[dict], heading: str,
         return lines
     if upcoming:
         lines.append(f"<b>📅 Upcoming ex-dates ({len(upcoming)})</b>")
-        lines.append(actions_table(upcoming, limit=cap_upcoming))
+        lines.append(actions_table(upcoming, limit=cap_upcoming, buy_by=buy_by))
+        if buy_by:
+            lines.append(muted("Buy-by = own the shares a full trading day before ex-date "
+                               "(T+1 settlement). A weekend/holiday just before ex-date "
+                               "needs even earlier buying."))
     if recent:
         lines.append(f"<b>🔄 Recently passed / in progress ({len(recent)})</b>")
-        lines.append(actions_table(recent, limit=cap_rest))
+        lines.append(actions_table(recent, limit=cap_rest, buy_by=buy_by))
     if pending:
         lines.append(f"<b>📢 Announced · ex-date not fixed ({len(pending)})</b>")
-        lines.append(actions_table(pending, limit=cap_rest))
+        lines.append(actions_table(pending, limit=cap_rest, buy_by=buy_by))
     shown = min(total, cap_upcoming + 2 * cap_rest)
     if total > shown and more_hint:
         lines.append(f"<p class='muted'>…and {total - shown} more - {more_hint}.</p>")
@@ -375,7 +379,7 @@ def build_nifty_actions_lines(actions: list[dict]) -> list[str]:
     return _build_grouped_action_tables(
         actions, "Nifty 500 · corporate actions in progress",
         cap_upcoming=25, cap_rest=15,
-        more_hint="full list on the web /exdates page")
+        more_hint="full list on the web /exdates page", buy_by=True)
 
 
 def build_watchlist_actions_lines(actions: list[dict]) -> list[str]:
@@ -388,13 +392,8 @@ def build_watchlist_actions_lines(actions: list[dict]) -> list[str]:
         more_hint="more in Telegram /corpactionsformylist")
 
 
-def build_all_actions_lines(chat_id) -> list[str]:
-    """Corporate-action blocks shared by the morning + evening mails.
-
-    Full-watchlist tables, then the Nifty-500 in-progress tables. A recorded
-    snapshot fills in only when the live watchlist fetch comes back empty;
-    a Nifty feed outage skips just that block. Never raises.
-    """
+def build_watchlist_block(chat_id) -> list[str]:
+    """Full-watchlist corporate-action tables (+ snapshot fallback)."""
     lines: list[str] = []
     try:
         watchlist = storage.load_watchlist() if str(chat_id) == str(_owner_chat()) \
@@ -412,14 +411,171 @@ def build_all_actions_lines(chat_id) -> list[str]:
         if snapshot.get("corporate_actions"):
             lines.append("<b>📋 Corporate actions (recorded)</b>")
             lines.append(actions_table(snapshot["corporate_actions"]))
+    return lines
+
+
+def build_nifty_block() -> list[str]:
+    """Nifty-500 in-progress tables (empty when the feed is down)."""
     try:
         nifty_actions = fetch_nifty_actions()
     except Exception as error:
         log.debug("nifty actions skipped: %s", error)
         nifty_actions = []
     if nifty_actions:
-        lines.extend(build_nifty_actions_lines(nifty_actions))
+        return build_nifty_actions_lines(nifty_actions)
+    return []
+
+
+def build_all_actions_lines(chat_id) -> list[str]:
+    """Corporate-action blocks shared by the morning + evening mails.
+
+    Full-watchlist tables, then the Nifty-500 in-progress tables. A recorded
+    snapshot fills in only when the live watchlist fetch comes back empty;
+    a Nifty feed outage skips just that block. Never raises.
+    """
+    return build_watchlist_block(chat_id) + build_nifty_block()
+
+
+def split_gaps(rows: list[dict]) -> tuple[list[dict], list[dict]]:
+    """(gap_downs, gap_ups) sorted most-extreme first (pure)."""
+    downs = sorted((r for r in rows or [] if (r.get("gap_pct") or 0) < 0),
+                   key=lambda r: r.get("gap_pct") or 0)[:8]
+    ups = sorted((r for r in rows or [] if (r.get("gap_pct") or 0) > 0),
+                 key=lambda r: r.get("gap_pct") or 0, reverse=True)[:8]
+    return downs, ups
+
+
+def fetch_morning_gaps(top_each: int = 8) -> tuple[list[dict], list[dict]]:
+    """This morning's overnight gaps across NIFTY 100 (best-effort).
+
+    One cheap chart call per ticker (cached 5 min server-side), threaded.
+    Returns (gap_downs, gap_ups). Never raises - outages yield ([], []).
+    """
+    try:
+        from concurrent.futures import ThreadPoolExecutor
+
+        from .. import sources
+        from ..sources.universe import get_index_universe
+
+        symbols = [str(s or "").strip().upper()
+                   for s in (get_index_universe("nifty100") or [])][:100]
+    except Exception as error:
+        log.debug("morning gaps setup skipped: %s", error)
+        return [], []
+    if not symbols:
+        return [], []
+
+    def _one(symbol: str) -> dict | None:
+        try:
+            move = sources.get_gap_change("NSE", symbol)
+        except Exception:
+            return None
+        if not move or move.get("gap_pct") is None:
+            return None
+        return {"symbol": symbol, "name": move.get("name") or symbol,
+                "open": move.get("open"), "gap_pct": move.get("gap_pct"),
+                "move_from_open_pct": move.get("move_from_open_pct")}
+
+    rows: list[dict] = []
+    try:
+        with ThreadPoolExecutor(max_workers=16) as pool:
+            for row in pool.map(_one, symbols):
+                if row:
+                    rows.append(row)
+    except Exception as error:
+        log.debug("morning gaps fetch skipped: %s", error)
+    downs, ups = split_gaps(rows)
+    return downs[: max(1, top_each)], ups[: max(1, top_each)]
+
+
+def build_gaps_lines() -> list[str]:
+    """Overnight gappers block for the morning mail (never raises)."""
+    from .tables import gap_table
+
+    try:
+        downs, ups = fetch_morning_gaps()
+    except Exception as error:
+        log.debug("gaps block skipped: %s", error)
+        downs, ups = [], []
+    if not downs and not ups:
+        # Pre-open fallback: yesterday's recorded gap-downs, honestly labeled.
+        try:
+            snapshot = storage.load_snapshots() or {}
+        except Exception:
+            snapshot = {}
+        recorded = (snapshot.get("gap_downs") or [])[:8]
+        lines = [section("Overnight gaps", "amber", "🌗")]
+        if recorded:
+            lines.append(muted("Live gaps not available yet - yesterday's recorded gap-downs:"))
+            lines.append(gap_table(
+                [{"symbol": r.get("symbol"), "name": r.get("symbol"),
+                  "open": None, "gap_pct": r.get("gap_pct"),
+                  "move_from_open_pct": None} for r in recorded], "₹"))
+        else:
+            lines.append(muted("Gaps appear after the 09:15 open."))
+        return lines
+    lines = [section("Overnight gaps · NIFTY 100", "amber", "🌗")]
+    if downs:
+        lines.append(f"<b>🔻 Gap-downs ({len(downs)})</b>")
+        lines.append(gap_table(downs, "₹"))
+    if ups:
+        lines.append(f"<b>🟢 Gap-ups ({len(ups)})</b>")
+        lines.append(gap_table(ups, "₹"))
     return lines
+
+
+def _latest_recorded_before(today_iso: str) -> tuple[dict, str]:
+    """Latest dated report strictly before today + label ({} when none)."""
+    try:
+        days = storage.list_openclose_dates() or []
+    except Exception as error:
+        log.debug("recorded-before list skipped: %s", error)
+        return {}, today_iso
+    for day in sorted(days, reverse=True):
+        if day >= today_iso:
+            continue
+        try:
+            doc = storage.load_openclose(day) or {}
+        except Exception:
+            continue
+        report = _as_report(doc)
+        if report.get("sections"):
+            return report, _session_label(report, day)
+    return {}, today_iso
+
+
+def _latest_us_report() -> tuple[dict, str]:
+    """Newest recorded US sections + label ({} when never recorded)."""
+    try:
+        days = storage.list_openclose_dates() or []
+    except Exception as error:
+        log.debug("us-report list skipped: %s", error)
+        return {}, ""
+    for day in sorted(days, reverse=True):
+        try:
+            doc = storage.load_openclose(day) or {}
+        except Exception:
+            continue
+        report = _as_report(doc)
+        us_sections = [s for s in report.get("sections") or []
+                       if s.get("market") == "us" and s.get("universes")]
+        if us_sections:
+            sub = dict(report)
+            sub["sections"] = us_sections
+            sub["total_verified"] = sum(
+                u.get("verified", 0) for s in us_sections for u in s.get("universes", []))
+            sub["total_target"] = sum(
+                u.get("target", 0) for s in us_sections for u in s.get("universes", []))
+            return sub, _session_label(report, day)
+    return {}, ""
+
+
+def build_us_lines() -> list[str]:
+    """Latest recorded U.S. tables for the morning mail (never raises)."""
+    report, label = _latest_us_report()
+    if not report.get("sections"):
+        return []
+    return _build_session_lines(report, label or "last recorded", "U.S. market", "", "🇺🇸")
 
 
 def build_eod_store_lines(chat_id, quotes: list[dict] | None = None) -> list[str]:
@@ -647,12 +803,11 @@ def _ensure_fresh_india(today_iso: str) -> tuple[dict, str, bool]:
 
 
 def maybe_send_open_email(chat_id, report: dict | None = None, force: bool = False) -> bool:
-    """Morning opening-screener mail with live opening-market details.
+    """Five-section morning digest mail (India must be OPEN).
 
-    Sends only while India is OPEN (never pre-open, weekends or holidays).
-    When the recorded file is stale/missing, a live India scan runs first so
-    the mail carries this morning's details instead of yesterday's file.
-    Carries the same all-stocks corporate-action summary as the evening mail.
+    (1) live opening screener + last completed close, (2) Nifty-500 actions
+    with buy-by dates, (3) latest recorded U.S. tables, (4) overnight
+    gappers, (5) full-watchlist actions. Skipped when closed or list-less.
     """
     try:
         # Single sender: the GitHub Actions cron (PROCESS_COMMANDS=false) runs
@@ -690,9 +845,17 @@ def maybe_send_open_email(chat_id, report: dict | None = None, force: bool = Fal
                    for s in live.get("sections") or []):
             log.info("open mail: no India section - skipping chat %s (retry next cycle)", chat_id)
             return False
+        # Five-section morning digest: (1) live open + last close,
+        # (2) Nifty actions with buy-by dates, (3) U.S. tables,
+        # (4) overnight gappers, (5) watchlist actions.
         lines = build_open_lines(live, label)
-        # Same all-stocks corporate-action summary as the evening mail.
-        lines.extend(build_all_actions_lines(chat_id))
+        prev, prev_label = _latest_recorded_before(today)
+        if prev.get("sections"):
+            lines.extend(build_close_lines(prev, f"{prev_label} (last close)"))
+        lines.extend(build_nifty_block())
+        lines.extend(build_us_lines())
+        lines.extend(build_gaps_lines())
+        lines.extend(build_watchlist_block(chat_id))
         ok, error = send_email(recipient, f"Royal Stock opening: {label}", lines,
                                  kind="auto-open", chat_id=chat_id)
         if not ok:

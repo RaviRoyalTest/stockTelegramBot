@@ -153,9 +153,10 @@ class MarketGatedMailTests(unittest.TestCase):
             patch.object(daily_mod, "email_configured", return_value=True),
             patch.object(storage_mod, "get_user_settings", return_value=dict(self.settings)),
             patch.object(storage_mod, "save_user_settings"),
-            # Live action fetches stay hermetic (no network in unit tests).
+            # Live action/gap fetches stay hermetic (no network in unit tests).
             patch("corporate_actions.poller.fetch_matching", return_value=[]),
             patch.object(daily_mod, "fetch_nifty_actions", return_value=[]),
+            patch.object(daily_mod, "fetch_morning_gaps", return_value=([], [])),
         ]
         for patcher in patches:
             patcher.start()
@@ -200,6 +201,67 @@ class MarketGatedMailTests(unittest.TestCase):
             },
         }
 
+    def test_buy_by_column_and_dates(self):
+        from corporate_actions.email.tables import actions_table, buy_by_date
+
+        self.assertEqual(buy_by_date("2026-10-10"), "09-Oct")
+        self.assertEqual(buy_by_date(""), "")
+        self.assertEqual(buy_by_date("not-a-date"), "")
+        plain = actions_table([{"symbol": "A", "subject": "Div", "ex_date": "2026-10-10"}])
+        self.assertNotIn("Buy by", plain)
+        rich = actions_table(
+            [{"symbol": "A", "subject": "Div", "ex_date": "2026-10-10"}], buy_by=True)
+        self.assertIn("Buy by", rich)
+        self.assertIn("09-Oct", rich)
+
+    def test_split_gaps_sorts_extremes_first(self):
+        from corporate_actions.email.daily import split_gaps
+
+        rows = [
+            {"symbol": "A", "gap_pct": -1.0},
+            {"symbol": "B", "gap_pct": -5.0},
+            {"symbol": "C", "gap_pct": 3.0},
+            {"symbol": "D", "gap_pct": 0.0},
+            {"symbol": "E", "gap_pct": None},
+        ]
+        downs, ups = split_gaps(rows)
+        self.assertEqual([r["symbol"] for r in downs], ["B", "A"])
+        self.assertEqual([r["symbol"] for r in ups], ["C"])
+
+    def test_prev_and_us_report_helpers(self):
+        from corporate_actions.email import daily as dm
+
+        prev_sections = [{
+            "market": "in",
+            "snapshot": {"date": "old", "time_local": "", "state": ""},
+            "universes": [{"key": "k", "title": "T", "verified": 1, "target": 20,
+                           "gainers": [], "losers": []}],
+            "indices": [],
+        }]
+        us_sections = [{
+            "market": "us",
+            "snapshot": {"date": "old", "time_local": "", "state": ""},
+            "universes": [{"key": "u", "title": "U", "verified": 2, "target": 20,
+                           "gainers": [], "losers": []}],
+            "indices": [],
+        }]
+        docs = {
+            "2099-01-06": {"report": {"sections": prev_sections,
+                                      "total_verified": 1, "total_target": 20}},
+            "2099-01-05": {"report": {"sections": us_sections,
+                                      "total_verified": 2, "total_target": 20}},
+        }
+        with patch.object(storage_mod, "list_openclose_dates",
+                          return_value=["2099-01-05", "2099-01-06"]), \
+                patch.object(storage_mod, "load_openclose",
+                             side_effect=lambda day=None: docs.get(day, {})):
+            prev, prev_label = dm._latest_recorded_before("2099-01-07")
+            self.assertEqual(prev_label, "2099-01-06")
+            self.assertTrue(prev.get("sections"))
+            sub, _label = dm._latest_us_report()
+            self.assertEqual([s["market"] for s in sub["sections"]], ["us"])
+            self.assertEqual((sub["total_verified"], sub["total_target"]), (2, 20))
+
     def test_open_mail_includes_all_stocks_action_summary(self):
         """The morning mail carries the watchlist + Nifty action blocks."""
         from corporate_actions.core.dates import today_ist
@@ -222,6 +284,88 @@ class MarketGatedMailTests(unittest.TestCase):
         self.assertIn("your full watchlist", body)
         self.assertIn("Nifty 500", body)
         self.assertIn("ACT", body)
+
+    def test_morning_mail_has_all_five_sections(self):
+        """Open + last close + Nifty(buy-by) + U.S. + gappers + watchlist."""
+        from datetime import date, timedelta
+
+        from corporate_actions.core.dates import today_ist
+        from corporate_actions.email import daily as dm
+
+        today = today_ist().isoformat()
+        yesterday = (today_ist() - timedelta(days=1)).isoformat()
+        stamped = f"{today}T10:00:00+05:30"
+        live = _live_report()
+        prev_sections = [{
+            "market": "in",
+            "snapshot": {"date": "old", "time_local": "", "state": ""},
+            "universes": [{"key": "k", "title": "T", "verified": 1, "target": 20,
+                           "gainers": [], "losers": []}],
+            "indices": []}]
+        us_sections = [{
+            "market": "us",
+            "snapshot": {"date": "old", "time_local": "", "state": ""},
+            "universes": [{"key": "u", "title": "U", "verified": 2, "target": 20,
+                           "gainers": [], "losers": []}],
+            "indices": []}]
+        docs = {
+            None: {"recorded_at": stamped, "report": live},
+            today: {"recorded_at": stamped, "report": live},
+            yesterday: {"recorded_at": f"{yesterday}T10:00:00+05:30",
+                        "report": {"sections": prev_sections + us_sections,
+                                   "total_verified": 3, "total_target": 40}},
+        }
+        future = (date.today() + timedelta(days=3)).isoformat()
+        actions = [{"symbol": "ACT", "subject": "Dividend Rs 5",
+                    "exchange": "NSE", "ex_date": future}]
+        gaps = ([{"symbol": "GD", "name": "G Down", "open": 100.0,
+                  "gap_pct": -2.0, "move_from_open_pct": 0.5}], [])
+        with patch("corporate_actions.market.hours.is_market_open", return_value=True), \
+                patch.object(storage_mod, "load_openclose",
+                             side_effect=lambda day=None: docs.get(day, {})), \
+                patch.object(storage_mod, "list_openclose_dates",
+                             return_value=[yesterday, today]), \
+                patch.object(dm, "fetch_watchlist_actions", return_value=actions), \
+                patch.object(dm, "fetch_nifty_actions", return_value=actions), \
+                patch.object(dm, "fetch_morning_gaps", return_value=gaps), \
+                patch.object(storage_mod, "load_snapshots", return_value={}):
+            self.assertTrue(maybe_send_open_email("123"))
+        body = "\n".join(self.send.call_args[0][2])
+        self.assertIn("Opening session screener", body)
+        self.assertIn("(last close)", body)
+        self.assertIn("Buy by", body)
+        self.assertIn("U.S. market", body)
+        self.assertIn("Overnight gaps", body)
+        self.assertIn("your full watchlist", body)
+
+    def test_morning_close_and_us_recaps(self):
+        from corporate_actions.email import daily as dm
+
+        prev = {"sections": [{
+            "market": "in",
+            "snapshot": {"date": "old", "time_local": "", "state": ""},
+            "universes": [{"key": "k", "title": "T", "verified": 1, "target": 20,
+                           "gainers": [], "losers": []}],
+            "indices": []}],
+            "total_verified": 1, "total_target": 20}
+        us_doc = {"report": {"sections": [{
+            "market": "us",
+            "snapshot": {"date": "old", "time_local": "", "state": ""},
+            "universes": [{"key": "u", "title": "U", "verified": 2, "target": 20,
+                           "gainers": [], "losers": []}],
+            "indices": []}],
+            "total_verified": 2, "total_target": 20}}
+        by_day = {"2099-01-06": prev, "2099-01-05": us_doc}
+        with patch.object(storage_mod, "list_openclose_dates",
+                          return_value=["2099-01-05", "2099-01-06"]), \
+                patch.object(storage_mod, "load_openclose",
+                             side_effect=lambda day=None: by_day.get(day, {})):
+            rep, label = dm._latest_recorded_before("2099-01-07")
+            self.assertEqual(label, "2099-01-06")
+            close_lines = dm.build_close_lines(rep, f"{label} (last close)")
+            self.assertIn("(last close)", "\n".join(close_lines))
+            us_lines = dm.build_us_lines()
+            self.assertIn("U.S. market", "\n".join(us_lines))
 
     def test_open_rebuilds_when_recorded_lacks_india(self):
         """A US-only doc recorded today must NOT pass as the opening mail -

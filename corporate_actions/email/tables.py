@@ -250,19 +250,69 @@ def kv_table(pairs: list[tuple[str, str]], caption: str = "") -> str:
     return f'<table class="rs-table" {_TABLE_STYLE}>{cap}<tbody>{rows}</tbody></table>'
 
 
-def actions_table(actions: list[dict], limit: int = 12) -> str:
+def buy_by_date(ex_iso) -> str:
+    """'Buy by' day for an ex-date (T+1: own the shares a day before ex-date).
+
+    Returns 'DD-Mon' one calendar day earlier, or '' when unparsable. A
+    weekend/holiday before the ex-date needs even earlier buying - the
+    caller states that caveat next to the table.
+    """
+    try:
+        from datetime import date as _date
+        from datetime import timedelta as _td
+
+        day = _date.fromisoformat(str(ex_iso or "").strip()[:10])
+        return (day - _td(days=1)).strftime("%d-%b")
+    except (TypeError, ValueError):
+        return ""
+
+
+def actions_table(actions: list[dict], limit: int = 12, buy_by: bool = False) -> str:
     if not actions:
         return muted("No upcoming corporate actions for your list.")
+    buy_col = f'<th class="num" {_TH_NUM}>Buy by</th>' if buy_by else ""
     rows = []
     for i, action in enumerate(actions[:limit], 1):
         bg = _ZEBRA if i % 2 == 0 else ""
-        rows.append(
+        cells = (
             f"<tr><td {_td(bg=bg)}><b>{esc(action.get('symbol') or '?')}</b></td>"
             f"<td {_td(bg=bg)}>{esc(action.get('subject') or action.get('action') or '')}</td>"
-            f"<td class='num' {_td(num=True, bg=bg)}>{esc(action.get('ex_date') or action.get('record_date') or '?')}</td></tr>"
+            f"<td class='num' {_td(num=True, bg=bg)}>{esc(action.get('ex_date') or action.get('record_date') or '?')}</td>"
         )
+        if buy_by:
+            when = buy_by_date(action.get("ex_date"))
+            cells += f"<td class='num' {_td(num=True, bg=bg)}>{esc(when) if when else '-'}</td>"
+        rows.append(cells + "</tr>")
     return (
         f'<table class="rs-table" {_TABLE_STYLE}><thead><tr><th {_TH}>Symbol</th><th {_TH}>Action</th>'
-        f'<th class="num" {_TH_NUM}>Ex-date</th></tr></thead>'
+        f'<th class="num" {_TH_NUM}>Ex-date</th>{buy_col}</tr></thead>'
         f"<tbody>{''.join(rows)}</tbody></table>"
     )
+
+
+def gap_table(rows: list[dict], currency: str = "₹", caption: str = "") -> str:
+    """Overnight gaps: Symbol | Open | Gap% | Since open."""
+    if not rows:
+        return muted("No gaps in this direction.")
+    head = (
+        f"<tr><th {_TH}>Symbol</th><th {_TH}>Company</th>"
+        f'<th class="num" {_TH_NUM}>Open</th><th class="num" {_TH_NUM}>Gap%</th>'
+        f'<th class="num" {_TH_NUM}>Since open</th></tr>'
+    )
+    body = []
+    for i, row in enumerate(rows[:10], 1):
+        bg = _ZEBRA if i % 2 == 0 else ""
+        symbol = esc(row.get("symbol") or "?")
+        company = esc(row.get("name") or row.get("company") or symbol)
+        open_px = price_cell(row.get("open"), currency)
+        gap = move_cell(row.get("gap_pct"))
+        move = move_cell(row.get("move_from_open_pct"))
+        body.append(
+            f"<tr><td {_td(bg=bg)}><b>{symbol}</b></td><td {_td(bg=bg)}>{company}</td>"
+            f'<td class="num" {_td(num=True, bg=bg)}>{open_px}</td>'
+            f'<td class="num" {_td(num=True, bg=bg)}>{gap}</td>'
+            f'<td class="num" {_td(num=True, bg=bg)}>{move}</td></tr>'
+        )
+    cap = f"<caption style='text-align:left;font-weight:700;'>{esc(caption)}</caption>" if caption else ""
+    return (f'<table class="rs-table" {_TABLE_STYLE}>{cap}<thead>{head}</thead>'
+            f'<tbody>{"".join(body)}</tbody></table>')
