@@ -388,6 +388,40 @@ def build_watchlist_actions_lines(actions: list[dict]) -> list[str]:
         more_hint="more in Telegram /corpactionsformylist")
 
 
+def build_all_actions_lines(chat_id) -> list[str]:
+    """Corporate-action blocks shared by the morning + evening mails.
+
+    Full-watchlist tables, then the Nifty-500 in-progress tables. A recorded
+    snapshot fills in only when the live watchlist fetch comes back empty;
+    a Nifty feed outage skips just that block. Never raises.
+    """
+    lines: list[str] = []
+    try:
+        watchlist = storage.load_watchlist() if str(chat_id) == str(_owner_chat()) \
+            else _chat_watchlist(chat_id)
+    except Exception:
+        watchlist = []
+    actions = fetch_watchlist_actions(watchlist)
+    if actions:
+        lines.extend(build_watchlist_actions_lines(actions))
+    else:
+        try:
+            snapshot = storage.load_snapshots() or {}
+        except Exception:
+            snapshot = {}
+        if snapshot.get("corporate_actions"):
+            lines.append("<b>📋 Corporate actions (recorded)</b>")
+            lines.append(actions_table(snapshot["corporate_actions"]))
+    try:
+        nifty_actions = fetch_nifty_actions()
+    except Exception as error:
+        log.debug("nifty actions skipped: %s", error)
+        nifty_actions = []
+    if nifty_actions:
+        lines.extend(build_nifty_actions_lines(nifty_actions))
+    return lines
+
+
 def build_eod_store_lines(chat_id, quotes: list[dict] | None = None) -> list[str]:
     """End-of-day stored-details tables for one chat (pure except storage reads)."""
     settings = storage.get_user_settings(chat_id) or {}
@@ -440,30 +474,9 @@ def build_eod_store_lines(chat_id, quotes: list[dict] | None = None) -> list[str
         ("Recorded sessions", esc(", ".join(snap_dates[-5:]) or "-")),
         ("Open/close reports", esc(", ".join(oc_dates[-5:]) or "-")),
     ]))
-    # Corporate actions for ALL watchlist stocks (live fetch). Falls back to
-    # the recorded snapshot only when the live fetch comes back empty.
-    try:
-        watchlist = storage.load_watchlist() if str(chat_id) == str(_owner_chat()) \
-            else _chat_watchlist(chat_id)
-    except Exception:
-        watchlist = []
-    actions = fetch_watchlist_actions(watchlist)
-    if actions:
-        lines.extend(build_watchlist_actions_lines(actions))
-    else:
-        snapshot = storage.load_snapshots() or {}
-        if snapshot.get("corporate_actions"):
-            lines.append("<b>📋 Corporate actions (recorded)</b>")
-            lines.append(actions_table(snapshot["corporate_actions"]))
-    # ALL Nifty-500 corporate actions currently in progress (not just the
-    # watchlist). Best-effort: a feed outage skips the block, never the mail.
-    try:
-        nifty_actions = fetch_nifty_actions()
-    except Exception as error:
-        log.debug("nifty actions skipped: %s", error)
-        nifty_actions = []
-    if nifty_actions:
-        lines.extend(build_nifty_actions_lines(nifty_actions))
+    # Corporate actions for ALL watchlist stocks + ALL Nifty in-progress
+    # (shared builder with the morning mail).
+    lines.extend(build_all_actions_lines(chat_id))
     lines.append(muted("Manage with /dailyemail off · full tables on the web Sessions tab."))
     return lines
 
@@ -639,6 +652,7 @@ def maybe_send_open_email(chat_id, report: dict | None = None, force: bool = Fal
     Sends only while India is OPEN (never pre-open, weekends or holidays).
     When the recorded file is stale/missing, a live India scan runs first so
     the mail carries this morning's details instead of yesterday's file.
+    Carries the same all-stocks corporate-action summary as the evening mail.
     """
     try:
         # Single sender: the GitHub Actions cron (PROCESS_COMMANDS=false) runs
@@ -676,7 +690,10 @@ def maybe_send_open_email(chat_id, report: dict | None = None, force: bool = Fal
                    for s in live.get("sections") or []):
             log.info("open mail: no India section - skipping chat %s (retry next cycle)", chat_id)
             return False
-        ok, error = send_email(recipient, f"Royal Stock opening: {label}", build_open_lines(live, label),
+        lines = build_open_lines(live, label)
+        # Same all-stocks corporate-action summary as the evening mail.
+        lines.extend(build_all_actions_lines(chat_id))
+        ok, error = send_email(recipient, f"Royal Stock opening: {label}", lines,
                                  kind="auto-open", chat_id=chat_id)
         if not ok:
             log.info("open mail failed for chat %s: %s", chat_id, error)

@@ -200,6 +200,29 @@ class MarketGatedMailTests(unittest.TestCase):
             },
         }
 
+    def test_open_mail_includes_all_stocks_action_summary(self):
+        """The morning mail carries the watchlist + Nifty action blocks."""
+        from corporate_actions.core.dates import today_ist
+
+        stamped = f"{today_ist().isoformat()}T10:00:00+05:30"
+        live = _live_report()
+        watch_actions = [{
+            "symbol": "ACT", "subject": "Dividend Rs 5", "exchange": "NSE",
+            "ex_date": today_ist().isoformat(),
+        }]
+        with patch("corporate_actions.market.hours.is_market_open", return_value=True), \
+                patch.object(storage_mod, "load_openclose",
+                             return_value={"recorded_at": stamped, "report": live}), \
+                patch("corporate_actions.poller.fetch_matching",
+                      return_value=watch_actions), \
+                patch.object(daily_mod, "fetch_nifty_actions",
+                             return_value=watch_actions):
+            self.assertTrue(maybe_send_open_email("123"))
+        body = "\n".join(self.send.call_args[0][2])
+        self.assertIn("your full watchlist", body)
+        self.assertIn("Nifty 500", body)
+        self.assertIn("ACT", body)
+
     def test_open_rebuilds_when_recorded_lacks_india(self):
         """A US-only doc recorded today must NOT pass as the opening mail -
         India is live-built and merged alongside instead."""
