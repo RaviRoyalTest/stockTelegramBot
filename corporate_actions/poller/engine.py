@@ -537,7 +537,13 @@ class Poller:
             # Opt-in everyday mail (snapshot + actions) to the chat's mail id.
             # Respects quiet mode like every other automatic message; never
             # raises (maybe_send_daily_email degrades to a skip internally).
-            if not quiet and not suppress:
+            # Deliberately NOT gated by the boot flood-guard (`suppress`):
+            # mail dedup is by per-day settings keys, independent of the seen
+            # cache, so a mail can never re-fire - while the guard would
+            # silently swallow it for 45 minutes after every redeploy (e.g. a
+            # deploy landing in the 15:45-16:30 EOD window kills the close
+            # mail with no trace but a log line).
+            if not quiet:
                 try:
                     from ..email.daily import maybe_send_daily_email
 

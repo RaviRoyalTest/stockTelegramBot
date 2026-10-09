@@ -211,6 +211,20 @@ class BootFloodGuardTests(unittest.TestCase):
             sent = poller.run_once(force=True)
         self.assertEqual(sent, 0)
 
+    def test_mail_bypasses_grace_but_alerts_do_not(self):
+        # Date-keyed mail dedup cannot re-fire, so the flood guard must not
+        # swallow it (a redeploy in the EOD window once killed the close mail).
+        poller = self._stale_poller(boot_seconds_ago=10)
+        with patch.object(config, "BOOT_FLOOD_GRACE_MINUTES", 45), \
+                patch.object(Poller, "_collect_targets", return_value=[("1", [])]), \
+                patch("corporate_actions.poller.engine.storage.save_seen"), \
+                patch("corporate_actions.email.daily.maybe_send_daily_email",
+                      return_value=True) as mail:
+            sent = poller.run_once()
+        mail.assert_called_once_with("1")
+        self.assertEqual(sent, 1)
+        self.assertTrue(poller._seen_stale)
+
     def test_watcher_suppressed_inside_grace(self):
         poller = self._stale_poller(boot_seconds_ago=10)
         with patch.object(config, "BOOT_FLOOD_GRACE_MINUTES", 45), \
