@@ -571,11 +571,20 @@ def _latest_us_report() -> tuple[dict, str]:
 
 
 def build_us_lines() -> list[str]:
-    """Latest recorded U.S. tables for the morning mail (never raises)."""
+    """Latest recorded U.S. tables for the morning mail (never raises).
+
+    Only sections whose market is "us" are handed to the renderer so a
+    recorded report with mixed IN/US sections can never leak India tables
+    (or duplicate U.S. blocks) into the morning mail's U.S. section.
+    """
     report, label = _latest_us_report()
-    if not report.get("sections"):
+    us_only = dict(report or {})
+    us_only["sections"] = [s for s in report.get("sections") or []
+                           if s.get("market") == "us"]
+    if not us_only["sections"]:
         return []
-    return _build_session_lines(report, label or "last recorded", "U.S. market", "", "🇺🇸")
+    return _build_session_lines(us_only, label or "last recorded",
+                                "U.S. market", "", "🇺🇸")
 
 
 def build_eod_store_lines(chat_id, quotes: list[dict] | None = None) -> list[str]:

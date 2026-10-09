@@ -6,10 +6,13 @@ spacing and layout declaration must therefore be INLINE on the element
 (see corporate_actions/email/tables.py and client._html_document).
 """
 import unittest
+import unittest.mock
 
 from corporate_actions.email import client, theme
+from corporate_actions.email import daily
 from corporate_actions.email.tables import (
     actions_table,
+    buy_by_date,
     index_table,
     kv_table,
     move_cell,
@@ -197,6 +200,42 @@ class DarkModeTests(unittest.TestCase):
         self.assertIn(theme.SECTION_BG, html)
         self.assertIn(theme.ACCENT_GREEN, html)
         self.assertIn(theme.TITLE_FG, html)
+
+
+class MorningMailSectionsTests(unittest.TestCase):
+    """The five-section morning digest: one U.S. block, buy-by clarity."""
+
+    def test_build_us_lines_renders_no_india_sections(self):
+        # Regression: _latest_us_report() may return a doc whose other keys
+        # still carry IN+US sections; build_us_lines must render U.S.-only.
+        report = {"sections": [
+            {"market": "in", "closed": False, "snapshot": {},
+             "universes": [{"title": "NIFTY 100", "verified": 1, "target": 1,
+                            "gainers": [{"symbol": "A", "price": 1, "change_pct": 1}],
+                            "losers": []}], "indices": []},
+            {"market": "us", "closed": False, "snapshot": {},
+             "universes": [{"title": "S&P 500", "verified": 1, "target": 1,
+                            "gainers": [{"symbol": "B", "price": 1, "change_pct": 1}],
+                            "losers": []}], "indices": []},
+        ]}
+        with unittest.mock.patch.object(daily, "_latest_us_report",
+                                        return_value=(report, "2026-10-09")):
+            parts = " ".join(daily.build_us_lines())
+        self.assertIn("S&amp;P 500", parts)
+        self.assertNotIn("NIFTY 100", parts)
+        self.assertEqual(parts.count("S&amp;P 500"), 1)  # no duplication
+
+    def test_buy_by_rule_explained_in_nifty_block(self):
+        lines = daily.build_nifty_actions_lines([
+            {"symbol": "RELIANCE", "subject": "Dividend", "ex_date": "2026-10-13"}])
+        joined = " ".join(lines)
+        self.assertIn("Buy by", joined)
+        self.assertIn("T+1 settlement", joined)
+
+    def test_buy_by_date_is_exdate_minus_one_trading_day(self):
+        self.assertEqual(buy_by_date("2026-10-13"), "12-Oct")
+        self.assertEqual(buy_by_date("2026-10-10"), "09-Oct")
+        self.assertEqual(buy_by_date("not a date"), "")
 
 
 if __name__ == "__main__":
