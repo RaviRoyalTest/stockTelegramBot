@@ -60,11 +60,13 @@ def _td(num: bool = False, bg: str = "") -> str:
     """Inline style for a body cell (optionally right-aligned / tinted).
 
     Full grid borders on ALL sides - a proper table look. With
-    border-collapse the shared edges merge into single lines."""
-    style = "padding:9px 10px;" + _GRID + "color:" + _INK + ";"
+    border-collapse the shared edges merge into single lines. Text colour is
+    inherited from the document body (same ink) to keep rows small: Gmail
+    clips mails past ~102 KB, so every repeated byte counts.
+    """
+    style = "padding:9px 10px;" + _GRID
     if num:
-        style += ("text-align:right;white-space:nowrap;"
-                  "font-variant-numeric:tabular-nums;")
+        style += "text-align:right;white-space:nowrap;"
     if bg:
         style += "background-color:" + bg + ";"
     return "style=\"" + style + "\""
@@ -158,16 +160,25 @@ def stat_chips(stats: list[tuple[str, str]]) -> str:
     return f'<div style="margin:10px 0 4px;">{chips}</div>'
 
 
-def stock_table(rows: list[dict], currency: str = "₹", caption: str = "") -> str:
-    """Gainers/losers table: Symbol | Company | Price | Chg% | Vol | Vol Chg%."""
+def stock_table(rows: list[dict], currency: str = "₹", caption: str = "",
+                limit: int | None = None) -> str:
+    """Gainers/losers table: Symbol | Company | Price | Chg% | Vol | Vol Chg%.
+
+    `limit` caps rows (mail tables stay under Gmail's ~102 KB clip); None
+    keeps everything (web/legacy callers unaffected).
+    """
+    if limit is not None:
+        rows = (rows or [])[: max(0, limit)]
     if not rows:
         return muted("No verified stocks.")
     head = (
-        f"<tr><th {_TH}>#</th><th {_TH}>Symbol</th><th {_TH}>Company</th>"
+        f"<tr><th {_TH}>Symbol</th>"
         f'<th class="num" {_TH_NUM}>Price</th><th class="num" {_TH_NUM}>Chg%</th>'
         f'<th class="num" {_TH_NUM}>Volume</th><th class="num" {_TH_NUM}>Vol Chg%</th></tr>'
     )
     body_rows = []
+    # Rank is implied by order; company rides under the symbol - fewer cells
+    # per row keeps big mails under Gmail's ~102 KB clip limit.
     for i, row in enumerate(rows[:10], 1):
         bg = _ZEBRA if i % 2 == 0 else ""
         symbol = esc(row.get("symbol") or "?")
@@ -177,8 +188,8 @@ def stock_table(rows: list[dict], currency: str = "₹", caption: str = "") -> s
         vol = esc(_num(row.get("volume"), 0)) if row.get("volume") is not None else "-"
         vol_chg = move_cell(row.get("volume_change_pct"))
         body_rows.append(
-            f"<tr><td {_td(bg=bg)}>{i}</td><td {_td(bg=bg)}><b>{symbol}</b></td>"
-            f"<td {_td(bg=bg)}>{company}</td>"
+            f"<tr><td {_td(bg=bg)}><b>{symbol}</b><br>"
+            f"<span style='color:{_MUTED};font-size:12px;'>{company}</span></td>"
             f'<td class="num" {_td(num=True, bg=bg)}>{price}</td>'
             f'<td class="num" {_td(num=True, bg=bg)}>{chg}</td>'
             f'<td class="num" {_td(num=True, bg=bg)}>{vol}</td>'
@@ -297,7 +308,7 @@ def gap_table(rows: list[dict], currency: str = "₹", caption: str = "") -> str
     if not rows:
         return muted("No gaps in this direction.")
     head = (
-        f"<tr><th {_TH}>Symbol</th><th {_TH}>Company</th>"
+        f"<tr><th {_TH}>Symbol</th>"
         f'<th class="num" {_TH_NUM}>Open</th><th class="num" {_TH_NUM}>Gap%</th>'
         f'<th class="num" {_TH_NUM}>Since open</th></tr>'
     )
@@ -310,7 +321,8 @@ def gap_table(rows: list[dict], currency: str = "₹", caption: str = "") -> str
         gap = move_cell(row.get("gap_pct"))
         move = move_cell(row.get("move_from_open_pct"))
         body.append(
-            f"<tr><td {_td(bg=bg)}><b>{symbol}</b></td><td {_td(bg=bg)}>{company}</td>"
+            f"<tr><td {_td(bg=bg)}><b>{symbol}</b><br>"
+            f"<span style='color:{_MUTED};font-size:12px;'>{company}</span></td>"
             f'<td class="num" {_td(num=True, bg=bg)}>{open_px}</td>'
             f'<td class="num" {_td(num=True, bg=bg)}>{gap}</td>'
             f'<td class="num" {_td(num=True, bg=bg)}>{move}</td></tr>'

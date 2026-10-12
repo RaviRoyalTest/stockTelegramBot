@@ -4,9 +4,11 @@ from unittest.mock import patch
 
 from corporate_actions import storage as storage_mod
 from corporate_actions.email import daily as daily_mod
-from corporate_actions.email.daily import build_combined_lines, build_daily_lines
-from corporate_actions.email.daily import build_eod_store_lines, build_full_session_lines
-from corporate_actions.email.daily import build_open_lines, get_scope
+from corporate_actions.email.daily import build_close_lines, build_combined_lines
+from corporate_actions.email.daily import build_daily_lines, build_eod_store_lines
+from corporate_actions.email.daily import build_full_session_lines
+from corporate_actions.email.daily import build_nifty_actions_lines, build_open_lines
+from corporate_actions.email.daily import build_watchlist_actions_lines, get_scope
 from corporate_actions.email.daily import maybe_send_eod_email, maybe_send_open_email
 
 
@@ -285,6 +287,47 @@ class MarketGatedMailTests(unittest.TestCase):
         self.assertIn("Nifty 500", body)
         self.assertIn("ACT", body)
 
+    def _big_rows(self, n, prefix):
+        return [{"symbol": f"{prefix}{i}", "name": f"Company {prefix}{i} Long Name",
+                 "price": 100.0 + i, "change_pct": 1.0 + i * 0.1,
+                 "volume": 1000000, "volume_change_pct": 10.0} for i in range(n)]
+
+    def _big_uni(self, key, title):
+        return {"key": key, "title": title, "verified": 20, "target": 20,
+                "gainers": self._big_rows(10, "G"), "losers": self._big_rows(10, "L")}
+
+    def test_full_mails_fit_gmail_clip_limit(self):
+        """Worst-case full mails must stay under ~95 KB (Gmail clips ~102)."""
+        from corporate_actions.email.client import _html_document
+        from corporate_actions.email.tables import gap_table
+
+        in_sec = {"market": "in",
+                  "snapshot": {"date": "D", "time_local": "10:00", "state": "OPEN"},
+                  "universes": [self._big_uni("a", "A"), self._big_uni("b", "B"),
+                                self._big_uni("c", "C")],
+                  "indices": [{"label": "I", "level": 1.0, "change_pct": 0.5}],
+                  "volume_computed": 5}
+        live = {"sections": [in_sec], "total_verified": 60, "total_target": 60,
+                "volume_computed": 5}
+        acts = [{"symbol": f"S{i}", "subject": "Dividend Rs 5 Per Share",
+                 "exchange": "NSE", "ex_date": "2026-10-20"} for i in range(55)]
+        g = [{"symbol": "GD", "name": "Gap Down Co", "open": 100.0, "gap_pct": -2.0,
+              "move_from_open_pct": 0.5}]
+        wl_acts = [{"symbol": "A", "subject": "Bonus 1:1", "exchange": "NSE",
+                    "ex_date": "2026-10-18"}]
+        lines = build_open_lines(live, "D")
+        lines += build_nifty_actions_lines(acts)
+        lines += [gap_table(g * 5, "Rs"), gap_table(g * 5, "Rs")]
+        lines += build_watchlist_actions_lines(wl_acts)
+        morning_kb = len(_html_document("T", lines).encode()) / 1024
+        self.assertLess(morning_kb, 95, f"morning mail {morning_kb:.1f} KB would clip")
+
+        elines = build_close_lines(live, "D")
+        elines += build_nifty_actions_lines(acts)
+        elines += build_watchlist_actions_lines(wl_acts)
+        evening_kb = len(_html_document("T", elines).encode()) / 1024
+        self.assertLess(evening_kb, 95, f"evening mail {evening_kb:.1f} KB would clip")
+
     def test_morning_mail_has_all_five_sections(self):
         """Open + last close + Nifty(buy-by) + U.S. + gappers + watchlist."""
         from datetime import date, timedelta
@@ -332,7 +375,7 @@ class MarketGatedMailTests(unittest.TestCase):
             self.assertTrue(maybe_send_open_email("123"))
         body = "\n".join(self.send.call_args[0][2])
         self.assertIn("Opening session screener", body)
-        self.assertIn("(last close)", body)
+        self.assertIn("full close tables", body)  # pointer to last evening's mail
         self.assertIn("Buy by", body)
         self.assertIn("U.S. market", body)
         self.assertIn("Overnight gaps", body)

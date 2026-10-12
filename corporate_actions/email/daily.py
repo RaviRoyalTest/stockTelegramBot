@@ -135,6 +135,12 @@ def build_daily_lines(snapshot: dict) -> list[str]:
     return lines
 
 
+# Rows per gainers/losers table inside mails. Gmail clips mails past ~102 KB,
+# so mail tables show the top 5 per side (full top-10 lives on the web) -
+# counts in the chips stay complete.
+MAIL_TOP_N = 5
+
+
 def _build_session_lines(report: dict, session_label: str,
                          banner: str, tone: str, emoji: str) -> list[str]:
     """Shared screener-table builder (pure - no network/disk)."""
@@ -174,15 +180,16 @@ def _build_session_lines(report: dict, session_label: str,
                 lines.append(muted("Universe unavailable - no rows fabricated."))
                 continue
             lines.append("<b>🟢 Top gainers</b>")
-            lines.append(stock_table(universe.get("gainers") or [], "₹" if block.get("market") == "in" else "$"))
+            lines.append(stock_table(universe.get("gainers") or [], "₹" if block.get("market") == "in" else "$", limit=MAIL_TOP_N))
             lines.append("<b>🔴 Top losers</b>")
-            lines.append(stock_table(universe.get("losers") or [], "₹" if block.get("market") == "in" else "$"))
+            lines.append(stock_table(universe.get("losers") or [], "₹" if block.get("market") == "in" else "$", limit=MAIL_TOP_N))
         if block.get("indices"):
             lines.append(section("Market overview", "slate", "📈"))
             lines.append(index_table(block["indices"]))
     lines.append(muted(
-        "Change % is vs the previous close. Open /openreport on the web "
-        "for sortable tables."))
+        "Change % is vs the previous close. Showing "
+        f"top {MAIL_TOP_N} per side to fit the mail - full tables on the web "
+        "Screener (/market) and Open report (/openreport) pages."))
     return lines
 
 
@@ -437,15 +444,18 @@ def build_all_actions_lines(chat_id) -> list[str]:
 
 
 def split_gaps(rows: list[dict]) -> tuple[list[dict], list[dict]]:
-    """(gap_downs, gap_ups) sorted most-extreme first (pure)."""
+    """(gap_downs, gap_ups) sorted most-extreme first, top 5 each (pure).
+
+    Capped so the morning mail fits under Gmail's ~102 KB clip limit.
+    """
     downs = sorted((r for r in rows or [] if (r.get("gap_pct") or 0) < 0),
-                   key=lambda r: r.get("gap_pct") or 0)[:8]
+                   key=lambda r: r.get("gap_pct") or 0)[:5]
     ups = sorted((r for r in rows or [] if (r.get("gap_pct") or 0) > 0),
-                 key=lambda r: r.get("gap_pct") or 0, reverse=True)[:8]
+                 key=lambda r: r.get("gap_pct") or 0, reverse=True)[:5]
     return downs, ups
 
 
-def fetch_morning_gaps(top_each: int = 8) -> tuple[list[dict], list[dict]]:
+def fetch_morning_gaps(top_each: int = 5) -> tuple[list[dict], list[dict]]:
     """This morning's overnight gaps across NIFTY 100 (best-effort).
 
     One cheap chart call per ticker (cached 5 min server-side), threaded.
@@ -854,13 +864,17 @@ def maybe_send_open_email(chat_id, report: dict | None = None, force: bool = Fal
                    for s in live.get("sections") or []):
             log.info("open mail: no India section - skipping chat %s (retry next cycle)", chat_id)
             return False
-        # Five-section morning digest: (1) live open + last close,
+        # Five-section morning digest: (1) live open + last-close pointer,
         # (2) Nifty actions with buy-by dates, (3) U.S. tables,
-        # (4) overnight gappers, (5) watchlist actions.
+        # (4) overnight gappers, (5) watchlist actions. Tables stay capped
+        # (top-N) so the whole mail fits under Gmail's ~102 KB clip limit -
+        # yesterday evening's mail already carried the full close tables.
         lines = build_open_lines(live, label)
-        prev, prev_label = _latest_recorded_before(today)
-        if prev.get("sections"):
-            lines.extend(build_close_lines(prev, f"{prev_label} (last close)"))
+        _prev, prev_label = _latest_recorded_before(today)
+        if prev_label != today:
+            lines.append(muted(
+                f"Yesterday's full close tables ({prev_label}) were mailed last "
+                "evening - replay any session on the web Sessions tab."))
         lines.extend(build_nifty_block())
         lines.extend(build_us_lines())
         lines.extend(build_gaps_lines())
