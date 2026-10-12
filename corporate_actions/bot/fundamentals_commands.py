@@ -120,6 +120,13 @@ def handle_single_stock_analysis(chat_id, parts) -> None:
         reply_suggestions(chat_id, raw_symbol, "fundamentalanalyze")
         return
 
+    # Preserve exactly what this lookup returned, timestamped, so the stock's
+    # state at answer-time survives even when the source later changes.
+    storage.capture_stock_detail(
+        " ".join(parts), raw_symbol, quote, fund,
+        is_us=is_us, deep=False, chat=chat_id,
+    )
+
     if is_us:
         lines = _us_stock_lines(raw_symbol, quote, fund, include_tip=True)
     else:
@@ -193,9 +200,21 @@ def build_stock_batch(chat_id, command: str, range, deep: bool) -> tuple[list[st
         funds = list(executor.map(_batch_fund, work))
 
     body = []
+    captured_rows = []
     for positive_flow, (item, quote, fund) in enumerate(zip(work, quotes, funds), start=start):
         symbol = item["symbol"]
         label = f"<b>#{positive_flow}</b>"
+        # Record every position the batch actually fetched, timestamped - a
+        # batch run is the only place a whole watchlist's state is captured.
+        captured_rows.append({
+            "position": positive_flow,
+            "symbol": symbol,
+            "market": "us" if item.get("exchange", "").upper() == "US" else "in",
+            "exchange": item.get("exchange", ""),
+            "quote": quote or {},
+            "fundamentals": fund or {},
+            "deep": bool(deep),
+        })
         if item.get("exchange", "").upper() == "US":
             lines = _us_stock_lines(symbol, quote, fund, include_tip=False, label=label)
         elif deep:
@@ -228,6 +247,11 @@ def build_stock_batch(chat_id, command: str, range, deep: bool) -> tuple[list[st
             f"<code>{command} {next_start}-{page_end}</code>",
             _DIVIDER,
         ])
+    # Preserve the whole page, timestamped, before it is rendered and lost.
+    storage.capture_stock_batch(
+        f"{command} {start}-{end}", captured_rows,
+        deep=deep, start=start, end=end, total=total, chat=chat_id,
+    )
     log.info("%s batch: done %d stocks in %.1fs", command, len(work), monotonic() - started_at)
     return all_lines, next_start
 
@@ -271,6 +295,12 @@ def handle_fund_analysis(chat_id, parts) -> None:
     if quote.get("price") is None and not fund:
         reply_suggestions(chat_id, raw_symbol, "fundamentalreport")
         return
+
+    # Preserve the deep report's underlying data, timestamped (best-effort).
+    storage.capture_stock_detail(
+        " ".join(parts), raw_symbol, quote, fund,
+        is_us=is_us, deep=True, chat=chat_id,
+    )
 
     if is_us:
         lines = _us_stock_lines(raw_symbol, quote, fund, include_tip=True)

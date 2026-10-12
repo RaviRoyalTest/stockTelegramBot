@@ -16,6 +16,7 @@ from __future__ import annotations
 import logging
 from time import monotonic
 
+from .. import storage
 from ..core.text import escape, split_messages
 from ..formatting.stock_us import _us_stock_lines
 from ..sources import get_quote, get_us_fundamentals, search_us_tickers
@@ -83,6 +84,12 @@ def handle_us_stock(chat_id, parts) -> None:
         matches = search_us_tickers(raw_symbol, limit=6)
         reply(chat_id, _not_found_message(raw_symbol, matches))
         return
+
+    # Preserve what this US lookup returned, timestamped (best-effort).
+    storage.capture_stock_detail(
+        " ".join(parts), raw_symbol, quote, fund,
+        is_us=True, deep=True, chat=chat_id,
+    )
 
     lines = _us_stock_lines(raw_symbol, quote, fund, include_tip=True)
     reply_messages(chat_id, split_messages(lines))

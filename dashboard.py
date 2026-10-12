@@ -794,6 +794,11 @@ async def api_analysis(symbol: str | None = Query(None), market: str = Query("in
                 pass
         price = (quote or {}).get("price", (fund or {}).get("price"))
         data = await asyncio.to_thread(build_analysis, fund or {}, price)
+        # Preserve the raw analysis inputs (the verdict is derived from them)
+        storage.capture_stock_detail(
+            f"GET /api/analysis?symbol={key}&market={market}", key, quote, fund,
+            is_us=want_us, deep=True, source="web", prefix="view_",
+        )
         return JSONResponse({"symbol": key, "market": "us" if want_us else "in", **data})
     except Exception as exc:
         raise HTTPException(status_code=500, detail=str(exc))
@@ -1393,6 +1398,10 @@ async def api_fundamentals(symbol: str | None = Query(None), refresh: bool = Que
             )
             if _is_stub_fund(fund) and not (quote or {}).get("price"):
                 raise HTTPException(status_code=404, detail=f"no data for {key} - symbol looks invalid")
+            storage.capture_stock_detail(
+                f"GET /api/fundamentals?symbol={key}&market=us", key, quote, fund,
+                is_us=True, deep=True, source="web", prefix="view_",
+            )
             return JSONResponse({"symbol": key, "market": "us", "fund": fund, "quote": quote or {}})
         fund = await asyncio.to_thread(sources.get_fundamentals, key, True) or {}
         try:
@@ -1416,6 +1425,10 @@ async def api_fundamentals(symbol: str | None = Query(None), refresh: bool = Que
         # watchlist/export actions instead of rendering a hollow report.
         if _is_stub_fund(fund) and not (quote or {}).get("price"):
             raise HTTPException(status_code=404, detail=f"no data for {key} - symbol looks invalid")
+        storage.capture_stock_detail(
+            f"GET /api/fundamentals?symbol={key}&market=in", key, quote, fund,
+            is_us=False, deep=True, source="web", prefix="view_",
+        )
         return JSONResponse({"symbol": key, "market": "in", "fund": fund, "quote": quote or {}})
     except HTTPException:
         raise

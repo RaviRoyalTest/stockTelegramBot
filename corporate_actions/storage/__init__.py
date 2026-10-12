@@ -69,6 +69,7 @@ from .realtime import (
     save_json_snapshot,
     unique_snapshot_path,
 )
+from .stock_capture import capture_stock_batch, capture_stock_detail
 from .watchlist import (
     add_to_watchlist,
     load_watchlist,
@@ -88,6 +89,8 @@ __all__ = [
     "generate_snapshot_filename",
     "save_json_snapshot",
     "unique_snapshot_path",
+    "capture_stock_detail",
+    "capture_stock_batch",
     "list_openclose_dates",
     "load_openclose",
     "merge_sections",
