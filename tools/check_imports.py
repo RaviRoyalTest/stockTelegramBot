@@ -1,5 +1,14 @@
+"""Import check for the data-source modules. Run with: python tools/check_imports.py"""
 import importlib
+import pathlib
 import sys
+
+# Running the file directly puts tools/ on sys.path, not the repo root - so
+# `import corporate_actions...` fails unless PYTHONPATH is set. Bootstrap it.
+ROOT = pathlib.Path(__file__).resolve().parent.parent
+if str(ROOT) not in sys.path:
+    sys.path.insert(0, str(ROOT))
+
 mods = [
     'corporate_actions.sources.nse',
     'corporate_actions.sources.bse',

@@ -118,6 +118,11 @@
 # Runtime captures (append-only JSON snapshots; per-file .lock handled above)
 data/realtime/
 
+# Outgoing-mail delivery log: rebuilt at runtime, never part of app state.
+# Without this, every sent mail leaves data/mail_log.json untracked and the
+# bot's git state-sync would commit it on the next push.
+data/mail_log.json
+
 # Temporary files
 *.tmp
 *.temp

@@ -26,6 +26,10 @@ dropdown, then continuously polls both exchanges for corporate actions
 - "Check now" button to force an immediate poll.
 - Graceful handling when a source is unavailable (e.g. BSE is Cloudflare-blocked
   from datacenter IPs).
+- **Email reports** — get the same screens in your mailbox: save an address with
+  `/setemail`, mail a deep report with `/emailreport RELIANCE`, and switch on
+  automatic opening/closing mails with `/dailyemail`. See
+  [Email reports](#email-reports).
 
 ## Setup
 
@@ -63,6 +67,67 @@ Open the URL shown in the terminal, then:
 | `SCHEDULED_REPORTS_CHAT` | owner | Chat id for the env-default report (defaults to `TELEGRAM_CHAT_ID`); used only while the owner has no entries in `data/schedule.json` |
 | `SCHEDULED_COMMANDS`     | `/scan500` | Comma-separated commands run on the schedule - used only when `data/schedule.json` has no entries |
 | `SCHEDULED_REPORTS_MARKET` | `in`    | Default market-hours gate for scheduled reports: `in` (India NSE/BSE 09:15-15:30 IST), `us` (NASDAQ/NYSE 09:30-16:00 ET) or `any` (no gate). An automatic report only fires while its gate's market is open; per-entry and per-user overrides exist via `/schedule add ... us` and `/market us` |
+| `PROCESS_COMMANDS`   | `true`  | **Exactly one host may own Telegram.** `true` = always-on server polls commands and runs schedules; `false` = cron/GitHub Actions does data polling only and sends no commands. Leaving it `true` in both places causes double replies and `getUpdates` 409 conflicts |
+| `HTTP_TIMEOUT`       | `20`    | Seconds to wait for any outbound HTTP request |
+| `ENABLE_BSE`         | `true`  | Set `false` on hosts where BSE is Cloudflare-blocked |
+| `NATURAL_QUERIES`    | `true`  | Answer plain-language messages ("how is reliance doing?") as well as slash commands |
+
+Mail delivery is configured separately — see [Email reports](#email-reports).
+
+## Email reports
+
+Every screen the bot can send to Telegram can also arrive in your mailbox.
+
+### 1. One-time setup — pick a sender
+
+Two options; **Resend is the easier one** and takes precedence when both are set:
+
+- **Resend (HTTPS)** — set `RESEND_API_KEY=re_...` (free tier at resend.com) and
+  `RESEND_FROM="Royal Stock <onboarding@resend.dev>"`. Works even where SMTP
+  ports are blocked.
+- **Gmail / any SMTP** — needs an **App Password**, not your login password:
+  Google Account → Security → turn on 2-Step Verification → search "App
+  passwords" → create one for Mail → paste it into `SMTP_PASS` (spaces are
+  stripped automatically). Then `SMTP_HOST=smtp.gmail.com`, `SMTP_PORT=587`,
+  `SMTP_USER=you@gmail.com`.
+
+Optional polish: `EMAIL_FROM_NAME` (display name) and `EMAIL_SUBJECT_PREFIX`
+(e.g. `My Stocks`, prepended to every subject).
+
+### 2. Save your address and pick what arrives
+
+| Command | What it does |
+| ------- | ------------ |
+| `/setemail you@gmail.com` | Save the address and send a test mail (`/setemail off` forgets it) |
+| `/emailreport RELIANCE` | Mail the deep fundamental report for one symbol |
+| `/dailyemail on` | Automatic opening **and** closing/EOD mails |
+| `/dailyemail open` | Mornings only (07:30–12:00 IST) |
+| `/dailyemail close` | Evenings only (after 15:45 IST) |
+| `/dailyemail scheduled` | Sharp separate mails at fixed clock times (see below) |
+| `/dailyemail off` | Stop all daily mails |
+| `/emailopen` / `/emailclose` / `/emailboth` | Send that mail right now |
+| `/emailstatus` | Last sends: ✅/❌ with time, type and error reason |
+
+`/email friend@gmail.com | Subject | message` sends a one-shot note to anyone.
+
+### 3. Sharp clock-time mails (no poll-timed duplicates)
+
+Poll-timed mails fire whenever the poller happens to run inside the open/close
+window, so the exact minute drifts. For mails that land at a predictable time:
+
+```
+/dailyemail scheduled                         # turn poll-timed mails OFF
+/schedule add at 10:10 /emailopen in          # opening mail at 10:10 IST
+/schedule add at 15:50 /emailclose in         # closing mail at 15:50 IST
+```
+
+(The `at` keyword is required; with no interval the entry runs **daily** at that
+clock time. `in` is the market-hours gate — the 15:50 close mail still fires
+because an anchored entry is allowed a 10-minute grace past the 15:30 bell.)
+
+`email_scope: "scheduled"` in `data/settings.json` disables the poll-timed path
+while the schedule entries drive the clock-time path — so you get **two separate
+mails at two fixed times, never a duplicate from both paths**.
 
 ## Deploy free on GitHub Actions (24/7 polling, no server)
 

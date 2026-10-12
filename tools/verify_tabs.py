@@ -1,5 +1,12 @@
 """Tab verification: routes, templates, aliases, filters. Run with python."""
 import pathlib
+import sys
+
+# Running the file directly puts tools/ on sys.path, not the repo root - so
+# `import dashboard` fails unless PYTHONPATH is set. Bootstrap it.
+ROOT = pathlib.Path(__file__).resolve().parent.parent
+if str(ROOT) not in sys.path:
+    sys.path.insert(0, str(ROOT))
 
 import dashboard
 from corporate_actions.sources.free_api import normalise_fundamentals
