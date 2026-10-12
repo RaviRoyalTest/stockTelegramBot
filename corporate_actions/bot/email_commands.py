@@ -313,21 +313,13 @@ def handle_dailyemail(chat_id, parts) -> None:
 
 
 def handle_emailopen(chat_id, parts) -> None:
-    """Force-send the full five-section morning digest right now (uses recorded file).
+    """Force-send the full morning digest right now (uses recorded file).
 
-    Sections: (1) opening screener, (2) Nifty-500 actions with buy-by dates,
-    (3) latest US tables, (4) overnight gappers, (5) full-watchlist actions.
-    Matches the content of the auto-mailer (maybe_send_open_email).
+    Delegates entirely to build_morning_digest_lines so the scheduled-command
+    path always delivers the same sections as the auto-mailer. Add/remove
+    sections in build_morning_digest_lines and both paths update automatically.
     """
-    from ..email.daily import (
-        _recorded_openclose,
-        build_gaps_lines,
-        build_nifty_block,
-        build_open_lines,
-        build_us_actions_block,
-        build_us_lines,
-        build_watchlist_block,
-    )
+    from ..email.daily import _recorded_openclose, build_morning_digest_lines
 
     settings = storage.get_user_settings(chat_id) or {}
     recipient = (settings.get("email") or "").strip()
@@ -337,7 +329,7 @@ def handle_emailopen(chat_id, parts) -> None:
     if not email_configured():
         reply(chat_id, _server_not_ready_text())
         return
-    reply(chat_id, f"🌅 Preparing the morning digest (screener + Nifty actions + US + gappers + watchlist) - mailing to <b>{escape(recipient)}</b> shortly.")
+    reply(chat_id, f"🌅 Preparing the morning digest - mailing to <b>{escape(recipient)}</b> shortly.")
     report, label = _recorded_openclose()
     if not report.get("sections"):
         # No recorded session: build a light snapshot fallback instead of a
@@ -351,26 +343,23 @@ def handle_emailopen(chat_id, parts) -> None:
         ok, info = send_email(recipient, f"Royal Stock opening: {label}", build_daily_lines(snapshot),
                                 kind="open", chat_id=chat_id)
     else:
-        # Full six-section morning digest.
-        lines = build_open_lines(report, label)
-        lines.extend(build_nifty_block())        # Nifty-500 actions + buy-by
-        lines.extend(build_us_actions_block())   # NASDAQ-100 + S&P-500 actions
-        lines.extend(build_us_lines())           # US screener tables
-        lines.extend(build_gaps_lines())         # Overnight gappers
-        lines.extend(build_watchlist_block(chat_id))  # Watchlist actions
+        lines = build_morning_digest_lines(chat_id, report, label)
         ok, info = send_email(recipient, f"Royal Stock opening: {label}", lines,
                                 kind="open", chat_id=chat_id)
     reply(chat_id, f"🌅 Morning digest mailed ✅" if ok else f"📧 Mail failed: {escape(info)}")
 
 
 def handle_emailclose(chat_id, parts) -> None:
-    """Force-send the closing screener + Nifty actions + EOD stored-details mail right now."""
+    """Force-send the closing digest + EOD stores mail right now.
+
+    Delegates to build_close_digest_lines for the screener + action sections
+    so the scheduled-command path always delivers the same content as the
+    auto-mailer. EOD stored details (watchlist quotes etc.) are appended after.
+    """
     from ..email.daily import (
         _recorded_openclose,
-        build_close_lines,
+        build_close_digest_lines,
         build_eod_store_lines,
-        build_nifty_block,
-        build_us_actions_block,
         fetch_watchlist_quotes,
     )
 
@@ -384,20 +373,14 @@ def handle_emailclose(chat_id, parts) -> None:
         return
     reply(chat_id, f"🌇 Preparing the close + EOD summary - mailing it to <b>{escape(recipient)}</b> shortly.")
     report, label = _recorded_openclose()
-    lines: list[str] = []
     if report.get("sections"):
-        lines.extend(build_close_lines(report, label))
+        lines = build_close_digest_lines(chat_id, report, label)
     else:
         from ..email.daily import build_daily_lines
 
         snapshot = storage.load_snapshots() or {}
-        if snapshot:
-            lines.extend(build_daily_lines(snapshot))
-            label = str(snapshot.get("session") or label)
-    # Nifty-500 in-progress corporate actions (with buy-by dates).
-    lines.extend(build_nifty_block())
-    # NASDAQ-100 + S&P-500 corporate actions (dividends, splits) with buy-by dates.
-    lines.extend(build_us_actions_block())
+        lines = list(build_daily_lines(snapshot)) if snapshot else []
+        label = str(snapshot.get("session") or label) if snapshot else label
     try:
         from ..email.daily import _chat_watchlist, _owner_chat
 

@@ -537,11 +537,60 @@ def build_us_actions_block() -> list[str]:
 def build_all_actions_lines(chat_id) -> list[str]:
     """Corporate-action blocks shared by the morning + evening mails.
 
-    Full-watchlist tables, then the Nifty-500 in-progress tables. A recorded
-    snapshot fills in only when the live watchlist fetch comes back empty;
-    a Nifty feed outage skips just that block. Never raises.
+    Full-watchlist tables, then Nifty-500 in-progress tables, then
+    NASDAQ-100 + S&P-500 actions. A recorded snapshot fills in only when
+    the live watchlist fetch comes back empty; feed outages skip just that
+    block. Never raises.
     """
-    return build_watchlist_block(chat_id) + build_nifty_block()
+    return (build_watchlist_block(chat_id)
+            + build_nifty_block()
+            + build_us_actions_block())
+
+
+def build_morning_digest_lines(chat_id: str, report: dict,
+                               label: str) -> list[str]:
+    """Assemble the complete six-section morning mail body (pure, no I/O).
+
+    Section order:
+      1. India opening screener (gainers / losers)
+      2. Nifty-500 corporate actions with buy-by dates
+      3. NASDAQ-100 + S&P-500 corporate actions with buy-by dates
+      4. Latest recorded U.S. screener tables
+      5. Overnight gappers – NIFTY 100
+      6. Watchlist corporate actions (India + US stocks)
+
+    All section-builders are best-effort and never raise; a feed outage
+    silently skips just that section so the rest of the mail still goes
+    out. Add/remove sections here and every mail path updates automatically.
+    """
+    lines = build_open_lines(report, label)
+    lines.extend(build_nifty_block())         # ② Nifty-500 actions + buy-by
+    lines.extend(build_us_actions_block())    # ③ US index actions + buy-by
+    lines.extend(build_us_lines())            # ④ US screener tables
+    lines.extend(build_gaps_lines())          # ⑤ Overnight gappers
+    lines.extend(build_watchlist_block(chat_id))  # ⑥ Watchlist actions
+    return lines
+
+
+def build_close_digest_lines(chat_id: str, report: dict,
+                              label: str) -> list[str]:
+    """Assemble the complete four-section evening mail body (pure, no I/O).
+
+    Section order:
+      1. India closing screener (gainers / losers)
+      2. Nifty-500 corporate actions with buy-by dates
+      3. NASDAQ-100 + S&P-500 corporate actions with buy-by dates
+      4. EOD stored details (watchlist prices + schedule + mail settings)
+
+    Watchlist quotes are fetched by the caller and passed via
+    build_eod_store_lines, which already calls build_all_actions_lines
+    internally so watchlist-level actions appear inside section 4.
+    """
+    lines = build_close_lines(report, label)
+    lines.extend(build_nifty_block())         # ② Nifty-500 actions + buy-by
+    lines.extend(build_us_actions_block())    # ③ US index actions + buy-by
+    return lines
+
 
 
 def split_gaps(rows: list[dict]) -> tuple[list[dict], list[dict]]:
@@ -970,17 +1019,12 @@ def maybe_send_open_email(chat_id, report: dict | None = None, force: bool = Fal
         # (4) U.S. screener tables, (5) overnight gappers, (6) watchlist actions.
         # Tables stay capped (top-N) so the whole mail fits under Gmail's
         # ~102 KB clip limit.
-        lines = build_open_lines(live, label)
+        lines = build_morning_digest_lines(chat_id, live, label)
         _prev, prev_label = _latest_recorded_before(today)
         if prev_label != today:
             lines.append(muted(
                 f"Yesterday's full close tables ({prev_label}) were mailed last "
                 "evening - replay any session on the web Sessions tab."))
-        lines.extend(build_nifty_block())
-        lines.extend(build_us_actions_block())
-        lines.extend(build_us_lines())
-        lines.extend(build_gaps_lines())
-        lines.extend(build_watchlist_block(chat_id))
         ok, error = send_email(recipient, f"Royal Stock opening: {label}", lines,
                                  kind="auto-open", chat_id=chat_id)
         if not ok:
@@ -1026,7 +1070,7 @@ def maybe_send_eod_email(chat_id, report: dict | None = None, force: bool = Fals
         live = _as_report(live)
         lines: list[str] = []
         if live.get("sections") and current:
-            lines.extend(build_close_lines(live, label))
+            lines = build_close_digest_lines(chat_id, live, label)
         else:
             # No current session recorded - degrade to the legacy snapshot
             # digest so the EOD mail is never empty (and never stale).
