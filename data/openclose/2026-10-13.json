@@ -1,0 +1,678 @@
+{
+  "recorded_at": "2026-10-12T20:08:12+00:00",
+  "recorded_by": "telegram",
+  "mode": "live",
+  "markets": [
+    "us"
+  ],
+  "target_date": null,
+  "report": {
+    "sections": [
+      {
+        "market": "us",
+        "snapshot": {
+          "market": "us",
+          "mode": "live",
+          "date": "12-Oct-2026",
+          "time_local": "16:07",
+          "tz_label": "ET",
+          "state": "CLOSED",
+          "time_ist": "01:37"
+        },
+        "universes": [
+          {
+            "key": "usmega",
+            "title": "MEGA CAP ($200B+)",
+            "unavailable": false,
+            "gainers": [
+              {
+                "symbol": "SHOP",
+                "name": "Shopify Inc.",
+                "price": 179.22000122070312,
+                "prev_close": 170.85000610351562,
+                "change": 8.3699951171875,
+                "change_pct": 4.8990312075940095,
+                "volume": 12357714,
+                "volume_change_pct": 82.85781506636481
+              },
+              {
+                "symbol": "META",
+                "name": "Meta Platforms, Inc.",
+                "price": 742.9600219726562,
+                "prev_close": 718.6699829101562,
+                "change": 24.2900390625,
+                "change_pct": 3.3798599691252993,
+                "volume": 23975720,
+                "volume_change_pct": 90.20650371674957
+              },
+              {
+                "symbol": "KO",
+                "name": "The Coca-Cola Company",
+                "price": 89.78500366210938,
+                "prev_close": 88.05000305175781,
+                "change": 1.7350006103515625,
+                "change_pct": 1.97047194800401,
+                "volume": 10083457,
+                "volume_change_pct": -3.3114356397667994
+              },
+              {
+                "symbol": "XOM",
+                "name": "ExxonMobil Holdings Corporation",
+                "price": 172.13999938964844,
+                "prev_close": 168.94000244140625,
+                "change": 3.1999969482421875,
+                "change_pct": 1.894161774593349,
+                "volume": 6948036,
+                "volume_change_pct": -14.0477510020288
+              },
+              {
+                "symbol": "C",
+                "name": "Citigroup Inc.",
+                "price": 131.92999267578125,
+                "prev_close": 129.63999938964844,
+                "change": 2.2899932861328125,
+                "change_pct": 1.7664249436240471,
+                "volume": 7966366,
+                "volume_change_pct": 22.42386894516843
+              },
+              {
+                "symbol": "ABBV",
+                "name": "AbbVie Inc.",
+                "price": 281.0400085449219,
+                "prev_close": 276.4700012207031,
+                "change": 4.57000732421875,
+                "change_pct": 1.6529848822804325,
+                "volume": 3170042,
+                "volume_change_pct": -26.23349001721971
+              },
+              {
+                "symbol": "WMT",
+                "name": "Walmart Inc.",
+                "price": 113.08000183105469,
+                "prev_close": 111.3499984741211,
+                "change": 1.7300033569335938,
+                "change_pct": 1.5536626678406866,
+                "volume": 13128505,
+                "volume_change_pct": 10.951988573939794
+              },
+              {
+                "symbol": "CVX",
+                "name": "Chevron Corporation",
+                "price": 215.00999450683594,
+                "prev_close": 211.97999572753906,
+                "change": 3.029998779296875,
+                "change_pct": 1.429379583152448,
+                "volume": 5595901,
+                "volume_change_pct": -11.159252556042421
+              },
+              {
+                "symbol": "COST",
+                "name": "Costco Wholesale Corporation",
+                "price": 959.4400024414062,
+                "prev_close": 946.9199829101562,
+                "change": 12.52001953125,
+                "change_pct": 1.3221834745500243,
+                "volume": 1413190,
+                "volume_change_pct": -5.962869310620176
+              },
+              {
+                "symbol": "PG",
+                "name": "The Procter & Gamble Company",
+                "price": 153.19000244140625,
+                "prev_close": 151.22999572753906,
+                "change": 1.9600067138671875,
+                "change_pct": 1.2960436217947133,
+                "volume": 3989421,
+                "volume_change_pct": -36.752156129114084
+              }
+            ],
+            "losers": [
+              {
+                "symbol": "SNDK",
+                "name": "Sandisk Corporation",
+                "price": 1487.3299560546875,
+                "prev_close": 1581.8199462890625,
+                "change": -94.489990234375,
+                "change_pct": -5.973498466500425,
+                "volume": 8484146,
+                "volume_change_pct": 52.121960840565166
+              },
+              {
+                "symbol": "CRWD",
+                "name": "CrowdStrike Holdings, Inc.",
+                "price": 263.010009765625,
+                "prev_close": 275.0400085449219,
+                "change": -12.029998779296875,
+                "change_pct": -4.373908669847948,
+                "volume": 6979750,
+                "volume_change_pct": -1.0694239709717657
+              },
+              {
+                "symbol": "ARM",
+                "name": "Arm Holdings plc",
+                "price": 255.24000549316406,
+                "prev_close": 266.2799987792969,
+                "change": -11.039993286132812,
+                "change_pct": -4.146009214639957,
+                "volume": 3508931,
+                "volume_change_pct": -17.512611956087355
+              },
+              {
+                "symbol": "MU",
+                "name": "Micron Technology, Inc.",
+                "price": 989.0399780273438,
+                "prev_close": 1029.0,
+                "change": -39.96002197265625,
+                "change_pct": -3.883384059538994,
+                "volume": 23103517,
+                "volume_change_pct": 16.374098363958737
+              },
+              {
+                "symbol": "PANW",
+                "name": "Palo Alto Networks, Inc.",
+                "price": 403.8299865722656,
+                "prev_close": 418.7799987792969,
+                "change": -14.95001220703125,
+                "change_pct": -3.5698964254761654,
+                "volume": 4719201,
+                "volume_change_pct": 23.081764122893954
+              },
+              {
+                "symbol": "MRVL",
+                "name": "Marvell Technology, Inc.",
+                "price": 265.8599853515625,
+                "prev_close": 275.2799987792969,
+                "change": -9.420013427734375,
+                "change_pct": -3.4219752504746204,
+                "volume": 17943244,
+                "volume_change_pct": 19.245605523914588
+              },
+              {
+                "symbol": "INTC",
+                "name": "Intel Corporation",
+                "price": 101.3499984741211,
+                "prev_close": 104.69999694824219,
+                "change": -3.3499984741210938,
+                "change_pct": -3.1996165919442627,
+                "volume": 70544983,
+                "volume_change_pct": -5.596140875830359
+              },
+              {
+                "symbol": "LRCX",
+                "name": "Lam Research Corporation",
+                "price": 309.55999755859375,
+                "prev_close": 318.8399963378906,
+                "change": -9.279998779296875,
+                "change_pct": -2.910550397028106,
+                "volume": 5699390,
+                "volume_change_pct": 24.134558839544358
+              },
+              {
+                "symbol": "ORCL",
+                "name": "Oracle Corporation",
+                "price": 137.39500427246094,
+                "prev_close": 141.39999389648438,
+                "change": -4.0049896240234375,
+                "change_pct": -2.8323831661233285,
+                "volume": 18936556,
+                "volume_change_pct": -25.720353343584275
+              },
+              {
+                "symbol": "KLAC",
+                "name": "KLA Corporation",
+                "price": 190.1199951171875,
+                "prev_close": 195.57000732421875,
+                "change": -5.45001220703125,
+                "change_pct": -2.7867321178733415,
+                "volume": 7411331,
+                "volume_change_pct": 38.56063042177685
+              }
+            ],
+            "verified": 20,
+            "target": 20
+          },
+          {
+            "key": "uslarge",
+            "title": "LARGE CAP ($10B-$200B)",
+            "unavailable": false,
+            "gainers": [
+              {
+                "symbol": "FICO",
+                "name": "Fair Isaac Corporation",
+                "price": 739.739990234375,
+                "prev_close": 667.5800170898438,
+                "change": 72.15997314453125,
+                "change_pct": 10.809187108250406,
+                "volume": 1804778,
+                "volume_change_pct": 65.34841960604673
+              },
+              {
+                "symbol": "MDT",
+                "name": "Medtronic plc",
+                "price": 91.81999969482422,
+                "prev_close": 88.4800033569336,
+                "change": 3.339996337890625,
+                "change_pct": 3.774860093999863,
+                "volume": 24749075,
+                "volume_change_pct": -36.31516038886516
+              },
+              {
+                "symbol": "ZBH",
+                "name": "Zimmer Biomet Holdings, Inc.",
+                "price": 92.18000030517578,
+                "prev_close": 89.13999938964844,
+                "change": 3.0400009155273438,
+                "change_pct": 3.4103667672678606,
+                "volume": 1489066,
+                "volume_change_pct": -7.182821168110702
+              },
+              {
+                "symbol": "TYL",
+                "name": "Tyler Technologies, Inc.",
+                "price": 339.9150085449219,
+                "prev_close": 329.54998779296875,
+                "change": 10.365020751953125,
+                "change_pct": 3.14520441082968,
+                "volume": 444940,
+                "volume_change_pct": -5.772977551884795
+              },
+              {
+                "symbol": "KDP",
+                "name": "Keurig Dr Pepper Inc.",
+                "price": 32.75,
+                "prev_close": 31.760000228881836,
+                "change": 0.9899997711181641,
+                "change_pct": 3.117127720351464,
+                "volume": 11721704,
+                "volume_change_pct": 36.210188714325554
+              },
+              {
+                "symbol": "STZ",
+                "name": "Constellation Brands, Inc.",
+                "price": 126.41999816894531,
+                "prev_close": 122.63999938964844,
+                "change": 3.779998779296875,
+                "change_pct": 3.082190800806486,
+                "volume": 2011280,
+                "volume_change_pct": -15.435586949209554
+              },
+              {
+                "symbol": "GEHC",
+                "name": "GE HealthCare Technologies Inc.",
+                "price": 67.73999786376953,
+                "prev_close": 65.73999786376953,
+                "change": 2.0,
+                "change_pct": 3.04228789928549,
+                "volume": 3472207,
+                "volume_change_pct": 21.55033956451726
+              },
+              {
+                "symbol": "BDX",
+                "name": "Becton, Dickinson and Company",
+                "price": 188.89999389648438,
+                "prev_close": 183.75,
+                "change": 5.149993896484375,
+                "change_pct": 2.802717766794218,
+                "volume": 822893,
+                "volume_change_pct": -49.068948443399144
+              },
+              {
+                "symbol": "ACN",
+                "name": "Accenture plc",
+                "price": 214.85000610351562,
+                "prev_close": 209.05999755859375,
+                "change": 5.790008544921875,
+                "change_pct": 2.7695439646693267,
+                "volume": 5659554,
+                "volume_change_pct": 16.052945639469314
+              },
+              {
+                "symbol": "CF",
+                "name": "CF Industries Holdings, Inc.",
+                "price": 114.59500122070312,
+                "prev_close": 111.54000091552734,
+                "change": 3.0550003051757812,
+                "change_pct": 2.7389279900485444,
+                "volume": 1814884,
+                "volume_change_pct": -62.26695496694249
+              }
+            ],
+            "losers": [
+              {
+                "symbol": "CIEN",
+                "name": "Ciena Corporation",
+                "price": 404.8900146484375,
+                "prev_close": 449.7699890136719,
+                "change": -44.879974365234375,
+                "change_pct": -9.978427965737424,
+                "volume": 3037004,
+                "volume_change_pct": -19.51118414078236
+              },
+              {
+                "symbol": "LITE",
+                "name": "Lumentum Holdings Inc.",
+                "price": 995.4099731445312,
+                "prev_close": 1103.35498046875,
+                "change": -107.94500732421875,
+                "change_pct": -9.783343460176281,
+                "volume": 6271494,
+                "volume_change_pct": 19.687284108475353
+              },
+              {
+                "symbol": "COHR",
+                "name": "Coherent Corp.",
+                "price": 288.0199890136719,
+                "prev_close": 312.6199951171875,
+                "change": -24.600006103515625,
+                "change_pct": -7.8689803876089774,
+                "volume": 6600774,
+                "volume_change_pct": -18.527068058949865
+              },
+              {
+                "symbol": "CVNA",
+                "name": "Carvana Co.",
+                "price": 59.54999923706055,
+                "prev_close": 63.72999954223633,
+                "change": -4.180000305175781,
+                "change_pct": -6.558920971599151,
+                "volume": 7390422,
+                "volume_change_pct": 8.735445142495623
+              },
+              {
+                "symbol": "BE",
+                "name": "Bloom Energy Corporation",
+                "price": 262.2900085449219,
+                "prev_close": 280.5,
+                "change": -18.209991455078125,
+                "change_pct": -6.49197556330771,
+                "volume": 12625424,
+                "volume_change_pct": 49.32494382022472
+              },
+              {
+                "symbol": "GLW",
+                "name": "Corning Incorporated",
+                "price": 147.27000427246094,
+                "prev_close": 156.67999267578125,
+                "change": -9.409988403320312,
+                "change_pct": -6.005864719940632,
+                "volume": 7055073,
+                "volume_change_pct": 5.760523475445225
+              },
+              {
+                "symbol": "ALAB",
+                "name": "Astera Labs, Inc.",
+                "price": 324.1099853515625,
+                "prev_close": 342.2099914550781,
+                "change": -18.100006103515625,
+                "change_pct": -5.289151852800771,
+                "volume": 3419813,
+                "volume_change_pct": -15.851058070866141
+              },
+              {
+                "symbol": "MRNA",
+                "name": "Moderna, Inc.",
+                "price": 213.74000549316406,
+                "prev_close": 225.0,
+                "change": -11.259994506835938,
+                "change_pct": -5.004442003038195,
+                "volume": 12689144,
+                "volume_change_pct": -56.04288619223961
+              },
+              {
+                "symbol": "NBIS",
+                "name": "Nebius Group N.V.",
+                "price": 210.05999755859375,
+                "prev_close": 221.07000732421875,
+                "change": -11.010009765625,
+                "change_pct": -4.980327227057013,
+                "volume": 13711837,
+                "volume_change_pct": 43.791744879875
+              },
+              {
+                "symbol": "AKAM",
+                "name": "Akamai Technologies, Inc.",
+                "price": 101.6500015258789,
+                "prev_close": 106.94999694824219,
+                "change": -5.299995422363281,
+                "change_pct": -4.955582584007162,
+                "volume": 3337030,
+                "volume_change_pct": -42.426286641017235
+              }
+            ],
+            "verified": 20,
+            "target": 20
+          }
+        ],
+        "indices": [
+          {
+            "label": "S&P 500",
+            "level": 7807.24,
+            "change": -4.300039062500218,
+            "change_pct": -0.05504726393255851
+          },
+          {
+            "label": "Nasdaq Composite",
+            "level": 27245.902,
+            "change": -120.26792187500178,
+            "change_pct": -0.4394766319815411
+          },
+          {
+            "label": "Dow Jones",
+            "level": 51850.55,
+            "change": 195.6007812500029,
+            "change_pct": 0.37866803512218467
+          },
+          {
+            "label": "Russell 2000",
+            "level": 2796.3918,
+            "change": -10.588180468750124,
+            "change_pct": -0.3772089769939135
+          }
+        ],
+        "volume_buckets": [
+          {
+            "label": "+100% to +200%",
+            "rows": [
+              {
+                "symbol": "BF-B",
+                "name": "Brown-Forman Corporation",
+                "price": 26.829999923706055,
+                "prev_close": 26.389999389648438,
+                "change": 0.4400005340576172,
+                "change_pct": 1.6673002812959852,
+                "volume": 5349532,
+                "volume_change_pct": 147.9504982618772
+              },
+              {
+                "symbol": "FANG",
+                "name": "Diamondback Energy, Inc.",
+                "price": 195.11000061035156,
+                "prev_close": 192.1300048828125,
+                "change": 2.9799957275390625,
+                "change_pct": 1.5510308914823985,
+                "volume": 2416348,
+                "volume_change_pct": 110.92423184357543
+              },
+              {
+                "symbol": "BMY",
+                "name": "Bristol-Myers Squibb Company",
+                "price": 57.57500076293945,
+                "prev_close": 59.119998931884766,
+                "change": -1.5449981689453125,
+                "change_pct": -2.613325772764958,
+                "volume": 19430398,
+                "volume_change_pct": 109.99706031752893
+              },
+              {
+                "symbol": "EBAY",
+                "name": "eBay Inc.",
+                "price": 114.6500015258789,
+                "prev_close": 112.19000244140625,
+                "change": 2.4599990844726562,
+                "change_pct": 2.1927079338084923,
+                "volume": 5148276,
+                "volume_change_pct": 101.38773274917854
+              }
+            ]
+          },
+          {
+            "label": "+50% to +100%",
+            "rows": [
+              {
+                "symbol": "DPZ",
+                "name": "Domino's Pizza, Inc.",
+                "price": 310.8999938964844,
+                "prev_close": 309.3599853515625,
+                "change": 1.540008544921875,
+                "change_pct": 0.4978046993284475,
+                "volume": 1208109,
+                "volume_change_pct": 96.92078239608803
+              },
+              {
+                "symbol": "META",
+                "name": "Meta Platforms, Inc.",
+                "price": 742.9600219726562,
+                "prev_close": 718.6699829101562,
+                "change": 24.2900390625,
+                "change_pct": 3.3798599691252993,
+                "volume": 23975720,
+                "volume_change_pct": 90.20650371674957
+              },
+              {
+                "symbol": "FSLR",
+                "name": "First Solar, Inc.",
+                "price": 179.72000122070312,
+                "prev_close": 177.82000732421875,
+                "change": 1.899993896484375,
+                "change_pct": 1.0684927557224317,
+                "volume": 2406315,
+                "volume_change_pct": 86.6228478362029
+              },
+              {
+                "symbol": "SHOP",
+                "name": "Shopify Inc.",
+                "price": 179.22000122070312,
+                "prev_close": 170.85000610351562,
+                "change": 8.3699951171875,
+                "change_pct": 4.8990312075940095,
+                "volume": 12357714,
+                "volume_change_pct": 82.85781506636481
+              },
+              {
+                "symbol": "MPWR",
+                "name": "Monolithic Power Systems, Inc.",
+                "price": 1319.22998046875,
+                "prev_close": 1386.2900390625,
+                "change": -67.06005859375,
+                "change_pct": -4.837375780258826,
+                "volume": 782084,
+                "volume_change_pct": 80.32833756052571
+              },
+              {
+                "symbol": "BIIB",
+                "name": "Biogen Inc.",
+                "price": 229.41000366210938,
+                "prev_close": 225.7100067138672,
+                "change": 3.6999969482421875,
+                "change_pct": 1.6392702309085825,
+                "volume": 1432632,
+                "volume_change_pct": 75.78306748466258
+              },
+              {
+                "symbol": "AES",
+                "name": "The AES Corporation",
+                "price": 14.979999542236328,
+                "prev_close": 14.9399995803833,
+                "change": 0.039999961853027344,
+                "change_pct": 0.2677373693206028,
+                "volume": 9329814,
+                "volume_change_pct": 67.01838491971142
+              },
+              {
+                "symbol": "FICO",
+                "name": "Fair Isaac Corporation",
+                "price": 739.739990234375,
+                "prev_close": 667.5800170898438,
+                "change": 72.15997314453125,
+                "change_pct": 10.809187108250406,
+                "volume": 1804778,
+                "volume_change_pct": 65.34841960604673
+              },
+              {
+                "symbol": "WEC",
+                "name": "WEC Energy Group, Inc.",
+                "price": 104.91000366210938,
+                "prev_close": 103.73999786376953,
+                "change": 1.1700057983398438,
+                "change_pct": 1.1278251613965573,
+                "volume": 2184096,
+                "volume_change_pct": 65.11158149380103
+              },
+              {
+                "symbol": "PEG",
+                "name": "Public Service Enterprise Group Incorporated",
+                "price": 70.76000213623047,
+                "prev_close": 72.27999877929688,
+                "change": -1.5199966430664062,
+                "change_pct": -2.1029284293537898,
+                "volume": 4284478,
+                "volume_change_pct": 62.32157605607122
+              },
+              {
+                "symbol": "ABNB",
+                "name": "Airbnb, Inc.",
+                "price": 163.5,
+                "prev_close": 165.8699951171875,
+                "change": -2.3699951171875,
+                "change_pct": -1.4288269047774997,
+                "volume": 3224005,
+                "volume_change_pct": 58.37328683008302
+              },
+              {
+                "symbol": "BKR",
+                "name": "Baker Hughes Company",
+                "price": 56.18000030517578,
+                "prev_close": 56.70000076293945,
+                "change": -0.5200004577636719,
+                "change_pct": -0.9171083787772314,
+                "volume": 4391593,
+                "volume_change_pct": 56.88182759975709
+              },
+              {
+                "symbol": "SNDK",
+                "name": "Sandisk Corporation",
+                "price": 1487.3299560546875,
+                "prev_close": 1581.8199462890625,
+                "change": -94.489990234375,
+                "change_pct": -5.973498466500425,
+                "volume": 8484146,
+                "volume_change_pct": 52.121960840565166
+              }
+            ]
+          }
+        ],
+        "catalysts": [
+          {
+            "symbol": "FICO",
+            "change_pct": 10.809187108250406,
+            "headline": "FICO Honors Tech Mahindra for Bold Solution Tackling India's E-Commerce Returns Crisis - FICO",
+            "publisher": "FICO"
+          },
+          {
+            "symbol": "SHOP",
+            "change_pct": 4.8990312075940095,
+            "headline": "Top 14 Pharma Stocks To Buy In India October 2026 - Samco",
+            "publisher": "Samco"
+          }
+        ],
+        "volume_computed": 501,
+        "unclassified": 17
+      }
+    ],
+    "total_verified": 40,
+    "total_target": 40,
+    "mode": "live",
+    "volume_computed": 501,
+    "source": "Yahoo Finance regular-session bars (includePrePost=false); Indian universes: official NSE index constituent CSVs."
+  }
+}
