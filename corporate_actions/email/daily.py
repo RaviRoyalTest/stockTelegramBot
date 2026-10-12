@@ -440,6 +440,100 @@ def build_nifty_block() -> list[str]:
     return []
 
 
+def fetch_us_actions(limit: int = 60) -> list[dict]:
+    """In-progress corporate actions for NASDAQ-100 + S&P-500 stocks (best-effort).
+
+    Uses the Yahoo-backed us_corporate_actions source (dividends, splits,
+    earnings). Deduplicates by (symbol, action_type, ex_date), sorted
+    upcoming-first. Never raises — outages yield [].
+    """
+    try:
+        from concurrent.futures import ThreadPoolExecutor
+
+        from ..poller import parse_ex_date, recently_passed, within_reminder_window
+        from ..sources import get_us_corporate_actions
+        from ..sources.universe import get_index_universe
+
+        nasdaq = [str(s or "").strip().upper()
+                  for s in (get_index_universe("nasdaq100") or [])][:100]
+        sp500 = [str(s or "").strip().upper()
+                 for s in (get_index_universe("sp500") or [])][:100]
+        symbols = list({*nasdaq, *sp500})
+    except Exception as error:
+        log.debug("us actions setup skipped: %s", error)
+        return []
+    if not symbols:
+        return []
+
+    def _one(symbol: str) -> list[dict]:
+        try:
+            return get_us_corporate_actions(symbol) or []
+        except Exception:
+            return []
+
+    all_actions: list[dict] = []
+    try:
+        with ThreadPoolExecutor(max_workers=20) as pool:
+            for rows in pool.map(_one, symbols):
+                all_actions.extend(rows)
+    except Exception as error:
+        log.debug("us actions fetch skipped: %s", error)
+        return []
+
+    def _is_relevant(action: dict) -> bool:
+        try:
+            if within_reminder_window(action.get("ex_date")):
+                return True
+            if recently_passed(action.get("ex_date")):
+                return True
+            return not parse_ex_date(action.get("ex_date"))
+        except Exception:
+            return False
+
+    seen: set = set()
+    rows: list[dict] = []
+    for action in all_actions:
+        symbol = str(action.get("symbol") or "").strip().upper()
+        key = (symbol, str(action.get("subject") or action.get("action") or "").strip()[:60],
+               str(action.get("ex_date") or ""))
+        if key in seen:
+            continue
+        seen.add(key)
+        if _is_relevant(action):
+            rows.append(action)
+
+    def _sort_key(action: dict):
+        try:
+            day = parse_ex_date(action.get("ex_date"))
+        except Exception:
+            day = None
+        return (day is None, str(day or "9999-99-99"))
+
+    rows.sort(key=_sort_key)
+    return rows[: max(1, limit)]
+
+
+def build_us_actions_block() -> list[str]:
+    """NASDAQ-100 + S&P-500 in-progress corporate-action tables (never raises).
+
+    Fetches dividends, splits and other actions for US index constituents.
+    Grouped upcoming / recently-passed / announced, with buy-by dates.
+    Returns [] when the feed is down or the universe is unavailable.
+    """
+    try:
+        us_actions = fetch_us_actions()
+    except Exception as error:
+        log.debug("us actions block skipped: %s", error)
+        us_actions = []
+    if not us_actions:
+        return []
+    return _build_grouped_action_tables(
+        us_actions,
+        "U.S. (NASDAQ-100 + S&P-500) · corporate actions in progress",
+        cap_upcoming=20, cap_rest=10,
+        more_hint="full list on the web /exdates page", buy_by=True)
+
+
 def build_all_actions_lines(chat_id) -> list[str]:
     """Corporate-action blocks shared by the morning + evening mails.
 
@@ -871,11 +965,11 @@ def maybe_send_open_email(chat_id, report: dict | None = None, force: bool = Fal
                    for s in live.get("sections") or []):
             log.info("open mail: no India section - skipping chat %s (retry next cycle)", chat_id)
             return False
-        # Five-section morning digest: (1) live open + last-close pointer,
-        # (2) Nifty actions with buy-by dates, (3) U.S. tables,
-        # (4) overnight gappers, (5) watchlist actions. Tables stay capped
-        # (top-N) so the whole mail fits under Gmail's ~102 KB clip limit -
-        # yesterday evening's mail already carried the full close tables.
+        # Six-section morning digest: (1) live open + last-close pointer,
+        # (2) Nifty actions with buy-by dates, (3) US actions with buy-by,
+        # (4) U.S. screener tables, (5) overnight gappers, (6) watchlist actions.
+        # Tables stay capped (top-N) so the whole mail fits under Gmail's
+        # ~102 KB clip limit.
         lines = build_open_lines(live, label)
         _prev, prev_label = _latest_recorded_before(today)
         if prev_label != today:
@@ -883,6 +977,7 @@ def maybe_send_open_email(chat_id, report: dict | None = None, force: bool = Fal
                 f"Yesterday's full close tables ({prev_label}) were mailed last "
                 "evening - replay any session on the web Sessions tab."))
         lines.extend(build_nifty_block())
+        lines.extend(build_us_actions_block())
         lines.extend(build_us_lines())
         lines.extend(build_gaps_lines())
         lines.extend(build_watchlist_block(chat_id))

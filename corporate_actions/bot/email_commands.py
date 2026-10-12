@@ -324,6 +324,7 @@ def handle_emailopen(chat_id, parts) -> None:
         build_gaps_lines,
         build_nifty_block,
         build_open_lines,
+        build_us_actions_block,
         build_us_lines,
         build_watchlist_block,
     )
@@ -350,12 +351,13 @@ def handle_emailopen(chat_id, parts) -> None:
         ok, info = send_email(recipient, f"Royal Stock opening: {label}", build_daily_lines(snapshot),
                                 kind="open", chat_id=chat_id)
     else:
-        # Full five-section morning digest: same as maybe_send_open_email.
+        # Full six-section morning digest.
         lines = build_open_lines(report, label)
-        lines.extend(build_nifty_block())
-        lines.extend(build_us_lines())
-        lines.extend(build_gaps_lines())
-        lines.extend(build_watchlist_block(chat_id))
+        lines.extend(build_nifty_block())        # Nifty-500 actions + buy-by
+        lines.extend(build_us_actions_block())   # NASDAQ-100 + S&P-500 actions
+        lines.extend(build_us_lines())           # US screener tables
+        lines.extend(build_gaps_lines())         # Overnight gappers
+        lines.extend(build_watchlist_block(chat_id))  # Watchlist actions
         ok, info = send_email(recipient, f"Royal Stock opening: {label}", lines,
                                 kind="open", chat_id=chat_id)
     reply(chat_id, f"🌅 Morning digest mailed ✅" if ok else f"📧 Mail failed: {escape(info)}")
@@ -368,6 +370,7 @@ def handle_emailclose(chat_id, parts) -> None:
         build_close_lines,
         build_eod_store_lines,
         build_nifty_block,
+        build_us_actions_block,
         fetch_watchlist_quotes,
     )
 
@@ -391,9 +394,10 @@ def handle_emailclose(chat_id, parts) -> None:
         if snapshot:
             lines.extend(build_daily_lines(snapshot))
             label = str(snapshot.get("session") or label)
-    # Nifty-500 in-progress corporate actions (with buy-by dates) - same
-    # block as the morning mail so you always have the latest action status.
+    # Nifty-500 in-progress corporate actions (with buy-by dates).
     lines.extend(build_nifty_block())
+    # NASDAQ-100 + S&P-500 corporate actions (dividends, splits) with buy-by dates.
+    lines.extend(build_us_actions_block())
     try:
         from ..email.daily import _chat_watchlist, _owner_chat
 
