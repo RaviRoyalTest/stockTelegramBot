@@ -98,10 +98,18 @@ def build_analysis(fund: dict | None, price=None) -> dict:
     annuals = fund.get("annuals") or []
     latest = annuals[-1] if annuals else None
     if latest:
-        if latest.get("sales_growth") is not None and latest["sales_growth"] > 0:
-            positives.append(f"Latest FY sales +{latest['sales_growth']:.1f}% YoY")
-        if latest.get("profit_growth") is not None and latest["profit_growth"] > 0:
-            positives.append(f"Latest FY profit +{latest['profit_growth']:.1f}% YoY")
+        # Guarded like every other numeric field above: a growth value that
+        # arrives as a string (some upstream rows do) must skip this positive
+        # instead of raising out of build_analysis and 500-ing /api/analysis.
+        for key, label in (("sales_growth", "sales"), ("profit_growth", "profit")):
+            if latest.get(key) is None:
+                continue
+            try:
+                growth = float(latest[key])
+            except (TypeError, ValueError):
+                continue
+            if growth > 0:
+                positives.append(f"Latest FY {label} +{growth:.1f}% YoY")
     if len(annuals) >= 3 and all(item.get("sales") is not None for item in annuals):
         try:
             if float(annuals[-1]["sales"]) > float(annuals[0]["sales"]):

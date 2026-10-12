@@ -14,6 +14,7 @@ the user can tap the right one instead of guessing.
 from __future__ import annotations
 
 import logging
+from time import monotonic
 
 from ..core.text import escape, split_messages
 from ..formatting.stock_us import _us_stock_lines
@@ -73,6 +74,7 @@ def handle_us_stock(chat_id, parts) -> None:
         reply(chat_id, f"Bad ticker <code>{escape(parts[1])}</code>. Use e.g. <code>/usstock AAPL</code>.")
         return
 
+    started_at = monotonic()
     log.info("handle_us_stock: fetching US fundamentals for %s (chat %s)", raw_symbol, chat_id)
     quote = get_quote("US", raw_symbol) or {}
     fund = get_us_fundamentals(raw_symbol) or {}
@@ -84,4 +86,7 @@ def handle_us_stock(chat_id, parts) -> None:
 
     lines = _us_stock_lines(raw_symbol, quote, fund, include_tip=True)
     reply_messages(chat_id, split_messages(lines))
-    log.info("handle_us_stock: completed for %s", raw_symbol)
+    # Duration included for parity with the India path
+    # (handle_single_stock: "completed for %s in %.1fs") so both markets are
+    # directly comparable when reading timings in the log.
+    log.info("handle_us_stock: completed for %s in %.1fs", raw_symbol, monotonic() - started_at)

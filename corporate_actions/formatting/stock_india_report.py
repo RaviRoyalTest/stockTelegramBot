@@ -854,15 +854,27 @@ def _fund_report_lines(raw_symbol, quote, fund, include_tip=True, label="") -> l
     positives = []
     annuals = fund.get("annuals") or []
     latest = annuals[-1] if annuals else None
-    if latest and latest.get("sales_growth") is not None and latest["sales_growth"] > 0:
-        positives.append(f"FY{_fy_label(latest.get('year'))[2:]} Sales +{latest['sales_growth']:.1f}%")
-    if latest and latest.get("profit_growth") is not None and latest["profit_growth"] > 0:
-        positives.append(f"FY{_fy_label(latest.get('year'))[2:]} Profit +{latest['profit_growth']:.1f}%")
-    if len(annuals) >= 3 and all(item.get("sales") is not None for item in annuals):
-        if annuals[-1]["sales"] > annuals[0]["sales"]:
-            positives.append("5-year sales expansion")
-    if fund.get("debt_to_equity") is not None and fund["debt_to_equity"] <= 0.5:
-        positives.append(f"D/E only {float(fund['debt_to_equity']):.2f}x")
+    # Guarded in the file's own convention (cf. the try/except a few lines
+    # below): a growth/ratio value arriving as a string must skip its positive
+    # line rather than raise out of the whole report.
+    try:
+        if latest and latest.get("sales_growth") is not None and float(latest["sales_growth"]) > 0:
+            positives.append(f"FY{_fy_label(latest.get('year'))[2:]} Sales +{float(latest['sales_growth']):.1f}%")
+        if latest and latest.get("profit_growth") is not None and float(latest["profit_growth"]) > 0:
+            positives.append(f"FY{_fy_label(latest.get('year'))[2:]} Profit +{float(latest['profit_growth']):.1f}%")
+    except (TypeError, ValueError):
+        pass
+    try:
+        if len(annuals) >= 3 and all(item.get("sales") is not None for item in annuals):
+            if float(annuals[-1]["sales"]) > float(annuals[0]["sales"]):
+                positives.append("5-year sales expansion")
+    except (TypeError, ValueError):
+        pass
+    try:
+        if fund.get("debt_to_equity") is not None and float(fund["debt_to_equity"]) <= 0.5:
+            positives.append(f"D/E only {float(fund['debt_to_equity']):.2f}x")
+    except (TypeError, ValueError):
+        pass
     dii_delta = _holding_delta(fund.get("dii_pct"))
     if dii_delta is not None and dii_delta > 0:
         positives.append("DII holding increased")

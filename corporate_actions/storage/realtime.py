@@ -171,7 +171,9 @@ def save_json_snapshot(
     """
     safe_name = _normalize_name(data_name)
     started = time.perf_counter()
-    record_count = len(data) if isinstance(data, (list, dict, str)) else None
+    # A str payload has no "records" - len() would report its character count
+    # in the saved log line, which reads like a row count but is not one.
+    record_count = len(data) if isinstance(data, (list, dict)) else None
     path: Path | None = None
     try:
         path = unique_snapshot_path(

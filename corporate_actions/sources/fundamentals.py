@@ -274,10 +274,6 @@ async def _quote_summary_async(symbol: str, suffix: str = ".NS") -> dict | None:
     if httpx is None:
         return await asyncio.to_thread(_quote_summary, symbol, suffix)
 
-    now = time.time()
-    if httpx is None:
-        return await asyncio.to_thread(_quote_summary, symbol, suffix)
-
     # Attempt hosts similarly to sync path. Use persisted cookie jar when possible
     # so async requests reuse the same consent state as the sync session.
     persisted_cookies = None
@@ -299,14 +295,14 @@ async def _quote_summary_async(symbol: str, suffix: str = ".NS") -> dict | None:
                         crumb = text
                         break
             except Exception as error:
-                log.debug("_quote_summary: %s", error)
+                log.debug("_quote_summary_async: %s", error)
                 continue
 
         for host in ("https://query1.finance.yahoo.com", "https://query2.finance.yahoo.com"):
             try:
                 await _throttle_fund_req_async()
             except Exception as error:
-                log.debug("_quote_summary: %s", error)
+                log.debug("_quote_summary_async: %s", error)
                 pass
             url = f"{host}/v10/finance/quoteSummary/{quote(symbol)}"
             params = {"modules": "summaryDetail,financialData,defaultKeyStatistics,assetProfile,recommendationTrend,upgradesDowngrades", "crumb": crumb}

@@ -4,6 +4,8 @@ One module per state file on top of a shared atomic-JSON base layer
 (json_file.py). This facade re-exports the whole public API so existing
 `from corporate_actions import storage` call sites keep working.
 """
+import logging
+
 from .schedule import (
     add_schedule_entry,
     clear_schedule,
@@ -139,12 +141,18 @@ __all__ = [
 
 # One-time moves of any leftover pre-reorg files into data/. No-op when
 # there is nothing to move; never raises, so importing the storage
-# package can never break the bot over a filesystem quirk.
+# package can never break the bot over a filesystem quirk. A failure is
+# still logged - a silently skipped migration would leave state behind in
+# the old location with no trace in the logs.
 try:
     migrate_legacy_state_files()
-except Exception:  # pragma: no cover - defensive, best effort only
-    pass
+except Exception as error:  # pragma: no cover - defensive, best effort only
+    logging.getLogger(__name__).warning(
+        "legacy state migration skipped (state may still sit in the old path): %s", error
+    )
 try:
     migrate_openclose_file()
-except Exception:  # pragma: no cover - defensive, best effort only
-    pass
+except Exception as error:  # pragma: no cover - defensive, best effort only
+    logging.getLogger(__name__).warning(
+        "legacy open/close migration skipped: %s", error
+    )

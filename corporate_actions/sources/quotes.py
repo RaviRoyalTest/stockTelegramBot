@@ -100,8 +100,11 @@ def get_quote(exchange: str, symbol: str) -> dict | None:
         # Yahoo has no data for this symbol (delisted, renamed, or a typo).
         # Cache the miss so a stock that will never resolve does not hammer
         # Yahoo every poll cycle and flood the logs with INFO lines.
-        _quote_fail_cache[(exchange, symbol)] = now
-        log.info("quote lookup failed for %s:%s (Yahoo %s)", exchange, symbol, suffix)
+        # Stamp the miss with the time the lookup actually FINISHED, not the
+        # time it started - otherwise the network round-trip is silently
+        # deducted from the 10-minute negative-cache window.
+        _quote_fail_cache[(exchange, symbol)] = time.time()
+        log.info("quote lookup failed for %s:%s (Yahoo ticker %s%s)", exchange, symbol, symbol, suffix)
         return None
 
     price = meta.get("regularMarketPrice")
@@ -111,10 +114,15 @@ def get_quote(exchange: str, symbol: str) -> dict | None:
         "price": price,
         "prev_close": prev,
         "change_pct": ((price - prev) / prev * 100) if (price is not None and prev) else None,
-        "currency": meta.get("currency", "INR"),
+        # Fall back on the exchange's own currency, not a blanket INR: a US
+        # ticker whose meta omits `currency` would otherwise be reported as
+        # rupees. Yahoo normally supplies it, so this only matters on a miss.
+        "currency": meta.get("currency") or ("USD" if exchange == "US" else "INR"),
         "name": name,
     }
-    _quote_cache[(exchange, symbol)] = {"timestamp": now, "data": data}
+    # Cache stamp = completion time. Using the pre-fetch `now` would age every
+    # entry by its own network latency and shorten the 60s TTL.
+    _quote_cache[(exchange, symbol)] = {"timestamp": time.time(), "data": data}
     log.debug("quote fetched for %s:%s", exchange, symbol)
     return data
 
@@ -195,8 +203,8 @@ async def get_quote_async(exchange: str, symbol: str) -> dict | None:
             continue
 
     if not meta:
-        _quote_fail_cache[(exchange, symbol)] = now
-        log.info("quote lookup failed for %s:%s (Yahoo %s)", exchange, symbol, suffix)
+        _quote_fail_cache[(exchange, symbol)] = time.time()
+        log.info("async quote lookup failed for %s:%s (Yahoo ticker %s%s)", exchange, symbol, symbol, suffix)
         return None
 
     price = meta.get("regularMarketPrice")
@@ -206,9 +214,9 @@ async def get_quote_async(exchange: str, symbol: str) -> dict | None:
         "price": price,
         "prev_close": prev,
         "change_pct": ((price - prev) / prev * 100) if (price is not None and prev) else None,
-        "currency": meta.get("currency", "INR"),
+        "currency": meta.get("currency") or ("USD" if exchange == "US" else "INR"),
         "name": name,
     }
-    _quote_cache[(exchange, symbol)] = {"timestamp": now, "data": data}
+    _quote_cache[(exchange, symbol)] = {"timestamp": time.time(), "data": data}
     log.debug("async quote fetched for %s:%s", exchange, symbol)
     return data
