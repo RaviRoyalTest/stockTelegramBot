@@ -313,8 +313,20 @@ def handle_dailyemail(chat_id, parts) -> None:
 
 
 def handle_emailopen(chat_id, parts) -> None:
-    """Force-send the opening screener mail right now (uses recorded file)."""
-    from ..email.daily import _recorded_openclose, build_open_lines
+    """Force-send the full five-section morning digest right now (uses recorded file).
+
+    Sections: (1) opening screener, (2) Nifty-500 actions with buy-by dates,
+    (3) latest US tables, (4) overnight gappers, (5) full-watchlist actions.
+    Matches the content of the auto-mailer (maybe_send_open_email).
+    """
+    from ..email.daily import (
+        _recorded_openclose,
+        build_gaps_lines,
+        build_nifty_block,
+        build_open_lines,
+        build_us_lines,
+        build_watchlist_block,
+    )
 
     settings = storage.get_user_settings(chat_id) or {}
     recipient = (settings.get("email") or "").strip()
@@ -324,7 +336,7 @@ def handle_emailopen(chat_id, parts) -> None:
     if not email_configured():
         reply(chat_id, _server_not_ready_text())
         return
-    reply(chat_id, f"🌅 Preparing the opening screener - mailing it to <b>{escape(recipient)}</b> shortly.")
+    reply(chat_id, f"🌅 Preparing the morning digest (screener + Nifty actions + US + gappers + watchlist) - mailing to <b>{escape(recipient)}</b> shortly.")
     report, label = _recorded_openclose()
     if not report.get("sections"):
         # No recorded session: build a light snapshot fallback instead of a
@@ -338,15 +350,26 @@ def handle_emailopen(chat_id, parts) -> None:
         ok, info = send_email(recipient, f"Royal Stock opening: {label}", build_daily_lines(snapshot),
                                 kind="open", chat_id=chat_id)
     else:
-        ok, info = send_email(recipient, f"Royal Stock opening: {label}", build_open_lines(report, label),
+        # Full five-section morning digest: same as maybe_send_open_email.
+        lines = build_open_lines(report, label)
+        lines.extend(build_nifty_block())
+        lines.extend(build_us_lines())
+        lines.extend(build_gaps_lines())
+        lines.extend(build_watchlist_block(chat_id))
+        ok, info = send_email(recipient, f"Royal Stock opening: {label}", lines,
                                 kind="open", chat_id=chat_id)
-    reply(chat_id, f"🌅 Opening screener mailed ✅" if ok else f"📧 Mail failed: {escape(info)}")
+    reply(chat_id, f"🌅 Morning digest mailed ✅" if ok else f"📧 Mail failed: {escape(info)}")
 
 
 def handle_emailclose(chat_id, parts) -> None:
-    """Force-send the closing screener + EOD stored-details mail right now."""
-    from ..email.daily import _recorded_openclose, build_close_lines, build_eod_store_lines
-    from ..email.daily import fetch_watchlist_quotes
+    """Force-send the closing screener + Nifty actions + EOD stored-details mail right now."""
+    from ..email.daily import (
+        _recorded_openclose,
+        build_close_lines,
+        build_eod_store_lines,
+        build_nifty_block,
+        fetch_watchlist_quotes,
+    )
 
     settings = storage.get_user_settings(chat_id) or {}
     recipient = (settings.get("email") or "").strip()
@@ -368,6 +391,9 @@ def handle_emailclose(chat_id, parts) -> None:
         if snapshot:
             lines.extend(build_daily_lines(snapshot))
             label = str(snapshot.get("session") or label)
+    # Nifty-500 in-progress corporate actions (with buy-by dates) - same
+    # block as the morning mail so you always have the latest action status.
+    lines.extend(build_nifty_block())
     try:
         from ..email.daily import _chat_watchlist, _owner_chat
 
