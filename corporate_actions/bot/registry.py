@@ -441,6 +441,8 @@ COMMAND_USAGE = {
         "/dailyemail on/both \u2192 morning opening + evening close/EOD stores\n"
         "/dailyemail open    \u2192 mornings only (07:30-12:00 IST)\n"
         "/dailyemail close   \u2192 evenings only (after 15:45 IST)\n"
+        "/dailyemail scheduled \u2192 sharp separate mails at fixed times "
+        "(needs at 10:10 /emailopen + at 15:50 /emailclose entries)\n"
         "/dailyemail off     \u2192 stop all daily mails\n"
         "Needs /setemail first. Aliases: /dailymail, /emaildaily"
     ),
@@ -636,7 +638,7 @@ COMMAND_EXAMPLES = {
     "/setemail": ["/setemail you@gmail.com", "/setemail off"],
     "/email": ["/email friend@gmail.com | Hello | My watchlist is up today"],
     "/emailreport": ["/emailreport RELIANCE", "/emailreport RELIANCE friend@gmail.com My title"],
-    "/dailyemail": ["/dailyemail on", "/dailyemail both", "/dailyemail open", "/dailyemail close", "/dailyemail off"],
+    "/dailyemail": ["/dailyemail on", "/dailyemail both", "/dailyemail open", "/dailyemail close", "/dailyemail scheduled", "/dailyemail off"],
     "/emailopen": ["/emailopen"],
     "/emailclose": ["/emailclose"],
     "/emailboth": ["/emailboth"],
@@ -866,7 +868,7 @@ def register_commands() -> bool:
         {"command": "setemail", "description": "Get reports in your mailbox: /setemail you@gmail.com"},
         {"command": "email", "description": "Send any custom mail: /email to | subject | message"},
         {"command": "emailreport", "description": "Mail the deep report: /emailreport RELIANCE"},
-        {"command": "dailyemail", "description": "Opening + closing/EOD mails: /dailyemail on|both|open|close|off"},
+        {"command": "dailyemail", "description": "Opening + closing/EOD mails: /dailyemail on|both|open|close|scheduled|off"},
         {"command": "emailboth", "description": "Open + close + EOD in one mail: /emailboth"},
         {"command": "emailstatus", "description": "Mail send results: success or failed: /emailstatus"},
         {"command": "emailopen", "description": "Opening screener mail now: /emailopen"},

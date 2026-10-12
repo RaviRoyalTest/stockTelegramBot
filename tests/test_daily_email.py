@@ -60,10 +60,16 @@ class DailyEmailTests(unittest.TestCase):
         self.assertIn("Opening session screener", text)
 
     def test_scope_mapping(self):
+        from corporate_actions.email.daily import wants_close, wants_open
+
         self.assertEqual(get_scope({"daily_email": True}), "both")
         self.assertEqual(get_scope({"daily_email": True, "email_scope": "open"}), "open")
         self.assertEqual(get_scope({"daily_email": True, "email_scope": "close"}), "close")
+        self.assertEqual(get_scope({"daily_email": True, "email_scope": "scheduled"}), "scheduled")
         self.assertEqual(get_scope({"daily_email": False}), "off")
+        scheduled = {"daily_email": True, "email_scope": "scheduled"}
+        self.assertFalse(wants_open(scheduled))
+        self.assertFalse(wants_close(scheduled))
 
     def test_full_session_single_banner(self):
         report = {
@@ -475,6 +481,13 @@ class MarketGatedMailTests(unittest.TestCase):
         yesterday = date.today() - timedelta(days=1)
         with patch("corporate_actions.opening_report.data.latest_session_date",
                    return_value=yesterday):
+            self.assertFalse(maybe_send_eod_email("123"))
+        self.send.assert_not_called()
+
+    def test_scheduled_mode_skips_poll_mails(self):
+        settings = {"email": "a@b.com", "daily_email": True, "email_scope": "scheduled"}
+        with patch.object(storage_mod, "get_user_settings", return_value=dict(settings)):
+            self.assertFalse(maybe_send_open_email("123"))
             self.assertFalse(maybe_send_eod_email("123"))
         self.send.assert_not_called()
 

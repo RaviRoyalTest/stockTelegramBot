@@ -34,10 +34,12 @@ EMAIL_USAGE = (
     "/emailreport RELIANCE friend@gmail.com  \u2192 same report to a friend\n"
     "<b>/email to@mail | subject | message</b> - send any custom mail\n"
     "/email friend@gmail.com | Hello | My watchlist is up 2% today\n"
-    "<b>/dailyemail on|both|open|close|off</b> - opening + closing/EOD mails\n"
+    "<b>/dailyemail on|both|open|close|scheduled|off</b> - opening + closing/EOD mails\n"
     "/dailyemail on/both \u2192 morning opening screener + evening close+EOD stores\n"
     "/dailyemail open    \u2192 only the morning opening screener\n"
     "/dailyemail close   \u2192 only the evening close + stored-details mail\n"
+    "/dailyemail scheduled \u2192 poll-timed mails OFF; sharp separate mails via "
+    "schedule entries (at 10:10 /emailopen, at 15:50 /emailclose)\n"
     "<b>/emailopen</b> - send this session's opening screener now\n"
     "<b>/emailclose</b> - send the closing screener + EOD stores now\n"
     "<b>/emailboth</b> - open + close + EOD stores in ONE mail, one command\n"
@@ -252,6 +254,7 @@ def handle_dailyemail(chat_id, parts) -> None:
             "Usage: <code>/dailyemail on</code> or <code>/dailyemail both</code> (opening + closing/EOD), "
             "<code>/dailyemail open</code> (mornings only), "
             "<code>/dailyemail close</code> (evenings only), "
+            "<code>/dailyemail scheduled</code> (sharp separate mails at fixed times), "
             "or <code>/dailyemail off</code> (needs <code>/setemail</code> first)",
         )
         return
@@ -286,13 +289,27 @@ def handle_dailyemail(chat_id, parts) -> None:
         settings["email_scope"] = "close"
         storage.save_user_settings(chat_id, settings)
         reply(chat_id, "📧 Daily mails <b>ON (closing/EOD only)</b> - evening close + stored details land every day.")
+    elif raw in ("scheduled", "sharp", "timetable"):
+        if not (settings.get("email") or "").strip():
+            reply(chat_id, "Set your mail id first: <code>/setemail you@gmail.com</code>")
+            return
+        settings["daily_email"] = True
+        settings["email_scope"] = "scheduled"
+        storage.save_user_settings(chat_id, settings)
+        reply(
+            chat_id,
+            "📧 Daily mails <b>ON (scheduled)</b> - poll-timed mails OFF, sharp separate "
+            "mails instead:<br>"
+            "• <code>/schedule add at 10:10 /emailopen</code> - morning digest on time<br>"
+            "• <code>/schedule add at 15:50 /emailclose</code> - close + EOD on time",
+        )
     elif raw in ("off", "disable", "stop", "no"):
         settings["daily_email"] = False
         settings["email_scope"] = "off"
         storage.save_user_settings(chat_id, settings)
         reply(chat_id, "📧 Daily mails <b>OFF</b>.")
     else:
-        reply(chat_id, "Usage: <code>/dailyemail on|both|open|close|off</code>")
+        reply(chat_id, "Usage: <code>/dailyemail on|both|open|close|scheduled|off</code>")
 
 
 def handle_emailopen(chat_id, parts) -> None:

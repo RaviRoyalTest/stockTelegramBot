@@ -35,10 +35,17 @@ CLOSE_START_MIN = 15 * 60 + 45  # 15:45 IST - just after the India close
 
 
 def get_scope(settings: dict) -> str:
-    """both | open | close - legacy daily_email=True (no scope) means both."""
+    """both | open | close | scheduled - legacy daily_email=True means both.
+
+    "scheduled" means the poll-timed auto mails stay off while sharp
+    clock-time mails go out via schedule entries (/emailopen, /emailclose) -
+    one separate mail per timing, no duplicates between the two paths.
+    """
     scope = str((settings or {}).get("email_scope") or "").strip().lower()
-    if scope in ("both", "open", "close", "eod"):
-        return "close" if scope == "eod" else scope
+    if scope in ("both", "open", "close", "eod", "scheduled", "sharp"):
+        if scope == "eod":
+            return "close"
+        return "scheduled" if scope == "sharp" else scope
     return "both" if (settings or {}).get("daily_email") else "off"
 
 
