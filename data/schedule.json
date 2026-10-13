@@ -18,8 +18,7 @@
       "/gappers today"
     ],
     "chat": "862087765",
-    "next_due": "2026-10-14T03:45:00",
-    "run_at": "09:15",
+    "run_at": "09:25",
     "market": "in",
     "window_start": null,
     "window_end": null,
@@ -96,6 +95,7 @@
       "/emailopen nifty"
     ],
     "chat": "862087765",
+    "next_due": null,
     "run_at": "10:14",
     "market": "in",
     "window_start": null,
@@ -108,6 +108,7 @@
       "/emailopen gappers"
     ],
     "chat": "862087765",
+    "next_due": null,
     "run_at": "10:18",
     "market": "in",
     "window_start": null,
