@@ -549,31 +549,29 @@ def build_all_actions_lines(chat_id) -> list[str]:
 
 # Morning sections, each mailable on its own (/emailopen <name>) or all
 # together (bare /emailopen). Keys are the /emailopen selector words.
-MORNING_SECTIONS = ("screener", "nifty", "us", "gappers", "watchlist")
-
-MORNING_SECTION_TITLES = {
-    "screener": "Screener",
-    "nifty": "Nifty actions",
-    "us": "U.S. markets",
-    "gappers": "Gappers",
-    "watchlist": "Watchlist actions",
-}
-
-_MORNING_SECTION_ALIASES = {
-    "screen": "screener", "screener": "screener", "open": "screener",
-    "actions": "nifty", "nifty": "nifty", "buy": "nifty",
-    "us": "us", "usa": "us", "ustocks": "us", "us-actions": "us",
-    "gap": "gappers", "gappers": "gappers", "gaps": "gappers",
-    "watchlist": "watchlist", "mylist": "watchlist", "mine": "watchlist",
-    "all": "all", "everything": "all", "digest": "all", "full": "all",
-}
+#
+# The catalogue now lives in email/sections.py (single source of truth) so the
+# command layer and the mail builders can never disagree about which sections
+# exist. These names are re-exported for the existing call sites.
+from .sections import (  # noqa: E402  (kept next to the names they replace)
+    CLOSE_SECTIONS,
+    CLOSE_SECTION_TITLES,
+    MORNING_SECTIONS,
+    MORNING_SECTION_TITLES,
+    SECTION_ALIASES as _MORNING_SECTION_ALIASES,
+    describe_sections,
+    sections_for,
+)
 
 
 def normalize_morning_section(raw: str | None) -> str | None:
     """Selector word -> section key, 'all', or None when unknown."""
     if raw is None:
         return "all"
-    return _MORNING_SECTION_ALIASES.get(str(raw or "").strip().lower())
+    word = str(raw or "").strip().lower()
+    if word in ("all", "everything", "digest", "full"):
+        return "all"
+    return _MORNING_SECTION_ALIASES.get(word)
 
 
 def build_morning_section_lines(chat_id: str, section: str, report: dict,
@@ -621,9 +619,13 @@ def build_morning_digest_lines(chat_id: str, report: dict,
     the combined mail and the separate mails can never disagree. Feed
     outages skip just that section so the rest still goes out. Add/remove
     sections in MORNING_SECTIONS and both paths update automatically.
+
+    WHICH sections appear is per-user: a chat that set /emailsections only
+    gets the ones it asked for. No preference means all of them.
     """
     lines: list[str] = []
-    for section in MORNING_SECTIONS:
+    settings = storage.get_user_settings(chat_id) or {}
+    for section in sections_for(settings, "morning"):
         _title, section_lines = build_morning_section_lines(
             chat_id, section, report, label)
         lines.extend(section_lines)
@@ -643,10 +645,20 @@ def build_close_digest_lines(chat_id: str, report: dict,
     Watchlist quotes are fetched by the caller and passed via
     build_eod_store_lines, which already calls build_all_actions_lines
     internally so watchlist-level actions appear inside section 4.
+
+    WHICH sections appear is per-user (/emailsections ... close). Without a
+    preference all four go out. "eod" is appended by the caller, so when the
+    caller has not asked for it the stored-details block is simply absent.
     """
-    lines = build_close_lines(report, label)
-    lines.extend(build_nifty_block())         # ② Nifty-500 actions + buy-by
-    lines.extend(build_us_actions_block())    # ③ US index actions + buy-by
+    settings = storage.get_user_settings(chat_id) or {}
+    chosen = sections_for(settings, "close")
+    lines: list[str] = []
+    if "screener" in chosen:
+        lines.extend(build_close_lines(report, label))   # ① closing screener
+    if "nifty" in chosen:
+        lines.extend(build_nifty_block())                # ② Nifty-500 + buy-by
+    if "us" in chosen:
+        lines.extend(build_us_actions_block())           # ③ US index + buy-by
     return lines
 
 

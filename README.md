@@ -110,7 +110,31 @@ Optional polish: `EMAIL_FROM_NAME` (display name) and `EMAIL_SUBJECT_PREFIX`
 
 `/email friend@gmail.com | Subject | message` sends a one-shot note to anyone.
 
-### 3. Sharp clock-time mails (no poll-timed duplicates)
+### 3. Choose what each mail contains (`/emailsections`)
+
+Sections are per-user, so you decide what actually lands in your inbox:
+
+| Command | What it does |
+| ------- | ------------ |
+| `/emailsections` | Show your current sections (✅ included / ➖ excluded) |
+| `/emailsections nifty,gappers` | Morning mail: only those two |
+| `/emailsections add us` | Add one section, keep the rest |
+| `/emailsections remove us` | Drop one section, keep the rest |
+| `/emailsections all` | Every section again |
+| `/emailsections close nifty,eod` | Same, for the evening mail |
+
+**Morning** sections: `screener` (India opening gainers/losers), `nifty`
+(Nifty-500 actions with buy-by dates), `us` (NASDAQ-100 + S&P-500),
+`gappers` (overnight gaps, NIFTY 100), `watchlist` (your list's actions).
+**Evening**: `screener` (closing), `nifty`, `us`, `eod` (stored details —
+watchlist prices, your schedule, mail settings).
+
+Notes: sections always render in the mail's own order, so `gappers,nifty`
+looks identical to `nifty,gappers`. Aliases work (`gaps`, `mylist`, `usa`).
+A chat with no preference gets everything — there is no way to accidentally
+silence your own mail by clearing the list.
+
+### 4. Sharp clock-time mails (no poll-timed duplicates)
 
 Poll-timed mails fire whenever the poller happens to run inside the open/close
 window, so the exact minute drifts. For mails that land at a predictable time:

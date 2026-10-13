@@ -414,14 +414,22 @@ def handle_emailclose(chat_id, parts) -> None:
         snapshot = storage.load_snapshots() or {}
         lines = list(build_daily_lines(snapshot)) if snapshot else []
         label = str(snapshot.get("session") or label) if snapshot else label
+    # The stored-details block is its own section - a chat that removed "eod"
+    # from /emailsections close should not get it back here.
     try:
-        from ..email.daily import _chat_watchlist, _owner_chat
-
-        watchlist = storage.load_watchlist() if str(chat_id) == str(_owner_chat()) else _chat_watchlist(chat_id)
-        quotes = fetch_watchlist_quotes(watchlist)
+        from ..email.sections import CLOSE_SECTIONS, sections_for
+        want_eod = "eod" in sections_for(settings, "close") and "eod" in CLOSE_SECTIONS
     except Exception:
-        quotes = []
-    lines.extend(build_eod_store_lines(chat_id, quotes))
+        want_eod = True
+    if want_eod:
+        try:
+            from ..email.daily import _chat_watchlist, _owner_chat
+
+            watchlist = storage.load_watchlist() if str(chat_id) == str(_owner_chat()) else _chat_watchlist(chat_id)
+            quotes = fetch_watchlist_quotes(watchlist)
+        except Exception:
+            quotes = []
+        lines.extend(build_eod_store_lines(chat_id, quotes))
     ok, info = send_email(recipient, f"Royal Stock close + EOD: {label}", lines, kind="close", chat_id=chat_id)
     reply(chat_id, f"🌇 Close + EOD mailed ✅" if ok else f"📧 Mail failed: {escape(info)}")
 
@@ -506,3 +514,109 @@ def handle_emailstatus(chat_id, parts) -> None:
         if not entry.get("ok") and entry.get("info"):
             lines.append(f"   └ failed: <i>{escape(str(entry['info'])[:160])}</i>")
     reply(chat_id, "<br>".join(lines))
+
+
+def handle_emailsections(chat_id, parts) -> None:
+    """Choose WHICH sections your morning / evening mails contain.
+
+    /emailsections                       -> show what you currently get
+    /emailsections nifty,gappers         -> morning mail: only those two
+    /emailsections all                   -> every section again
+    /emailsections add us                -> add one, keep the rest
+    /emailsections remove us             -> drop one, keep the rest
+    /emailsections close nifty,eod       -> same for the evening mail
+    /emailsections close add eod         -> add one to the evening mail
+
+    Sections always render in the mail's own order, so "gappers,nifty" looks
+    exactly like "nifty,gappers". A chat with no preference gets everything -
+    there is no way to accidentally silence your own mail by clearing it.
+    """
+    from ..email.sections import (
+        CLOSE_SECTION_TITLES,
+        MORNING_SECTION_TITLES,
+        add_section,
+        default_sections,
+        describe_sections,
+        normalize_section_list,
+        remove_section,
+        sections_for,
+    )
+
+    tokens = [str(t).strip() for t in (parts or [])[1:] if str(t).strip()]
+    kind = "morning"
+    if tokens and tokens[0].lower() in ("close", "evening", "eodmail", "close-mail"):
+        kind = "close"
+        tokens = tokens[1:]
+
+    settings = storage.get_user_settings(chat_id) or {}
+    key = "email_sections" if kind == "morning" else "email_close_sections"
+    current = sections_for(settings, kind)
+    catalogue = default_sections(kind)
+
+    # ---- show current -------------------------------------------------
+    if not tokens:
+        titles = MORNING_SECTION_TITLES if kind == "morning" else CLOSE_SECTION_TITLES
+        rows = []
+        for name in catalogue:
+            rows.append(
+                ("✅" if name in current else "➖")
+                + " "
+                + escape(titles.get(name, name))
+                + f"  <code>{escape(name)}</code>"
+            )
+        # Examples must be copy-pasteable: the evening mail needs the
+        # "close" keyword, the morning mail must not carry it.
+        prefix = "close " if kind == "close" else ""
+        other = "morning" if kind == "close" else "close"
+        other_hint = (
+            f"<code>/emailsections nifty,gappers</code> — the morning mail"
+            if kind == "close" else
+            "<code>/emailsections close nifty,eod</code> — the evening mail"
+        )
+        body = (
+            f"<b>Mail sections · {kind}</b>\n"
+            + "\n".join(rows)
+            + "\n\nChange them:\n"
+            + f"<code>/emailsections {prefix}nifty,gappers</code> — only those\n"
+            + f"<code>/emailsections {prefix}add us</code> / "
+            + f"<code>/emailsections {prefix}remove us</code>\n"
+            + f"<code>/emailsections {prefix}all</code> — everything again\n"
+            + other_hint
+        )
+        return reply(chat_id, body)
+
+    # ---- add / remove one --------------------------------------------
+    action = tokens[0].lower()
+    if action in ("add", "remove", "+", "-") and len(tokens) >= 2:
+        helper = add_section if action in ("add", "+") else remove_section
+        updated: list[str] = list(current)
+        errors: list[str] = []
+        for word in tokens[1:]:
+            updated, err = helper(updated, word, kind)
+            if err:
+                errors.append(err)
+        if not updated:
+            updated = catalogue  # never let a mail become empty
+        settings[key] = updated
+        storage.save_user_settings(chat_id, settings)
+        note = (" " + "; ".join(errors)) if errors else ""
+        return reply(
+            chat_id,
+            f"✅ <b>{kind.capitalize()} mail</b> sections now: "
+            f"<b>{escape(describe_sections(updated, kind))}</b>{escape(note)}",
+        )
+
+    # ---- replace the whole list ---------------------------------------
+    chosen, unknown = normalize_section_list(tokens, kind)
+    if not chosen:
+        chosen = catalogue
+    settings[key] = chosen
+    storage.save_user_settings(chat_id, settings)
+    note = ""
+    if unknown:
+        note = "\n⚠️ ignored unknown: " + escape(", ".join(unknown))
+    reply(
+        chat_id,
+        f"✅ <b>{kind.capitalize()} mail</b> will contain: "
+        f"<b>{escape(describe_sections(chosen, kind))}</b>{note}",
+    )

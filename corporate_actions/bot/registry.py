@@ -184,6 +184,9 @@ ALIAS_TO_MAIN = {
     "/emailfund": "/emailreport",
     "/dailymail": "/dailyemail",
     "/emaildaily": "/dailyemail",
+    "/emailsection": "/emailsections",
+    "/mailsections": "/emailsections",
+    "/mailcontent": "/emailsections",
     "/emailsetup": "/emailhelp",
     "/gmailhelp": "/emailhelp",
     "/openmail": "/emailopen",
@@ -212,6 +215,7 @@ DISPATCHED_COMMANDS = frozenset({
     "/corporate-actions", "/dailybrief", "/dailyemail", "/dailymail",
     "/dnd", "/bothmail", "/closemail", "/email", "/emailboth", "/emailclose", "/emaildaily",
     "/emailfull", "/emailfund", "/emailhelp", "/emailstatus",
+    "/emailsections", "/emailsection", "/mailsections", "/mailcontent",
     "/emailopen", "/emailreport", "/emailsend", "/emailsetup", "/eod", "/eodmail", "/ex-dates", "/exdate",
     "/exdates", "/explain", "/favorites", "/favourites", "/filter",
     "/filterstocks", "/forecast", "/forecastanalysis", "/fund",
@@ -445,6 +449,18 @@ COMMAND_USAGE = {
         "(needs morning /emailopen section entries + at 15:50 /emailclose)\n"
         "/dailyemail off     \u2192 stop all daily mails\n"
         "Needs /setemail first. Aliases: /dailymail, /emaildaily"
+    ),
+    "/emailsections": (
+        "<b>/emailsections</b> - choose WHAT your mails contain\n"
+        "/emailsections               \u2192 show your current sections\n"
+        "/emailsections nifty,gappers \u2192 morning mail: only those two\n"
+        "/emailsections add us        \u2192 add one section, keep the rest\n"
+        "/emailsections remove us     \u2192 drop one section, keep the rest\n"
+        "/emailsections all           \u2192 every section again\n"
+        "/emailsections close nifty,eod \u2192 same for the evening mail\n"
+        "Morning: screener, nifty, us, gappers, watchlist\n"
+        "Evening: screener, nifty, us, eod\n"
+        "Aliases: /emailsection, /mailsections, /mailcontent"
     ),
     "/emailopen": (
         "<b>/emailopen</b> - morning mail now: whole digest or one section\n"

@@ -60,6 +60,7 @@ WRITE_COMMANDS = {
     "/emailopen", "/openmail", "/morningmail",
     "/emailclose", "/closemail", "/eodmail", "/eod",
     "/emailboth", "/bothmail", "/emailfull", "/sessionmail",
+    "/emailsections", "/emailsection", "/mailsections", "/mailcontent",
 }
 
 
@@ -319,6 +320,10 @@ def handle_command(chat_id, text):
 
     if command in ("/emailstatus", "/maillog", "/maillogs", "/mailstatus"):
         email_commands.handle_emailstatus(chat_id, parts)
+        return
+
+    if command in ("/emailsections", "/emailsection", "/mailsections", "/mailcontent"):
+        email_commands.handle_emailsections(chat_id, parts)
         return
 
     if len(parts) < 2:
