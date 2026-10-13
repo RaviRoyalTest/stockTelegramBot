@@ -442,7 +442,7 @@ COMMAND_USAGE = {
         "/dailyemail open    \u2192 mornings only (07:30-12:00 IST)\n"
         "/dailyemail close   \u2192 evenings only (after 15:45 IST)\n"
         "/dailyemail scheduled \u2192 sharp separate mails at fixed times "
-        "(needs at 10:10 /emailopen + at 15:50 /emailclose entries)\n"
+        "(needs morning /emailopen section entries + at 15:50 /emailclose)\n"
         "/dailyemail off     \u2192 stop all daily mails\n"
         "Needs /setemail first. Aliases: /dailymail, /emaildaily"
     ),

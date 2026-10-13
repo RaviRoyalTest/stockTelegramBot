@@ -18,6 +18,7 @@
       "/gappers today"
     ],
     "chat": "862087765",
+    "next_due": null,
     "run_at": "09:25",
     "market": "in",
     "window_start": null,
@@ -30,8 +31,7 @@
       "/openreport in"
     ],
     "chat": "862087765",
-    "next_due": "2026-10-14T04:30:00",
-    "run_at": "10:00,15:35",
+    "run_at": "09:45,15:35",
     "market": "in",
     "window_start": null,
     "window_end": null,
@@ -82,8 +82,7 @@
       "/emailopen screener"
     ],
     "chat": "862087765",
-    "next_due": null,
-    "run_at": "10:10",
+    "run_at": "09:50",
     "market": "in",
     "window_start": null,
     "window_end": null,
@@ -95,8 +94,7 @@
       "/emailopen nifty"
     ],
     "chat": "862087765",
-    "next_due": null,
-    "run_at": "10:14",
+    "run_at": "09:53",
     "market": "in",
     "window_start": null,
     "window_end": null,
@@ -108,8 +106,7 @@
       "/emailopen gappers"
     ],
     "chat": "862087765",
-    "next_due": null,
-    "run_at": "10:18",
+    "run_at": "09:56",
     "market": "in",
     "window_start": null,
     "window_end": null,
@@ -121,8 +118,7 @@
       "/emailopen watchlist"
     ],
     "chat": "862087765",
-    "next_due": null,
-    "run_at": "10:22",
+    "run_at": "09:59",
     "market": "in",
     "window_start": null,
     "window_end": null,
