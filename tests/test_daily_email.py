@@ -632,6 +632,38 @@ class NiftyActionsMailTests(unittest.TestCase):
         self.assertIn("DIV", text)
 
 
+    def test_section_map_covers_digest_order(self):
+        from corporate_actions.email import daily as dm
+
+        for section in dm.MORNING_SECTIONS:
+            self.assertIn(section, dm.MORNING_SECTION_TITLES)
+        self.assertEqual(dm.normalize_morning_section(None), "all")
+        self.assertEqual(dm.normalize_morning_section("NIFTY"), "nifty")
+        self.assertEqual(dm.normalize_morning_section("gaps"), "gappers")
+        self.assertIsNone(dm.normalize_morning_section("nonsense"))
+
+    def test_single_section_builder_matches_digest(self):
+        from corporate_actions.email import daily as dm
+
+        report = _live_report()
+        with patch.object(dm, "build_nifty_block", return_value=["<nifty>"]), \
+                patch.object(dm, "build_us_actions_block", return_value=["<us-a>"]), \
+                patch.object(dm, "build_us_lines", return_value=["<us>"]), \
+                patch.object(dm, "build_gaps_lines", return_value=["<gaps>"]), \
+                patch.object(dm, "build_watchlist_block", return_value=["<watch>"]):
+            for section in dm.MORNING_SECTIONS:
+                with self.subTest(section=section):
+                    title, lines = dm.build_morning_section_lines(
+                        "123", section, report, "D")
+                    self.assertEqual(title, dm.MORNING_SECTION_TITLES[section])
+                    self.assertTrue(lines)
+            full = dm.build_morning_digest_lines("123", report, "D")
+            parts: list[str] = []
+            for s in dm.MORNING_SECTIONS:
+                parts.extend(dm.build_morning_section_lines("123", s, report, "D")[1])
+            self.assertEqual(full, parts)
+
+
 class ManualMailTests(unittest.TestCase):
     def setUp(self):
         from corporate_actions.bot import email_commands as ec
@@ -667,6 +699,24 @@ class ManualMailTests(unittest.TestCase):
                 patch.object(storage_mod, "list_openclose_dates", return_value=[]):
             self.ec.handle_emailboth("123", ["/emailboth"])
         self.assertTrue(any("mailed" in str(m).lower() for m in self.sent))
+
+    def test_emailopen_section_sends_only_it(self):
+        from corporate_actions.email import daily as dm
+
+        with patch.object(dm, "_recorded_openclose",
+                          return_value=({"sections": [{"market": "in"}]}, "D")), \
+                patch.object(dm, "build_morning_section_lines",
+                             return_value=("Nifty actions", ["<x>"])) as build:
+            self.ec.handle_emailopen("123", ["/emailopen", "nifty"])
+        build.assert_called_once()
+        subject = self.ec.send_email.call_args[0][1]
+        self.assertIn("Nifty actions", subject)
+
+    def test_emailopen_unknown_section_shows_usage(self):
+        with patch.object(self.ec, "send_email") as send:
+            self.ec.handle_emailopen("123", ["/emailopen", "bogus"])
+        send.assert_not_called()
+        self.assertTrue(any("Usage" in str(m) for m in self.sent))
 
     def test_emailstatus_hides_foreign_and_unattributed_entries(self):
         entries = [

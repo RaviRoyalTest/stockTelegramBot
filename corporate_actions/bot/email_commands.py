@@ -40,7 +40,9 @@ EMAIL_USAGE = (
     "/dailyemail close   \u2192 only the evening close + stored-details mail\n"
     "/dailyemail scheduled \u2192 poll-timed mails OFF; sharp separate mails via "
     "schedule entries (at 10:10 /emailopen, at 15:50 /emailclose)\n"
-    "<b>/emailopen</b> - send this session's opening screener now\n"
+    "<b>/emailopen [screener|nifty|us|gappers|watchlist]</b> - morning mail now\n"
+    "/emailopen          \u2192 full morning digest in one mail\n"
+    "/emailopen nifty    \u2192 only the Nifty-actions mail, separately\n"
     "<b>/emailclose</b> - send the closing screener + EOD stores now\n"
     "<b>/emailboth</b> - open + close + EOD stores in ONE mail, one command\n"
     "<b>/emailstatus</b> - last mail sends: ✅ success or ❌ failed + reason\n"
@@ -300,7 +302,9 @@ def handle_dailyemail(chat_id, parts) -> None:
             chat_id,
             "📧 Daily mails <b>ON (scheduled)</b> - poll-timed mails OFF, sharp separate "
             "mails instead:<br>"
-            "• <code>/schedule add at 10:10 /emailopen</code> - morning digest on time<br>"
+            "• <code>/schedule add at 10:10 /emailopen screener</code> + "
+            "<code>10:13 nifty</code> + <code>10:16 us</code> + "
+            "<code>10:19 gappers</code> + <code>10:22 watchlist</code><br>"
             "• <code>/schedule add at 15:50 /emailclose</code> - close + EOD on time",
         )
     elif raw in ("off", "disable", "stop", "no"):
@@ -312,14 +316,30 @@ def handle_dailyemail(chat_id, parts) -> None:
         reply(chat_id, "Usage: <code>/dailyemail on|both|open|close|scheduled|off</code>")
 
 
-def handle_emailopen(chat_id, parts) -> None:
-    """Force-send the full morning digest right now (uses recorded file).
+def _morning_usage() -> str:
+    return (
+        "Usage: <code>/emailopen</code> (full morning digest) or "
+        "<code>/emailopen screener|nifty|us|gappers|watchlist</code> "
+        "(that section alone, as its own mail)"
+    )
 
-    Delegates entirely to build_morning_digest_lines so the scheduled-command
-    path always delivers the same sections as the auto-mailer. Add/remove
-    sections in build_morning_digest_lines and both paths update automatically.
+
+def handle_emailopen(chat_id, parts) -> None:
+    """Send the morning mail now: whole digest, or one section separately.
+
+    /emailopen             -> all five sections in one mail (as before)
+    /emailopen nifty       -> only the Nifty-actions mail
+    /emailopen us|gappers|watchlist|screener -> only that section's mail
+    Section bodies come from the same builders as the digest, so combined
+    and separate mails can never disagree. Empty sections are skipped with
+    a note instead of sending an empty mail.
     """
-    from ..email.daily import _recorded_openclose, build_morning_digest_lines
+    from ..email.daily import (
+        _recorded_openclose,
+        build_morning_digest_lines,
+        build_morning_section_lines,
+        normalize_morning_section,
+    )
 
     settings = storage.get_user_settings(chat_id) or {}
     recipient = (settings.get("email") or "").strip()
@@ -329,24 +349,37 @@ def handle_emailopen(chat_id, parts) -> None:
     if not email_configured():
         reply(chat_id, _server_not_ready_text())
         return
-    reply(chat_id, f"🌅 Preparing the morning digest - mailing to <b>{escape(recipient)}</b> shortly.")
+    section = normalize_morning_section(parts[1] if len(parts) > 1 else None)
+    if section is None:
+        reply(chat_id, _morning_usage())
+        return
     report, label = _recorded_openclose()
-    if not report.get("sections"):
-        # No recorded session: build a light snapshot fallback instead of a
-        # 60-90s live scan inside the Telegram handler.
-        from ..email.daily import build_daily_lines
+    if section == "all":
+        reply(chat_id, f"🌅 Preparing the morning digest - mailing to <b>{escape(recipient)}</b> shortly.")
+        if not report.get("sections"):
+            # No recorded session: build a light snapshot fallback instead of a
+            # 60-90s live scan inside the Telegram handler.
+            from ..email.daily import build_daily_lines
 
-        snapshot = storage.load_snapshots() or {}
-        if not snapshot:
-            reply(chat_id, "No recorded session yet - run /openreport or /snap first, then retry.")
-            return
-        ok, info = send_email(recipient, f"Royal Stock opening: {label}", build_daily_lines(snapshot),
-                                kind="open", chat_id=chat_id)
-    else:
-        lines = build_morning_digest_lines(chat_id, report, label)
+            snapshot = storage.load_snapshots() or {}
+            if not snapshot:
+                reply(chat_id, "No recorded session yet - run /openreport or /snap first, then retry.")
+                return
+            lines = build_daily_lines(snapshot)
+        else:
+            lines = build_morning_digest_lines(chat_id, report, label)
         ok, info = send_email(recipient, f"Royal Stock opening: {label}", lines,
-                                kind="open", chat_id=chat_id)
-    reply(chat_id, f"🌅 Morning digest mailed ✅" if ok else f"📧 Mail failed: {escape(info)}")
+                              kind="open", chat_id=chat_id)
+        reply(chat_id, f"🌅 Morning digest mailed ✅" if ok else f"📧 Mail failed: {escape(info)}")
+        return
+    title, lines = build_morning_section_lines(chat_id, section, report, label)
+    if not lines:
+        reply(chat_id, f"No {escape(title.lower())} data available right now - nothing mailed.")
+        return
+    reply(chat_id, f"🌅 Preparing {escape(title.lower())} - mailing to <b>{escape(recipient)}</b> shortly.")
+    ok, info = send_email(recipient, f"Royal Stock opening: {label} — {title}", lines,
+                          kind=f"open-{section}", chat_id=chat_id)
+    reply(chat_id, f"🌅 {escape(title)} mailed ✅" if ok else f"📧 Mail failed: {escape(info)}")
 
 
 def handle_emailclose(chat_id, parts) -> None:

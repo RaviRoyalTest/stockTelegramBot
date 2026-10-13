@@ -547,28 +547,86 @@ def build_all_actions_lines(chat_id) -> list[str]:
             + build_us_actions_block())
 
 
+# Morning sections, each mailable on its own (/emailopen <name>) or all
+# together (bare /emailopen). Keys are the /emailopen selector words.
+MORNING_SECTIONS = ("screener", "nifty", "us", "gappers", "watchlist")
+
+MORNING_SECTION_TITLES = {
+    "screener": "Screener",
+    "nifty": "Nifty actions",
+    "us": "U.S. markets",
+    "gappers": "Gappers",
+    "watchlist": "Watchlist actions",
+}
+
+_MORNING_SECTION_ALIASES = {
+    "screen": "screener", "screener": "screener", "open": "screener",
+    "actions": "nifty", "nifty": "nifty", "buy": "nifty",
+    "us": "us", "usa": "us", "ustocks": "us", "us-actions": "us",
+    "gap": "gappers", "gappers": "gappers", "gaps": "gappers",
+    "watchlist": "watchlist", "mylist": "watchlist", "mine": "watchlist",
+    "all": "all", "everything": "all", "digest": "all", "full": "all",
+}
+
+
+def normalize_morning_section(raw: str | None) -> str | None:
+    """Selector word -> section key, 'all', or None when unknown."""
+    if raw is None:
+        return "all"
+    return _MORNING_SECTION_ALIASES.get(str(raw or "").strip().lower())
+
+
+def build_morning_section_lines(chat_id: str, section: str, report: dict,
+                                label: str) -> tuple[str, list[str]]:
+    """(subject suffix, lines) for ONE morning section (never raises).
+
+    "screener" renders the recorded report; the rest fetch live. An empty
+    section returns [] lines so the caller skips the send instead of
+    mailing an empty body. Add/remove sections here, MORNING_SECTIONS and
+    MORNING_SECTION_TITLES together.
+    """
+    try:
+        if section == "screener":
+            lines = build_open_lines(report, label)
+            return MORNING_SECTION_TITLES[section], lines
+        if section == "nifty":
+            lines = build_nifty_block()
+            return MORNING_SECTION_TITLES[section], lines
+        if section == "us":
+            lines = build_us_actions_block() + build_us_lines()
+            return MORNING_SECTION_TITLES[section], lines
+        if section == "gappers":
+            lines = build_gaps_lines()
+            return MORNING_SECTION_TITLES[section], lines
+        if section == "watchlist":
+            lines = build_watchlist_block(chat_id)
+            return MORNING_SECTION_TITLES[section], lines
+    except Exception as error:
+        log.debug("morning section %s skipped: %s", section, error)
+    return MORNING_SECTION_TITLES.get(section, section), []
+
+
 def build_morning_digest_lines(chat_id: str, report: dict,
                                label: str) -> list[str]:
-    """Assemble the complete six-section morning mail body (pure, no I/O).
+    """Assemble the complete morning mail body (pure, no I/O).
 
     Section order:
       1. India opening screener (gainers / losers)
       2. Nifty-500 corporate actions with buy-by dates
-      3. NASDAQ-100 + S&P-500 corporate actions with buy-by dates
-      4. Latest recorded U.S. screener tables
-      5. Overnight gappers – NIFTY 100
-      6. Watchlist corporate actions (India + US stocks)
+      3. U.S. markets: NASDAQ-100 + S&P-500 actions, then screener tables
+      4. Overnight gappers – NIFTY 100
+      5. Watchlist corporate actions (India + US stocks)
 
-    All section-builders are best-effort and never raise; a feed outage
-    silently skips just that section so the rest of the mail still goes
-    out. Add/remove sections here and every mail path updates automatically.
+    Composed from the same per-section builders /emailopen <name> uses, so
+    the combined mail and the separate mails can never disagree. Feed
+    outages skip just that section so the rest still goes out. Add/remove
+    sections in MORNING_SECTIONS and both paths update automatically.
     """
-    lines = build_open_lines(report, label)
-    lines.extend(build_nifty_block())         # ② Nifty-500 actions + buy-by
-    lines.extend(build_us_actions_block())    # ③ US index actions + buy-by
-    lines.extend(build_us_lines())            # ④ US screener tables
-    lines.extend(build_gaps_lines())          # ⑤ Overnight gappers
-    lines.extend(build_watchlist_block(chat_id))  # ⑥ Watchlist actions
+    lines: list[str] = []
+    for section in MORNING_SECTIONS:
+        _title, section_lines = build_morning_section_lines(
+            chat_id, section, report, label)
+        lines.extend(section_lines)
     return lines
 
 

@@ -52,20 +52,55 @@
   {
     "interval_min": 1440,
     "commands": [
-      "/emailopen"
-    ],
-    "chat": "862087765",
-    "run_at": "10:10",
-    "market": "in",
-    "next_due": "2026-10-14T04:40:00"
-  },
-  {
-    "interval_min": 1440,
-    "commands": [
       "/emailclose"
     ],
     "chat": "862087765",
     "run_at": "15:50",
+    "market": "in"
+  },
+  {
+    "interval_min": 1440,
+    "commands": [
+      "/emailopen screener"
+    ],
+    "chat": "862087765",
+    "run_at": "10:10",
+    "market": "in"
+  },
+  {
+    "interval_min": 1440,
+    "commands": [
+      "/emailopen nifty"
+    ],
+    "chat": "862087765",
+    "run_at": "10:13",
+    "market": "in"
+  },
+  {
+    "interval_min": 1440,
+    "commands": [
+      "/emailopen us"
+    ],
+    "chat": "862087765",
+    "run_at": "10:16",
+    "market": "in"
+  },
+  {
+    "interval_min": 1440,
+    "commands": [
+      "/emailopen gappers"
+    ],
+    "chat": "862087765",
+    "run_at": "10:19",
+    "market": "in"
+  },
+  {
+    "interval_min": 1440,
+    "commands": [
+      "/emailopen watchlist"
+    ],
+    "chat": "862087765",
+    "run_at": "10:22",
     "market": "in"
   }
 ]

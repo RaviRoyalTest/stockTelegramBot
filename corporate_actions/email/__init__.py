@@ -11,6 +11,7 @@ from .tables import esc as tables_esc
 from .tables import muted, stat_chips
 from .daily import build_close_lines, build_combined_lines, build_daily_lines
 from .daily import build_close_digest_lines, build_morning_digest_lines
+from .daily import build_morning_section_lines, normalize_morning_section
 from .daily import build_eod_store_lines, build_full_session_lines
 from .daily import build_all_actions_lines, build_gaps_lines
 from .daily import build_nifty_actions_lines, build_nifty_block, build_open_lines
@@ -42,6 +43,7 @@ __all__ = [
     "build_combined_lines",
     "build_daily_lines",
     "build_morning_digest_lines",
+    "build_morning_section_lines",
     "build_eod_store_lines",
     "build_full_session_lines",
     "build_gaps_lines",
@@ -57,9 +59,12 @@ __all__ = [
     "fetch_us_actions",
     "fetch_watchlist_actions",
     "get_scope",
+    "MORNING_SECTIONS",
+    "MORNING_SECTION_TITLES",
     "maybe_send_daily_email",
     "maybe_send_eod_email",
     "maybe_send_open_email",
+    "normalize_morning_section",
     "split_gaps",
     "resend_configured",
     "send_via_resend",

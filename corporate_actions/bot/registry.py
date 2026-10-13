@@ -447,8 +447,10 @@ COMMAND_USAGE = {
         "Needs /setemail first. Aliases: /dailymail, /emaildaily"
     ),
     "/emailopen": (
-        "<b>/emailopen</b> - opening screener mail right now\n"
-        "/emailopen  \u2192 this session's recorded gainers/losers tables\n"
+        "<b>/emailopen</b> - morning mail now: whole digest or one section\n"
+        "/emailopen  \u2192 full morning digest in one mail\n"
+        "/emailopen nifty|us|gappers|watchlist|screener  \u2192 only that "
+        "section, as its own separate mail\n"
         "Needs /setemail first. Aliases: /openmail, /morningmail"
     ),
     "/emailclose": (
@@ -639,7 +641,7 @@ COMMAND_EXAMPLES = {
     "/email": ["/email friend@gmail.com | Hello | My watchlist is up today"],
     "/emailreport": ["/emailreport RELIANCE", "/emailreport RELIANCE friend@gmail.com My title"],
     "/dailyemail": ["/dailyemail on", "/dailyemail both", "/dailyemail open", "/dailyemail close", "/dailyemail scheduled", "/dailyemail off"],
-    "/emailopen": ["/emailopen"],
+    "/emailopen": ["/emailopen", "/emailopen nifty", "/emailopen gappers"],
     "/emailclose": ["/emailclose"],
     "/emailboth": ["/emailboth"],
     "/emailstatus": ["/emailstatus"],
@@ -871,7 +873,7 @@ def register_commands() -> bool:
         {"command": "dailyemail", "description": "Opening + closing/EOD mails: /dailyemail on|both|open|close|scheduled|off"},
         {"command": "emailboth", "description": "Open + close + EOD in one mail: /emailboth"},
         {"command": "emailstatus", "description": "Mail send results: success or failed: /emailstatus"},
-        {"command": "emailopen", "description": "Opening screener mail now: /emailopen"},
+        {"command": "emailopen", "description": "Morning mail now, whole or one section: /emailopen nifty"},
         {"command": "emailclose", "description": "Closing + EOD stores mail now: /emailclose"},
         {"command": "harmonicpatterns", "description": "Harmonic pattern scan NIFTY 100/500: /harmonicpatterns all"},
         {"command": "indicator", "description": "One-indicator deep-dive: /indicator RELIANCE RSI (US works too)"},
