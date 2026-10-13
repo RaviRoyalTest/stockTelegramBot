@@ -79,15 +79,6 @@
   {
     "interval_min": 1440,
     "commands": [
-      "/emailopen us"
-    ],
-    "chat": "862087765",
-    "run_at": "10:16",
-    "market": "in"
-  },
-  {
-    "interval_min": 1440,
-    "commands": [
       "/emailopen gappers"
     ],
     "chat": "862087765",
