@@ -126,6 +126,23 @@
     </ol>
     <p class="muted" style="margin-bottom:0;">The login password will NOT work — it must be the App Password (spaces are stripped automatically). Easier alternative: set <code>RESEND_API_KEY</code> from resend.com and skip SMTP entirely. Optional polish: <code>EMAIL_SUBJECT_PREFIX</code> + <code>EMAIL_FROM_NAME</code>.</p>
   </section>
+
+  <section class="card section" aria-labelledby="hTg">
+    <h2 id="hTg">🤖 Telegram mail commands</h2>
+    <p class="muted" style="margin-top:0;">Run these in the Royal Stock Telegram bot. Typing <code>/email</code> shows your live setup and this full list.</p>
+    <ul style="margin:0; padding-left:20px;">
+      <li><code>/setemail you@gmail.com</code> — save address + test mail (<code>/setemail off</code> forgets it)</li>
+      <li><code>/email to | subject | message</code> — send any custom note</li>
+      <li><code>/emailreport SYMBOL [to] [subject]</code> — mail the deep report</li>
+      <li><code>/dailyemail on|both|open|close|scheduled|off</code> — automatic mails</li>
+      <li><code>/emailsections [add|remove|all ...]</code> — choose what each mail contains</li>
+      <li><code>/emailopen [section]</code> — morning mail now</li>
+      <li><code>/emailclose</code> — closing + EOD stores mail now</li>
+      <li><code>/emailboth</code> — open + close + EOD in one mail</li>
+      <li><code>/emailstatus</code> — last sends: ✅/❌ + reason</li>
+      <li><code>/emailhelp</code> — Gmail/SMTP setup walkthrough</li>
+    </ul>
+  </section>
 {% endblock %}
 
 {% block scripts %}

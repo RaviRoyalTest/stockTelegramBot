@@ -13,7 +13,7 @@ from ..formatting.schedule import format_schedule, format_settings
 from ..poller.watcher import DEFAULT_WATCHER
 from ..telegram.client import is_configured, set_my_commands
 from ..telegram.markup import inline_command_buttons, quick_menu_markup, recent_buttons
-from . import corporate_action_commands, scanner_commands, schedule_commands, screen_commands, snapshot_commands, status as status_commands, watchlist_commands
+from . import corporate_action_commands, email_commands, scanner_commands, schedule_commands, screen_commands, snapshot_commands, status as status_commands, watchlist_commands
 from .help_texts import CA_HELP
 from .reply import reply, reply_messages
 
@@ -95,7 +95,44 @@ def _market_status_text(chat_id) -> str:
     return schedule_commands.market_status_text(chat_id)
 
 
+def _email_status_text(chat_id) -> str:
+    """Live mailbox snapshot shown by the bare /email hub command."""
+    from ..email import is_configured as email_configured
+    from ..email.sections import sections_for
+
+    settings = storage.get_user_settings(chat_id) or {}
+    raw = (settings.get("email") or "").strip()
+    if raw and "@" in raw:
+        local, _, domain = raw.partition("@")
+        masked = (local[0] + "\u2022" * (len(local) - 1)) if len(local) > 1 else "\u2022"
+        address = f"{masked}@{domain}"
+    else:
+        address = "Not set"
+    daily = settings.get("daily_email")
+    scope = (settings.get("email_scope") or ("both" if daily else "off"))
+    daily_state = (
+        "ON" + (f" ({scope})" if scope and scope != "off" else "")
+        if daily else "OFF"
+    )
+    morning = sections_for(settings, "morning")
+    close = sections_for(settings, "close")
+    server = (
+        "ready \u2705"
+        if email_configured()
+        else "NOT configured \u274c (admin needs RESEND_API_KEY or Gmail SMTP)"
+    )
+    return "\n".join([
+        "\U0001F4E7 <b>Your mailbox</b>",
+        f"Address: <b>{address}</b>",
+        f"Daily mails: <b>{daily_state}</b>",
+        f"Morning sections: <b>{', '.join(morning)}</b>",
+        f"Evening sections: <b>{', '.join(close)}</b>",
+        f"Sender: {server}",
+    ])
+
+
 COMMAND_STATUS = {
+    "/email": _email_status_text,
     "/watcher": _watcher_status_text,
     "/pricealert": _pricealert_status_text,
     "/alertfilters": _alertfilters_status_text,
@@ -429,10 +466,9 @@ COMMAND_USAGE = {
         "Gmail needs an App Password (see /emailhelp). Aliases: /email"
     ),
     "/email": (
-        "<b>/email</b> - send any custom mail (easy + customizable)\n"
-        "/email friend@gmail.com | Subject | your message  \u2192 one-shot note\n"
-        "/email you@gmail.com  \u2192 same as /setemail (save address)\n"
-        "Aliases: /emailsend, /sendmail, /mail"
+        "<b>\U0001F4E7 Email \u2014 your mailbox hub</b>\n"
+        "Your live setup is shown above. Every mail command:\n"
+        + "\n".join("\u2022 " + line for line in email_commands.EMAIL_COMMANDS_OVERVIEW)
     ),
     "/emailreport": (
         "<b>/emailreport</b> - mail the deep fundamental report\n"
@@ -884,7 +920,7 @@ def register_commands() -> bool:
         {"command": "usstock", "description": "US stock details: /usstock AAPL (USD fundamentals)"},
         {"command": "checklist", "description": "32-point investment scorecard: /checklist RELIANCE"},
         {"command": "setemail", "description": "Get reports in your mailbox: /setemail you@gmail.com"},
-        {"command": "email", "description": "Send any custom mail: /email to | subject | message"},
+        {"command": "email", "description": "All email commands + your mail setup: /email"},
         {"command": "emailreport", "description": "Mail the deep report: /emailreport RELIANCE"},
         {"command": "dailyemail", "description": "Opening + closing/EOD mails: /dailyemail on|both|open|close|scheduled|off"},
         {"command": "emailboth", "description": "Open + close + EOD in one mail: /emailboth"},

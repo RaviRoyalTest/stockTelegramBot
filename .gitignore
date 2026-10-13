@@ -2,6 +2,7 @@
 .claude
 .gemini
 .opencode
+.workbuddy-ai
 
 # IDE and Editors
 **/.idea/

@@ -25,28 +25,26 @@ log = logging.getLogger(__name__)
 
 _EMAIL_RE = re.compile(r"^[^@\s]+@[^@\s]+\.[^@\s]+$")
 
+# Single source of truth for the email command family. Every surface that
+# lists mail commands (the bare /email hub, /emailhelp, the README, the web
+# dashboard) draws from this so they never drift apart.
+EMAIL_COMMANDS_OVERVIEW = [
+    "<b>/setemail you@gmail.com</b> \u2014 save your address + send a test mail (\u201coff\u201d forgets it).",
+    "<b>/email to | subject | message</b> \u2014 send any custom note. Aliases: /emailsend, /sendmail, /mail",
+    "<b>/emailreport SYMBOL [to] [subject]</b> \u2014 mail the deep fundamental report. Alias: /emailfund",
+    "<b>/dailyemail on|both|open|close|scheduled|off</b> \u2014 automatic opening/closing/EOD mails. Aliases: /dailymail, /emaildaily",
+    "<b>/emailsections [add|remove|all ...]</b> \u2014 choose WHAT each mail contains. Aliases: /emailsection, /mailsections, /mailcontent",
+    "<b>/emailopen [section]</b> \u2014 morning mail now (whole digest or one section). Aliases: /openmail, /morningmail",
+    "<b>/emailclose</b> \u2014 closing screener + EOD stores mail now. Aliases: /closemail, /eodmail, /eod",
+    "<b>/emailboth</b> \u2014 open + close + EOD in ONE mail. Aliases: /bothmail, /emailfull, /sessionmail",
+    "<b>/emailstatus</b> \u2014 last sends: \u2705 success or \u274c failed + reason. Aliases: /maillog, /mailstatus",
+    "<b>/emailhelp</b> \u2014 this Gmail/SMTP setup walkthrough",
+]
+
 EMAIL_USAGE = (
-    "<b>/setemail</b> - get bot reports in your mailbox\n"
-    "/setemail you@gmail.com  \u2192 save + test-mail the address\n"
-    "/setemail off             \u2192 forget the address\n"
-    "<b>/emailreport SYMBOL [to@mail] [custom subject...]</b> - mail the deep report\n"
-    "/emailreport RELIANCE  \u2192 full report to your saved mail id\n"
-    "/emailreport RELIANCE friend@gmail.com  \u2192 same report to a friend\n"
-    "<b>/email to@mail | subject | message</b> - send any custom mail\n"
-    "/email friend@gmail.com | Hello | My watchlist is up 2% today\n"
-    "<b>/dailyemail on|both|open|close|scheduled|off</b> - opening + closing/EOD mails\n"
-    "/dailyemail on/both \u2192 morning opening screener + evening close+EOD stores\n"
-    "/dailyemail open    \u2192 only the morning opening screener\n"
-    "/dailyemail close   \u2192 only the evening close + stored-details mail\n"
-    "/dailyemail scheduled \u2192 poll-timed mails OFF; sharp separate mails via "
-    "schedule entries (at 10:10 /emailopen, at 15:50 /emailclose)\n"
-    "<b>/emailopen [screener|nifty|us|gappers|watchlist]</b> - morning mail now\n"
-    "/emailopen          \u2192 full morning digest in one mail\n"
-    "/emailopen nifty    \u2192 only the Nifty-actions mail, separately\n"
-    "<b>/emailclose</b> - send the closing screener + EOD stores now\n"
-    "<b>/emailboth</b> - open + close + EOD stores in ONE mail, one command\n"
-    "<b>/emailstatus</b> - last mail sends: ✅ success or ❌ failed + reason\n"
-    "Gmail users: it needs an App Password (not the login password) - "
+    "<b>\U0001F4E7 Email commands</b> \u2014 type <code>/email</code> for your live mail setup + this full list.\n"
+    + "\n".join("\u2022 " + line for line in EMAIL_COMMANDS_OVERVIEW)
+    + "\n\nGmail users: it needs an App Password (not the login password) - "
     "see /emailhelp. Easiest: admin sets RESEND_API_KEY once."
 )
 

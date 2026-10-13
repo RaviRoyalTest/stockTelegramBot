@@ -31,6 +31,9 @@ dropdown, then continuously polls both exchanges for corporate actions
   automatic opening/closing mails with `/dailyemail`. See
   [Email reports](#email-reports).
 
+  💡 In Telegram, type `/email` any time to see your live mail setup (address,
+  daily-mail state, morning/evening sections) **and every mail command** in one place.
+
 ## Setup
 
 ```bash
@@ -98,6 +101,7 @@ Optional polish: `EMAIL_FROM_NAME` (display name) and `EMAIL_SUBJECT_PREFIX`
 
 | Command | What it does |
 | ------- | ------------ |
+| `/email` | **Hub** — shows your live mail setup AND lists every mail command below |
 | `/setemail you@gmail.com` | Save the address and send a test mail (`/setemail off` forgets it) |
 | `/emailreport RELIANCE` | Mail the deep fundamental report for one symbol |
 | `/dailyemail on` | Automatic opening **and** closing/EOD mails |

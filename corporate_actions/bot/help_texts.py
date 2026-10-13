@@ -226,7 +226,9 @@ HELP_TEXT = (
     "/news RELIANCE          \u2192 Latest RELIANCE headlines\n"
     "/alertfilters bonus,split  \u2192 Only bonus &amp; split alerts\n"
     "/pricealert 2.5         \u2192 Alert on \u00b12.5% daily move\n"
-    "\U0001F4DD Type in plain text: \"gainers\", \"dividends\", \"ex-date today\", \"news\""
+    "\U0001F4DD Type in plain text: \"gainers\", \"dividends\", \"ex-date today\", \"news\"\n\n"
+    "\U0001F4E7 <b>Email hub</b> \u2014 type <code>/email</code> to see your live mailbox setup "
+    "(address, daily-mail state, morning/evening sections) and every mail command at a glance."
 )
 
 CA_HELP = (
@@ -328,6 +330,7 @@ ALL_COMMANDS_TEXT = (
     "  /fundmode button|auto  \u2192 movers reports: fundamentals via button or auto\n"
     "  /quiet on|2h|off       \u2192 master pause: mute ALL automatic messages (commands still work)\n"
     "  /settings                \u2192 view your filters, alerts &amp; screen options\n"
+  "  /email                  \u2192 ALL mail commands + your live setup (the hub)\n"
   "  /setemail ADDR|off        \u2192 reports to your mailbox (test-mailed on save)\n"
   "  /email TO|SUBJECT|MSG     \u2192 send any custom mail (Gmail App Password needed)\n"
   "  /emailreport SYM [TO] [SUBJECT] \u2192 mail the deep report, custom destination/subject\n"
