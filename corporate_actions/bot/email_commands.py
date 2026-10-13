@@ -303,8 +303,8 @@ def handle_dailyemail(chat_id, parts) -> None:
             "📧 Daily mails <b>ON (scheduled)</b> - poll-timed mails OFF, sharp separate "
             "mails instead:<br>"
             "• <code>/schedule add at 10:10 /emailopen screener</code> + "
-            "<code>10:13 nifty</code> + <code>10:16 us</code> + "
-            "<code>10:19 gappers</code> + <code>10:22 watchlist</code><br>"
+            "<code>10:14 nifty</code> + <code>10:18 gappers</code> + "
+            "<code>10:22 watchlist</code> (even 4-min spacing)<br>"
             "• <code>/schedule add at 15:50 /emailclose</code> - close + EOD on time",
         )
     elif raw in ("off", "disable", "stop", "no"):

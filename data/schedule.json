@@ -5,9 +5,12 @@
       "/corpactionsformylist"
     ],
     "chat": "862087765",
+    "next_due": "2026-10-14T03:30:00",
     "run_at": "09:00",
     "market": "in",
-    "next_due": "2026-10-14T03:30:00"
+    "window_start": null,
+    "window_end": null,
+    "paused_until": null
   },
   {
     "interval_min": 1440,
@@ -15,9 +18,12 @@
       "/gappers today"
     ],
     "chat": "862087765",
+    "next_due": "2026-10-14T03:45:00",
     "run_at": "09:15",
     "market": "in",
-    "next_due": "2026-10-14T03:45:00"
+    "window_start": null,
+    "window_end": null,
+    "paused_until": null
   },
   {
     "interval_min": 1440,
@@ -25,9 +31,12 @@
       "/openreport in"
     ],
     "chat": "862087765",
+    "next_due": "2026-10-14T04:30:00",
     "run_at": "10:00,15:35",
     "market": "in",
-    "next_due": "2026-10-14T04:30:00"
+    "window_start": null,
+    "window_end": null,
+    "paused_until": null
   },
   {
     "interval_min": 1440,
@@ -35,9 +44,12 @@
       "/openreport us"
     ],
     "chat": "862087765",
+    "next_due": "2026-10-13T13:40:00",
     "run_at": "09:40,16:05",
     "market": "us",
-    "next_due": "2026-10-13T13:40:00"
+    "window_start": null,
+    "window_end": null,
+    "paused_until": null
   },
   {
     "interval_min": 1440,
@@ -45,9 +57,12 @@
       "/corpactionssummary"
     ],
     "chat": "862087765",
+    "next_due": "2026-10-14T03:45:00",
     "run_at": "09:15",
     "market": "in",
-    "next_due": "2026-10-14T03:45:00"
+    "window_start": null,
+    "window_end": null,
+    "paused_until": null
   },
   {
     "interval_min": 1440,
@@ -55,8 +70,12 @@
       "/emailclose"
     ],
     "chat": "862087765",
+    "next_due": null,
     "run_at": "15:50",
-    "market": "in"
+    "market": "in",
+    "window_start": null,
+    "window_end": null,
+    "paused_until": null
   },
   {
     "interval_min": 1440,
@@ -64,8 +83,12 @@
       "/emailopen screener"
     ],
     "chat": "862087765",
+    "next_due": null,
     "run_at": "10:10",
-    "market": "in"
+    "market": "in",
+    "window_start": null,
+    "window_end": null,
+    "paused_until": null
   },
   {
     "interval_min": 1440,
@@ -73,8 +96,11 @@
       "/emailopen nifty"
     ],
     "chat": "862087765",
-    "run_at": "10:13",
-    "market": "in"
+    "run_at": "10:14",
+    "market": "in",
+    "window_start": null,
+    "window_end": null,
+    "paused_until": null
   },
   {
     "interval_min": 1440,
@@ -82,8 +108,11 @@
       "/emailopen gappers"
     ],
     "chat": "862087765",
-    "run_at": "10:19",
-    "market": "in"
+    "run_at": "10:18",
+    "market": "in",
+    "window_start": null,
+    "window_end": null,
+    "paused_until": null
   },
   {
     "interval_min": 1440,
@@ -91,7 +120,11 @@
       "/emailopen watchlist"
     ],
     "chat": "862087765",
+    "next_due": null,
     "run_at": "10:22",
-    "market": "in"
+    "market": "in",
+    "window_start": null,
+    "window_end": null,
+    "paused_until": null
   }
 ]
