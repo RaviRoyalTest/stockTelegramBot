@@ -56,7 +56,8 @@
     ],
     "chat": "862087765",
     "run_at": "10:10",
-    "market": "in"
+    "market": "in",
+    "next_due": "2026-10-14T04:40:00"
   },
   {
     "interval_min": 1440,
