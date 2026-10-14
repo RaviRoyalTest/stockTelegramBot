@@ -7,6 +7,7 @@
       "universe": "nifty500"
     },
     "recent_commands": [
+      "/openreport us",
       "/emailclose",
       "/openreport in",
       "/emailopen watchlist",
@@ -15,7 +16,6 @@
       "/gappers today",
       "/corpactionssummary",
       "/corpactionsformylist",
-      "/openreport us",
       "/emailopen"
     ],
     "movers_fund": "button",
