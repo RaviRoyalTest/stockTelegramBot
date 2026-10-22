@@ -241,7 +241,9 @@ class BootFloodGuardTests(unittest.TestCase):
         with patch.object(config, "BOOT_FLOOD_GRACE_MINUTES", 45), \
                 patch("corporate_actions.poller.engine.market_active", return_value=True), \
                 patch("corporate_actions.poller.engine.watcher_module.watcher_targets",
-                      return_value=[]) as mock_targets:
+                      return_value=[]) as mock_targets, \
+                patch("corporate_actions.poller.engine.highlow_module.highlow_targets",
+                      return_value=[]):
             poller.run_watcher_once()
         mock_targets.assert_called()
 

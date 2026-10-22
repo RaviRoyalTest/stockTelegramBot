@@ -50,6 +50,7 @@ WRITE_COMMANDS = {
     "/add", "/addstock", "/remove", "/removestock", "/setlist", "/setwatchlist",
     "/filter", "/alertfilters", "/actionfilters", "/alert", "/pricealert",
     "/sched", "/schedule", "/watcher", "/moverwatch",
+    "/highlow", "/hilo", "/52w",
     "/myfavourites", "/favorites", "/favourites", "/mypicks", "/dailybrief",
     "/fundmode", "/moversfund", "/market",
     "/openreport", "/closereport", "/sessionreport", "/openclose",
@@ -133,6 +134,10 @@ def handle_command(chat_id, text):
 
     if command in ("/watcher", "/moverwatch"):
         settings_commands.handle_watcher(chat_id, parts)
+        return
+
+    if command in ("/highlow", "/hilo", "/52w"):
+        settings_commands.handle_highlow(chat_id, parts)
         return
 
     if command in ("/fundmode", "/moversfund"):

@@ -24,6 +24,7 @@ from .. import config, storage
 from ..core.dates import today_ist
 from ..market.hours import market_active, market_for_exchange, screen_available
 from ..formatting import (
+    format_52w_alert,
     format_corporate_action,
     format_mover_alert,
     format_price_alert,
@@ -33,6 +34,7 @@ from ..sources import get_best_quote, get_quote
 from ..sources.types import ACTION_TYPES, action_type
 from ..telegram.client import NotifierError, send_message
 from ..telegram.markup import symbol_buttons
+from . import highlow as highlow_module
 from . import watcher as watcher_module
 from .events import (
     event_key,
@@ -205,16 +207,23 @@ class Poller:
             self._stop.wait(config.MOVERS_WATCH_INTERVAL_SECONDS)
 
     def run_watcher_once(self) -> int:
-        """One scan: alert any enabled user when a universe stock moves >= its
-        threshold (session % from previous close). Returns alerts sent.
+        """One fast-cadence scan; returns the number of alerts sent.
 
-        Alerts are de-duplicated per chat per day (seen key `mwatch|...`), so
-        a stock that keeps falling alerts once, not every cycle.
+        Two alert families share a single quote fetch per cycle:
 
-        Market-hours gated: the watcher's universes are India-only, so the
-        whole cycle is skipped outside the IST session (plus a 1-hour grace
-        after the close). Otherwise a stale move from yesterday's session
-        would re-alert after midnight when the daily dedup key resets.
+          * sudden movers - a stock in the chat's universe moved >= its
+            threshold (session % from previous close), and
+          * 52-week extremes - a stock cleared the highest high (or lowest
+            low) of the previous 52 weeks today.
+
+        Alerts are de-duplicated per chat per day (seen keys `mwatch|...` and
+        `hilo|...`), so a stock that keeps falling - or stays parked at its
+        52-week high - alerts once, not every cycle.
+
+        Market-hours gated: both alert families are India-only, so the whole
+        cycle is skipped outside the IST session (plus a 1-hour grace after
+        the close). Otherwise a stale move from yesterday's session would
+        re-alert after midnight when the daily dedup key resets.
         """
         if not market_active("in"):
             log.debug("watcher cycle skipped - India market closed")
@@ -226,14 +235,20 @@ class Poller:
             log.info("watcher cycle skipped - flood-guard active (stale dedup boot)")
             return 0
         targets = watcher_module.watcher_targets()
-        if not targets:
+        highlow_targets = highlow_module.highlow_targets()
+        if not targets and not highlow_targets:
             return 0
         today = today_ist()
         sent = 0
-        unique_pairs = watcher_module.unique_watch_pairs(targets)
+        unique_pairs = set(watcher_module.unique_watch_pairs(targets))
+        for chat_id, config_ in highlow_targets:
+            for symbol in highlow_module.highlow_symbols(
+                chat_id, config_.get("universe", "nifty100")
+            ):
+                unique_pairs.add((chat_id, symbol.upper()))
         if not unique_pairs:
             return 0
-        quotes = watcher_module.fetch_quotes(unique_pairs)
+        quotes = watcher_module.fetch_quotes(sorted(unique_pairs))
         for chat_id, symbol, quote, change in watcher_module.pending_alerts(targets, quotes, self._seen, today):
             if storage.is_quiet(chat_id):
                 log.debug("watcher alert skipped for %s - chat is in quiet mode", chat_id)
@@ -248,6 +263,29 @@ class Poller:
                 sent += 1
             except NotifierError as error:
                 log.warning("watcher alert failed for %s: %s", symbol, config.redact(error))
+        # 52-week extremes: verify once per symbol, then fan out per chat.
+        breakouts = highlow_module.fresh_breakouts(quotes, today)
+        if breakouts:
+            log.info(
+                "watcher cycle: %d new 52-week extreme(s): %s",
+                len(breakouts), ", ".join(f"{sym}={kind}" for sym, kind in breakouts.items()),
+            )
+        for chat_id, symbol, quote, kind in highlow_module.pending_alerts(
+            highlow_targets, quotes, breakouts, self._seen, today
+        ):
+            if storage.is_quiet(chat_id):
+                log.debug("52-week alert skipped for %s - chat is in quiet mode", chat_id)
+                continue
+            try:
+                send_message(
+                    format_52w_alert(symbol, quote, kind),
+                    chat_id=chat_id,
+                    reply_markup=symbol_buttons([symbol.upper()], "fund"),
+                )
+                self._seen.add(highlow_module.alert_key(chat_id, today, symbol, kind))
+                sent += 1
+            except NotifierError as error:
+                log.warning("52-week alert failed for %s: %s", symbol, config.redact(error))
         return sent
 
     def _collect_targets(self, only_chat: str | None) -> list[tuple[str, list]]:

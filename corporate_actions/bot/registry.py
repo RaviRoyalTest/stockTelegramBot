@@ -10,6 +10,7 @@ import logging
 from .. import storage
 from ..core.text import split_messages
 from ..formatting.schedule import format_schedule, format_settings
+from ..poller.highlow import DEFAULT_HIGHLOW
 from ..poller.watcher import DEFAULT_WATCHER
 from ..telegram.client import is_configured, set_my_commands
 from ..telegram.markup import inline_command_buttons, quick_menu_markup, recent_buttons
@@ -28,6 +29,16 @@ def _watcher_status_text(chat_id) -> str:
         f"Status: <b>{state}</b>\n"
         f"Threshold: <b>{watcher.get('threshold', 5.0):g}%</b> session move\n"
         f"Universe: <b>{(watcher.get('universe') or 'nifty100').upper()}</b>"
+    )
+
+
+def _highlow_status_text(chat_id) -> str:
+    highlow = (storage.get_user_settings(chat_id) or {}).get("highlow") or DEFAULT_HIGHLOW
+    state = "ON" if highlow.get("enabled") else "OFF"
+    return (
+        "\U0001F4C8 <b>52-week high/low alerts</b>\n"
+        f"Status: <b>{state}</b>\n"
+        f"Universe: <b>{(highlow.get('universe') or 'nifty100').upper()}</b>"
     )
 
 
@@ -134,6 +145,7 @@ def _email_status_text(chat_id) -> str:
 COMMAND_STATUS = {
     "/email": _email_status_text,
     "/watcher": _watcher_status_text,
+    "/highlow": _highlow_status_text,
     "/pricealert": _pricealert_status_text,
     "/alertfilters": _alertfilters_status_text,
     "/corpactions": _ca_status_text,
@@ -206,6 +218,8 @@ ALIAS_TO_MAIN = {
     "/bigmover": "/moversover",
     "/bigmovers": "/moversover",
     "/moverwatch": "/watcher",
+    "/hilo": "/highlow",
+    "/52w": "/highlow",
     "/moversfund": "/fundmode",
     "/moverlist": "/moversover",
     "/watcherlist": "/moversover",
@@ -258,7 +272,8 @@ DISPATCHED_COMMANDS = frozenset({
     "/filterstocks", "/forecast", "/forecastanalysis", "/fund",
     "/fundamental-analysis", "/fundamentalanalyze", "/fundamentals",
     "/fundamentalreport", "/fundmode", "/gainers", "/gap", "/gappers",
-    "/gmailhelp", "/guide", "/harmonic", "/harmonicpatterns", "/help", "/howto",
+    "/gmailhelp", "/guide", "/harmonic", "/harmonicpatterns", "/help", "/highlow",
+    "/hilo", "/52w",
     "/increase", "/ind", "/indicator", "/investcheck", "/learn", "/list",
     "/losers", "/mail", "/maillog", "/maillogs", "/mailstatus", "/market", "/marketmovers", "/menu", "/morningmail", "/moverlist",
     "/movers", "/moversfund", "/moversover", "/moverwatch", "/myfavourites", "/openmail",
@@ -600,6 +615,16 @@ COMMAND_USAGE = {
         "Your commands still work - only background pushes pause.\n"
         "Aliases: /dnd, /silence, /pauseall"
     ),
+    "/highlow": (
+        "<b>/highlow</b> - 52-week high/low alerts \u00b7 ON by default (NIFTY 100)\n"
+        "Messages you with the full details whenever a stock clears its "
+        "52-week high or low during the session.\n\n"
+        "/highlow off   \u2192 turn it OFF\n"
+        "/highlow on    \u2192 turn it back ON\n"
+        "/highlow universe nifty500 \u2192 nifty100 | nifty500 | mylist\n"
+        "/highlow       \u2192 show current status\n"
+        "Aliases: /hilo, /52w"
+    ),
     "/watcher": (
         "<b>/watcher</b> - big-move alerts \u00b7 ON by default (5% \u00b7 NIFTY 100)\n"
         "No setup needed - you're already covered; /watcher off stops it.\n\n"
@@ -706,6 +731,7 @@ COMMAND_EXAMPLES = {
     "/alertfilters": ["/alertfilters dividend,bonus", "/alertfilters all", "/alertfilters off"],
     "/quiet": ["/quiet on", "/quiet 2h", "/quiet off"],
     "/watcher": ["/watcher", "/watcher off", "/watcher on", "/watcher set 5", "/watcher universe nifty500"],
+    "/highlow": ["/highlow", "/highlow off", "/highlow on", "/highlow universe nifty500"],
     "/fundmode": ["/fundmode button", "/fundmode auto", "/fundmode default"],
     "/addstock": ["/addstock RELIANCE NSE", "/addstock PGINVIT", "/add RELIANCE, INFY, CANBK"],
     "/removestock": ["/removestock TCS"],
@@ -947,6 +973,7 @@ def register_commands() -> bool:
         {"command": "status", "description": "Check persistence / GitHub push"},
         {"command": "checknow", "description": "Force a check and resend alerts"},
         {"command": "watcher", "description": "Big-move alerts: /watcher on, off, set 5, universe nifty500"},
+        {"command": "highlow", "description": "52-week high/low alerts: /highlow on, off, universe nifty500"},
         {"command": "moversover", "description": "All stocks that moved over a % today"},
         {"command": "fundmode", "description": "Movers: button vs auto fundamentals"},
         {"command": "all", "description": "Show every command - copy & send any line"},

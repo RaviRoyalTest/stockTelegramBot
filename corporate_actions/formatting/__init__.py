@@ -1,6 +1,7 @@
 """Message-rendering package (Telegram HTML output for every report type)."""
 from .actions import (
     action_status,
+    format_52w_alert,
     format_action_block,
     format_action_detail,
     format_action_entry,
@@ -19,6 +20,7 @@ from .stock_india import _fundamentals_lines, _fund_report_lines, _stock_summary
 
 __all__ = [
     "action_status",
+    "format_52w_alert",
     "format_action_block",
     "format_action_detail",
     "format_action_entry",

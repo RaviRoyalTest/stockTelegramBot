@@ -12,6 +12,7 @@ import time
 from datetime import datetime
 
 from .. import storage
+from ..poller.highlow import DEFAULT_HIGHLOW
 from ..poller.watcher import DEFAULT_WATCHER
 from ..sources.types import ACTION_TYPES
 from .reply import reply
@@ -275,6 +276,64 @@ def handle_watcher(chat_id, parts) -> None:
           "<code>/watcher on</code> / <code>/watcher off</code>\n"
           "<code>/watcher set 3</code>  (alert at 3% move)\n"
           "<code>/watcher universe nifty500</code>  (nifty100 | nifty500 | mylist)")
+
+
+def handle_highlow(chat_id, parts) -> None:
+    """Manage 52-week high/low alerts (/highlow).
+
+    ON by default over NIFTY 100 (DEFAULT_HIGHLOW) for any chat that never
+    configured it, so the alerts arrive without setup; /highlow off stops
+    them. The universe reuses the watcher's tokens (nifty100 / nifty500 /
+    mylist) so both alert families can cover the same stocks.
+    """
+    settings = storage.get_user_settings(chat_id)
+    stored = settings.get("highlow")
+    highlow = dict(stored) if stored else dict(DEFAULT_HIGHLOW)
+    universe = (highlow.get("universe") or "nifty100").upper()
+    subcommand = parts[1].lower() if len(parts) > 1 else "status"
+    if subcommand in ("on", "enable", "start"):
+        highlow["enabled"] = True
+        settings["highlow"] = highlow
+        storage.save_user_settings(chat_id, settings)
+        reply(chat_id, "\U0001F4C8 <b>52-week high/low alerts ON.</b>\n"
+              "I'll message you here when any stock in "
+              f"<b>{universe}</b> clears its <b>52-week high or low</b>, with "
+              "the price, the level broken, range position, day range and P/E.\n"
+              "Tune the coverage with <code>/highlow universe nifty500</code>.")
+        return
+    if subcommand in ("off", "disable", "stop"):
+        highlow["enabled"] = False
+        settings["highlow"] = highlow
+        storage.save_user_settings(chat_id, settings)
+        reply(chat_id, "\U0001F515 <b>52-week high/low alerts OFF.</b>\n"
+              "No more 52-week breakout messages. "
+              "<code>/highlow on</code> brings them back.")
+        return
+    if subcommand in ("universe", "scope", "market"):
+        if len(parts) < 3:
+            reply(chat_id, "Usage: <code>/highlow universe nifty100</code> | nifty500 | mylist")
+            return
+        chosen = watcher_universe(parts[2])
+        if chosen is None:
+            reply(chat_id, "Universe must be <code>nifty100</code>, <code>nifty500</code> or <code>mylist</code>.")
+            return
+        highlow["universe"] = chosen
+        highlow["enabled"] = bool(highlow.get("enabled"))
+        settings["highlow"] = highlow
+        storage.save_user_settings(chat_id, settings)
+        reply(chat_id, f"52-week alerts now cover <b>{chosen.upper()}</b> "
+              + ("(ON)." if highlow.get("enabled") else "(OFF - use <code>/highlow on</code>)."))
+        return
+    # status
+    state = "ON" if highlow.get("enabled") else "OFF"
+    reply(chat_id, "\U0001F4C8 <b>52-week high/low alerts</b>\n"
+          f"Status: <b>{state}</b>\n"
+          f"Universe: <b>{universe}</b>\n"
+          "Alerts on a NEW 52-week high or low (the level is cleared during the "
+          "session) - once per stock per day.\n\n"
+          "Usage:\n"
+          "<code>/highlow on</code> / <code>/highlow off</code>\n"
+          "<code>/highlow universe nifty500</code>  (nifty100 | nifty500 | mylist)")
 
 
 def handle_moversfund(chat_id, parts) -> None:

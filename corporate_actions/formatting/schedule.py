@@ -5,6 +5,7 @@ import datetime as _datetime
 import html
 
 from .. import config, storage
+from ..poller.highlow import DEFAULT_HIGHLOW
 from ..poller.watcher import DEFAULT_WATCHER
 
 
@@ -57,6 +58,7 @@ def format_settings(chat_id) -> str:
     filters = settings.get("action_filters") or []
     alert = settings.get("price_alert_pct")
     watcher = settings.get("watcher") or DEFAULT_WATCHER
+    highlow = settings.get("highlow") or DEFAULT_HIGHLOW
     owner = storage.is_owner(chat_id)
     where = storage.list_location(chat_id)
     ca_state = "off" if settings.get("ca_alerts", True) is False else (
@@ -74,11 +76,13 @@ def format_settings(chat_id) -> str:
             "Watcher: " + ("off" if not watcher.get("enabled")
                            else f"on at {float(watcher.get('threshold') or 5):g}% "
                                 f"({(watcher.get('universe') or 'nifty100').upper()})"),
+            "52-week high/low alerts: " + ("off" if not highlow.get("enabled")
+                                           else f"on ({(highlow.get('universe') or 'nifty100').upper()})"),
             "Movers fundamentals: " + ("auto" if settings.get("movers_fund") == "auto" else "button"),
             "Quiet mode: " + quiet_state,
             "Mail id: " + (settings.get("email") or "not set (use /setemail)"),
             f"Your list is saved in: {where}",
-            "Customize with /corpactions on|off, /pricealert, /watcher, /fundmode and /quiet.",
+            "Customize with /corpactions on|off, /pricealert, /watcher, /highlow, /fundmode and /quiet.",
         ]
     )
 

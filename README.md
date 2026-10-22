@@ -19,6 +19,12 @@ dropdown, then continuously polls both exchanges for corporate actions
   (dividend / bonus / split / rights / buyback) via `/alertfilters` (alias `/filter`) or the web UI.
 - **Price-move alerts** - get a Telegram alert when a watched stock moves
   beyond a threshold (e.g. ±3% in a day) via `/pricealert 3` (alias `/alert`) or the web UI.
+- **52-week high/low alerts** - a Telegram message whenever a stock clears the
+  highest high (or lowest low) of the past 52 weeks during the session, with the
+  full stock details: company, price and day move, the level broken, position in
+  the 52-week range, distance from both extremes, the day range, P/E and what the
+  event means. ON by default over NIFTY 100; `/highlow off` stops it and
+  `/highlow universe nifty500|mylist` changes the coverage.
 - `/corpactionsformylist` bot command (aliases `/upcoming`, `/next`) - instantly
   list upcoming ex-dates for your watchlist, plus recently passed /
   in-progress actions (e.g. a rights issue whose ex-date has just passed, or
@@ -221,6 +227,7 @@ plus a derived Status and book-closure dates.
 | `/watchlist` | `/watchlist` | Show the current watchlist. Alias: `/list` |
 | `/alertfilters TYPE,...` | `/alertfilters dividend,bonus` | Only receive these action types (`/alertfilters all` resets). Alias: `/filter` |
 | `/pricealert PCT` | `/pricealert 3` | Alert on daily moves of ±PCT% (`/pricealert off` disables). Alias: `/alert` |
+| `/highlow [on\|off]` | `/highlow off` · `/highlow universe nifty500` | 52-week high/low breakout alerts (ON by default · NIFTY 100). Only **fresh** extremes alert - a stock parked at a high set weeks ago stays quiet - once per stock per side per day. Aliases: `/hilo`, `/52w` |
 | `/menu` | `/menu` | Show a one-tap button menu in Telegram — tap a button to run the command (no typing). `/menu off` hides it |
 | `/settings` | `/settings` | Show your current filters, price-alert and list location |
 | `/status` | `/status` | Show where your list is saved and whether GitHub push is configured |
@@ -357,7 +364,8 @@ corporate_actions/
   formatting/               # message renderers (actions, news, stock, schedule)
   market/                   # movement-screen + market-hours helpers (periods,
                             #   change, hours) shared by bot + dashboard
-  poller/                   # polling engine (engine, events, fetchers, watcher)
+  poller/                   # polling engine (engine, events, fetchers, watcher,
+                            #   highlow = 52-week high/low alerts)
   scanner/                  # NIFTY 500 scanner (indicators, rules, scoring, ...)
   harmonic/                 # harmonic patterns (patterns, analysis, report)
   bot/                      # Telegram bot: dispatch, registry, runner + one

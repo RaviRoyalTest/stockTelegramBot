@@ -37,7 +37,13 @@ def _clean_company_name(raw_name: str) -> str:
 
 
 def get_quote(exchange: str, symbol: str) -> dict | None:
-    """Return {'price', 'prev_close', 'change_pct', 'currency', 'name'} or None."""
+    """Return {'price','prev_close','change_pct','high','low','wk52_high',
+    'wk52_low','volume','currency','name'} or None.
+
+    The chart meta already carries the session's high/low and the trailing
+    52-week extremes, so the 52-week alert scanner gets them for free from
+    the same request that supplies the price.
+    """
     global _yahoo_fail_count, _yahoo_blocked_until
     exchange = exchange.upper()
     symbol = symbol.upper().removesuffix(".NS").removesuffix(".BO").strip()
@@ -114,6 +120,12 @@ def get_quote(exchange: str, symbol: str) -> dict | None:
         "price": price,
         "prev_close": prev,
         "change_pct": ((price - prev) / prev * 100) if (price is not None and prev) else None,
+        "high": meta.get("regularMarketDayHigh"),
+        "low": meta.get("regularMarketDayLow"),
+        # Trailing 52-week extremes (Yahoo refreshes them intraday).
+        "wk52_high": meta.get("fiftyTwoWeekHigh"),
+        "wk52_low": meta.get("fiftyTwoWeekLow"),
+        "volume": meta.get("regularMarketVolume"),
         # Fall back on the exchange's own currency, not a blanket INR: a US
         # ticker whose meta omits `currency` would otherwise be reported as
         # rupees. Yahoo normally supplies it, so this only matters on a miss.
@@ -214,6 +226,11 @@ async def get_quote_async(exchange: str, symbol: str) -> dict | None:
         "price": price,
         "prev_close": prev,
         "change_pct": ((price - prev) / prev * 100) if (price is not None and prev) else None,
+        "high": meta.get("regularMarketDayHigh"),
+        "low": meta.get("regularMarketDayLow"),
+        "wk52_high": meta.get("fiftyTwoWeekHigh"),
+        "wk52_low": meta.get("fiftyTwoWeekLow"),
+        "volume": meta.get("regularMarketVolume"),
         "currency": meta.get("currency") or ("USD" if exchange == "US" else "INR"),
         "name": name,
     }

@@ -201,6 +201,115 @@ def format_mover_alert(symbol: str, quote: dict, change_pct: float) -> str:
     return "\n".join(lines)
 
 
+def _pw(value, currency: str) -> str:
+    """Price with its currency symbol, or 'n/a' when the quote lacks it."""
+    return format_money(value, currency) if value is not None else "n/a"
+
+
+def _pct(value) -> str:
+    """Signed one-decimal percent, e.g. '+2.1%' / '-0.4%'."""
+    return f"{value:+.1f}%" if value is not None else "n/a"
+
+
+def format_52w_alert(symbol: str, quote: dict, kind: str) -> str:
+    """Full-detail alert for a NEW 52-week high (kind='high') or low ('low').
+
+    Unlike the one-line mover alert this carries the whole context a 52-week
+    event needs: company, price and day move, the broken level, where the
+    price sits in its 52-week range, distance from both extremes, the day's
+    range, P/E, and what the event means.
+    """
+    currency = quote.get("currency") or "INR"
+    name = quote.get("name") or symbol
+    price = quote.get("price")
+    change = quote.get("change_pct")
+    prev_close = quote.get("prev_close")
+    day_high = quote.get("high")
+    day_low = quote.get("low")
+    high_52 = quote.get("wk52_high")
+    low_52 = quote.get("wk52_low")
+    is_high = kind == "high"
+
+    # The quoted 52-week level can lag the intraday print by a few seconds
+    # (or be an older cached value). Show the level the stock actually
+    # cleared so the message never reads "price 1433 above 52W high 1428".
+    if is_high:
+        level = max([value for value in (high_52, day_high, price) if value is not None] or [None])
+    else:
+        level = min([value for value in (low_52, day_low, price) if value is not None] or [None])
+
+    header_icon = "\U0001F4C8" if is_high else "\U0001F4C9"  # 📈 / 📉
+    title = "52-WEEK HIGH" if is_high else "52-WEEK LOW"
+    change_icon = "\U0001F7E2" if (change or 0) >= 0 else "\U0001F53B"
+
+    lines = [f"{header_icon} <b>{title}</b>", f"<b>{escape(symbol)}</b> (NSE) \u00b7 {escape(name)}"]
+    if price is not None:
+        price_line = f"Price: <b>{_pw(price, currency)}</b>"
+        if change is not None:
+            price_line += f"  {change_icon} <b>{_pct(change)}</b> today"
+        lines.append(price_line)
+        if prev_close is not None:
+            lines.append(f"Previous close: {_pw(prev_close, currency)}")
+
+    if is_high:
+        lines.append(f"\U0001F53A 52W High: <b>{_pw(level, currency)}</b> \u2014 cleared today")
+        if low_52 is not None:
+            lines.append(f"52W Low: {_pw(low_52, currency)}")
+    else:
+        lines.append(f"\U0001F53B 52W Low: <b>{_pw(level, currency)}</b> \u2014 broken today")
+        if high_52 is not None:
+            lines.append(f"52W High: {_pw(high_52, currency)}")
+
+    # Range position + distance from each end of the 52-week channel.
+    if price is not None and high_52 is not None and low_52 is not None and high_52 > low_52:
+        position = max(0.0, min(100.0, (price - low_52) / (high_52 - low_52) * 100.0))
+        if position >= 95:
+            zone = "top of its range"
+        elif position <= 5:
+            zone = "bottom of its range"
+        elif position >= 50:
+            zone = "upper half of its range"
+        else:
+            zone = "lower half of its range"
+        lines.append(f"52W range position: <b>{position:.0f}%</b> ({zone})")
+        lines.append(
+            f"From 52W low: <b>{_pct((price / low_52 - 1) * 100)}" 
+            f"</b>  \u00b7  From 52W high: <b>{_pct((price / high_52 - 1) * 100)}</b>"
+        )
+
+    if day_high is not None and day_low is not None:
+        lines.append(f"Day range: {_pw(day_low, currency)} \u2013 {_pw(day_high, currency)}")
+
+    details = []
+    if high_52 is not None and low_52 is not None:
+        details.append(f"52W range: {_pw(low_52, currency)} \u2013 {_pw(high_52, currency)}")
+    if quote.get("pe") is not None:
+        details.append(f"P/E: {quote['pe']:.1f}")
+    if details:
+        lines.append("  \u00b7  ".join(details))
+
+    if is_high:
+        invalidation = (
+            f"a close back below {_pw(high_52, currency)} would make it a failed breakout."
+            if high_52 is not None
+            else "a close back below the level it broke would make it a failed breakout."
+        )
+        meaning = (
+            "It has now traded above every price of the past year \u2014 a "
+            f"momentum/breakout signal. Confirm with volume; {invalidation}"
+        )
+    else:
+        meaning = (
+            "It has now traded below every price of the past year \u2014 a "
+            "falling-knife risk. Value buyers usually wait for a base or a "
+            "volume-backed reversal, and check the fundamentals first."
+        )
+    lines.append("")
+    lines.append(f"\U0001F4A1 {meaning}")
+    lines.append("Tap the button below for the full fundamental report.")
+    return "\n".join(lines)
+
+
 def format_upcoming_list(actions: list[dict]) -> str:
     """Render a compact list of upcoming ex-dates for Telegram (/next)."""
     if not actions:
