@@ -27,6 +27,7 @@ from ..telegram.markup import symbol_buttons
 from .helpers import (
     MAX_NEWS_STOCKS,
     attach_quotes,
+    known_symbol,
     reply_suggestions,
     resolve_or_none,
     run_command_sequence,
@@ -241,6 +242,41 @@ def handle_setlist(chat_id, parts) -> None:
     reply(chat_id, "\n".join(lines))
 
 
+def _suggest_from_watchlist(chat_id, symbol: str, items: list) -> None:
+    """'Not in your watchlist' reply, offering the closest names in it."""
+    entries = [item for item in items if isinstance(item, dict)]
+    symbols = [str(item.get("symbol", "")).upper() for item in entries]
+    if not symbols:
+        reply(
+            chat_id,
+            "Your watchlist is empty - add stocks with "
+            "<code>/addstock SYMBOL NSE</code>.",
+        )
+        return
+    from difflib import get_close_matches
+
+    close = get_close_matches(symbol, symbols, n=3, cutoff=0.6)
+    lines = [f"\u2753 <b>{html.escape(symbol)}</b> isn't in your watchlist."]
+    if close:
+        companies = {
+            str(item.get("symbol", "")).upper(): item.get("company") or ""
+            for item in entries
+        }
+        lines.append("")
+        lines.append("Did you mean one of these?")
+        for match in close:
+            company = html.escape(str(companies.get(match) or ""))
+            suffix = f" \u2014 {company}" if company else ""
+            lines.append(f"\u2022 <code>{html.escape(match)}</code>{suffix}")
+        lines.append("")
+        lines.append(f"Try: <code>/removestock {html.escape(close[0])}</code>")
+    else:
+        lines.append(
+            f"<code>/watchlist</code> shows all {len(symbols)} stock(s) you track."
+        )
+    reply(chat_id, "\n".join(lines))
+
+
 def handle_add_remove(chat_id, parts, command) -> None:
     """Add or remove a stock for the requester (/add, /addstock, /remove, /removestock)."""
     raw_symbol = parts[1].upper().strip()
@@ -315,9 +351,20 @@ def handle_add_remove(chat_id, parts, command) -> None:
             f"Saved in: <code>{html.escape(where)}</code>.",
         )
     elif command in ("/remove", "/removestock"):
+        current = storage.get_user_list(chat_id)
+        present = any(
+            str(item.get("symbol", "")).upper() == symbol
+            for item in current
+            if isinstance(item, dict)
+        )
+        if not present:
+            # A typo here silently did nothing before - show the closest
+            # names in THEIR list so the right one can be removed instead.
+            _suggest_from_watchlist(chat_id, symbol, current)
+            return
         storage.remove_from_user_list(chat_id, symbol, exchange)
         log.info("Removed %s (%s) for chat %s", symbol, exchange, chat_id)
-        reply(chat_id, f"Removed <b>{symbol}</b> ({exchange}) if it was present.")
+        reply(chat_id, f"Removed <b>{symbol}</b> ({exchange}) from your watchlist.")
 
 
 # --------------------------------------------------------------- favourites
@@ -566,6 +613,11 @@ def handle_news(chat_id, parts) -> None:
     log.info("news: fetched headlines for %d/%d stock(s)", len(fetched), len(items))
 
     for item, news in fetched:
+        if target and not news and not known_symbol(target):
+            # The single-symbol path is where typos land: offer close names
+            # instead of a bare 'no headlines'.
+            reply_suggestions(chat_id, target, "news")
+            continue
         try:
             send_message(
                 format_news_list(item["symbol"], item["exchange"], news),

@@ -20,6 +20,7 @@ from .. import storage
 from ..core.text import escape, split_messages
 from ..formatting.stock_us import _us_stock_lines
 from ..sources import get_quote, get_us_fundamentals, search_us_tickers
+from .helpers import has_stock_data
 from .reply import reply, reply_messages
 
 log = logging.getLogger(__name__)
@@ -80,7 +81,7 @@ def handle_us_stock(chat_id, parts) -> None:
     quote = get_quote("US", raw_symbol) or {}
     fund = get_us_fundamentals(raw_symbol) or {}
 
-    if quote.get("price") is None and not fund:
+    if not has_stock_data(raw_symbol, quote, fund):
         matches = search_us_tickers(raw_symbol, limit=6)
         reply(chat_id, _not_found_message(raw_symbol, matches))
         return

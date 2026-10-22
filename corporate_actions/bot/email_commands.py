@@ -18,7 +18,7 @@ from ..email import parse_recipients, send_custom, send_email
 from ..formatting.stock_india import _fund_report_lines
 from ..formatting.stock_us import _us_stock_lines
 from .fundamentals_commands import _resolve_fund, _resolve_quote
-from .helpers import reply_suggestions
+from .helpers import has_stock_data, reply_suggestions
 from .reply import reply, reply_messages
 
 log = logging.getLogger(__name__)
@@ -162,7 +162,7 @@ def handle_emailreport(chat_id, parts) -> None:
     reply(chat_id, f"Preparing <b>{escape(raw_symbol)}</b> - mailing it to <b>{escape(recipient)}</b> shortly.")
     quote, is_us = _resolve_quote(raw_symbol)
     fund = _resolve_fund(raw_symbol, is_us, quote)
-    if quote.get("price") is None and not fund:
+    if not has_stock_data(raw_symbol, quote, fund):
         reply_suggestions(chat_id, raw_symbol, "fundamentalreport")
         return
     if is_us:

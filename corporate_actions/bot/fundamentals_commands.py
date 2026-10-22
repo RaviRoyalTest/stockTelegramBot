@@ -23,7 +23,7 @@ from ..sources import (
     get_us_fundamentals,
     normalise_fundamentals,
 )
-from .helpers import MAX_FUND_BATCH, MAX_STOCK_BATCH, reply_suggestions
+from .helpers import MAX_FUND_BATCH, MAX_STOCK_BATCH, has_stock_data, reply_suggestions
 from .reply import reply, reply_messages
 
 log = logging.getLogger(__name__)
@@ -116,7 +116,7 @@ def handle_single_stock_analysis(chat_id, parts) -> None:
     quote, is_us = _resolve_quote(raw_symbol)
     fund = _resolve_fund(raw_symbol, is_us, quote)
 
-    if quote.get("price") is None and not fund:
+    if not has_stock_data(raw_symbol, quote, fund):
         reply_suggestions(chat_id, raw_symbol, "fundamentalanalyze")
         return
 
@@ -221,7 +221,7 @@ def build_stock_batch(chat_id, command: str, range, deep: bool) -> tuple[list[st
             lines = _fund_report_lines(symbol, quote, fund, include_tip=False, label=label)
         else:
             lines = _stock_summary_lines(symbol, quote, fund, include_tip=False, label=label)
-        if not quote and not fund:
+        if not has_stock_data(symbol, quote, fund):
             lines = [
                 f"\U0001F4CA {label} <b>{escape(symbol)}</b>",
                 "\u26a0\ufe0f No data available right now.",
@@ -292,7 +292,7 @@ def handle_fund_analysis(chat_id, parts) -> None:
     quote, is_us = _resolve_quote(raw_symbol)
     fund = _resolve_fund(raw_symbol, is_us, quote)
 
-    if quote.get("price") is None and not fund:
+    if not has_stock_data(raw_symbol, quote, fund):
         reply_suggestions(chat_id, raw_symbol, "fundamentalreport")
         return
 

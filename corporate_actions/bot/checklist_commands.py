@@ -23,7 +23,7 @@ from ..sources import (
     normalise_fundamentals,
 )
 from .fundamentals_commands import parse_stock_range
-from .helpers import reply_suggestions
+from .helpers import has_stock_data, reply_suggestions
 from .reply import reply, reply_messages
 
 log = logging.getLogger(__name__)
@@ -85,7 +85,7 @@ def handle_single_checklist(chat_id, raw_symbol: str) -> None:
     symbol = raw_symbol.upper().strip().removesuffix(".NS").removesuffix(".BO")
     log.info("checklist: scoring %s (chat %s)", symbol, chat_id)
     quote, fund, currency = _fetch_stock(symbol)
-    if quote.get("price") is None and not fund:
+    if not has_stock_data(symbol, quote, fund):
         reply_suggestions(chat_id, symbol, "checklist")
         return
     lines = format_checklist(symbol, quote, fund, currency=currency)
@@ -122,7 +122,7 @@ def handle_checklist_batch(chat_id, range) -> None:
     all_lines: list[str] = []
     for index, (item, quote, fund, currency) in enumerate(results, start=start):
         label = f"<b>#{index}</b>"
-        if quote.get("price") is None and not fund:
+        if not has_stock_data(item["symbol"], quote, fund):
             all_lines.append(
                 f"\U0001F4DD {label} <b>{escape(item['symbol'])}</b> \u2014 "
                 "no data available right now."

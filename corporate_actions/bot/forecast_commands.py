@@ -10,7 +10,7 @@ from __future__ import annotations
 
 import logging
 
-from ..core.text import escape, split_messages
+from ..core.text import split_messages
 from ..formatting.forecast import build_forecast_lines
 from ..sources import (
     get_best_quote,
@@ -18,9 +18,8 @@ from ..sources import (
     get_quote,
     get_us_fundamentals,
     normalise_fundamentals,
-    search_stocks,
-    search_us_tickers,
 )
+from .helpers import has_stock_data, reply_suggestions
 from .reply import reply, reply_messages
 
 log = logging.getLogger(__name__)
@@ -33,30 +32,6 @@ _USAGE = (
     "the top competitors by market cap.\n"
     "Aliases: <code>/analyst</code>, <code>/forecastanalysis</code>"
 )
-
-
-def _not_found_message(raw_symbol: str, in_matches: list[dict], us_matches: list[dict]) -> str:
-    """Clear 'not found' reply with ticker + full-name suggestions (IN then US)."""
-    matches = (in_matches[:3] + us_matches[:3]) or None
-    if not matches:
-        return (
-            f"\U0001F6AB No market data found for <code>{escape(raw_symbol)}</code> "
-            "\u2014 neither NSE/BSE nor NASDAQ/NYSE knows that name.\n"
-            "Check the spelling (e.g. <code>/forecast RELIANCE</code> or "
-            "<code>/forecast AAPL</code>)."
-        )
-    lines = [
-        f"\U0001F6AB No market data found for <code>{escape(raw_symbol)}</code>.",
-        "",
-        "Did you mean one of these?",
-    ]
-    for match in matches:
-        name = escape(match.get("name") or match.get("company") or "")
-        exchange = (match.get("exchange") or "").upper()
-        lines.append(f"\u2022 <code>{escape(match['symbol'])}</code> \u2014 {name} ({exchange})")
-    lines.append("")
-    lines.append(f"Try: <code>/forecast {escape(matches[0]['symbol'])}</code>")
-    return "\n".join(lines)
 
 
 def handle_forecast(chat_id, parts) -> None:
@@ -88,13 +63,9 @@ def handle_forecast(chat_id, parts) -> None:
             log.warning("handle_forecast: %s", error)
             pass
 
-    if quote.get("price") is None and not fund:
+    if not has_stock_data(raw_symbol, quote, fund):
         log.info("forecast: no data for %s - showing suggestions", raw_symbol)
-        reply(chat_id, _not_found_message(
-            raw_symbol,
-            search_stocks(raw_symbol, limit=5),
-            search_us_tickers(raw_symbol, limit=5),
-        ))
+        reply_suggestions(chat_id, raw_symbol, "forecast")
         return
 
     log.info("forecast: %s (%s) -> %d fund fields", raw_symbol, "US" if is_us else "IN", len(fund))

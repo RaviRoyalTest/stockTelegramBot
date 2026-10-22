@@ -40,6 +40,7 @@ from ..sources import (
     get_window_gap_range,
 )
 from ..telegram.markup import inline_command_buttons
+from .helpers import reply_suggestions
 from .reply import reply, reply_messages
 
 log = logging.getLogger(__name__)
@@ -352,14 +353,10 @@ def handle_symbol_gap(chat_id, raw_symbol: str) -> None:
 
     history = get_gap_history(exchange, raw, days=7)
     if not history:
-        reply(
-            chat_id,
-            f"No gap data found for <code>{escape(raw)}</code> right now. "
-            f"Check the symbol (e.g. <code>/gappers GODREJCP</code> or <code>/gappers AAPL</code>).",
-            reply_markup=inline_command_buttons(
-                ["/gappers GODREJCP", "/gappers AAPL", "/gappers 1d", "/gappers down", "/gappers"],
-            ),
-        )
+        # A typo and a feed hiccup look identical here, so use the shared
+        # pick-list: close names for a mistyped symbol, a 'valid ticker, no
+        # data right now' note for a real one.
+        reply_suggestions(chat_id, raw, "gappers")
         return
 
     currency = "USD" if exchange == "US" else "INR"
