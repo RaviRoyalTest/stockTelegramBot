@@ -270,15 +270,26 @@ class Poller:
                 "watcher cycle: %d new 52-week extreme(s): %s",
                 len(breakouts), ", ".join(f"{sym}={kind}" for sym, kind in breakouts.items()),
             )
-        for chat_id, symbol, quote, kind in highlow_module.pending_alerts(
+        pending_highlow = highlow_module.pending_alerts(
             highlow_targets, quotes, breakouts, self._seen, today
-        ):
+        )
+        # Fetch the valuation block once per symbol, and only for alerts that
+        # will actually be sent (a stock shared by several chats, or one that
+        # already alerted today, never re-pays for it).
+        details_by_symbol: dict[str, dict] = {}
+        for _, symbol, _, _ in pending_highlow:
+            key = symbol.upper()
+            if key not in details_by_symbol:
+                details_by_symbol[key] = highlow_module.alert_details(key)
+        for chat_id, symbol, quote, kind in pending_highlow:
             if storage.is_quiet(chat_id):
                 log.debug("52-week alert skipped for %s - chat is in quiet mode", chat_id)
                 continue
             try:
                 send_message(
-                    format_52w_alert(symbol, quote, kind),
+                    format_52w_alert(
+                        symbol, quote, kind, details_by_symbol.get(symbol.upper()) or {}
+                    ),
                     chat_id=chat_id,
                     reply_markup=symbol_buttons([symbol.upper()], "fund"),
                 )

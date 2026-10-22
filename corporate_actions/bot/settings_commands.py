@@ -298,7 +298,9 @@ def handle_highlow(chat_id, parts) -> None:
         reply(chat_id, "\U0001F4C8 <b>52-week high/low alerts ON.</b>\n"
               "I'll message you here when any stock in "
               f"<b>{universe}</b> clears its <b>52-week high or low</b>, with "
-              "the price, the level broken, range position, day range and P/E.\n"
+              "the price, the level broken, range position, day range, volume "
+              "and fundamentals (P/E, sector P/E, D/E, ROE/ROCE, dividend yield, "
+              "market cap, RSI).\n"
               "Tune the coverage with <code>/highlow universe nifty500</code>.")
         return
     if subcommand in ("off", "disable", "stop"):

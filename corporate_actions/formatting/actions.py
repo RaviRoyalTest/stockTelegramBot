@@ -7,6 +7,7 @@ from ..core.dates import format_date, parse_iso_date, today_ist
 from ..core.numbers import format_money
 from ..core.text import escape
 from ..sources.types import TYPE_LABELS, action_type
+from .stock_common import _inr_group, _num_or_na, _rsi_signal
 
 # Emoji map for corporate action types
 _TYPE_EMOJI = {
@@ -211,13 +212,79 @@ def _pct(value) -> str:
     return f"{value:+.1f}%" if value is not None else "n/a"
 
 
-def format_52w_alert(symbol: str, quote: dict, kind: str) -> str:
+def _vol_str(value) -> str:
+    """Share volume in Indian units - '1.49 Cr' / '24.5 L' / '8,540'."""
+    try:
+        volume = float(value)
+    except (TypeError, ValueError):
+        return ""
+    if volume >= 1e7:
+        return f"{volume / 1e7:.2f} Cr"
+    if volume >= 1e5:
+        return f"{volume / 1e5:.1f} L"
+    return f"{volume:,.0f}"
+
+
+def _valuation_lines(details: dict, quote: dict, currency: str) -> list[str]:
+    """Compact valuation/quality block: P/E, D/E and the key stock ratios.
+
+    The quote's own P/E is used when the fundamentals payload is missing, so
+    a rate-limited enrichment never blanks out the headline ratio.
+    """
+    details = details or {}
+    pe = details.get("pe") if details.get("pe") is not None else quote.get("pe")
+    money_prefix = "\u20b9" if currency == "INR" else (
+        "$" if currency == "USD" else f"{currency} "
+    )
+    valuation = []
+    if pe is not None:
+        valuation.append(f"P/E: <b>{_num_or_na(pe, 1)}x</b>")
+    if details.get("sector_pe") is not None:
+        valuation.append(f"Sector P/E: {_num_or_na(details['sector_pe'], 1)}x")
+    if details.get("debt_to_equity") is not None:
+        valuation.append(f"D/E: <b>{_num_or_na(details['debt_to_equity'], 2)}x</b>")
+    if details.get("price_to_book") is not None:
+        valuation.append(f"P/B: {_num_or_na(details['price_to_book'], 1)}x")
+
+    size = []
+    if details.get("div_yield") is not None:
+        size.append(f"Div yield: {_num_or_na(details['div_yield'], 2)}%")
+    mcap_cr = details.get("mcap_cr")
+    if mcap_cr is not None:
+        size.append(f"Mkt cap: {money_prefix}{_inr_group(mcap_cr)} Cr")
+    if details.get("roe") is not None:
+        size.append(f"ROE: {_num_or_na(details['roe'], 1)}%")
+    if details.get("roce") is not None:
+        size.append(f"ROCE: {_num_or_na(details['roce'], 1)}%")
+
+    technical = []
+    rsi = details.get("rsi") if details.get("rsi") is not None else details.get("rsi14")
+    rsi_text = _rsi_signal(rsi) if rsi is not None else ""
+    if rsi_text:
+        technical.append(rsi_text)
+    if details.get("book_value") is not None:
+        technical.append(f"Book value: {money_prefix}{_num_or_na(details['book_value'], 2)}")
+    if details.get("trailing_eps") is not None:
+        technical.append(f"EPS (TTM): {money_prefix}{_num_or_na(details['trailing_eps'], 2)}")
+    if details.get("profit_margin") is not None:
+        technical.append(f"Net margin: {_num_or_na(details['profit_margin'] * 100, 1)}%")
+
+    lines = []
+    for row in (valuation, size, technical):
+        if row:
+            lines.append("  \u00b7  ".join(row))
+    return lines
+
+
+def format_52w_alert(symbol: str, quote: dict, kind: str, details: dict | None = None) -> str:
     """Full-detail alert for a NEW 52-week high (kind='high') or low ('low').
 
     Unlike the one-line mover alert this carries the whole context a 52-week
-    event needs: company, price and day move, the broken level, where the
-    price sits in its 52-week range, distance from both extremes, the day's
-    range, P/E, and what the event means.
+    event needs: company and sector, price and day move, the broken level,
+    where the price sits in its 52-week range, distance from both extremes,
+    the day's range and volume, valuation/quality ratios (P/E, sector P/E,
+    D/E, P/B, dividend yield, market cap, ROE/ROCE, RSI, book value, EPS,
+    net margin) when ``details`` is supplied, and what the event means.
     """
     currency = quote.get("currency") or "INR"
     name = quote.get("name") or symbol
@@ -243,6 +310,13 @@ def format_52w_alert(symbol: str, quote: dict, kind: str) -> str:
     change_icon = "\U0001F7E2" if (change or 0) >= 0 else "\U0001F53B"
 
     lines = [f"{header_icon} <b>{title}</b>", f"<b>{escape(symbol)}</b> (NSE) \u00b7 {escape(name)}"]
+    sector = (details or {}).get("sector") or ""
+    industry = ((details or {}).get("industry") or "").strip()
+    if sector or industry:
+        tag = escape(sector or "Indian Equity")
+        if industry and industry != sector:
+            tag += f" \u00b7 {escape(industry)}"
+        lines.append(f"Sector: {tag}")
     if price is not None:
         price_line = f"Price: <b>{_pw(price, currency)}</b>"
         if change is not None:
@@ -278,15 +352,17 @@ def format_52w_alert(symbol: str, quote: dict, kind: str) -> str:
         )
 
     if day_high is not None and day_low is not None:
-        lines.append(f"Day range: {_pw(day_low, currency)} \u2013 {_pw(day_high, currency)}")
+        range_line = f"Day range: {_pw(day_low, currency)} \u2013 {_pw(day_high, currency)}"
+        volume = _vol_str(quote.get("volume"))
+        if volume:
+            range_line += f"  \u00b7  Volume: {volume}"
+        lines.append(range_line)
 
-    details = []
-    if high_52 is not None and low_52 is not None:
-        details.append(f"52W range: {_pw(low_52, currency)} \u2013 {_pw(high_52, currency)}")
-    if quote.get("pe") is not None:
-        details.append(f"P/E: {quote['pe']:.1f}")
-    if details:
-        lines.append("  \u00b7  ".join(details))
+    valuation_lines = _valuation_lines(details or {}, quote, currency)
+    if valuation_lines:
+        lines.append("")
+        lines.append("\U0001F4CA <b>Fundamentals</b>")
+        lines.extend(valuation_lines)
 
     if is_high:
         invalidation = (

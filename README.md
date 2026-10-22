@@ -21,9 +21,10 @@ dropdown, then continuously polls both exchanges for corporate actions
   beyond a threshold (e.g. ±3% in a day) via `/pricealert 3` (alias `/alert`) or the web UI.
 - **52-week high/low alerts** - a Telegram message whenever a stock clears the
   highest high (or lowest low) of the past 52 weeks during the session, with the
-  full stock details: company, price and day move, the level broken, position in
-  the 52-week range, distance from both extremes, the day range, P/E and what the
-  event means. ON by default over NIFTY 100; `/highlow off` stops it and
+  full stock details: company and sector, price and day move, the level broken,
+  position in the 52-week range, distance from both extremes, day range and
+  volume, plus fundamentals (P/E, sector P/E, D/E, P/B, dividend yield, market
+  cap, ROE/ROCE, RSI, book value, EPS, net margin) and what the event means. ON by default over NIFTY 100; `/highlow off` stops it and
   `/highlow universe nifty500|mylist` changes the coverage.
 - `/corpactionsformylist` bot command (aliases `/upcoming`, `/next`) - instantly
   list upcoming ex-dates for your watchlist, plus recently passed /

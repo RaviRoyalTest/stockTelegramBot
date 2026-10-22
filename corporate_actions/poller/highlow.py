@@ -194,6 +194,23 @@ def fresh_breakouts(quotes: dict[str, dict], today: date | None = None) -> dict[
     return breakouts
 
 
+def alert_details(symbol: str) -> dict:
+    """Fundamentals snapshot for an alert message (best effort, cached).
+
+    Called only when an alert really fires, so the deep fetch (Yahoo
+    quoteSummary + chart + screener.in ratio block) never touches the scan
+    loop's per-symbol cost. A failure returns {} and the alert still sends
+    with the quote-only fields.
+    """
+    try:
+        from ..sources.fundamentals import get_fundamentals
+
+        return get_fundamentals(symbol, with_screener=True) or {}
+    except Exception as error:  # enrichment must never cost us the alert
+        log.info("52w alert details unavailable for %s: %s", symbol, error)
+        return {}
+
+
 def pending_alerts(
     targets: list[tuple[str, dict]],
     quotes: dict[str, dict],

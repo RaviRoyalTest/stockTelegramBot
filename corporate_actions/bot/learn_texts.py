@@ -270,7 +270,7 @@ COMMAND_LEARN: dict = {
         "what": "52-week high/low alerts: message you whenever a stock clears the highest high (or lowest low) of the past 52 weeks during the session, with the full stock details.",
         "syntax": "/highlow on | off | universe U",
         "examples": ["/highlow  \u2192 show status", "/highlow off  \u2192 stop the alerts", "/highlow on  \u2192 turn them back on", "/highlow universe nifty500  \u2192 nifty100 | nifty500 | mylist"],
-        "output": "A message per breakout: company, price and day move, the 52-week level it cleared, its position in the 52-week range, distance from both extremes, the day range, P/E and what the event means.",
+        "output": "A message per breakout: company and sector, price and day move, the 52-week level it cleared, its position in the 52-week range, distance from both extremes, the day range and volume, plus fundamentals (P/E, sector P/E, D/E, P/B, dividend yield, market cap, ROE/ROCE, RSI, book value, EPS, net margin) and what the event means.",
         "tips": ["ON by default over NIFTY 100 - no setup needed; /highlow off stops it.", "Only FRESH extremes alert: a stock parked at a high set weeks ago stays quiet.", "One alert per stock per side per day, so an uptrend does not spam you."],
         "aliases": "/hilo, /52w",
     },

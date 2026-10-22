@@ -46,6 +46,22 @@ QUOTE_HIGH = {
     "currency": "INR",
     "name": "Infosys Limited",
 }
+DETAILS = {
+    "pe": 42.3,
+    "sector_pe": 59.4,
+    "debt_to_equity": 0.27,
+    "price_to_book": 21.8,
+    "div_yield": 1.96,
+    "mcap_cr": 111401.6,
+    "roe": 60.1,
+    "roce": 61.4,
+    "rsi": 33.2,
+    "book_value": 212.006,
+    "trailing_eps": 108.11,
+    "profit_margin": 0.13376,
+    "sector": "Fast Moving Consumer Goods",
+    "industry": "Packaged Foods",
+}
 QUOTE_LOW = {
     "price": 1140.0,
     "prev_close": 1180.0,
@@ -155,7 +171,7 @@ class FormatTests(unittest.TestCase):
         for expected in (
             "52-WEEK HIGH", "INFY", "Infosys Limited", "₹1,912.00",
             "Previous close", "52W Low", "52W range position", "From 52W low",
-            "Day range", "P/E: 24.5", "momentum",
+            "Day range", "P/E: <b>24.5x</b>", "momentum",
         ):
             self.assertIn(expected, message)
 
@@ -174,11 +190,46 @@ class FormatTests(unittest.TestCase):
         self.assertIn("52-WEEK HIGH", message)
         self.assertNotIn("n/a would make", message)
 
+    def test_valuation_block_carries_pe_and_debt_to_equity(self):
+        message = format_52w_alert("INFY", QUOTE_HIGH, "high", DETAILS)
+        for expected in (
+            "P/E: <b>42.3x</b>", "Sector P/E: 59.4x", "D/E: <b>0.27x</b>",
+            "P/B: 21.8x", "Div yield: 1.96%", "Mkt cap: \u20b91,11,402 Cr",
+            "ROE: 60.1%", "ROCE: 61.4%", "RSI 33.2", "Book value: \u20b9212.01",
+            "EPS (TTM): \u20b9108.11", "Net margin: 13.4%",
+            "Sector: Fast Moving Consumer Goods \u00b7 Packaged Foods",
+        ):
+            self.assertIn(expected, message)
+
+    def test_quote_pe_is_used_when_details_are_missing(self):
+        message = format_52w_alert("INFY", QUOTE_HIGH, "high", {})
+        self.assertIn("P/E: <b>24.5x</b>", message)
+        self.assertNotIn("D/E", message)
+
+    def test_volume_is_shown_in_indian_units(self):
+        quote = dict(QUOTE_HIGH, volume=14931109)
+        self.assertIn("Volume: 1.49 Cr", format_52w_alert("INFY", quote, "high"))
+        quote = dict(QUOTE_HIGH, volume=245000)
+        self.assertIn("Volume: 2.5 L", format_52w_alert("INFY", quote, "high"))
+
     def test_cleared_level_wins_over_a_stale_52w_field(self):
         # Exchange 52w field still shows yesterday's 1908 while the print is
         # 1912 - the message must show the level the stock actually cleared.
         quote = dict(QUOTE_HIGH, wk52_high=1908.0)
         self.assertIn("₹1,912.00", format_52w_alert("INFY", quote, "high"))
+
+
+class AlertDetailsTests(unittest.TestCase):
+    def test_details_use_the_cached_screener_fundamentals(self):
+        with patch("corporate_actions.sources.fundamentals.get_fundamentals",
+                   return_value={"pe": 1.0}) as fetch:
+            self.assertEqual(highlow.alert_details("INFY"), {"pe": 1.0})
+        fetch.assert_called_once_with("INFY", with_screener=True)
+
+    def test_details_failure_never_blocks_the_alert(self):
+        with patch("corporate_actions.sources.fundamentals.get_fundamentals",
+                   side_effect=RuntimeError("rate limited")):
+            self.assertEqual(highlow.alert_details("INFY"), {})
 
 
 class WatcherScanTests(unittest.TestCase):
@@ -208,9 +259,13 @@ class WatcherScanTests(unittest.TestCase):
                       return_value={"INFY": QUOTE_HIGH}), \
                 patch("corporate_actions.poller.engine.highlow_module.is_fresh_extreme",
                       return_value=True), \
+                patch("corporate_actions.poller.engine.highlow_module.alert_details",
+                      return_value=DETAILS) as mock_details, \
                 patch("corporate_actions.poller.engine.send_message") as mock_send:
             sent = poller.run_watcher_once()
         self.assertEqual(sent, 1)
+        mock_details.assert_called_once_with("INFY")
+        self.assertIn("D/E: <b>0.27x</b>", mock_send.call_args[0][0])
         message = mock_send.call_args[0][0]
         self.assertIn("52-WEEK HIGH", message)
         self.assertIn("Infosys Limited", message)
@@ -231,6 +286,8 @@ class WatcherScanTests(unittest.TestCase):
                       return_value={"INFY": QUOTE_HIGH}), \
                 patch("corporate_actions.poller.engine.highlow_module.is_fresh_extreme",
                       return_value=True), \
+                patch("corporate_actions.poller.engine.highlow_module.alert_details",
+                      return_value=DETAILS), \
                 patch("corporate_actions.poller.engine.send_message") as mock_send:
             sent = poller.run_watcher_once()
         self.assertEqual(sent, 0)
