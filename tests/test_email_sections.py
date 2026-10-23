@@ -15,8 +15,10 @@ from corporate_actions.email import sections as sec  # noqa: E402
 class SectionCatalogueTests(unittest.TestCase):
     def test_morning_and_close_catalogues(self):
         self.assertEqual(
-            sec.MORNING_SECTIONS, ("screener", "nifty", "us", "gappers", "watchlist"))
-        self.assertEqual(sec.CLOSE_SECTIONS, ("screener", "nifty", "us", "eod"))
+            sec.MORNING_SECTIONS,
+            ("screener", "wk52", "nifty", "us", "gappers", "watchlist"))
+        self.assertEqual(sec.CLOSE_SECTIONS,
+                         ("screener", "wk52", "nifty", "us", "eod"))
 
     def test_every_section_has_a_title(self):
         for kind in ("morning", "close"):

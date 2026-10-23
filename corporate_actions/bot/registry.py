@@ -509,8 +509,8 @@ COMMAND_USAGE = {
         "/emailsections remove us     \u2192 drop one section, keep the rest\n"
         "/emailsections all           \u2192 every section again\n"
         "/emailsections close nifty,eod \u2192 same for the evening mail\n"
-        "Morning: screener, nifty, us, gappers, watchlist\n"
-        "Evening: screener, nifty, us, eod\n"
+        "Morning: screener, wk52, nifty, us, gappers, watchlist\n"
+        "Evening: screener, wk52, nifty, us, eod\n"
         "Aliases: /emailsection, /mailsections, /mailcontent"
     ),
     "/emailopen": (

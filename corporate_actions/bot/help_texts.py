@@ -340,7 +340,7 @@ ALL_COMMANDS_TEXT = (
   "  /emailhelp                \u2192 Gmail setup walkthrough + mail examples\n"
   "  /dailyemail on|both|open|close|scheduled|off \u2192 morning opening + evening close/EOD mails\n"
   "  /emailopen [section]     \u2192 morning mail now: whole digest or one section\n"
-  "                             (screener, nifty, us, gappers, watchlist)\n"
+  "                             (screener, wk52, nifty, us, gappers, watchlist)\n"
   "  /emailclose              \u2192 closing + EOD stores mail now\n"
   "  /emailboth               \u2192 open + close + EOD in ONE mail, one command\n"
   "  /emailstatus             \u2192 last sends: success or failed + reason\n\n"

@@ -4,6 +4,9 @@
 .opencode
 .workbuddy-ai
 
+# Local previews / rendered artifacts (never part of the deployed app)
+outputs/
+
 # IDE and Editors
 **/.idea/
 **/.vscode/

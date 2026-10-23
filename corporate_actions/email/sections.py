@@ -31,10 +31,11 @@ __all__ = [
 
 # ---- catalogue -----------------------------------------------------------
 # Order matters: it is the order sections appear in a mail.
-MORNING_SECTIONS = ("screener", "nifty", "us", "gappers", "watchlist")
+MORNING_SECTIONS = ("screener", "wk52", "nifty", "us", "gappers", "watchlist")
 
 MORNING_SECTION_TITLES = {
     "screener": "Screener",
+    "wk52": "52-week range",
     "nifty": "Nifty actions",
     "us": "U.S. markets",
     "gappers": "Gappers",
@@ -43,10 +44,11 @@ MORNING_SECTION_TITLES = {
 
 # The evening mail has its own set: it leads with the CLOSING screener and
 # ends with the end-of-day stored details.
-CLOSE_SECTIONS = ("screener", "nifty", "us", "eod")
+CLOSE_SECTIONS = ("screener", "wk52", "nifty", "us", "eod")
 
 CLOSE_SECTION_TITLES = {
     "screener": "Closing screener",
+    "wk52": "52-week range",
     "nifty": "Nifty actions",
     "us": "U.S. markets",
     "eod": "Stored details (end of day)",
@@ -57,6 +59,8 @@ CLOSE_SECTION_TITLES = {
 SECTION_ALIASES = {
     "screen": "screener", "screener": "screener", "open": "screener",
     "close": "screener", "closing": "screener",
+    "wk52": "wk52", "52w": "wk52", "52week": "wk52", "52-week": "wk52",
+    "52weeks": "wk52", "highlow": "wk52", "hilo": "wk52", "range": "wk52",
     "actions": "nifty", "nifty": "nifty", "buy": "nifty", "nifty500": "nifty",
     "us": "us", "usa": "us", "ustocks": "us", "us-actions": "us",
     "gap": "gappers", "gappers": "gappers", "gaps": "gappers",

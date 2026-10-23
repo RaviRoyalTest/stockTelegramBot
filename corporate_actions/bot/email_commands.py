@@ -270,8 +270,9 @@ def handle_dailyemail(chat_id, parts) -> None:
             chat_id,
             f"📧 Daily mails <b>ON (both)</b> in <b>{escape(settings['email'])}</b> every day.<br>"
             "🌅 Morning (07:30-12:00 IST, market open): open screener + last close, "
-            "Nifty actions with buy-by dates, U.S. tables, overnight gappers, watchlist actions.<br>"
-            "🌇 Evening (after 15:45 IST): close screener + EOD stores.",
+            "consolidated 52-week range, Nifty actions with buy-by dates, U.S. tables, "
+            "overnight gappers, watchlist actions.<br>"
+            "🌇 Evening (after 15:45 IST): close screener + 52-week range + EOD stores.",
         )
     elif raw in ("open", "opening", "morning"):
         if not (settings.get("email") or "").strip():
@@ -327,7 +328,7 @@ def handle_emailopen(chat_id, parts) -> None:
 
     /emailopen             -> all five sections in one mail (as before)
     /emailopen nifty       -> only the Nifty-actions mail
-    /emailopen us|gappers|watchlist|screener -> only that section's mail
+    /emailopen us|gappers|watchlist|screener|wk52 -> only that section's mail
     Section bodies come from the same builders as the digest, so combined
     and separate mails can never disagree. Empty sections are skipped with
     a note instead of sending an empty mail.

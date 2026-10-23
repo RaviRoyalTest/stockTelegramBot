@@ -303,6 +303,64 @@ def actions_table(actions: list[dict], limit: int = 12, buy_by: bool = False) ->
     )
 
 
+def wk52_table(rows: list[dict], currency: str = "₹", caption: str = "",
+               limit: int = 12) -> str:
+    """Consolidated 52-week position, one row per symbol.
+
+    Columns: Symbol | Price | 52W low | 52W high | From high | From low |
+    In range. "In range" is where the price sits inside the 52-week band
+    (0% = at the low, 100% = at the high) and carries a small bar so the
+    table reads at a glance without needing the numbers.
+    """
+    if not rows:
+        return muted("No 52-week levels available for this session.")
+    head = (
+        f"<tr><th {_TH}>Symbol</th>"
+        f'<th class="num" {_TH_NUM}>Price</th>'
+        f'<th class="num" {_TH_NUM}>52W low</th>'
+        f'<th class="num" {_TH_NUM}>52W high</th>'
+        f'<th class="num" {_TH_NUM}>From high</th>'
+        f'<th class="num" {_TH_NUM}>From low</th>'
+        f'<th class="num" {_TH_NUM}>In range</th></tr>'
+    )
+    body = []
+    for i, row in enumerate(rows[:limit], 1):
+        bg = _ZEBRA if i % 2 == 0 else ""
+        symbol = esc(row.get("symbol") or "?")
+        company = esc(row.get("name") or row.get("company") or symbol)
+        in_range = row.get("in_range_pct")
+        try:
+            bar_pct = max(0.0, min(100.0, float(in_range)))
+        except (TypeError, ValueError):
+            bar_pct = None
+        if bar_pct is None:
+            range_cell = "-"
+        else:
+            bar = (
+                '<div style="display:inline-block;width:56px;height:6px;'
+                'background-color:#e5e7eb;border-radius:3px;vertical-align:middle;'
+                'margin-right:6px;">'
+                f'<div style="width:{bar_pct:.0f}%;height:6px;'
+                'background-color:#6366f1;border-radius:3px;"></div></div>'
+                f"<span style=\"font-size:12px;\">{bar_pct:.0f}%</span>"
+            )
+            range_cell = bar
+        body.append(
+            f"<tr><td {_td(bg=bg)}><b>{symbol}</b><br>"
+            f"<span style='color:{_MUTED};font-size:12px;'>{company}</span></td>"
+            f'<td class="num" {_td(num=True, bg=bg)}>{price_cell(row.get("price"), currency)}</td>'
+            f'<td class="num" {_td(num=True, bg=bg)}>{price_cell(row.get("wk52_low"), currency)}</td>'
+            f'<td class="num" {_td(num=True, bg=bg)}>{price_cell(row.get("wk52_high"), currency)}</td>'
+            f'<td class="num" {_td(num=True, bg=bg)}>{move_cell(row.get("from_high_pct"))}</td>'
+            f'<td class="num" {_td(num=True, bg=bg)}>{move_cell(row.get("from_low_pct"))}</td>'
+            f'<td class="num" {_td(num=True, bg=bg)}>{range_cell}</td></tr>'
+        )
+    cap = (f"<caption style='text-align:left;font-weight:700;'>{esc(caption)}</caption>"
+           if caption else "")
+    return (f'<table class="rs-table" {_TABLE_STYLE}>{cap}<thead>{head}</thead>'
+            f'<tbody>{"".join(body)}</tbody></table>')
+
+
 def gap_table(rows: list[dict], currency: str = "₹", caption: str = "") -> str:
     """Overnight gaps: Symbol | Open | Gap% | Since open."""
     if not rows:

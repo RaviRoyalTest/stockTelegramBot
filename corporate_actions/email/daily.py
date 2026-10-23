@@ -22,6 +22,7 @@ from .client import is_configured as email_configured
 from .client import send_email
 from .tables import actions_table, esc, index_table, kv_table, muted
 from .tables import section, stat_chips, stock_table, watchlist_table
+from .tables import wk52_table
 
 log = logging.getLogger(__name__)
 
@@ -547,6 +548,201 @@ def build_all_actions_lines(chat_id) -> list[str]:
             + build_us_actions_block())
 
 
+# ------------------------------------------------------------- 52-week mail
+# Rows shown in the consolidated 52-week table. Gmail clips mails past
+# ~102 KB and this block is context rather than the headline, so it is capped
+# - the recorded session can contribute at most ~30 unique symbols anyway.
+WK52_MAIL_ROWS = 12
+# "Near an extreme" for the summary chips, in percent.
+WK52_NEAR_PCT = 2.0
+
+
+def _num(value) -> float | None:
+    """Float from a possibly-stringy row field, None when unusable."""
+    try:
+        number = float(value)
+    except (TypeError, ValueError):
+        return None
+    return number if number == number else None  # drop NaN
+
+
+def _wk52_record(row: dict) -> dict | None:
+    """One symbol's 52-week row with the derived distances, or None.
+
+    None means "no usable levels" - the caller drops the row rather than
+    mailing a band built from a missing or inverted pair of numbers.
+    """
+    high = _num(row.get("wk52_high"))
+    low = _num(row.get("wk52_low"))
+    if high is None or low is None or high <= 0 or low <= 0 or high <= low:
+        return None
+    price = _num(row.get("price"))
+    symbol = str(row.get("symbol") or "").strip().upper()
+    if not symbol:
+        return None
+    record = {
+        "symbol": symbol,
+        "name": row.get("name") or row.get("company") or symbol,
+        "price": price,
+        "wk52_high": high,
+        "wk52_low": low,
+    }
+    if price is not None:
+        record["from_high_pct"] = (price - high) / high * 100.0
+        record["from_low_pct"] = (price - low) / low * 100.0
+        record["in_range_pct"] = (price - low) / (high - low) * 100.0
+    return record
+
+
+def wk52_rows_from_snapshot(snapshot: dict) -> list[dict]:
+    """Every UNIQUE symbol of a recorded session with its 52-week context (pure).
+
+    Consolidated on purpose: one symbol can appear as a gap-down, a gainer
+    and inside a universe block, and a mail that repeats it three times is
+    not a summary. The first row that carries usable levels wins; rows
+    without them are dropped, never guessed.
+
+    Ordered nearest-the-high first, so the table reads as a position ladder
+    from the top of the band down.
+    """
+    found: dict[str, dict] = {}
+    for key in ("gap_downs", "top_gainers", "top_losers"):
+        for row in (snapshot or {}).get(key) or []:
+            record = _wk52_record(row or {})
+            if record and record["symbol"] not in found:
+                found[record["symbol"]] = record
+    for block in (snapshot or {}).get("universes") or []:
+        for key in ("gainers", "losers"):
+            for row in (block or {}).get(key) or []:
+                record = _wk52_record(row or {})
+                if record and record["symbol"] not in found:
+                    found[record["symbol"]] = record
+    return sorted(
+        found.values(),
+        key=lambda r: (r.get("in_range_pct") is None,
+                       -(r.get("in_range_pct") or 0.0)),
+    )
+
+
+def wk52_rows_live(snapshot: dict, limit: int = WK52_MAIL_ROWS) -> list[dict]:
+    """Live 52-week levels for a session file recorded before they existed.
+
+    Only used when the stored session carries no levels at all (files written
+    before the 52-week capture landed). The caller labels the block as LIVE,
+    so today's band is never passed off as that session's. Best effort: a
+    symbol whose lookup fails is simply absent.
+    """
+    symbols: list[str] = []
+    prices: dict[str, float] = {}
+    for key in ("gap_downs", "top_gainers", "top_losers"):
+        for row in (snapshot or {}).get(key) or []:
+            symbol = str((row or {}).get("symbol") or "").strip().upper()
+            if symbol and symbol not in symbols:
+                symbols.append(symbol)
+                price = _num((row or {}).get("price"))
+                if price is not None:
+                    prices[symbol] = price
+    for block in (snapshot or {}).get("universes") or []:
+        for key in ("gainers", "losers"):
+            for row in (block or {}).get(key) or []:
+                symbol = str((row or {}).get("symbol") or "").strip().upper()
+                if symbol and symbol not in symbols:
+                    symbols.append(symbol)
+                    price = _num((row or {}).get("price"))
+                    if price is not None:
+                        prices[symbol] = price
+    if not symbols:
+        return []
+    try:
+        from .. import screener_service
+    except Exception as error:  # pragma: no cover - import guard only
+        log.debug("52w live fallback unavailable: %s", error)
+        return []
+    out: list[dict] = []
+    for symbol in symbols[:limit]:
+        try:
+            row = screener_service._get_cached_row(symbol) or {}
+        except Exception as error:
+            log.debug("52w live lookup failed for %s: %s", symbol, error)
+            continue
+        merged = dict(row)
+        merged["symbol"] = symbol
+        merged.setdefault("price", prices.get(symbol))
+        if merged.get("price") is None:
+            merged["price"] = prices.get(symbol)
+        record = _wk52_record(merged)
+        if record:
+            out.append(record)
+    return sorted(
+        out,
+        key=lambda r: (r.get("in_range_pct") is None,
+                       -(r.get("in_range_pct") or 0.0)),
+    )
+
+
+def build_wk52_lines(session_label: str = "", snapshot: dict | None = None,
+                     allow_live_fallback: bool = True) -> list[str]:
+    """Consolidated 52-week block for one session (never raises).
+
+    Two honest states, never mixed:
+      * the session recorded its levels -> the table IS that session's band;
+      * it did not (file written before 52-week capture) -> the block falls
+        back to LIVE levels and says so in the caption, because mailing
+        today's band as "the session's" would be a quiet lie.
+    """
+    doc = snapshot if isinstance(snapshot, dict) and snapshot else {}
+    if not doc:
+        try:
+            doc = storage.load_snapshots() or {}
+        except Exception as error:
+            log.debug("52w mail: snapshot unavailable: %s", error)
+            doc = {}
+    session = str(doc.get("session") or session_label or "last session").strip()
+    market = str(doc.get("market") or "in").lower()
+    currency = "$" if market == "us" else "\u20b9"
+
+    rows = wk52_rows_from_snapshot(doc)
+    source = "session"
+    if not rows and allow_live_fallback:
+        rows = wk52_rows_live(doc)
+        source = "live" if rows else "none"
+
+    lines = [section(f"52-week range \u00b7 {session}", "slate", "\U0001F4CF")]
+    if not rows:
+        lines.append(muted(
+            "No 52-week levels for this session yet. The recorded file carries "
+            "them from the next session record on - re-record with /snap to "
+            "include them now."))
+        return lines
+
+    near_high = sum(1 for r in rows
+                    if r.get("from_high_pct") is not None
+                    and r["from_high_pct"] >= -WK52_NEAR_PCT)
+    near_low = sum(1 for r in rows
+                   if r.get("from_low_pct") is not None
+                   and r["from_low_pct"] <= WK52_NEAR_PCT)
+    lines.append(stat_chips([
+        ("Symbols", str(len(rows))),
+        (f"Within {WK52_NEAR_PCT:g}% of high", str(near_high)),
+        (f"Within {WK52_NEAR_PCT:g}% of low", str(near_low)),
+    ]))
+    shown = min(len(rows), WK52_MAIL_ROWS)
+    caption = (
+        f"Recorded with the {session} session"
+        if source == "session"
+        else f"Live levels - the {session} file predates 52-week capture"
+    )
+    caption += f" \u00b7 showing {shown} of {len(rows)} nearest the high"
+    lines.append(wk52_table(rows, currency=currency, caption=caption,
+                            limit=WK52_MAIL_ROWS))
+    lines.append(muted(
+        "\u201cIn range\u201d = where the price sits inside the 52-week band "
+        "(0% at the low, 100% at the high). \u201cFrom high/low\u201d is the "
+        "distance to that extreme. Consolidated: one row per symbol across "
+        "gaps, gainers and losers."))
+    return lines
+
+
 # Morning sections, each mailable on its own (/emailopen <name>) or all
 # together (bare /emailopen). Keys are the /emailopen selector words.
 #
@@ -587,6 +783,9 @@ def build_morning_section_lines(chat_id: str, section: str, report: dict,
         if section == "screener":
             lines = build_open_lines(report, label)
             return MORNING_SECTION_TITLES[section], lines
+        if section == "wk52":
+            lines = build_wk52_lines(label)
+            return MORNING_SECTION_TITLES[section], lines
         if section == "nifty":
             lines = build_nifty_block()
             return MORNING_SECTION_TITLES[section], lines
@@ -610,10 +809,11 @@ def build_morning_digest_lines(chat_id: str, report: dict,
 
     Section order:
       1. India opening screener (gainers / losers)
-      2. Nifty-500 corporate actions with buy-by dates
-      3. U.S. markets: NASDAQ-100 + S&P-500 actions, then screener tables
-      4. Overnight gappers – NIFTY 100
-      5. Watchlist corporate actions (India + US stocks)
+      2. Consolidated 52-week range for the recorded session
+      3. Nifty-500 corporate actions with buy-by dates
+      4. U.S. markets: NASDAQ-100 + S&P-500 actions, then screener tables
+      5. Overnight gappers – NIFTY 100
+      6. Watchlist corporate actions (India + US stocks)
 
     Composed from the same per-section builders /emailopen <name> uses, so
     the combined mail and the separate mails can never disagree. Feed
@@ -638,9 +838,10 @@ def build_close_digest_lines(chat_id: str, report: dict,
 
     Section order:
       1. India closing screener (gainers / losers)
-      2. Nifty-500 corporate actions with buy-by dates
-      3. NASDAQ-100 + S&P-500 corporate actions with buy-by dates
-      4. EOD stored details (watchlist prices + schedule + mail settings)
+      2. Consolidated 52-week range for the recorded session
+      3. Nifty-500 corporate actions with buy-by dates
+      4. NASDAQ-100 + S&P-500 corporate actions with buy-by dates
+      5. EOD stored details (watchlist prices + schedule + mail settings)
 
     Watchlist quotes are fetched by the caller and passed via
     build_eod_store_lines, which already calls build_all_actions_lines
@@ -655,6 +856,8 @@ def build_close_digest_lines(chat_id: str, report: dict,
     lines: list[str] = []
     if "screener" in chosen:
         lines.extend(build_close_lines(report, label))   # ① closing screener
+    if "wk52" in chosen:
+        lines.extend(build_wk52_lines(label))            # ①b 52-week range
     if "nifty" in chosen:
         lines.extend(build_nifty_block())                # ② Nifty-500 + buy-by
     if "us" in chosen:
