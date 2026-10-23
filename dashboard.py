@@ -1017,6 +1017,11 @@ async def api_movers(
     top = rows[:limit]
 
     # Enrich with the cached screener rows (valuation/momentum context).
+    # The 52-week levels live in that cache as CURRENT levels, so they are
+    # attached to live screens only: stamping a historical screen with
+    # today's extremes would be a lie the stored JSON could not undo.
+    live_screen = not (target_date or range_from)
+
     def _enrich(row: dict) -> dict:
         try:
             extra = screener_service._get_cached_row(row["symbol"])
@@ -1027,6 +1032,10 @@ async def api_movers(
                       "div_yield", "rsi14", "macd_bull", "above_ema200"):
             if merged.get(field) is None and (extra or {}).get(field) is not None:
                 merged[field] = extra[field]
+        if live_screen:
+            for field in ("wk52_high", "wk52_low"):
+                if merged.get(field) is None and (extra or {}).get(field) is not None:
+                    merged[field] = extra[field]
         if not merged.get("company"):
             merged["company"] = merged.get("name") or merged["symbol"]
         return merged

@@ -44,6 +44,17 @@ def _yahoo_suffix(exchange: str) -> str:
     return ".BO" if ex == "BSE" else ("" if ex == "US" else ".NS")
 
 
+def _finite(value) -> float | None:
+    """Float from a possibly-stringy chart field, None when unusable."""
+    try:
+        number = float(value)
+    except (TypeError, ValueError):
+        return None
+    if number != number or number in (float("inf"), float("-inf")):
+        return None
+    return number
+
+
 def _clean_symbols(symbols) -> list[str]:
     """Drop NSE 'Dummy...' placeholder rows and dedupe, preserving order.
 
@@ -250,7 +261,7 @@ def _fetch_regular_session(
         volume_change_pct = None
         if today_volume is not None and prev_volume:
             volume_change_pct = ((today_volume - prev_volume) / prev_volume) * 100.0
-        return {
+        row = {
             "symbol": symbol,
             "name": name or symbol,
             "price": price,
@@ -260,6 +271,15 @@ def _fetch_regular_session(
             "volume": today_volume,
             "volume_change_pct": volume_change_pct,
         }
+        # Trailing 52-week extremes ride along in the SAME chart meta, so they
+        # cost no extra request - but only for a LIVE screen. On a historical
+        # window (start/end) meta still describes today's trailing year, so
+        # attaching it would label a past session with today's levels; there
+        # the fields are omitted, never guessed.
+        if start is None and end is None:
+            row["wk52_high"] = _finite(meta.get("fiftyTwoWeekHigh"))
+            row["wk52_low"] = _finite(meta.get("fiftyTwoWeekLow"))
+        return row
     except Exception as error:
         log.info("regular-session fetch failed for %s:%s - %s", exchange, symbol, error)
         return None

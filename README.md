@@ -396,6 +396,10 @@ corporate_actions/
   of truth, committed and pushed by the always-on server after every WRITE
   command (`/addstock`, `/removestock`, `/alertfilters`, `/pricealert`, `/schedule`
   and their short aliases) and by the workflow cron after every poll.
+  Stored screen rows carry the trailing `wk52_high` / `wk52_low` for **live**
+  screens (they come free in the same Yahoo chart response); a **historical**
+  screen deliberately omits both keys rather than stamping a past session with
+  today's levels.
   Read-only commands (`/watchlist`, `/status`, `/corpactionsformylist`, `/help`)
   never push or reset. Always-on hosts like Render have **ephemeral disks** -
   anything written but not pushed is wiped on redeploy. To persist changes

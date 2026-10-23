@@ -133,8 +133,14 @@ def compact_gap_row(symbol: str, data: dict) -> dict:
 
 
 def compact_move_row(row: dict) -> dict:
-    """One session mover row with JSON-safe rounded numbers (pure)."""
-    return {
+    """One session mover row with JSON-safe rounded numbers (pure).
+
+    The trailing 52-week extremes are carried through when the source row has
+    them (live screens only - see opening_report.data._fetch_regular_session);
+    a historical row has no 52-week context, so the keys are omitted rather
+    than filled with today's levels.
+    """
+    compact = {
         "symbol": row.get("symbol"),
         "name": row.get("name") or row.get("symbol"),
         "price": _round(row.get("price")),
@@ -144,6 +150,11 @@ def compact_move_row(row: dict) -> dict:
         "volume": row.get("volume"),
         "volume_change_pct": _round(row.get("volume_change_pct"), 1),
     }
+    for field in ("wk52_high", "wk52_low"):
+        value = _round(row.get(field))
+        if value is not None:
+            compact[field] = value
+    return compact
 
 
 def normalize_action(row: dict) -> dict:
