@@ -1,13 +1,21 @@
 {
-  "recorded_at": "2026-10-23T20:06:04+00:00",
+  "recorded_at": "2026-10-24T04:05:03+00:00",
   "recorded_by": "telegram",
   "mode": "live",
   "markets": [
+    "in",
     "us"
   ],
   "target_date": null,
   "report": {
     "sections": [
+      {
+        "market": "in",
+        "closed": true,
+        "reason": "Weekend - the exchange does not trade on Saturday/Sunday.",
+        "next_session": "Mon 26-Oct-2026 09:15 IST",
+        "label": "Indian"
+      },
       {
         "market": "us",
         "snapshot": {
