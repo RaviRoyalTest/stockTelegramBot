@@ -114,7 +114,7 @@
     "window_start": null,
     "window_end": null,
     "paused_until": null,
-    "next_due": "2026-10-25T04:16:00"
+    "next_due": "2026-10-26T04:16:00"
   },
   {
     "interval_min": 1440,
@@ -126,6 +126,7 @@
     "market": "in",
     "window_start": null,
     "window_end": null,
-    "paused_until": null
+    "paused_until": null,
+    "next_due": "2026-10-26T04:19:00"
   }
 ]
