@@ -57,8 +57,7 @@ def handle_alertfilters(chat_id, parts) -> None:
         return
     raw = parts[1].lower()
     if raw in ("off", "none", "-", "false"):
-        settings["ca_alerts"] = False
-        storage.save_user_settings(chat_id, settings)
+        storage.patch_user_settings(chat_id, {"ca_alerts": False})
         reply(
             chat_id,
             "\U0001F515 <b>Corporate-action alerts OFF.</b>\n"
@@ -69,9 +68,8 @@ def handle_alertfilters(chat_id, parts) -> None:
         )
         return
     if raw in ("on", "enable", "true"):
-        settings["ca_alerts"] = True
+        settings = storage.patch_user_settings(chat_id, {"ca_alerts": True})
         settings["action_filters"] = settings.get("action_filters") or []
-        storage.save_user_settings(chat_id, settings)
         reply(
             chat_id,
             "\U0001F4E8 <b>Corporate-action alerts ON.</b>\n"
@@ -83,7 +81,6 @@ def handle_alertfilters(chat_id, parts) -> None:
     invalid = []
     if raw == "all":
         chosen = []
-        settings["ca_alerts"] = True
     else:
         chosen = []
         for token in raw.split(","):
@@ -92,9 +89,7 @@ def handle_alertfilters(chat_id, parts) -> None:
                 chosen.append(token)
             elif token:
                 invalid.append(token)
-        settings["ca_alerts"] = True
-    settings["action_filters"] = chosen
-    storage.save_user_settings(chat_id, settings)
+    storage.patch_user_settings(chat_id, {"ca_alerts": True, "action_filters": chosen})
     log.info(
         "chat %s filters set to: %s",
         chat_id, ", ".join(chosen) if chosen else "all types",
@@ -111,8 +106,7 @@ def handle_corpaction_alerts(chat_id, parts) -> None:
     settings = storage.get_user_settings(chat_id)
     subcommand = parts[1].lower() if len(parts) > 1 else "status"
     if subcommand in ("off", "disable", "stop", "silence"):
-        settings["ca_alerts"] = False
-        storage.save_user_settings(chat_id, settings)
+        storage.patch_user_settings(chat_id, {"ca_alerts": False})
         reply(
             chat_id,
             "\U0001F515 <b>Corporate-action alerts OFF.</b>\n"
@@ -124,8 +118,7 @@ def handle_corpaction_alerts(chat_id, parts) -> None:
         )
         return
     if subcommand in ("on", "enable", "start"):
-        settings["ca_alerts"] = True
-        storage.save_user_settings(chat_id, settings)
+        storage.patch_user_settings(chat_id, {"ca_alerts": True})
         reply(
             chat_id,
             "\U0001F4E8 <b>Corporate-action alerts ON.</b>\n"
@@ -159,9 +152,14 @@ def handle_pricealert(chat_id, parts) -> None:
         return
     raw = parts[1].lower()
     if raw in ("on", "enable", "start"):
+        def restore(settings):
+            last = settings.get("last_price_alert_pct")
+            if last:
+                settings["price_alert_pct"] = last
+
+        settings = storage.update_user_settings(chat_id, restore)
+        last = settings.get("last_price_alert_pct")
         if last:
-            settings["price_alert_pct"] = last
-            storage.save_user_settings(chat_id, settings)
             reply(chat_id, f"Price alerts back <b>ON at {last:g}%</b>.")
         else:
             reply(chat_id, "No previous threshold to restore - set one first: <code>/alert 3</code>")
@@ -176,15 +174,25 @@ def handle_pricealert(chat_id, parts) -> None:
             return
         if value == 0:
             value = None
+    changes = {"price_alert_pct": value}
     if value is not None:
-        settings["last_price_alert_pct"] = value
-    settings["price_alert_pct"] = value
-    storage.save_user_settings(chat_id, settings)
+        changes["last_price_alert_pct"] = value
+    storage.patch_user_settings(chat_id, changes)
     log.info(
         "chat %s price-alert threshold set to: %s",
         chat_id, "off" if value is None else f"{value:g}%",
     )
     reply(chat_id, f"Price alerts {'off' if value is None else 'set to <b>' + format(value, 'g') + '%</b>'}.")
+
+
+def _patch_alert_settings(chat_id, key, defaults, changes) -> dict:
+    """Merge alert fields into the latest nested configuration under lock."""
+    def apply(settings):
+        alert = dict(settings.get(key) or defaults)
+        alert.update(changes)
+        settings[key] = alert
+
+    return storage.update_user_settings(chat_id, apply)[key]
 
 
 def handle_watcher(chat_id, parts) -> None:
@@ -199,11 +207,14 @@ def handle_watcher(chat_id, parts) -> None:
     watcher = dict(stored) if stored else dict(DEFAULT_WATCHER)
     subcommand = parts[1].lower() if len(parts) > 1 else "status"
     if subcommand in ("on", "enable", "start"):
-        if not watcher.get("threshold"):
-            watcher["threshold"] = 5.0
-        watcher["enabled"] = True
-        settings["watcher"] = watcher
-        storage.save_user_settings(chat_id, settings)
+        def enable(settings):
+            watcher = dict(settings.get("watcher") or DEFAULT_WATCHER)
+            if not watcher.get("threshold"):
+                watcher["threshold"] = 5.0
+            watcher["enabled"] = True
+            settings["watcher"] = watcher
+
+        watcher = storage.update_user_settings(chat_id, enable)["watcher"]
         reply(chat_id, "\U0001F6A8 <b>Sudden-move watcher ON.</b>\n"
               f"I will alert you here when any stock in "
               f"<b>{watcher.get('universe', 'nifty100').upper()}</b> moves "
@@ -211,9 +222,7 @@ def handle_watcher(chat_id, parts) -> None:
               "Tune with <code>/watcher set 3</code> or <code>/watcher universe nifty500</code>.")
         return
     if subcommand in ("off", "disable", "stop"):
-        watcher["enabled"] = False
-        settings["watcher"] = watcher
-        storage.save_user_settings(chat_id, settings)
+        _patch_alert_settings(chat_id, "watcher", DEFAULT_WATCHER, {"enabled": False})
         reply(chat_id, "\U0001F6A8 <b>Sudden-move watcher OFF.</b> No more big-move alerts.")
         return
     if subcommand in ("set", "threshold", "pct"):
@@ -227,17 +236,15 @@ def handle_watcher(chat_id, parts) -> None:
             return
         if value == 0:
             value = 5.0
-        watcher["threshold"] = value
+        changes = {"threshold": value}
         # Combined form: /watcher set 5 nifty500 sets threshold AND universe.
         universe = watcher_universe(parts[3]) if len(parts) >= 4 else None
         if universe is None and len(parts) >= 4:
             reply(chat_id, "Universe must be <code>nifty100</code>, <code>nifty500</code> or <code>mylist</code>.")
             return
         if universe:
-            watcher["universe"] = universe
-        watcher["enabled"] = bool(watcher.get("enabled"))
-        settings["watcher"] = watcher
-        storage.save_user_settings(chat_id, settings)
+            changes["universe"] = universe
+        watcher = _patch_alert_settings(chat_id, "watcher", DEFAULT_WATCHER, changes)
         reply(chat_id, f"Watcher threshold set to <b>{value:g}%</b>"
               + (f" · universe <b>{universe.upper()}</b>" if universe else "") + " "
               + ("✅ ON" if watcher.get("enabled") else "(OFF - use <code>/watcher on</code> to enable)."))
@@ -250,18 +257,16 @@ def handle_watcher(chat_id, parts) -> None:
         if universe is None:
             reply(chat_id, "Universe must be <code>nifty100</code>, <code>nifty500</code> or <code>mylist</code>.")
             return
-        watcher["universe"] = universe
+        changes = {"universe": universe}
         # Combined form: /watcher universe nifty500 5 sets universe AND threshold.
         if len(parts) >= 4:
             try:
                 threshold = abs(float(parts[3].strip().rstrip("%")))
-                watcher["threshold"] = threshold if threshold > 0 else 5.0
+                changes["threshold"] = threshold if threshold > 0 else 5.0
             except ValueError:
                 reply(chat_id, "Usage: <code>/watcher universe nifty500 5</code> (percent move)")
                 return
-        watcher["enabled"] = bool(watcher.get("enabled"))
-        settings["watcher"] = watcher
-        storage.save_user_settings(chat_id, settings)
+        watcher = _patch_alert_settings(chat_id, "watcher", DEFAULT_WATCHER, changes)
         reply(chat_id, f"Watcher universe set to <b>{universe.upper()}</b> "
               + ("ON" if watcher.get("enabled") else "OFF")
               + " - use <code>/watcher on</code> to enable.")
@@ -292,9 +297,8 @@ def handle_highlow(chat_id, parts) -> None:
     universe = (highlow.get("universe") or "nifty100").upper()
     subcommand = parts[1].lower() if len(parts) > 1 else "status"
     if subcommand in ("on", "enable", "start"):
-        highlow["enabled"] = True
-        settings["highlow"] = highlow
-        storage.save_user_settings(chat_id, settings)
+        highlow = _patch_alert_settings(chat_id, "highlow", DEFAULT_HIGHLOW, {"enabled": True})
+        universe = (highlow.get("universe") or "nifty100").upper()
         reply(chat_id, "\U0001F4C8 <b>52-week high/low alerts ON.</b>\n"
               "I'll message you here when any stock in "
               f"<b>{universe}</b> clears its <b>52-week high or low</b>, with "
@@ -304,9 +308,7 @@ def handle_highlow(chat_id, parts) -> None:
               "Tune the coverage with <code>/highlow universe nifty500</code>.")
         return
     if subcommand in ("off", "disable", "stop"):
-        highlow["enabled"] = False
-        settings["highlow"] = highlow
-        storage.save_user_settings(chat_id, settings)
+        _patch_alert_settings(chat_id, "highlow", DEFAULT_HIGHLOW, {"enabled": False})
         reply(chat_id, "\U0001F515 <b>52-week high/low alerts OFF.</b>\n"
               "No more 52-week breakout messages. "
               "<code>/highlow on</code> brings them back.")
@@ -319,10 +321,9 @@ def handle_highlow(chat_id, parts) -> None:
         if chosen is None:
             reply(chat_id, "Universe must be <code>nifty100</code>, <code>nifty500</code> or <code>mylist</code>.")
             return
-        highlow["universe"] = chosen
-        highlow["enabled"] = bool(highlow.get("enabled"))
-        settings["highlow"] = highlow
-        storage.save_user_settings(chat_id, settings)
+        highlow = _patch_alert_settings(
+            chat_id, "highlow", DEFAULT_HIGHLOW, {"universe": chosen},
+        )
         reply(chat_id, f"52-week alerts now cover <b>{chosen.upper()}</b> "
               + ("(ON)." if highlow.get("enabled") else "(OFF - use <code>/highlow on</code>)."))
         return
@@ -343,16 +344,14 @@ def handle_moversfund(chat_id, parts) -> None:
     settings = storage.get_user_settings(chat_id)
     subcommand = parts[1].lower() if len(parts) > 1 else "status"
     if subcommand in ("button", "default", "reset", "on", "manual", "tap"):
-        settings["movers_fund"] = "button"
-        storage.save_user_settings(chat_id, settings)
+        storage.patch_user_settings(chat_id, {"movers_fund": "button"})
         reply(chat_id, "\U0001F4CA <b>Movers fundamentals: button mode.</b>\n"
               "Every movers report now ends with a <b>Get Fundamentals</b> "
               "button - tap it to fetch P/E, ROCE/ROE, dividend yield etc. "
               "for that screen.")
         return
     if subcommand in ("auto", "full", "always", "complete"):
-        settings["movers_fund"] = "auto"
-        storage.save_user_settings(chat_id, settings)
+        storage.patch_user_settings(chat_id, {"movers_fund": "auto"})
         reply(chat_id, "\U0001F4CA <b>Movers fundamentals: auto mode.</b>\n"
               "Full fundamentals are now sent automatically with every "
               "movers report.")
@@ -413,12 +412,9 @@ def handle_quiet(chat_id, parts) -> None:
     background pushes: corporate actions, ex-date reminders, price alerts,
     the watcher and scheduled reports.
     """
-    settings = storage.get_user_settings(chat_id)
     subcommand = parts[1].lower() if len(parts) > 1 else "status"
     if subcommand in ("off", "resume", "stop", "end", "unpause"):
-        settings["quiet"] = False
-        settings.pop("quiet_until", None)
-        storage.save_user_settings(chat_id, settings)
+        storage.patch_user_settings(chat_id, {"quiet": False}, remove=("quiet_until",))
         reply(
             chat_id,
             "\U0001F514 <b>Quiet mode OFF.</b>\n"
@@ -426,9 +422,7 @@ def handle_quiet(chat_id, parts) -> None:
         )
         return
     if subcommand in ("on", "start", "pause", "mute", "yes", "true"):
-        settings["quiet"] = True
-        settings["quiet_until"] = None
-        storage.save_user_settings(chat_id, settings)
+        storage.patch_user_settings(chat_id, {"quiet": True}, remove=("quiet_until",))
         reply(
             chat_id,
             "\U0001F515 <b>Quiet mode ON.</b>\n"
@@ -441,9 +435,7 @@ def handle_quiet(chat_id, parts) -> None:
     if minutes is not None:
         now = time.time()
         until = now + minutes * 60
-        settings["quiet"] = True
-        settings["quiet_until"] = until
-        storage.save_user_settings(chat_id, settings)
+        storage.patch_user_settings(chat_id, {"quiet": True, "quiet_until": until})
         reply(
             chat_id,
             "\U0001F515 <b>Quiet mode ON</b> for "

@@ -5,7 +5,7 @@
       "/corpactionsformylist"
     ],
     "chat": "862087765",
-    "next_due": "2026-10-27T03:30:00",
+    "next_due": "2026-10-27T03:30:00+00:00",
     "run_at": "09:00",
     "market": "in",
     "window_start": null,
@@ -23,7 +23,7 @@
     "window_start": null,
     "window_end": null,
     "paused_until": null,
-    "next_due": "2026-10-27T03:55:00"
+    "next_due": "2026-10-27T03:55:00+00:00"
   },
   {
     "interval_min": 1440,
@@ -36,7 +36,7 @@
     "window_start": null,
     "window_end": null,
     "paused_until": null,
-    "next_due": "2026-10-26T10:05:00"
+    "next_due": "2026-10-26T10:05:00+00:00"
   },
   {
     "interval_min": 1440,
@@ -44,7 +44,7 @@
       "/openreport us"
     ],
     "chat": "862087765",
-    "next_due": "2026-10-26T13:40:00",
+    "next_due": "2026-10-26T13:40:00+00:00",
     "run_at": "09:40,16:05",
     "market": "us",
     "window_start": null,
@@ -57,7 +57,7 @@
       "/corpactionssummary"
     ],
     "chat": "862087765",
-    "next_due": "2026-10-27T03:45:00",
+    "next_due": "2026-10-27T03:45:00+00:00",
     "run_at": "09:15",
     "market": "in",
     "window_start": null,
@@ -70,7 +70,7 @@
       "/emailclose"
     ],
     "chat": "862087765",
-    "next_due": "2026-10-26T10:20:00",
+    "next_due": "2026-10-26T10:20:00+00:00",
     "run_at": "15:50",
     "market": "in",
     "window_start": null,
@@ -88,7 +88,7 @@
     "window_start": null,
     "window_end": null,
     "paused_until": null,
-    "next_due": "2026-10-27T04:10:00"
+    "next_due": "2026-10-27T04:10:00+00:00"
   },
   {
     "interval_min": 1440,
@@ -101,7 +101,7 @@
     "window_start": null,
     "window_end": null,
     "paused_until": null,
-    "next_due": "2026-10-27T04:13:00"
+    "next_due": "2026-10-27T04:13:00+00:00"
   },
   {
     "interval_min": 1440,
@@ -114,7 +114,7 @@
     "window_start": null,
     "window_end": null,
     "paused_until": null,
-    "next_due": "2026-10-27T04:16:00"
+    "next_due": "2026-10-27T04:16:00+00:00"
   },
   {
     "interval_min": 1440,
@@ -127,6 +127,6 @@
     "window_start": null,
     "window_end": null,
     "paused_until": null,
-    "next_due": "2026-10-27T04:19:00"
+    "next_due": "2026-10-27T04:19:00+00:00"
   }
 ]

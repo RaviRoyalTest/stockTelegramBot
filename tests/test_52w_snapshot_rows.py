@@ -15,16 +15,21 @@ Three invariants are pinned here:
     the keys entirely when absent (never writes a null placeholder).
 """
 import unittest
+from datetime import datetime, time, timedelta
 from unittest.mock import patch
+from zoneinfo import ZoneInfo
 
 from corporate_actions import snapshots as snapshots_mod
 from corporate_actions.opening_report import data as d
+
+IST = ZoneInfo("Asia/Kolkata")
 
 
 class _FakeResponse:
     def __init__(self, payload):
         self._payload = payload
-        self.status_code = 200
+
+    status_code = 200
 
     def raise_for_status(self):
         return None
@@ -33,7 +38,21 @@ class _FakeResponse:
         return self._payload
 
 
-def _payload(meta_extra=None):
+def _session_epochs():
+    """Three daily bars ending on TODAY's India session.
+
+    The live path only accepts a bar dated the market-local current date, so
+    the fixture must be anchored on the wall clock instead of a frozen epoch
+    that silently becomes a stale session as time passes.
+    """
+    today = datetime.now(IST).date()
+    return [
+        int(datetime.combine(today - timedelta(days=days), time(15, 30), IST).timestamp())
+        for days in (2, 1, 0)
+    ]
+
+
+def _payload(meta_extra=None, timestamps=None):
     meta = {
         "longName": "Reliance Industries Limited",
         "symbol": "RELIANCE.NS",
@@ -44,7 +63,7 @@ def _payload(meta_extra=None):
         "chart": {
             "result": [{
                 "meta": meta,
-                "timestamp": [1759900000, 1760000000, 1760100000],
+                "timestamp": list(timestamps or _session_epochs()),
                 "indicators": {"quote": [{
                     "close": [1150.0, 1175.5, 1190.0],
                     "volume": [1000, 1200, 1500],
@@ -55,12 +74,13 @@ def _payload(meta_extra=None):
 
 
 class LiveSession52WeekTests(unittest.TestCase):
-    def _fetch(self, start=None, end=None, meta_extra=None):
+    def _fetch(self, start=None, end=None, meta_extra=None, timestamps=None):
+        payload = _payload(meta_extra, timestamps)
         with patch.object(d, "_throttle_chart_req", lambda: None), \
                 patch.object(d, "_quote_session",
                              lambda: type("S", (), {
                                  "get": lambda _self, url, timeout=None:
-                                     _FakeResponse(_payload(meta_extra)),
+                                     _FakeResponse(payload),
                              })()):
             return d._fetch_regular_session("NSE", "RELIANCE", start, end)
 
@@ -84,9 +104,10 @@ class LiveSession52WeekTests(unittest.TestCase):
         self.assertEqual(row["wk52_low"], 1152.2)
 
     def test_historical_row_omits_52_week_fields(self):
-        # 1760100000 = the last bar; asking for that completed session must
+        # The last bar is the completed session we ask for; that record must
         # not drag today's trailing extremes into a past session's record.
-        row = self._fetch(start=1759900000, end=1760100000,
+        stamps = _session_epochs()
+        row = self._fetch(start=stamps[0], end=stamps[-1], timestamps=stamps,
                           meta_extra={"fiftyTwoWeekHigh": 1611.8,
                                       "fiftyTwoWeekLow": 1152.2})
         self.assertIsNotNone(row)

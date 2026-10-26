@@ -7,7 +7,10 @@ import time
 from datetime import datetime
 
 from .. import config, storage
+from ..core.dates import IST
 from ..formatting.schedule import format_schedule
+from ..storage.schedule import schedule_defaults_enabled
+from ..storage.settings import patch_user_settings
 from ..market.hours import is_market_open, market_label, market_tz_tag
 from ..telegram.markup import hide_keyboard_markup, quick_menu_markup
 from .helpers import run_command_sequence
@@ -55,7 +58,7 @@ def run_schedule_now(chat_id) -> None:
     for entry in mine:
         commands.extend(command for command in (entry.get("commands") or []) if command.strip())
     if not commands:
-        if storage.is_owner(chat_id):
+        if storage.is_owner(chat_id) and schedule_defaults_enabled(chat_id):
             commands = [command for command in config.SCHEDULED_COMMANDS if command.strip()]
         if not commands:
             reply(chat_id, "No scheduled commands for your chat yet.\n"
@@ -100,9 +103,7 @@ def handle_market(chat_id, parts) -> None:
     subcommand = parts[1].lower() if len(parts) > 1 else ""
     if subcommand in MARKET_WORDS:
         value = "any" if subcommand == "off" else subcommand
-        settings = storage.get_user_settings(chat_id) or {}
-        settings["schedule_market"] = value
-        storage.save_user_settings(chat_id, settings)
+        patch_user_settings(chat_id, {"schedule_market": value})
         log.info("chat %s set schedule market gate to %s", chat_id, value)
         reply(
             chat_id,
@@ -194,7 +195,7 @@ def handle_sched(chat_id, parts) -> None:
             return
         until_ts = time.time() + minutes * 60
         storage.pause_schedule(chat_id, until_ts)
-        until_label = datetime.fromtimestamp(until_ts).strftime("%d-%b %H:%M")
+        until_label = datetime.fromtimestamp(until_ts, IST).strftime("%d-%b %H:%M IST")
         log.info("chat %s paused schedule for %s (%s)", chat_id, parts[2], until_label)
         reply(
             chat_id,

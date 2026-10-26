@@ -41,33 +41,36 @@ def _fake_run_recorder():
 class GitHttpVersionTests(unittest.TestCase):
     def _run_git(self, *args, env=None):
         calls, fake_run = _fake_run_recorder()
-        with patch.dict("os.environ", env or {}, clear=False), \
+        with patch.dict("os.environ", {"GIT_HTTP_VERSION": "HTTP/1.1", **(env or {})}, clear=False), \
                 patch("corporate_actions.github.subprocess.run", side_effect=fake_run):
             _git(*args)
         return calls
 
     def test_push_pinned_to_http_1_1(self):
         calls = self._run_git("push", "https://x@github.com/r.git", "HEAD:main")
-        self.assertEqual(calls[0][:3], ["-c", "http.version=HTTP/1.1", "push"])
+        self.assertEqual(calls[0][:5], ["git", "--no-pager", "-c", "http.version=HTTP/1.1", "push"])
 
     def test_fetch_and_ls_remote_also_pinned(self):
         for command in ("fetch", "ls-remote"):
             calls = self._run_git(command, "origin")
-            self.assertEqual(calls[0][2], command, command)
+            self.assertEqual(
+                            calls[0][:5],
+                            ["git", "--no-pager", "-c", "http.version=HTTP/1.1", command],
+                            command)
 
     def test_local_commands_not_pinned(self):
         calls = self._run_git("status", "--porcelain")
-        self.assertEqual(calls[0][:2], ["status", "--porcelain"])
+        self.assertEqual(calls[0], ["git", "--no-pager", "status", "--porcelain"])
 
     def test_env_override(self):
         calls = self._run_git(
             "push", "origin", env={"GIT_HTTP_VERSION": "HTTP/2"}
         )
-        self.assertEqual(calls[0][:3], ["-c", "http.version=HTTP/2", "push"])
+        self.assertEqual(calls[0][:5], ["git", "--no-pager", "-c", "http.version=HTTP/2", "push"])
 
     def test_disable_with_empty_env(self):
         calls = self._run_git("push", "origin", env={"GIT_HTTP_VERSION": ""})
-        self.assertEqual(calls[0][0], "push")
+        self.assertEqual(calls[0], ["git", "--no-pager", "push", "origin"])
 
 
 class PostAlertPushTests(unittest.TestCase):
@@ -139,6 +142,18 @@ class StaleSeenWarningTests(unittest.TestCase):
 
 class BootFloodGuardTests(unittest.TestCase):
     """A stale-seen boot must not re-fire everything on the first cycle."""
+
+    def setUp(self):
+        patches = [
+            patch.object(Poller, "_fetch_for_watchlist", return_value=([], [], [])),
+            patch("corporate_actions.poller.engine.storage.get_user_settings", return_value={}),
+            patch("corporate_actions.poller.engine.storage.is_quiet", return_value=False),
+            patch("corporate_actions.email.daily.maybe_send_daily_email", return_value=False),
+            patch("corporate_actions.snapshots.maybe_record_session_snapshot"),
+        ]
+        for mock_patch in patches:
+            mock_patch.start()
+            self.addCleanup(mock_patch.stop)
 
     def _stale_poller(self, boot_seconds_ago=0):
         with patch("corporate_actions.poller.engine.storage.load_seen",

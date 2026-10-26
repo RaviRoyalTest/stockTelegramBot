@@ -1,6 +1,6 @@
 """Record last-session market screens into data/snapshots.json.
 
-One file holds the LAST session only, mirroring the openreport layout:
+The legacy latest file and per-market session archives mirror the openreport layout:
 India = NIFTY 100 + NIFTY 500 ex-100 + Microcap 250 blocks of 20
 (10 gainers + 10 losers each = 60 rows, exactly like /openreport);
 US = Mega-cap + Large-cap blocks. Plus the overnight gap-down scan and
@@ -16,14 +16,14 @@ the day's bars) - reuse first, fetch only when stale, never churn.
 """
 from __future__ import annotations
 
+import inspect
 import logging
 import threading
 from concurrent.futures import ThreadPoolExecutor, as_completed
-from datetime import datetime, timezone
+from datetime import date, datetime, timedelta, timezone
 
 from . import config, storage
 from .market import hours as market_hours
-from .core.dates import today_ist
 from .opening_report.data import (
     fetch_universe_moves,
     get_microcap250,
@@ -36,7 +36,9 @@ from .opening_report.data import (
     top_gainers,
     top_losers,
 )
-from .sources import get_bse_corporate_actions, get_gap_change, get_index_universe
+from .sources import (
+    get_bse_corporate_actions, get_gap_change_on_date, get_index_universe,
+)
 
 log = logging.getLogger(__name__)
 
@@ -78,31 +80,66 @@ def _minutes_since_close(market: str, now=None) -> int | None:
     return local.hour * 60 + local.minute - close
 
 
+def _session_can_finalize(market: str, session: date, now=None) -> bool:
+    local = market_hours.local_now(market, now)
+    if session != local.date():
+        return session < local.date()
+    delay = _minutes_since_close(market, now)
+    return delay is not None and delay >= RECORD_DELAY_MINUTES
+
+
+def is_snapshot_finalized(doc: dict | None, market: str | None = None) -> bool:
+    """Lifecycle API for dashboard/record callers, including legacy records.
+
+    Old docs have no explicit lifecycle: only a verifiable post-close capture
+    counts as final. An unknown capture time is eligible for one safe refresh.
+    """
+    if not isinstance(doc, dict) or not doc:
+        return False
+    if market is not None and doc.get("market", "in") != market:
+        return False
+    if "finalized" in doc:
+        return doc["finalized"] is True
+    if doc.get("status") in ("provisional", "finalized"):
+        return doc["status"] == "finalized"
+    try:
+        captured = datetime.fromisoformat(doc["recorded_at"])
+        if captured.tzinfo is None:
+            return False
+        session = date.fromisoformat(doc["session"])
+        return _session_can_finalize(doc.get("market", "in"), session, captured)
+    except (KeyError, TypeError, ValueError):
+        return False
+
+
 def should_auto_record(market: str, doc: dict | None, now=None,
                        latest: "object" = "auto") -> bool:
     """Stale verdict for the auto-refresh (pure - no network, no disk).
 
-    True only when the stored doc is for THIS market and its session is
-    older than the market's latest regular session date (or nothing is
-    stored at all). `latest` injects the latest-session lookup for tests
+    True for a missing/wrong-market doc, an older session, or a provisional
+    capture of the same session. Close-delay gating is the caller's job.
+    `latest` injects the latest-session lookup for tests
     ("auto" = do the real lookup); an injected or failed lookup of None
     deliberately returns False - an unverifiable verdict must never
     trigger a heavy refetch.
     """
     market, _ = _market_key(market or "", None)
-    doc = doc or {}
-    if str(doc.get("market") or "in") != market:
-        # Never auto-replace the other market's recorded session; that
-        # stays an explicit choice (web selector / Telegram /snap us).
-        return not doc  # empty store -> allowed to bootstrap the default market
-    session = str(doc.get("session") or "")
-    if not session:
-        return True
+    doc = doc if isinstance(doc, dict) else {}
     if latest == "auto":
         latest = latest_session_date(market)
     if latest is None:
         return False
-    return session != latest.isoformat()
+    if str(doc.get("market") or "in").lower() != market:
+        return True
+    session = str(doc.get("session") or "")
+    try:
+        if date.fromisoformat(session).isoformat() != session:
+            return True
+    except ValueError:
+        return True
+    return session < latest.isoformat() or (
+        session == latest.isoformat() and not is_snapshot_finalized(doc, market)
+    )
 
 # Openreport-style blocks per market: (key, title, symbol-loader).
 IN_BLOCKS = (
@@ -129,6 +166,7 @@ def compact_gap_row(symbol: str, data: dict) -> dict:
         "open": _round(data.get("open")),
         "gap_pct": _round(data.get("gap_pct")),
         "move_from_open_pct": _round(data.get("move_from_open_pct")),
+        **({"date": data["date"]} if data.get("date") else {}),
     }
 
 
@@ -150,6 +188,8 @@ def compact_move_row(row: dict) -> dict:
         "volume": row.get("volume"),
         "volume_change_pct": _round(row.get("volume_change_pct"), 1),
     }
+    if row.get("date"):
+        compact["date"] = row["date"]
     for field in ("wk52_high", "wk52_low"):
         value = _round(row.get(field))
         if value is not None:
@@ -182,7 +222,8 @@ def trim_actions(rows: list[dict], limit: int = ACTIONS_TOP_N) -> list[dict]:
 def build_snapshot_doc(session: str, universe: str, gaps: list[dict],
                        gainers: list[dict], losers: list[dict],
                        actions: list[dict], recorded_by: str = "manual",
-                       market: str = "in", universes: list[dict] | None = None) -> dict:
+                       market: str = "in", universes: list[dict] | None = None,
+                       finalized: bool = False) -> dict:
     """Assemble the file doc (pure - no network, no disk)."""
     return {
         "session": session,
@@ -190,6 +231,8 @@ def build_snapshot_doc(session: str, universe: str, gaps: list[dict],
         "universe": universe,
         "recorded_at": datetime.now(timezone.utc).isoformat(timespec="seconds"),
         "recorded_by": recorded_by,
+        "status": "finalized" if finalized else "provisional",
+        "finalized": finalized,
         "gap_downs": gaps,
         "top_gainers": gainers,
         "top_losers": losers,
@@ -198,22 +241,64 @@ def build_snapshot_doc(session: str, universe: str, gaps: list[dict],
     }
 
 
-def _fetch_gap(exchange: str, symbol: str) -> tuple[str, dict | None]:
+def _fetch_gap(exchange: str, symbol: str,
+               target_date: date) -> tuple[str, dict | None]:
     try:
-        data = get_gap_change(exchange, symbol)
+        data = get_gap_change_on_date(exchange, symbol, target_date)
     except Exception as error:
         log.warning("_fetch_gap: %s", error)
         return symbol, None
-    if not data or data.get("gap_pct") is None or data["gap_pct"] >= 0:
+    if not data or data.get("date") != target_date.isoformat() \
+            or data.get("gap_pct") is None or data["gap_pct"] >= 0:
         return symbol, None
     return symbol, data
 
 
+def _fetch_session_moves(exchange: str, symbols: list[str],
+                         target_date: date) -> list[dict]:
+    """Anchor every symbol to the intended bar, not its latest usable bar.
+
+    New providers accept target_date; older ones expose an exact-date
+    start/end window. Never fall back to an unbounded live fetch.
+    """
+    parameters = inspect.signature(fetch_universe_moves).parameters
+    if "target_date" in parameters or any(
+        p.kind == inspect.Parameter.VAR_KEYWORD for p in parameters.values()
+    ):
+        rows = fetch_universe_moves(exchange, symbols, target_date=target_date)
+    elif "start" in parameters and "end" in parameters:
+        market = "us" if exchange.upper() == "US" else "in"
+        close = market_hours._hhmm_minutes(market_hours.MARKETS[market]["close"])
+        # Just after the local close includes the daily bar and falls on the
+        # same date in UTC too (legacy providers interpret end in UTC).
+        end = datetime.combine(
+            target_date, datetime.min.time(),
+            market_hours.market_timezone(market) or timezone.utc,
+        ) + timedelta(minutes=close + 1)
+        rows = fetch_universe_moves(
+            exchange, symbols, start=(end - timedelta(days=14)).timestamp(),
+            end=end.timestamp(),
+        )
+    else:
+        log.warning("snapshots: mover source cannot select an exact session")
+        return []
+    session = target_date.isoformat()
+    aligned = []
+    for row in rows or []:
+        # Legacy exact-date fetches omit a row date; their bounded API
+        # already rejects missing target bars. Explicit dates must agree.
+        row_date = row.get("date", row.get("session_date", row.get("session")))
+        if row_date is not None and str(row_date) != session:
+            continue
+        aligned.append({**row, "date": session})
+    return aligned
+
+
 def _universe_block(key: str, title: str, exchange: str,
-                    symbols: list[str]) -> tuple[dict, list[dict]]:
+                    symbols: list[str], target_date: date) -> tuple[dict, list[dict]]:
     """One openreport-style block + its raw rows (for the flat tops)."""
     try:
-        rows = fetch_universe_moves(exchange, symbols or [])
+        rows = _fetch_session_moves(exchange, symbols or [], target_date)
     except Exception as error:
         log.warning("snapshots: block %s failed: %s", key, error)
         rows = []
@@ -244,26 +329,27 @@ def maybe_record_session_snapshot(market: str = "in",
     (fresh or reused); {} only when nothing could be recorded.
     """
     market, _ = _market_key(market or "", None)
-    today = today_ist().isoformat()
+    today = market_hours.local_now(market).date().isoformat()
     state = _auto_state.get(market) or {}
     if state.get("date") != today:
         state = {"date": today, "attempts": 0}
         _auto_state[market] = state
-    if state["attempts"] >= MAX_AUTO_ATTEMPTS:
-        return storage.load_snapshots() or {}
+    existing = storage.load_snapshots(market) or {}
+    if state["attempts"] >= MAX_AUTO_ATTEMPTS or is_recording():
+        return existing
     try:
-        stale = should_auto_record(market, storage.load_snapshots())
+        latest = latest_session_date(market)
+        stale = should_auto_record(market, existing, latest=latest)
     except Exception as error:
         log.info("snapshots: staleness check failed: %s", error)
-        return storage.load_snapshots() or {}
+        return existing
     if not stale:
-        return storage.load_snapshots() or {}
+        return existing
     # Post-close delay BEFORE burning an attempt: during market hours (and
     # right after the bell) the day's bars are not final yet, so the record
     # must wait - and must not consume the day's MAX_AUTO_ATTEMPTS either.
-    delay = _minutes_since_close(market)
-    if delay is not None and delay < RECORD_DELAY_MINUTES:
-        return storage.load_snapshots() or {}
+    if latest is None or not _session_can_finalize(market, latest):
+        return existing
     state["attempts"] += 1
     return record_session_snapshot(market=market, force=True,
                                    recorded_by=recorded_by)
@@ -279,7 +365,8 @@ def record_session_snapshot(universe: str = "nifty500", force: bool = False,
     """
     if not _recording.acquire(blocking=False):
         log.info("snapshots: record already running - skipping (%s)", recorded_by)
-        return storage.load_snapshots() or {}
+        requested_market, _ = _market_key(market or "", universe)
+        return storage.load_snapshots(requested_market) or {}
     try:
         return _record_session_snapshot_impl(universe, force, recorded_by, market)
     finally:
@@ -300,15 +387,20 @@ def _record_session_snapshot_impl(universe: str = "nifty500", force: bool = Fals
     """
     market, universe = _market_key(market or "", universe)
     exchange = "US" if market == "us" else "NSE"
+    existing = storage.load_snapshots(market) or {}
     try:
-        session_date = latest_session_date(market) or today_ist()
-    except Exception:
-        session_date = today_ist()
+        session_date = latest_session_date(market)
+    except Exception as error:
+        log.info("snapshots: session lookup failed: %s", error)
+        session_date = None
+    if session_date is None:
+        # Do not stamp today's date onto unverifiable or stale price bars.
+        return existing
     session = session_date.isoformat()
+    can_finalize = _session_can_finalize(market, session_date)
     try:
-        existing = storage.load_snapshots() or {}
         if not force and existing.get("session") == session \
-                and existing.get("market", "in") == market and existing.get("gap_downs"):
+                and (is_snapshot_finalized(existing, market) or not can_finalize):
             log.info("snapshots: %s/%s already recorded - skipping refetch", market, session)
             return existing
     except Exception as error:
@@ -326,7 +418,7 @@ def _record_session_snapshot_impl(universe: str = "nifty500", force: bool = Fals
             us_symbols = []
         us_rows: list[dict] = []
         try:
-            us_rows = fetch_universe_moves("US", us_symbols)
+            us_rows = _fetch_session_moves("US", us_symbols, session_date)
         except Exception as error:
             log.warning("snapshots: US moves failed: %s", error)
         try:
@@ -354,7 +446,7 @@ def _record_session_snapshot_impl(universe: str = "nifty500", force: bool = Fals
             except Exception as error:
                 log.warning("snapshots: block %s universe failed: %s", key, error)
                 symbols = []
-            block, rows = _universe_block(key, title, "NSE", symbols)
+            block, rows = _universe_block(key, title, "NSE", symbols, session_date)
             blocks.append(block)
             all_rows.extend(rows)
         try:
@@ -369,7 +461,7 @@ def _record_session_snapshot_impl(universe: str = "nifty500", force: bool = Fals
     gaps: list[dict] = []
     try:
         with ThreadPoolExecutor(max_workers=20) as executor:
-            futures = {executor.submit(_fetch_gap, exchange, symbol): symbol
+            futures = {executor.submit(_fetch_gap, exchange, symbol, session_date): symbol
                        for symbol in gap_symbols}
             found = []
             for future in as_completed(futures):
@@ -406,10 +498,11 @@ def _record_session_snapshot_impl(universe: str = "nifty500", force: bool = Fals
     if not gaps and not gainers and not losers and not actions \
             and not any(block.get("gainers") or block.get("losers") for block in blocks):
         log.warning("snapshots: every source failed for %s/%s", market, session)
-        return storage.load_snapshots() or {}
+        return existing
 
     doc = build_snapshot_doc(session, universe, gaps, gainers, losers, actions,
-                             recorded_by, market, blocks)
+                             recorded_by, market, blocks,
+                             finalized=can_finalize and bool(all_rows or gaps))
     try:
         storage.save_snapshots(doc)
     except Exception as error:

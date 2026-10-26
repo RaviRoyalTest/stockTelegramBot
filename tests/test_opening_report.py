@@ -524,8 +524,25 @@ class RecordOpencloseTests(unittest.TestCase):
         from corporate_actions import storage as storage_pkg
         from corporate_actions.opening_report import report as r
 
-        fake_report = {"sections": [], "total_verified": 4, "total_target": 4,
-                       "mode": "live"}
+        from datetime import timezone
+        from zoneinfo import ZoneInfo
+
+        now = datetime(2026, 9, 29, 17, 10, tzinfo=timezone.utc)
+        clock = patch.object(r, "datetime", wraps=datetime)
+        clock.start().now.return_value = now
+        self.addCleanup(clock.stop)
+        local = patch.object(r, "local_now", side_effect=lambda market, instant=None:
+                             (instant or now).astimezone(ZoneInfo("Asia/Kolkata")))
+        local.start()
+        self.addCleanup(local.stop)
+        fake_report = {
+            "sections": [{"market": "in", "session_date": "2026-09-29",
+                          "captured_at": "2026-09-29T17:00:00+00:00",
+                          "mode": "live", "finalized": True,
+                          "universes": [{"key": "in100", "verified": 4,
+                                         "target": 4, "gainers": [], "losers": []}]}],
+            "total_verified": 4, "total_target": 4, "mode": "live",
+        }
         saved = []
         with patch.object(r, "collect_and_render",
                           return_value=(["L"], fake_report)):

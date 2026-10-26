@@ -18,4 +18,5 @@ def load_seen() -> set:
 
 def save_seen(keys: set) -> None:
     with _lock, _file_lock(config.SEEN_FILE):
-        write_json(config.SEEN_FILE, sorted(keys))
+        current = read_json(config.SEEN_FILE, [])
+        write_json(config.SEEN_FILE, sorted(set(current) | set(keys)))

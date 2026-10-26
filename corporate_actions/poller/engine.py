@@ -650,15 +650,16 @@ class Poller:
         # Keep data/snapshots.json (the web Sessions tab + daily mail data)
         # current: reuse the stored file while it covers the latest session;
         # fetch a new session's screens only after that session ends. Runs
-        # inline but never raises and never blocks long (the record takes the
-        # snapshots lock; a concurrent web/button record makes this a no-op).
+        # inline and may take a full scan; a concurrent web/button record
+        # makes this a no-op. Each market reuses its own latest archive.
         if not suppress and _snapshots_auto_enabled:
-            try:
-                from .. import snapshots as snapshots_module
+            from .. import snapshots as snapshots_module
 
-                snapshots_module.maybe_record_session_snapshot(market="in")
-            except Exception as error:
-                log.info("poll cycle: snapshot auto-refresh skipped: %s", error)
+            for market in ("in", "us"):
+                try:
+                    snapshots_module.maybe_record_session_snapshot(market=market)
+                except Exception as error:
+                    log.info("poll cycle: %s snapshot auto-refresh skipped: %s", market, error)
 
         total_sent = self.status["total_sent"] + sent
         self._set("total_sent", total_sent)

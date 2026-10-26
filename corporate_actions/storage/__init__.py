@@ -17,10 +17,11 @@ from .schedule import (
     resume_schedule,
     save_schedule,
     schedule_next_due_ts,
+    schedule_defaults_enabled,
     set_schedule_next_due,
 )
 from .maillog import load_mail_log, record_mail
-from .migrate import migrate_legacy_state_files
+from .migrate import migrate_legacy_state_files, normalize_schedule_timestamps
 from .openclose import (
     list_openclose_dates,
     load_openclose,
@@ -45,6 +46,8 @@ from .settings import (
     quiet_until_ts,
     record_recent_command,
     save_user_settings,
+    patch_user_settings,
+    update_user_settings,
 )
 from .subscriptions import (
     add_subscription,
@@ -83,6 +86,7 @@ __all__ = [
     "load_mail_log",
     "record_mail",
     "migrate_legacy_state_files",
+    "normalize_schedule_timestamps",
     "append_snapshot",
     "capture_command_output",
     "cleanup_expired_snapshots",
@@ -116,6 +120,8 @@ __all__ = [
     "load_settings",
     "get_user_settings",
     "save_user_settings",
+    "patch_user_settings",
+    "update_user_settings",
     "ca_alerts_enabled",
     "is_quiet",
     "quiet_until_ts",
@@ -137,6 +143,7 @@ __all__ = [
     "is_undeliverable_chat",
     "set_schedule_next_due",
     "schedule_next_due_ts",
+    "schedule_defaults_enabled",
     "pause_schedule",
     "resume_schedule",
 ]
@@ -158,4 +165,10 @@ try:
 except Exception as error:  # pragma: no cover - defensive, best effort only
     logging.getLogger(__name__).warning(
         "legacy open/close migration skipped: %s", error
+    )
+try:
+    normalize_schedule_timestamps()
+except Exception as error:  # pragma: no cover - defensive, best effort only
+    logging.getLogger(__name__).warning(
+        "schedule timestamp normalisation skipped: %s", error
     )

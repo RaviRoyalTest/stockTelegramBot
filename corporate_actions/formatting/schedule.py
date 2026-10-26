@@ -7,6 +7,7 @@ import html
 from .. import config, storage
 from ..poller.highlow import DEFAULT_HIGHLOW
 from ..poller.watcher import DEFAULT_WATCHER
+from ..storage.schedule import schedule_at_times
 
 
 def format_interval(interval_min: int) -> str:
@@ -109,7 +110,7 @@ def format_schedule(chat_id) -> str:
     )
     mine = storage.load_schedule_for(chat_id)
     if not mine:
-        if storage.is_owner(chat_id):
+        if storage.is_owner(chat_id) and storage.schedule_defaults_enabled(chat_id):
             commands = [command for command in config.SCHEDULED_COMMANDS if command.strip()]
             if not commands:
                 return "<b>Schedule:</b> no automated reports yet."
@@ -132,29 +133,35 @@ def format_schedule(chat_id) -> str:
         interval = int(entry.get("interval_min") or 0)
         commands = entry.get("commands") or []
         market = entry_market(entry, default=default_market)
-        tz_tag = market_tz_tag(market)
-        tz_name = market_tz_name(market)
+        tz_name = str(entry.get("timezone") or market_tz_name(market))
+        tz_tag = str(entry.get("timezone") or market_tz_tag(market))
+        at_times = schedule_at_times(entry)
         # A clock-time entry on a 24h cadence reads as 'daily at HH:MM', not
         # the confusing 'every 1d: /cmd at 09:15 IST'.
-        if entry.get("run_at") and interval and interval % (24 * 60) == 0:
+        if at_times and interval and interval % (24 * 60) == 0:
             label = "daily"
         else:
             label = format_interval(interval)
         line = f"  {index}. {label}: {html.escape(', '.join(commands))}"
-        if entry.get("run_at"):
-            pretty_times = str(entry["run_at"]).replace(",", ", ")
-            line += f" at {pretty_times} {tz_tag}"
+        if at_times:
+            pretty_times = ", ".join(at_times)
+            line += f" at {html.escape(pretty_times)} {html.escape(tz_tag)}"
         if entry.get("window_start") and entry.get("window_end"):
-            line += f" \u00b7 window {entry['window_start']}\u2013{entry['window_end']} {tz_tag}"
+            line += (f" \u00b7 window {html.escape(str(entry['window_start']))}"
+                     f"\u2013{html.escape(str(entry['window_end']))} {html.escape(tz_tag)}")
         elif market != "any":
             line += f" \u00b7 {market_label(market)}"
         elif entry.get("market") == "any":
             line += " \u00b7 any time"
+        if entry.get("timezone") and not at_times and not (
+            entry.get("window_start") and entry.get("window_end")
+        ):
+            line += f" \u00b7 timezone {html.escape(tz_name)}"
         if entry_paused(entry):
             line += f" \u2014 \u23f8 <b>paused</b> (until {entry_paused_until(entry)})"
         due_time = storage.schedule_next_due_ts(entry)
         if due_time:
-            line += f"  \u2014 next run {format_next_run(due_time, tz_name, tz_tag)}"
+            line += f"  \u2014 next run {html.escape(format_next_run(due_time, tz_name, tz_tag))}"
         lines.append(line)
     lines.append(
         "\nUsage: <code>/schedule add 3h /scan500</code> (interval: 180, 90m, 3h, 1d)"

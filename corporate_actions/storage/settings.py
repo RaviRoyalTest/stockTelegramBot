@@ -5,8 +5,10 @@ here so they survive restarts and GitHub Actions re-runs.
 """
 from __future__ import annotations
 
+import copy
 import logging
 import time
+from collections.abc import Callable
 
 from .. import config
 from .json_file import _file_lock, _lock, read_json, write_json
@@ -27,12 +29,42 @@ def get_user_settings(chat_id) -> dict:
 
 
 def save_user_settings(chat_id, settings: dict) -> None:
-    """Merge/replace a chat's settings dict."""
+    """Replace a chat's settings (legacy API).
+
+    Prefer patch_user_settings for fields and update_user_settings for
+    read-modify-write operations; a previously read snapshot is not safe here.
+    """
     with _lock, _file_lock(config.SETTINGS_FILE):
         current = read_json(config.SETTINGS_FILE, {})
         current[str(chat_id)] = settings
         write_json(config.SETTINGS_FILE, current)
     log.info("settings.json: chat %s settings = %s", chat_id, settings)
+
+
+def update_user_settings(chat_id, update: Callable[[dict], None]) -> dict:
+    """Mutate a fresh settings dict under lock and return the saved snapshot.
+
+    The callback runs inside the transaction, must mutate its argument, and
+    must not perform network I/O. Exceptions leave the stored state unchanged.
+    """
+    with _lock, _file_lock(config.SETTINGS_FILE):
+        current = read_json(config.SETTINGS_FILE, {})
+        settings = current.get(str(chat_id))
+        settings = copy.deepcopy(settings) if isinstance(settings, dict) else {}
+        update(settings)
+        current[str(chat_id)] = settings
+        write_json(config.SETTINGS_FILE, current)
+        return copy.deepcopy(settings)
+
+
+def patch_user_settings(chat_id, changes: dict, *, remove=()) -> dict:
+    """Set only supplied top-level fields, optionally deleting named fields."""
+    def apply(settings):
+        settings.update(copy.deepcopy(changes))
+        for key in remove:
+            settings.pop(key, None)
+
+    return update_user_settings(chat_id, apply)
 
 
 RECENT_COMMANDS_LIMIT = 10
@@ -49,14 +81,12 @@ def record_recent_command(chat_id, text: str) -> None:
     raw = (text or "").strip()
     if not raw:
         return
-    with _lock, _file_lock(config.SETTINGS_FILE):
-        current = read_json(config.SETTINGS_FILE, {})
-        settings = dict(current.get(str(chat_id)) or {})
+    def remember(settings):
         recent = [item for item in (settings.get("recent_commands") or []) if item != raw]
         recent.insert(0, raw)
         settings["recent_commands"] = recent[:RECENT_COMMANDS_LIMIT]
-        current[str(chat_id)] = settings
-        write_json(config.SETTINGS_FILE, current)
+
+    update_user_settings(chat_id, remember)
 
 
 def get_recent_commands(chat_id, limit: int = RECENT_COMMANDS_LIMIT) -> list[str]:

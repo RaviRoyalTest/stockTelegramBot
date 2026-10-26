@@ -13,7 +13,7 @@ import os
 import tempfile
 import unittest
 from pathlib import Path
-from unittest.mock import patch
+from unittest.mock import call, patch
 from zoneinfo import ZoneInfo
 
 from corporate_actions import config
@@ -34,18 +34,20 @@ class ShouldAutoRecordTests(unittest.TestCase):
         self.assertTrue(snapshots_mod.should_auto_record("in", doc, latest=dt.date(2026, 9, 29)))
 
     def test_current_session_is_reused(self):
-        doc = {"market": "in", "session": "2026-09-29"}
+        doc = {"market": "in", "session": "2026-09-29",
+                       "recorded_at": "2026-09-29T10:30:00+00:00",
+                       "status": "finalized", "finalized": True}
         self.assertFalse(snapshots_mod.should_auto_record("in", doc, latest=dt.date(2026, 9, 29)))
 
     def test_unknown_latest_never_triggers(self):
         doc = {"market": "in", "session": "2026-09-26"}
         self.assertFalse(snapshots_mod.should_auto_record("in", doc, latest=None))
 
-    def test_other_market_doc_is_not_replaced(self):
+    def test_other_market_doc_does_not_block_auto_record(self):
         us_doc = {"market": "us", "session": "2026-09-26"}
         in_doc = {"market": "in", "session": "2026-09-26"}
-        self.assertFalse(snapshots_mod.should_auto_record("in", us_doc, latest=dt.date(2026, 9, 29)))
-        self.assertFalse(snapshots_mod.should_auto_record("us", in_doc, latest=dt.date(2026, 9, 29)))
+        self.assertTrue(snapshots_mod.should_auto_record("in", us_doc, latest=dt.date(2026, 9, 29)))
+        self.assertTrue(snapshots_mod.should_auto_record("us", in_doc, latest=dt.date(2026, 9, 29)))
 
 
 class MinutesSinceCloseTests(unittest.TestCase):
@@ -66,6 +68,10 @@ class MaybeRecordTests(unittest.TestCase):
     def setUp(self):
         snapshots_mod._auto_state.clear()
         self.addCleanup(snapshots_mod._auto_state.clear)
+        latest = patch.object(snapshots_mod, "latest_session_date",
+                              return_value=dt.datetime.now(IST).date())
+        latest.start()
+        self.addCleanup(latest.stop)
 
     def _tmp_store(self):
         tmp = tempfile.TemporaryDirectory()
@@ -122,6 +128,15 @@ class MaybeRecordTests(unittest.TestCase):
 
 
 class PollerHookTests(unittest.TestCase):
+    def setUp(self):
+        for mock_patch in (
+                patch.object(engine_mod.storage, "load_seen", return_value=set()),
+                patch.object(engine_mod.storage, "get_user_settings", return_value={}),
+                patch.object(engine_mod.storage, "is_quiet", return_value=False),
+                patch("corporate_actions.email.daily.maybe_send_daily_email", return_value=False)):
+            mock_patch.start()
+            self.addCleanup(mock_patch.stop)
+
     def _run_cycle(self):
         poller = engine_mod.Poller()
         poller._seen_stale = False  # bypass the flood guard for this test
@@ -147,7 +162,7 @@ class PollerHookTests(unittest.TestCase):
         engine_mod._snapshots_auto_enabled = True
         try:
             rec = self._run_cycle()
-            rec.assert_called_once()
+            self.assertEqual(rec.call_args_list, [call(market="in"), call(market="us")])
         finally:
             engine_mod._snapshots_auto_enabled = False
 

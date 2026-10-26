@@ -84,6 +84,7 @@
       var esc = RS.escapeHtml, fmtNum = RS.fmtNum;
       var actions = [];
       var pollTimer = null;
+      var loadSequence = 0;
 
       function num(v, d) {
         if (v == null || v === '' || isNaN(Number(v))) return '−';
@@ -96,9 +97,17 @@
 
       async function load(params) {
         try {
-          var res = await fetch('/api/snapshots' + (params || ''));
+          var sequence = ++loadSequence;
+          var query = new URLSearchParams(params || '');
+          var market = document.getElementById('market').value;
+          query.set('market', market);
+          if (!query.has('date') && document.getElementById('historyPick').value) {
+            query.set('date', document.getElementById('historyPick').value);
+          }
+          var res = await fetch('/api/snapshots?' + query.toString());
           if (!res.ok) throw new Error('API ' + res.status);
           var doc = await res.json();
+          if (sequence !== loadSequence || market !== document.getElementById('market').value) return null;
           render(doc);
           return doc;
         } catch (err) {
@@ -123,11 +132,12 @@
       function render(doc) {
         doc = doc || {};
         var session = doc.session || '—';
-        var market = (doc.market || 'in').toUpperCase();
+        var market = (doc.market || document.getElementById('market').value).toUpperCase();
         document.getElementById('snapSession').textContent = session;
         document.getElementById('snapMeta').textContent =
           'Session ' + session + ' · ' + market + ' · ' + (doc.universe || '') +
           ' · recorded ' + (doc.recorded_at || 'never') + ' by ' + (doc.recorded_by || '—') +
+          (doc.status ? ' · ' + doc.status : '') +
           (doc.recording ? ' · ⏳ recording in progress…' : '');
 
         var gaps = doc.gap_downs || [];
@@ -219,6 +229,7 @@
 
       async function record(force) {
         var btn = document.getElementById('recordBtn');
+        document.getElementById('historyPick').value = '';
         btn.disabled = true;
         try {
           var res = await fetch('/api/snapshots/record?market=' +
@@ -231,14 +242,12 @@
           } else {
             RS.toast('Recording started — this takes a minute or two.', 'ok');
           }
-          var before = document.getElementById('snapSession').textContent;
           var tries = 0;
           clearInterval(pollTimer);
           pollTimer = setInterval(async function () {
             tries++;
             var doc = await load();
-            var now = document.getElementById('snapSession').textContent;
-            if ((doc && !doc.recording) || now !== before || tries > 30) {
+            if ((doc && !doc.recording) || tries > 30) {
               clearInterval(pollTimer);
               if (tries > 30) RS.toast('Still recording — refresh in a bit.', 'err');
               else RS.toast('Snapshot ready.', 'ok');
@@ -256,11 +265,11 @@
       // fresh data appears without a manual reload.
       var autoPoll = null;
       function maybeAutoPoll(doc) {
-        var needs = doc && (doc.recording || !((doc.gap_downs || []).length) && !((doc.top_gainers || []).length));
+        var needs = doc && doc.recording;
         if (needs && !autoPoll) {
           autoPoll = setInterval(async function () {
             var fresh = await load();
-            if (!fresh || (!fresh.recording && ((fresh.gap_downs || []).length || (fresh.top_gainers || []).length))) {
+            if (!fresh || !fresh.recording) {
               clearInterval(autoPoll);
               autoPoll = null;
             }
@@ -274,7 +283,20 @@
         document.getElementById('historyPick').value = '';
         load('').then(maybeAutoPoll);
       });
+      function stopPolling() {
+        clearInterval(pollTimer);
+        clearInterval(autoPoll);
+        pollTimer = null;
+        autoPoll = null;
+        loadSequence++;
+      }
+      document.getElementById('market').addEventListener('change', function () {
+        stopPolling();
+        document.getElementById('historyPick').innerHTML = '<option value="">History…</option>';
+        load('').then(maybeAutoPoll);
+      });
       document.getElementById('historyPick').addEventListener('change', function () {
+        stopPolling();
         if (!this.value) { load('').then(maybeAutoPoll); return; }
         load('?date=' + encodeURIComponent(this.value));
       });

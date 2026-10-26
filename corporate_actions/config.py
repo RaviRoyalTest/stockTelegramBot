@@ -104,21 +104,27 @@ SCHEDULED_COMMANDS = [
 # is active an automatic report only fires while that market is open.
 SCHEDULED_REPORTS_MARKET = os.getenv("SCHEDULED_REPORTS_MARKET", "in").strip().lower()
 
-WATCHLIST_FILE = Path(os.getenv("WATCHLIST_FILE", str(BASE_DIR / "data" / "watchlist.json")))
-SUBSCRIPTIONS_FILE = Path(os.getenv("SUBSCRIPTIONS_FILE", str(BASE_DIR / "data" / "subscriptions.json")))
-SETTINGS_FILE = Path(os.getenv("SETTINGS_FILE", str(BASE_DIR / "data" / "settings.json")))
-SEEN_FILE = Path(os.getenv("SEEN_FILE", str(BASE_DIR / "data" / "seen_actions.json")))
-SCHEDULE_FILE = Path(os.getenv("SCHEDULE_FILE", str(BASE_DIR / "data" / "schedule.json")))
-SNAPSHOT_FILE = Path(os.getenv("SNAPSHOT_FILE", str(BASE_DIR / "data" / "snapshots.json")))
-OPENREPORT_FILE = Path(os.getenv("OPENREPORT_FILE", str(BASE_DIR / "data" / "openclose.json")))
+def _env_path(name: str, default: str) -> Path:
+    """Resolve relative overrides from the repository, never the process CWD."""
+    path = Path(os.getenv(name, "").strip() or default).expanduser()
+    return (path if path.is_absolute() else BASE_DIR / path).resolve()
+
+
+WATCHLIST_FILE = _env_path("WATCHLIST_FILE", "data/watchlist.json")
+SUBSCRIPTIONS_FILE = _env_path("SUBSCRIPTIONS_FILE", "data/subscriptions.json")
+SETTINGS_FILE = _env_path("SETTINGS_FILE", "data/settings.json")
+SEEN_FILE = _env_path("SEEN_FILE", "data/seen_actions.json")
+SCHEDULE_FILE = _env_path("SCHEDULE_FILE", "data/schedule.json")
+SNAPSHOT_FILE = _env_path("SNAPSHOT_FILE", "data/snapshots.json")
+OPENREPORT_FILE = _env_path("OPENREPORT_FILE", "data/openclose.json")
 # Date-wise history lives here: data/openclose/YYYY-MM-DD.json per session.
-OPENREPORT_DIR = Path(os.getenv("OPENREPORT_DIR", str(BASE_DIR / "data" / "openclose")))
+OPENREPORT_DIR = _env_path("OPENREPORT_DIR", "data/openclose")
 # Last-known US market caps ({symbol: cap_usd}) - fills tickers the live
 # Yahoo batch misses so one crumb failure cannot blank the whole US block.
-US_CAPS_FILE = Path(os.getenv("US_CAPS_FILE", str(BASE_DIR / "data" / "us_caps.json")))
+US_CAPS_FILE = _env_path("US_CAPS_FILE", "data/us_caps.json")
 # Append-only mail send log (last 50 sends): every Telegram / web / auto mail
 # records ✅/❌ here so /emailstatus and the web Email page can show it.
-MAIL_LOG_FILE = Path(os.getenv("MAIL_LOG_FILE", str(BASE_DIR / "data" / "mail_log.json")))
+MAIL_LOG_FILE = _env_path("MAIL_LOG_FILE", "data/mail_log.json")
 
 USER_AGENT = (
     "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "

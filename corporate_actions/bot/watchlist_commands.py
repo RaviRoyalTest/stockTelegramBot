@@ -377,9 +377,7 @@ def _get_favourites(chat_id) -> list[str]:
 
 
 def _save_favourites(chat_id, commands: list[str]) -> None:
-    settings = storage.get_user_settings(chat_id)
-    settings["favourites"] = commands
-    storage.save_user_settings(chat_id, settings)
+    storage.patch_user_settings(chat_id, {"favourites": commands})
 
 
 def _favourites_summary(chat_id) -> str:

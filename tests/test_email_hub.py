@@ -5,9 +5,12 @@ email category's details and enumerate all possible commands in that category,
 consistently across the Telegram registry, /emailhelp, the README and the
 dashboard.
 """
+import tempfile
 import unittest
+from pathlib import Path
 from unittest.mock import patch
 
+from corporate_actions import config
 from corporate_actions.bot import dispatch
 from corporate_actions.bot import email_commands
 from corporate_actions.bot import help_texts
@@ -21,6 +24,17 @@ EMAIL_COMMANDS = (
 
 
 class EmailHubTests(unittest.TestCase):
+    def setUp(self):
+        # Dispatching a command records it in the recent-commands list, so the
+        # settings file must be redirected - a test run must never add a fake
+        # chat to the committed data/settings.json.
+        tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(tmp.cleanup)
+        patcher = patch.object(config, "SETTINGS_FILE",
+                               Path(tmp.name) / "settings.json")
+        patcher.start()
+        self.addCleanup(patcher.stop)
+
     def test_overview_lists_every_email_command(self):
         overview = email_commands.EMAIL_COMMANDS_OVERVIEW
         self.assertTrue(len(overview) >= 9)

@@ -20,10 +20,7 @@ log = logging.getLogger(__name__)
 import datetime as _datetime
 import re
 
-try:
-    from zoneinfo import ZoneInfo
-except Exception:  # pragma: no cover - tzdata unavailable
-    ZoneInfo = None
+from ..core.dates import IST, parse_utc_timestamp, timezone_for
 
 MARKETS = {
     "in": {
@@ -103,15 +100,8 @@ def market_label(market) -> str:
 
 
 def market_timezone(market):
-    """zoneinfo.ZoneInfo for a market (None when unavailable)."""
-    info = MARKETS.get(normalise_market(market))
-    if not info or ZoneInfo is None:
-        return None
-    try:
-        return ZoneInfo(info["tz"])
-    except Exception as error:
-        log.debug("market_timezone: %s", error)
-        return None
+    """Market timezone, with a fixed IST fallback and no host-local fallback."""
+    return timezone_for(market_tz_name(market))
 
 
 def _now_ts(now=None) -> float:
@@ -121,13 +111,15 @@ def _now_ts(now=None) -> float:
     if isinstance(now, (int, float)):
         return float(now)
     try:
+        if now.tzinfo is None:
+            now = now.replace(tzinfo=_datetime.timezone.utc)
         return now.timestamp()
     except AttributeError:
         return _datetime.datetime.now(_datetime.timezone.utc).timestamp()
 
 
 def local_now(market, now=None) -> _datetime.datetime:
-    """Current wall-clock time in the market's timezone (host-local fallback).
+    """Current wall-clock time in the market's timezone (never host local).
 
     `now` may be None (use the clock), an epoch timestamp or a datetime.
     """
@@ -137,10 +129,9 @@ def local_now(market, now=None) -> _datetime.datetime:
         now_utc = _datetime.datetime.fromtimestamp(now, _datetime.timezone.utc)
     else:
         now_utc = now
-    timezone = market_timezone(market)
-    if timezone is None:
-        return now_utc.astimezone()
-    return now_utc.astimezone(timezone)
+        if now_utc.tzinfo is None:
+            now_utc = now_utc.replace(tzinfo=_datetime.timezone.utc)
+    return now_utc.astimezone(market_timezone(market))
 
 
 def _hhmm_minutes(hhmm) -> int | None:
@@ -153,13 +144,16 @@ def _hhmm_minutes(hhmm) -> int | None:
     return hour * 60 + minute
 
 
-def is_between(open_hm: str, close_hm: str, market="in", now=None) -> bool:
+def is_between(open_hm: str, close_hm: str, market="in", now=None,
+               timezone: str | None = None) -> bool:
     """True when 'now' (default: the current moment) is inside open..close.
 
     Supports overnight windows (e.g. 22:00-06:00). Invalid times fall back to
     'always allowed' so a malformed window never silently suppresses a report.
     """
     local = local_now(market, now)
+    if timezone:
+        local = local.astimezone(timezone_for(timezone))
     current_minutes = local.hour * 60 + local.minute
     open_minutes = _hhmm_minutes(open_hm)
     close_minutes = _hhmm_minutes(close_hm)
@@ -168,6 +162,15 @@ def is_between(open_hm: str, close_hm: str, market="in", now=None) -> bool:
     if open_minutes <= close_minutes:
         return open_minutes <= current_minutes < close_minutes
     return current_minutes >= open_minutes or current_minutes < close_minutes
+
+
+def is_session_day(market, now=None) -> bool:
+    """Weekday session eligibility in market time, not an exchange calendar.
+
+    No offline holiday calendar is configured. Do not infer exchange holidays
+    or special sessions from a hand-maintained list here.
+    """
+    return normalise_market(market) == "any" or local_now(market, now).weekday() < 5
 
 
 def is_market_open(market, now=None) -> bool:
@@ -179,7 +182,7 @@ def is_market_open(market, now=None) -> bool:
     if not info:
         return True
     local = local_now(key, now)
-    if local.weekday() >= 5:  # Sat / Sun
+    if not is_session_day(key, now):
         return False
     return is_between(info["open"], info["close"], key, now)
 
@@ -201,7 +204,7 @@ def market_active(market, grace_minutes: int = 60, now=None) -> bool:
     if is_market_open(key, now):
         return True
     local = local_now(key, now)
-    if local.weekday() >= 5:  # Sat / Sun - no grace after the Friday close
+    if not is_session_day(key, now):
         return False
     close_minutes = _hhmm_minutes(info["close"])
     current_minutes = local.hour * 60 + local.minute
@@ -243,7 +246,7 @@ def screen_available(market, now=None) -> bool:
     if not info:
         return True
     local = local_now(key, now)
-    if local.weekday() >= 5:  # Sat / Sun - no session today
+    if not is_session_day(key, now):
         return False
     open_minutes = _hhmm_minutes(info["open"])
     current_minutes = local.hour * 60 + local.minute
@@ -265,7 +268,7 @@ def next_open_after(market, after_ts=None) -> float:
     open_hour, open_minute = (int(part) for part in info["open"].split(":"))
     day = base.replace(hour=0, minute=0, second=0, microsecond=0)
     for _ in range(14):  # at most two calendar weeks ahead
-        if day.weekday() < 5:
+        if is_session_day(market, day):
             candidate = day.replace(hour=open_hour, minute=open_minute)
             if candidate > base:
                 return candidate.timestamp()
@@ -283,11 +286,8 @@ def entry_paused(entry: dict, now=None) -> bool:
     raw = (entry or {}).get("paused_until")
     if not raw:
         return False
-    now_ts = _now_ts(now)
-    try:
-        return now_ts < _datetime.datetime.fromisoformat(str(raw)).timestamp()
-    except (TypeError, ValueError):
-        return False
+    parsed = parse_utc_timestamp(raw)
+    return parsed is not None and _now_ts(now) < parsed.timestamp()
 
 
 def entry_paused_until(entry: dict) -> str:
@@ -295,10 +295,8 @@ def entry_paused_until(entry: dict) -> str:
     raw = (entry or {}).get("paused_until")
     if not raw:
         return ""
-    try:
-        return _datetime.datetime.fromisoformat(str(raw)).strftime("%d-%b %H:%M")
-    except (TypeError, ValueError):
-        return ""
+    parsed = parse_utc_timestamp(raw)
+    return parsed.astimezone(IST).strftime("%d-%b %H:%M") if parsed else ""
 
 
 def entry_in_window(entry: dict, default="in", now=None) -> bool:
@@ -310,5 +308,6 @@ def entry_in_window(entry: dict, default="in", now=None) -> bool:
     window_start = (entry or {}).get("window_start")
     window_end = (entry or {}).get("window_end")
     if window_start and window_end:
-        return is_between(window_start, window_end, entry_market(entry, default), now)
+        return is_between(window_start, window_end, entry_market(entry, default), now,
+                                  timezone=entry.get("timezone"))
     return is_market_open(entry_market(entry, default), now)

@@ -1,3 +1,4 @@
+import json
 import tempfile
 import unittest
 from pathlib import Path
@@ -74,9 +75,9 @@ class OpencloseDatedStoreTests(unittest.TestCase):
             dir_patch, file_patch = self._patched_dir(root)
             with dir_patch, file_patch:
                 oc_store.save_openclose({"recorded_at": "2026-09-29T10:00:00+00:00",
-                                         "report": {"total_verified": 1}})
+                                         "report": self._report("in", 1, day="2026-09-29")})
                 oc_store.save_openclose({"recorded_at": "2026-09-28T10:00:00+00:00",
-                                         "report": {"total_verified": 2}})
+                                         "report": self._report("in", 2, day="2026-09-28")})
                 self.assertTrue((root / "data" / "openclose" / "2026-09-29.json").exists())
                 self.assertTrue((root / "data" / "openclose" / "2026-09-28.json").exists())
                 latest = oc_store.load_openclose()
@@ -87,40 +88,68 @@ class OpencloseDatedStoreTests(unittest.TestCase):
                 self.assertEqual(specific["report"]["total_verified"], 2)
                 self.assertEqual(oc_store.load_openclose("2000-01-01"), {})
 
-    def test_legacy_single_file_seeds_dated_and_is_removed(self):
+    def test_legacy_single_file_seeds_dated_and_retains_original(self):
         from corporate_actions.storage import openclose as oc_store
 
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)
             (root / "data").mkdir()
-            (root / "data" / "openclose.json").write_text(
-                '{"recorded_at": "2026-09-29T10:00:00+00:00", "report": {}}',
-                encoding="utf-8",
-            )
+            original = json.dumps({
+                "recorded_at": "2026-09-29T10:00:00+00:00",
+                "report": self._report("in", 1, day="2026-09-29"),
+            })
+            legacy = root / "data" / "openclose.json"
+            legacy.write_text(original, encoding="utf-8")
             dir_patch, file_patch = self._patched_dir(root)
             with dir_patch, file_patch:
                 day = oc_store.migrate_openclose_file()
             self.assertEqual(day, "2026-09-29")
             self.assertTrue((root / "data" / "openclose" / "2026-09-29.json").exists())
-            self.assertFalse((root / "data" / "openclose.json").exists())
+            self.assertEqual(legacy.read_text(encoding="utf-8"), original)
+            seeded = root / "data" / "openclose" / "2026-09-29.json"
+            self.assertEqual(json.loads(seeded.read_text(encoding="utf-8")),
+                             json.loads(original))
             # Second run is a no-op.
             with dir_patch, file_patch:
                 self.assertIsNone(oc_store.migrate_openclose_file())
 
-    def test_doc_date_prefers_explicit_target(self):
+    def test_doc_date_uses_section_identity_not_wrapper_target(self):
         from corporate_actions.storage import openclose as oc_store
 
-        self.assertEqual(
-            oc_store._doc_date({"target_date": "2026-10-18",
-                                 "recorded_at": "2026-09-29T10:00:00+00:00"}),
-            "2026-10-18",
-        )
+        doc = {"target_date": "2026-10-18",
+               "recorded_at": "2026-09-29T10:00:00+00:00"}
+        self.assertIsNone(oc_store._doc_date(doc))
+        doc["report"] = self._report("in", 1, day="2026-09-29")
+        self.assertEqual(oc_store._doc_date(doc), "2026-09-29")
 
-    def _report(self, market, verified):
+    def test_ambiguous_legacy_original_is_retained_without_filing(self):
+        from corporate_actions.storage import openclose as oc_store
+
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            (root / "data").mkdir()
+            legacy = root / "data" / "openclose.json"
+            original = json.dumps({
+                "recorded_at": "2026-09-29T10:00:00+00:00",
+                "target_date": "2026-09-29",
+                "report": {"sections": [{"market": "in", "universes": [
+                    {"verified": 1, "target": 20}]}]},
+            })
+            legacy.write_text(original, encoding="utf-8")
+            dir_patch, file_patch = self._patched_dir(root)
+            with dir_patch, file_patch:
+                self.assertIsNone(oc_store.migrate_openclose_file())
+                self.assertEqual(oc_store.list_openclose_dates(), [])
+            self.assertEqual(legacy.read_text(encoding="utf-8"), original)
+
+    def _report(self, market, verified, *, day="2026-10-08",
+                captured_at=None, mode="live", finalized=False):
+        captured_at = captured_at or f"{day}T{'04:30' if market == 'in' else '14:00'}:00+00:00"
         return {
             "sections": [{
-                "market": market,
-                "snapshot": {"date": "2026-10-08", "time_local": "10:00", "state": "OPEN"},
+                "market": market, "session_date": day,
+                "captured_at": captured_at, "mode": mode, "finalized": finalized,
+                "snapshot": {"date": day, "time_local": "10:00", "state": "OPEN"},
                 "universes": [{"key": "k", "title": "T", "verified": verified,
                                "target": 20, "gainers": [], "losers": []}],
                 "volume_computed": 1,
@@ -161,23 +190,49 @@ class OpencloseDatedStoreTests(unittest.TestCase):
                 oc_store.save_openclose({
                     "recorded_at": "2026-10-08T04:00:00+00:00", "recorded_by": "a",
                     "mode": "live", "markets": ["in", "us"],
-                    "report": {"sections": [
-                        {"market": "in", "universes": [
-                            {"key": "k", "verified": 1, "target": 20}],
-                         "volume_computed": 0},
-                        {"market": "us", "universes": [
-                            {"key": "u", "verified": 2, "target": 20}],
-                         "volume_computed": 0},
-                    ], "total_verified": 3, "total_target": 40,
-                        "volume_computed": 0}})
+                    "report": {"sections": (
+                        self._report("in", 1)["sections"]
+                        + self._report("us", 2)["sections"])}})
                 oc_store.save_openclose({
                     "recorded_at": "2026-10-08T10:00:00+00:00", "recorded_by": "b",
                     "mode": "live", "markets": ["in"],
-                    "report": self._report("in", 60)})
+                    "report": self._report("in", 60,
+                        captured_at="2026-10-08T10:00:00+00:00", finalized=True)})
                 doc = oc_store.load_openclose("2026-10-08")
         by_market = {s["market"]: s for s in doc["report"]["sections"]}
         self.assertEqual(by_market["in"]["universes"][0]["verified"], 60)
         self.assertEqual(by_market["us"]["universes"][0]["verified"], 2)
+        self.assertEqual(by_market["us"]["captured_at"], "2026-10-08T14:00:00+00:00")
+        self.assertFalse(by_market["us"]["finalized"])
+        self.assertTrue(by_market["in"]["finalized"])
+        self.assertFalse(doc["finalized"])
+
+    def test_mixed_modes_are_explicit_and_keep_section_metadata(self):
+        from corporate_actions.storage import openclose as oc_store
+
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            dir_patch, file_patch = self._patched_dir(root)
+            with dir_patch, file_patch:
+                oc_store.save_openclose({
+                    "recorded_at": "2026-10-08T10:30:00+00:00",
+                    "mode": "historical", "target_date": "2026-10-08",
+                    "report": self._report("in", 60, mode="historical",
+                        captured_at="2026-10-08T10:30:00+00:00", finalized=True)})
+                oc_store.save_openclose({
+                    "recorded_at": "2026-10-08T14:00:00+00:00", "mode": "live",
+                    "report": self._report("us", 40)})
+                doc = oc_store.load_openclose("2026-10-08")
+        self.assertEqual(doc["mode"], "mixed")
+        self.assertEqual(doc["report"]["mode"], "mixed")
+        self.assertIsNone(doc["target_date"])
+        self.assertIsNone(doc["report"]["target_date"])
+        self.assertFalse(doc["finalized"])
+        india, us = doc["report"]["sections"]
+        self.assertEqual((india["mode"], india["finalized"]), ("historical", True))
+        self.assertEqual((us["mode"], us["finalized"]), ("live", False))
+        self.assertEqual(india["captured_at"], "2026-10-08T10:30:00+00:00")
+        self.assertEqual(us["captured_at"], "2026-10-08T14:00:00+00:00")
 
     def test_empty_build_never_wipes_tables(self):
         from corporate_actions.storage import openclose as oc_store

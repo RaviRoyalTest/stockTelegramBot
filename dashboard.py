@@ -1142,7 +1142,12 @@ async def api_openreport(
         try:
             existing = await asyncio.to_thread(
                 storage.load_openclose, target_date.isoformat())
-            report = existing.get("report") if isinstance(existing, dict) else None
+            # A recorded file only answers a historical ask when it holds that
+            # session's COMPLETED closes for EVERY requested market. An
+            # opening scan, a provisional capture, or the other market's
+            # record is not a substitute - fall through and build it instead.
+            report = openreport.select_report_sections(
+                existing, markets, target_date.isoformat(), require_finalized=True)
             if report:
                 return JSONResponse({**report, "from_cache": True})
         except Exception as exc:
@@ -1161,14 +1166,24 @@ async def api_openreport(
 
 
 @app.get("/api/openreport/recorded")
-async def api_openreport_recorded(date: str = Query("")):
+async def api_openreport_recorded(date: str = Query(""), market: str = Query("all")):
     """A recorded open+close session, date-wise, with no re-fetch.
 
     ?date=YYYY-MM-DD serves that session; omitted serves the latest.
+    ?market=in|us|all scopes which sections are returned. Every returned
+    section is re-validated from its own labels, so the payload can never
+    present another market's session, or an unfinished opening capture, as
+    this date's completed record - `finalized` tells the page which it is.
     Response always carries `dates` (all recorded sessions, newest first)
     so the page can offer a history picker. {} (with dates possibly empty)
     when nothing was ever recorded.
     """
+    from corporate_actions.storage.openclose import merge_sections, section_metadata
+
+    markets = {"all": ("in", "us"), "in": ("in",), "us": ("us",)}.get(
+        (market or "all").strip().lower())
+    if markets is None:
+        raise HTTPException(status_code=400, detail="market must be all|in|us")
     try:
         day = (date or "").strip()
         if day:
@@ -1184,7 +1199,21 @@ async def api_openreport_recorded(date: str = Query("")):
         else:
             doc = await asyncio.to_thread(storage.load_openclose)
         dates = await asyncio.to_thread(storage.list_openclose_dates)
-        return JSONResponse({**(doc or {}), "dates": dates[::-1]})
+        stored = (doc or {}).get("report") if isinstance(doc, dict) else None
+        sections = [s for s in (stored or {}).get("sections") or []
+                    if isinstance(s, dict) and s.get("market") in markets]
+        if day and not sections:
+            raise HTTPException(
+                status_code=404,
+                detail=f"no recorded {(market or 'all').strip().lower()} session for {day}")
+        # Recompute identity/mode/finality from the retained sections instead
+        # of trusting the wrapper the latest writer left behind.
+        report = merge_sections({**(stored or {}), "sections": []},
+                                [section_metadata(s) for s in sections]) if sections else {}
+        payload = {**(doc or {}), "report": report, "dates": dates[::-1]}
+        for key in ("mode", "markets", "target_date", "session_date", "finalized"):
+            payload[key] = report.get(key)
+        return JSONResponse(payload)
     except HTTPException:
         raise
     except Exception as exc:
@@ -1681,41 +1710,55 @@ def _record_snapshot_thread(market: str, force: bool) -> None:
 async def api_snapshots(date: str = Query(""), market: str = Query("")):
     """The recorded session file(s) - reuse-first, never blocks the view.
 
-    No date: the latest record (legacy single file). ?date=YYYY-MM-DD serves
-    that session's ARCHIVED record ({} -> 404 when that day was never
-    recorded) - recorded history is reusable at zero fetch cost. The
-    response always carries `dates` (all archived sessions, newest first)
+    No date: the latest record for the requested market. ?date=YYYY-MM-DD
+    serves that session's ARCHIVED record ({} -> 404 when that day was never
+    recorded for that market) - recorded history is reusable at zero fetch
+    cost. ?market=in|us scopes the READ *and* the history list, so a US ask
+    can never be answered with the India file for the same date; omitting it
+    keeps the legacy "whatever was written last" behaviour. The response
+    always carries `dates` (archived sessions for the scope, newest first)
     so the page can offer a history picker. When the stored session is
     older than the market's latest session, a background auto-refresh is
     kicked once (reuse-first: current files are never re-fetched).
     """
     try:
-        day = (date or "").strip()
-        if day:
-            import datetime as _dt
+        import datetime as _dt
 
+        day = (date or "").strip()
+        scope = (market or "").strip().lower()
+        if scope and scope not in ("in", "us"):
+            raise HTTPException(status_code=400, detail="market must be in|us")
+        scope = scope or None
+        if day:
             try:
                 _dt.date.fromisoformat(day)
             except ValueError:
                 raise HTTPException(status_code=400, detail="date must be YYYY-MM-DD")
-            doc = await asyncio.to_thread(storage.load_snapshot_archive, day)
+            doc = await asyncio.to_thread(storage.load_snapshot_archive, day, scope)
             if not doc:
-                raise HTTPException(status_code=404, detail=f"no recorded session for {day}")
+                raise HTTPException(
+                    status_code=404,
+                    detail=f"no recorded {scope or 'market'} session for {day}")
         else:
-            doc = await asyncio.to_thread(storage.load_snapshots)
-        dates = await asyncio.to_thread(storage.list_snapshot_dates)
+            doc = await asyncio.to_thread(storage.load_snapshots, scope)
+        dates = await asyncio.to_thread(storage.list_snapshot_dates, scope)
+        # The recorder must be told the market that was actually asked for,
+        # never the other market's document we happened to read.
+        refresh_market = scope or str((doc or {}).get("market") or "in").strip().lower()
+        if refresh_market not in ("in", "us"):
+            refresh_market = "in"
         # Fire-and-forget auto-refresh: only fires when no explicit date was
         # requested (history views must not trigger fresh fetches) and the
         # file is stale (maybe_record_session_snapshot re-checks everything).
         if not day and not snapshots_service.is_recording():
             threading.Thread(
                 target=snapshots_service.maybe_record_session_snapshot,
-                kwargs={"market": str(market or (doc or {}).get("market") or "in"),
-                        "recorded_by": "auto-page"},
+                kwargs={"market": refresh_market, "recorded_by": "auto-page"},
                 daemon=True, name="snapshot-auto-page",
             ).start()
         recording = bool(_snap_state["recording"]) or snapshots_service.is_recording()
-        return JSONResponse({**(doc or {}), "dates": dates[::-1], "recording": recording})
+        return JSONResponse({**(doc or {}), "dates": dates[::-1],
+                             "market": refresh_market, "recording": recording})
     except HTTPException:
         raise
     except Exception as exc:

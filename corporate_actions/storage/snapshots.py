@@ -1,10 +1,10 @@
 """Recorded market snapshots (data/snapshots.json + data/snapshots/).
 
-The latest record lives in the single file data/snapshots.json exactly as
-before - every existing caller (Sessions tab, daily mail, poller) keeps
-reading that with load_snapshots() / save_snapshots().
+The last write lives in data/snapshots.json for legacy load_snapshots()
+callers. load_snapshots(market) also consults the archive so one market's
+record never hides the other market's latest session.
 
-NEW: every record is ALSO archived under its session date+market,
+Every record is ALSO archived under its session date+market,
 ``data/snapshots/YYYY-MM-DD-<market>.json``, so history accumulates instead
 of each record clobbering the last. That makes the recorded details
 REUSABLE: any past session recorded once can be reopened later at zero
@@ -14,6 +14,7 @@ archived day without re-fetching anything.
 from __future__ import annotations
 
 import logging
+from datetime import date
 
 from .. import config
 from .json_file import _file_lock, _lock, read_json, write_json
@@ -30,11 +31,28 @@ def _history_dir():
     return config.SNAPSHOT_FILE.parent / "snapshots"
 
 
+def _session_key(session) -> str | None:
+    """Accept only canonical calendar dates, never arbitrary path components."""
+    if not isinstance(session, str):
+        return None
+    try:
+        return session if date.fromisoformat(session).isoformat() == session else None
+    except ValueError:
+        return None
+
+
+def _market_key(market) -> str | None:
+    key = str(market).strip().lower()
+    return key if key in ("in", "us") else None
+
+
 def _dated_path(session: str, market: str):
     from pathlib import Path
 
-    day = str(session or "unknown").strip() or "unknown"
-    market_key = "us" if str(market or "").strip().lower() == "us" else "in"
+    day = _session_key(session)
+    market_key = _market_key(market)
+    if day is None or market_key is None:
+        raise ValueError("Expected an ISO session date and market 'in' or 'us'")
     return Path(_history_dir()) / f"{day}-{market_key}.json"
 
 
@@ -72,8 +90,8 @@ def archive_snapshot(doc: dict) -> str | None:
     try:
         if not isinstance(doc, dict) or not doc:
             return None
-        session = str(doc.get("session") or "").strip()
-        if not session:
+        session = _session_key(doc.get("session"))
+        if session is None:
             return None
         market = str(doc.get("market") or "in")
         path = _dated_path(session, market)
@@ -93,17 +111,19 @@ def list_snapshot_dates(market: str | None = None) -> list[str]:
         directory = _history_dir()
         if not directory.is_dir():
             return []
-        suffix = "-us" if str(market or "").lower() == "us" else \
-            ("-in" if str(market or "").lower() == "in" else None)
+        market_key = _market_key(market) if market is not None else None
+        if market is not None and market_key is None:
+            return []
         days = []
         for path in directory.glob("*.json"):
             if not path.is_file():
                 continue
-            stem = path.stem  # YYYY-MM-DD-<market>
-            if suffix and not stem.endswith(suffix):
+            day, _, archived_market = path.stem.rpartition("-")
+            if _market_key(archived_market) is None:
                 continue
-            day = stem.rsplit("-", 1)[0]
-            if len(day) == 10 and day[4] == "-" and day[7] == "-":
+            if market_key and archived_market != market_key:
+                continue
+            if _session_key(day) is not None:
                 days.append(day)
         return sorted(set(days))
     except Exception:
@@ -114,29 +134,56 @@ def load_snapshot_archive(session: str, market: str | None = None) -> dict:
     """One archived record for a session date ({} when never recorded).
 
     With no market hint the India file is preferred, then US - the date is
-    what the user asks for; both markets' files for one day are rare.
+    what the user asks for. Invalid dates/markets and corrupt docs return {}.
     """
-    requested = str(session or "").strip()
-    if not requested:
+    requested = _session_key(session)
+    requested_market = _market_key(market) if market is not None else None
+    if requested is None or (market is not None and requested_market is None):
         return {}
     for market_key in ("in", "us"):
-        if market and str(market).lower() != market_key:
+        if requested_market and requested_market != market_key:
             continue
-        path = _dated_path(requested, market_key)
-        if not path.is_file():
+        try:
+            path = _dated_path(requested, market_key)
+            if not path.is_file():
+                continue
+            with _lock, _file_lock(path):
+                data = read_json(path, {})
+            if isinstance(data, dict) and data.get("session") == requested \
+                    and _market_key(data.get("market", "in")) == market_key:
+                return data
+        except (OSError, ValueError):
             continue
-        with _lock, _file_lock(path):
-            data = read_json(path, {})
-        if isinstance(data, dict) and data:
-            return data
     return {}
 
 
-def load_snapshots() -> dict:
-    """Return the recorded snapshot doc ({} when never recorded)."""
-    with _lock, _file_lock(config.SNAPSHOT_FILE):
-        data = read_json(config.SNAPSHOT_FILE, {})
-    return data if isinstance(data, dict) else {}
+def load_snapshots(market: str | None = None) -> dict:
+    """Latest record, optionally scoped to a market via the session archive.
+
+    No argument preserves the legacy single-file read. Market-aware callers
+    get the newest valid session across that file and their market's archive;
+    a corrupt newest archive is skipped rather than hiding older good data.
+    """
+    key = _market_key(market) if market is not None else None
+    if market is not None and key is None:
+        return {}
+    try:
+        with _lock, _file_lock(config.SNAPSHOT_FILE):
+            data = read_json(config.SNAPSHOT_FILE, {})
+    except (OSError, ValueError):
+        data = {}
+    data = data if isinstance(data, dict) else {}
+    if market is None:
+        return data
+    candidate = data if _market_key(data.get("market", "in")) == key \
+        and _session_key(data.get("session")) else {}
+    for session in reversed(list_snapshot_dates(key)):
+        if candidate and session <= candidate["session"]:
+            break
+        archived = load_snapshot_archive(session, key)
+        if archived:
+            return archived
+    return candidate
 
 
 def save_snapshots(doc: dict) -> None:

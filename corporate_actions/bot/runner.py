@@ -10,7 +10,7 @@ import logging
 import sys
 
 from .. import config, scheduler
-from ..github import main_check, push_state
+from ..github import last_push_error, main_check, push_state, sync_state
 from ..poller import poller
 from ..telegram.client import get_updates, is_configured
 from . import dispatch
@@ -113,6 +113,8 @@ def start_scheduled_reports() -> None:
 def main():
     if any(argument.lower() == "--check" for argument in sys.argv[1:]):
         sys.exit(main_check())
+    if not sync_state():
+        raise RuntimeError("Initial state sync failed: " + last_push_error())
     log.info("Processing Telegram commands...")
     register_commands()
     checknow_chat = process_commands()
@@ -124,7 +126,8 @@ def main():
     poller_engine._snapshots_auto_enabled = poller_engine._snapshots_auto_default()
     sent = poller.run_once(force=bool(checknow_chat), only_chat=checknow_chat)
     log.info("Pushing state if changed...")
-    push_state()
+    if not push_state():
+        raise RuntimeError("State persistence failed: " + last_push_error())
     # Retention for runtime captures (data/realtime/): disabled unless
     # JSON_RETENTION_DAYS is set - cleanup must never run by default.
     try:

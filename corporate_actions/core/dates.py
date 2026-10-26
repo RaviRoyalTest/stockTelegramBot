@@ -14,20 +14,44 @@ try:
     from zoneinfo import ZoneInfo
 
     IST = ZoneInfo("Asia/Kolkata")
-except Exception:  # tzdata unavailable - fall back to host local time
-    IST = None
+except Exception:  # India has no DST; this fallback is independent of the host.
+    IST = _datetime.timezone(_datetime.timedelta(hours=5, minutes=30), "IST")
 
 
 def now_ist() -> datetime:
     """Timezone-aware 'now' in India Standard Time (Asia/Kolkata)."""
-    if IST is not None:
-        return datetime.now(IST)
-    return datetime.now().astimezone()
+    return datetime.now(IST)
 
 
 def today_ist() -> date:
     """Today's date in India Standard Time (Asia/Kolkata)."""
     return now_ist().date()
+
+
+def timezone_for(tz_name: str | None = None):
+    """Resolve a wall-clock timezone, defaulting to IST, never host local.
+
+    Missing non-Indian timezone data is an error rather than silently moving
+    a US schedule to the host's timezone. Install tzdata on Windows.
+    """
+    if not tz_name or tz_name in ("Asia/Kolkata", "Asia/Calcutta", "IST"):
+        return IST
+    from zoneinfo import ZoneInfo
+
+    return ZoneInfo(tz_name)
+
+
+def parse_utc_timestamp(value) -> datetime | None:
+    """Parse persisted ISO timestamps; legacy naive values were written in UTC."""
+    if not value:
+        return None
+    try:
+        parsed = datetime.fromisoformat(str(value).replace("Z", "+00:00"))
+        if parsed.tzinfo is None:
+            parsed = parsed.replace(tzinfo=_datetime.timezone.utc)
+        return parsed.astimezone(_datetime.timezone.utc)
+    except (TypeError, ValueError, OverflowError):
+        return None
 
 
 def _valid_hhmm(hhmm) -> tuple | None:
@@ -54,21 +78,7 @@ def next_at_in_tz_after(hhmm: str, tz_name: str | None, after_ts: float) -> floa
     if parsed is None:
         return None
     hour, minute = parsed
-    timezone = None
-    try:
-        from zoneinfo import ZoneInfo
-
-        if tz_name:
-            timezone = ZoneInfo(tz_name)
-    except Exception:
-        timezone = None
-    if timezone is None:
-        base = _datetime.datetime.fromtimestamp(after_ts)
-        candidate = base.replace(hour=hour, minute=minute, second=0, microsecond=0)
-        if candidate <= base:
-            candidate += _datetime.timedelta(days=1)
-        return candidate.timestamp()
-    base = _datetime.datetime.fromtimestamp(after_ts, timezone)
+    base = _datetime.datetime.fromtimestamp(after_ts, timezone_for(tz_name))
     candidate = base.replace(hour=hour, minute=minute, second=0, microsecond=0)
     if candidate <= base:
         candidate += _datetime.timedelta(days=1)
@@ -167,7 +177,7 @@ def parse_date_token(value) -> date | None:
     if not raw:
         return None
     lowered = raw.lower()
-    now = date.today()
+    now = today_ist()
 
     def _build(day: int, month: int, year: int | None) -> date | None:
         try:
@@ -234,7 +244,7 @@ def date_from_parts(tokens, index: int) -> tuple:
             year = int(year_token) + (2000 if len(str(year_token)) == 2 else 0)
             consumed = 3
         try:
-            return date(year or date.today().year, month, day), consumed
+            return date(year or today_ist().year, month, day), consumed
         except ValueError:
             return None, 0
 
@@ -260,7 +270,7 @@ def sessions_back_estimate(target: date, today: date | None = None) -> int:
     Used to size history fetches for date-based screens - an exact count is
     not needed, only enough to cover the target date. Never returns 0.
     """
-    today = today or date.today()
+    today = today or today_ist()
     days = (today - target).days
     if days <= 0:
         return 1
@@ -279,6 +289,6 @@ def format_date(value) -> str:
 def format_timestamp(timestamp) -> str:
     """Format a unix timestamp as '07-Aug 14:30' (or empty when absent)."""
     try:
-        return datetime.fromtimestamp(int(timestamp)).strftime("%d-%b %H:%M")
+        return datetime.fromtimestamp(int(timestamp), IST).strftime("%d-%b %H:%M")
     except (TypeError, ValueError, OSError):
         return ""

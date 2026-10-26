@@ -72,8 +72,7 @@ def handle_setemail(chat_id, parts) -> None:
         return
     raw = parts[1].strip().lower()
     if raw in ("off", "none", "clear", "remove"):
-        settings.pop("email", None)
-        storage.save_user_settings(chat_id, settings)
+        storage.patch_user_settings(chat_id, {}, remove=("email",))
         reply(chat_id, "Mail id removed - I will only reply here now.")
         return
     if not _EMAIL_RE.match(raw):
@@ -82,8 +81,7 @@ def handle_setemail(chat_id, parts) -> None:
     if not email_configured():
         reply(chat_id, _server_not_ready_text())
         return
-    settings["email"] = raw
-    storage.save_user_settings(chat_id, settings)
+    storage.patch_user_settings(chat_id, {"email": raw})
     ok, info = send_email(
         raw,
         "Royal Stock: test mail ✅",
@@ -263,9 +261,7 @@ def handle_dailyemail(chat_id, parts) -> None:
         if not (settings.get("email") or "").strip():
             reply(chat_id, "Set your mail id first: <code>/setemail you@gmail.com</code>")
             return
-        settings["daily_email"] = True
-        settings["email_scope"] = "both"
-        storage.save_user_settings(chat_id, settings)
+        settings = storage.patch_user_settings(chat_id, {"daily_email": True, "email_scope": "both"})
         reply(
             chat_id,
             f"📧 Daily mails <b>ON (both)</b> in <b>{escape(settings['email'])}</b> every day.<br>"
@@ -278,25 +274,19 @@ def handle_dailyemail(chat_id, parts) -> None:
         if not (settings.get("email") or "").strip():
             reply(chat_id, "Set your mail id first: <code>/setemail you@gmail.com</code>")
             return
-        settings["daily_email"] = True
-        settings["email_scope"] = "open"
-        storage.save_user_settings(chat_id, settings)
+        storage.patch_user_settings(chat_id, {"daily_email": True, "email_scope": "open"})
         reply(chat_id, "📧 Daily mails <b>ON (opening only)</b> - morning screener lands every day.")
     elif raw in ("close", "closing", "eod", "evening"):
         if not (settings.get("email") or "").strip():
             reply(chat_id, "Set your mail id first: <code>/setemail you@gmail.com</code>")
             return
-        settings["daily_email"] = True
-        settings["email_scope"] = "close"
-        storage.save_user_settings(chat_id, settings)
+        storage.patch_user_settings(chat_id, {"daily_email": True, "email_scope": "close"})
         reply(chat_id, "📧 Daily mails <b>ON (closing/EOD only)</b> - evening close + stored details land every day.")
     elif raw in ("scheduled", "sharp", "timetable"):
         if not (settings.get("email") or "").strip():
             reply(chat_id, "Set your mail id first: <code>/setemail you@gmail.com</code>")
             return
-        settings["daily_email"] = True
-        settings["email_scope"] = "scheduled"
-        storage.save_user_settings(chat_id, settings)
+        storage.patch_user_settings(chat_id, {"daily_email": True, "email_scope": "scheduled"})
         reply(
             chat_id,
             "📧 Daily mails <b>ON (scheduled)</b> - poll-timed mails OFF, sharp separate "
@@ -307,9 +297,7 @@ def handle_dailyemail(chat_id, parts) -> None:
             "• <code>/schedule add at 15:50 /emailclose</code> - close + EOD on time",
         )
     elif raw in ("off", "disable", "stop", "no"):
-        settings["daily_email"] = False
-        settings["email_scope"] = "off"
-        storage.save_user_settings(chat_id, settings)
+        storage.patch_user_settings(chat_id, {"daily_email": False, "email_scope": "off"})
         reply(chat_id, "📧 Daily mails <b>OFF</b>.")
     else:
         reply(chat_id, "Usage: <code>/dailyemail on|both|open|close|scheduled|off</code>")
@@ -360,7 +348,7 @@ def handle_emailopen(chat_id, parts) -> None:
             # 60-90s live scan inside the Telegram handler.
             from ..email.daily import build_daily_lines
 
-            snapshot = storage.load_snapshots() or {}
+            snapshot = storage.load_snapshots("in") or {}
             if not snapshot:
                 reply(chat_id, "No recorded session yet - run /openreport or /snap first, then retry.")
                 return
@@ -410,7 +398,7 @@ def handle_emailclose(chat_id, parts) -> None:
     else:
         from ..email.daily import build_daily_lines
 
-        snapshot = storage.load_snapshots() or {}
+        snapshot = storage.load_snapshots("in") or {}
         lines = list(build_daily_lines(snapshot)) if snapshot else []
         label = str(snapshot.get("session") or label) if snapshot else label
     # The stored-details block is its own section - a chat that removed "eod"
@@ -453,7 +441,7 @@ def handle_emailboth(chat_id, parts) -> None:
         # instead of refusing, so one command always delivers one mail.
         from ..email.daily import build_daily_lines
 
-        snapshot = storage.load_snapshots() or {}
+        snapshot = storage.load_snapshots("in") or {}
         if not snapshot:
             reply(chat_id, "No recorded session yet - run /openreport or /snap first, then retry.")
             return
@@ -588,16 +576,18 @@ def handle_emailsections(chat_id, parts) -> None:
     action = tokens[0].lower()
     if action in ("add", "remove", "+", "-") and len(tokens) >= 2:
         helper = add_section if action in ("add", "+") else remove_section
-        updated: list[str] = list(current)
         errors: list[str] = []
-        for word in tokens[1:]:
-            updated, err = helper(updated, word, kind)
-            if err:
-                errors.append(err)
-        if not updated:
-            updated = catalogue  # never let a mail become empty
-        settings[key] = updated
-        storage.save_user_settings(chat_id, settings)
+
+        def apply(settings):
+            updated = list(sections_for(settings, kind))
+            for word in tokens[1:]:
+                updated, err = helper(updated, word, kind)
+                if err:
+                    errors.append(err)
+            settings[key] = updated or catalogue  # never let a mail become empty
+
+        settings = storage.update_user_settings(chat_id, apply)
+        updated = settings[key]
         note = (" " + "; ".join(errors)) if errors else ""
         return reply(
             chat_id,
@@ -609,8 +599,7 @@ def handle_emailsections(chat_id, parts) -> None:
     chosen, unknown = normalize_section_list(tokens, kind)
     if not chosen:
         chosen = catalogue
-    settings[key] = chosen
-    storage.save_user_settings(chat_id, settings)
+    storage.patch_user_settings(chat_id, {key: chosen})
     note = ""
     if unknown:
         note = "\n⚠️ ignored unknown: " + escape(", ".join(unknown))

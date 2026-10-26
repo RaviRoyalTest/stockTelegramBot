@@ -1,5 +1,5 @@
 import unittest
-from datetime import date, timedelta
+from datetime import date, datetime, timedelta, timezone
 from unittest.mock import patch
 
 from corporate_actions import storage as storage_mod
@@ -10,6 +10,7 @@ from corporate_actions.email.daily import build_full_session_lines
 from corporate_actions.email.daily import build_nifty_actions_lines, build_open_lines
 from corporate_actions.email.daily import build_watchlist_actions_lines, get_scope
 from corporate_actions.email.daily import maybe_send_eod_email, maybe_send_open_email
+from corporate_actions.opening_report import report as report_mod
 
 
 class DailyEmailTests(unittest.TestCase):
@@ -132,11 +133,27 @@ class DailyEmailTests(unittest.TestCase):
         self.assertIn("Watchlist", text)
 
 
-def _live_report(label="2099-01-05"):
+_MAIL_DAY = date(2026, 10, 23)
+_MAIL_NOW = datetime(2026, 10, 23, 12, tzinfo=timezone.utc)
+
+
+def _session_identity(day, market="in", finalized=False):
+    clock = "16:05" if finalized else "10:00"
+    offset = "+05:30" if market == "in" else "-04:00"
+    return {
+        "session_date": day, "captured_at": f"{day}T{clock}:00{offset}",
+        "mode": "live", "finalized": finalized,
+        "snapshot": {"date": day, "time_local": clock,
+                     "state": "CLOSED" if finalized else "OPEN"},
+    }
+
+
+def _live_report(label=None, *, finalized=False):
+    label = label or _MAIL_DAY.isoformat()
     return {
         "sections": [{
             "market": "in",
-            "snapshot": {"date": label, "time_local": "10:00", "state": "OPEN"},
+            **_session_identity(label, finalized=finalized),
             "universes": [{
                 "title": "NIFTY 100", "verified": 10, "target": 20,
                 "gainers": [{"symbol": "RELIANCE", "price": 100.0, "change_pct": 1.0}],
@@ -154,21 +171,40 @@ class MarketGatedMailTests(unittest.TestCase):
 
     def setUp(self):
         daily_mod._TRADED_DAY_CACHE.clear()
+        self.addCleanup(daily_mod._TRADED_DAY_CACHE.clear)
         self.settings = {"email": "a@b.com", "daily_email": True, "email_scope": "both"}
         patches = [
+            patch.object(daily_mod, "today_ist", return_value=_MAIL_DAY),
+            patch("corporate_actions.core.dates.today_ist", return_value=_MAIL_DAY),
+            patch.object(daily_mod, "now_ist", return_value=_MAIL_NOW.astimezone(
+                timezone(timedelta(hours=5, minutes=30)))),
+            patch.object(daily_mod, "select_report_sections", side_effect=lambda *args, **kwargs:
+                         report_mod.select_report_sections(*args, now=_MAIL_NOW, **kwargs)),
+            patch("corporate_actions.config.PROCESS_COMMANDS", True),
+            patch.object(storage_mod, "load_watchlist", return_value=[]),
+            patch.object(storage_mod, "load_subscriptions", return_value={}),
+            patch.object(storage_mod, "load_schedule_for", return_value=[]),
+            patch.object(storage_mod, "load_snapshots", return_value={}),
+            patch.object(storage_mod, "list_snapshot_dates", return_value=[]),
+            patch.object(storage_mod, "list_openclose_dates", return_value=[]),
             patch.object(daily_mod, "in_open_window", return_value=True),
             patch.object(daily_mod, "in_close_window", return_value=True),
             patch.object(daily_mod, "email_configured", return_value=True),
             patch.object(storage_mod, "get_user_settings", return_value=dict(self.settings)),
-            patch.object(storage_mod, "save_user_settings"),
+
             # Live action/gap fetches stay hermetic (no network in unit tests).
             patch("corporate_actions.poller.fetch_matching", return_value=[]),
             patch.object(daily_mod, "fetch_nifty_actions", return_value=[]),
+            patch.object(daily_mod, "fetch_us_actions", return_value=[]),
+            patch.object(daily_mod, "wk52_rows_live", return_value=[]),
             patch.object(daily_mod, "fetch_morning_gaps", return_value=([], [])),
         ]
         for patcher in patches:
             patcher.start()
             self.addCleanup(patcher.stop)
+        settings_patcher = patch.object(daily_mod, "patch_user_settings")
+        self.patch_settings = settings_patcher.start()
+        self.addCleanup(settings_patcher.stop)
         sender = patch.object(daily_mod, "send_email", return_value=(True, ""))
         self.send = sender.start()
         self.addCleanup(sender.stop)
@@ -180,7 +216,7 @@ class MarketGatedMailTests(unittest.TestCase):
 
     def test_open_builds_live_when_recorded_stale(self):
         stale = {"recorded_at": "2020-01-01T00:00:00+00:00",
-                 "report": _live_report("old")}
+                 "report": _live_report("2020-01-01")}
         live = _live_report()
         with patch("corporate_actions.market.hours.is_market_open", return_value=True), \
                 patch.object(storage_mod, "load_openclose", return_value=stale), \
@@ -198,7 +234,7 @@ class MarketGatedMailTests(unittest.TestCase):
             "report": {
                 "sections": [{
                     "market": "us",
-                    "snapshot": {"date": "x", "time_local": "09:41", "state": "OPEN"},
+                    **_session_identity("2026-10-22", "us", finalized=True),
                     "universes": [{
                         "title": "MEGA CAP ($200B+)", "verified": 0, "target": 20,
                         "gainers": [], "losers": [],
@@ -241,30 +277,30 @@ class MarketGatedMailTests(unittest.TestCase):
 
         prev_sections = [{
             "market": "in",
-            "snapshot": {"date": "old", "time_local": "", "state": ""},
+            **_session_identity("2026-10-22", finalized=True),
             "universes": [{"key": "k", "title": "T", "verified": 1, "target": 20,
                            "gainers": [], "losers": []}],
             "indices": [],
         }]
         us_sections = [{
             "market": "us",
-            "snapshot": {"date": "old", "time_local": "", "state": ""},
+            **_session_identity("2026-10-21", "us", finalized=True),
             "universes": [{"key": "u", "title": "U", "verified": 2, "target": 20,
                            "gainers": [], "losers": []}],
             "indices": [],
         }]
         docs = {
-            "2099-01-06": {"report": {"sections": prev_sections,
+            "2026-10-22": {"report": {"sections": prev_sections,
                                       "total_verified": 1, "total_target": 20}},
-            "2099-01-05": {"report": {"sections": us_sections,
+            "2026-10-21": {"report": {"sections": us_sections,
                                       "total_verified": 2, "total_target": 20}},
         }
         with patch.object(storage_mod, "list_openclose_dates",
-                          return_value=["2099-01-05", "2099-01-06"]), \
+                          return_value=["2026-10-21", "2026-10-22"]), \
                 patch.object(storage_mod, "load_openclose",
-                             side_effect=lambda day=None: docs.get(day, {})):
-            prev, prev_label = dm._latest_recorded_before("2099-01-07")
-            self.assertEqual(prev_label, "2099-01-06")
+                             side_effect=lambda day=None: docs.get(day or "", {})):
+            prev, prev_label = dm._latest_recorded_before(_MAIL_DAY.isoformat())
+            self.assertEqual(prev_label, "2026-10-22")
             self.assertTrue(prev.get("sections"))
             sub, _label = dm._latest_us_report()
             self.assertEqual([s["market"] for s in sub["sections"]], ["us"])
@@ -336,8 +372,6 @@ class MarketGatedMailTests(unittest.TestCase):
 
     def test_morning_mail_has_all_five_sections(self):
         """Open + last close + Nifty(buy-by) + U.S. + gappers + watchlist."""
-        from datetime import date, timedelta
-
         from corporate_actions.core.dates import today_ist
         from corporate_actions.email import daily as dm
 
@@ -347,13 +381,13 @@ class MarketGatedMailTests(unittest.TestCase):
         live = _live_report()
         prev_sections = [{
             "market": "in",
-            "snapshot": {"date": "old", "time_local": "", "state": ""},
+            **_session_identity(yesterday, finalized=True),
             "universes": [{"key": "k", "title": "T", "verified": 1, "target": 20,
                            "gainers": [], "losers": []}],
             "indices": []}]
         us_sections = [{
             "market": "us",
-            "snapshot": {"date": "old", "time_local": "", "state": ""},
+            **_session_identity(yesterday, "us", finalized=True),
             "universes": [{"key": "u", "title": "U", "verified": 2, "target": 20,
                            "gainers": [], "losers": []}],
             "indices": []}]
@@ -364,7 +398,7 @@ class MarketGatedMailTests(unittest.TestCase):
                         "report": {"sections": prev_sections + us_sections,
                                    "total_verified": 3, "total_target": 40}},
         }
-        future = (date.today() + timedelta(days=3)).isoformat()
+        future = (_MAIL_DAY + timedelta(days=3)).isoformat()
         actions = [{"symbol": "ACT", "subject": "Dividend Rs 5",
                     "exchange": "NSE", "ex_date": future}]
         gaps = ([{"symbol": "GD", "name": "G Down", "open": 100.0,
@@ -392,25 +426,25 @@ class MarketGatedMailTests(unittest.TestCase):
 
         prev = {"sections": [{
             "market": "in",
-            "snapshot": {"date": "old", "time_local": "", "state": ""},
+            **_session_identity("2026-10-22", finalized=True),
             "universes": [{"key": "k", "title": "T", "verified": 1, "target": 20,
                            "gainers": [], "losers": []}],
             "indices": []}],
             "total_verified": 1, "total_target": 20}
         us_doc = {"report": {"sections": [{
             "market": "us",
-            "snapshot": {"date": "old", "time_local": "", "state": ""},
+            **_session_identity("2026-10-21", "us", finalized=True),
             "universes": [{"key": "u", "title": "U", "verified": 2, "target": 20,
                            "gainers": [], "losers": []}],
             "indices": []}],
             "total_verified": 2, "total_target": 20}}
-        by_day = {"2099-01-06": prev, "2099-01-05": us_doc}
+        by_day = {"2026-10-22": prev, "2026-10-21": us_doc}
         with patch.object(storage_mod, "list_openclose_dates",
-                          return_value=["2099-01-05", "2099-01-06"]), \
+                          return_value=["2026-10-21", "2026-10-22"]), \
                 patch.object(storage_mod, "load_openclose",
-                             side_effect=lambda day=None: by_day.get(day, {})):
-            rep, label = dm._latest_recorded_before("2099-01-07")
-            self.assertEqual(label, "2099-01-06")
+                             side_effect=lambda day=None: by_day.get(day or "", {})):
+            rep, label = dm._latest_recorded_before(_MAIL_DAY.isoformat())
+            self.assertEqual(label, "2026-10-22")
             close_lines = dm.build_close_lines(rep, f"{label} (last close)")
             self.assertIn("(last close)", "\n".join(close_lines))
             us_lines = dm.build_us_lines()
@@ -420,7 +454,6 @@ class MarketGatedMailTests(unittest.TestCase):
         """A US-only doc recorded today must NOT pass as the opening mail -
         India is live-built and merged alongside instead."""
         from corporate_actions.core.dates import today_ist
-        from corporate_actions.email import daily as dm
 
         stamped = f"{today_ist().isoformat()}T10:00:00+05:30"
         live = _live_report()
@@ -467,18 +500,29 @@ class MarketGatedMailTests(unittest.TestCase):
     def test_open_reuses_current_recorded_without_rebuild(self):
         from corporate_actions.core.dates import today_ist
 
-        # Fixed mid-morning IST stamp: immune to UTC/IST midnight edges.
         stamped = f"{today_ist().isoformat()}T10:00:00+05:30"
         current = {"recorded_at": stamped, "report": _live_report()}
-        with patch("corporate_actions.market.hours.is_market_open", return_value=True), \
-                patch.object(storage_mod, "load_openclose", return_value=current), \
-                patch("corporate_actions.opening_report.report.collect",
-                      side_effect=AssertionError("must not refetch")):
-            self.assertTrue(maybe_send_open_email("123"))
-        self.send.assert_called_once()
+        for explicit in (False, True):
+            with self.subTest(explicit=explicit), \
+                    patch("corporate_actions.market.hours.is_market_open", return_value=True), \
+                    patch.object(storage_mod, "load_openclose", return_value=current) as load, \
+                    patch("corporate_actions.opening_report.report.collect",
+                          side_effect=AssertionError("must not refetch")):
+                self.send.reset_mock()
+                self.patch_settings.reset_mock()
+                self.assertTrue(maybe_send_open_email("123", report=current if explicit else None))
+                self.send.assert_called_once()
+                self.patch_settings.assert_called_once_with("123", {
+                    "last_open_email": _MAIL_DAY.isoformat(),
+                    "last_daily_email": _MAIL_DAY.isoformat(),
+                })
+                if explicit:
+                    load.assert_not_called()
+                else:
+                    load.assert_called_once_with()
 
     def test_eod_skipped_when_no_session_today(self):
-        yesterday = date.today() - timedelta(days=1)
+        yesterday = _MAIL_DAY - timedelta(days=1)
         with patch("corporate_actions.opening_report.data.latest_session_date",
                    return_value=yesterday):
             self.assertFalse(maybe_send_eod_email("123"))
@@ -500,14 +544,27 @@ class MarketGatedMailTests(unittest.TestCase):
     def test_eod_sends_when_traded_today(self):
         from corporate_actions.core.dates import today_ist
 
-        stamped = f"{today_ist().isoformat()}T16:00:00+05:30"
-        current = {"recorded_at": stamped, "report": _live_report()}
-        with patch("corporate_actions.opening_report.data.latest_session_date",
-                   return_value=date.today()), \
-                patch.object(storage_mod, "load_openclose", return_value=current), \
-                patch.object(storage_mod, "load_watchlist", return_value=[]):
-            self.assertTrue(maybe_send_eod_email("123"))
-        self.send.assert_called_once()
+        stamped = f"{today_ist().isoformat()}T16:05:00+05:30"
+        current = {"recorded_at": stamped, "report": _live_report(finalized=True)}
+        for explicit in (False, True):
+            with self.subTest(explicit=explicit), \
+                    patch("corporate_actions.opening_report.data.latest_session_date",
+                          return_value=_MAIL_DAY), \
+                    patch.object(storage_mod, "load_openclose", return_value=current) as load, \
+                    patch("corporate_actions.opening_report.report.collect",
+                          side_effect=AssertionError("must reuse finalized close")):
+                self.send.reset_mock()
+                self.patch_settings.reset_mock()
+                self.assertTrue(maybe_send_eod_email("123", report=current if explicit else None))
+                self.send.assert_called_once()
+                self.patch_settings.assert_called_once_with("123", {
+                    "last_eod_email": _MAIL_DAY.isoformat(),
+                    "last_daily_email": _MAIL_DAY.isoformat(),
+                })
+                if explicit:
+                    load.assert_not_called()
+                else:
+                    load.assert_called_once_with()
 
 
 class WatchlistActionsMailTests(unittest.TestCase):

@@ -172,8 +172,8 @@ def handle_openmarket(chat_id, parts) -> None:
     """
     from .. import storage as _storage
 
-    if len(parts) > 1 and parts[1].lower() in ("now", "fresh", "run", "update", "new"):
-        handle_opening_report(chat_id, ["/openreport", *parts[2:]])
+    if any(str(arg).lower() in ("now", "fresh", "run", "update", "new") for arg in parts[1:]):
+        handle_opening_report(chat_id, ["/openreport", *parts[1:]])
         return
     market = None
     date_token = None
@@ -198,6 +198,13 @@ def handle_openmarket(chat_id, parts) -> None:
         doc = {}
     report = doc.get("report") if isinstance(doc.get("report"), dict) else {}
     sections = report.get("sections") or []
+    if date_token:
+        from ..opening_report.report import select_report_sections
+
+        requested = (market,) if market else tuple(
+            dict.fromkeys(s.get("market") for s in sections if s.get("market")))
+        report = select_report_sections(doc, requested, date_token)
+        sections = report.get("sections") or []
     if not sections:
         if date_token:
             reply(
@@ -225,22 +232,18 @@ def handle_openmarket(chat_id, parts) -> None:
                 f"Run <code>/openmarket now {'us' if market == 'us' else 'in'}</code> to add it.",
             )
             return
-    shown = dict(report)
-    shown["sections"] = sections
-    # Recompute the summary for the shown subset (the stored totals cover
-    # every market in the file, not necessarily the requested slice).
-    shown["total_verified"] = sum(
-        u.get("verified", 0) for s in sections for u in s.get("universes", [])
-    )
-    shown["total_target"] = sum(
-        u.get("target", 0) for s in sections for u in s.get("universes", [])
-    )
-    shown["volume_computed"] = sum(s.get("volume_computed", 0) for s in sections)
+    from ..storage.openclose import merge_sections
+
+    shown = merge_sections({**report, "sections": []}, sections)
+    captures = ", ".join(
+        f"{'India' if s.get('market') == 'in' else 'US'}: {s.get('captured_at') or 'unknown (legacy)'}"
+        for s in shown["sections"])
     scope = ("India" if market == "in" else "US") if market else "India + US"
     head = (
         "\U0001F4D6 <b>Recorded open/close report</b>\n"
-        f"{scope} \u00b7 recorded <b>{doc.get('recorded_at') or '?'}</b> "
+        f"{scope} \u00b7 saved <b>{doc.get('recorded_at') or '?'}</b> "
         f"by {doc.get('recorded_by') or '?'}\n"
+        f"Section captures: {captures}\n"
         "Served instantly from the saved file - "
         "<code>/openmarket now</code> re-scans fresh."
     )

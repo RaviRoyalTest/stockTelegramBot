@@ -9,9 +9,12 @@ from __future__ import annotations
 
 import logging
 import time
+from datetime import datetime, time as Time, timedelta
+from zoneinfo import ZoneInfo
 from concurrent.futures import ThreadPoolExecutor, as_completed
 
 from .. import config
+from ..market.hours import local_now
 from ..sources.http import _quote_session, _throttle_chart_req
 
 log = logging.getLogger(__name__)
@@ -166,7 +169,21 @@ def _utc_date(epoch: float):
     return datetime.fromtimestamp(epoch, tz=timezone.utc).date()
 
 
-def _historical_snapshot(quote: dict, timestamps: list, end_epoch: float):
+def session_window(market: str, target_date, days: int = 21) -> tuple[float, float]:
+    """Host-independent epoch window ending at the market-local day end."""
+    tz = ZoneInfo("America/New_York" if str(market).lower() == "us" else "Asia/Kolkata")
+    midnight = datetime.combine(target_date, Time(), tz)
+    return ((midnight - timedelta(days=days)).timestamp(),
+            (midnight + timedelta(days=1) - timedelta(seconds=1)).timestamp())
+
+
+def session_date(epoch: float, market: str):
+    """Exchange-local date of a daily bar or historical window endpoint."""
+    tz = ZoneInfo("America/New_York" if str(market).lower() == "us" else "Asia/Kolkata")
+    return datetime.fromtimestamp(epoch, tz).date()
+
+
+def _historical_snapshot(quote: dict, timestamps: list, end_epoch: float, market=None):
     """(close, volume, prev_close, prev_volume) for the session ON end_date.
 
     Works on timestamp-aligned triples BEFORE null-close dropping, because
@@ -177,7 +194,8 @@ def _historical_snapshot(quote: dict, timestamps: list, end_epoch: float):
     can never be a real previous session). Returns None when the target date
     has no usable bar - the caller reports N/A rather than guessing.
     """
-    end_date = _utc_date(end_epoch)
+    day_of = (lambda ts: session_date(ts, market)) if market else _utc_date
+    end_date = day_of(end_epoch)
     closes = quote.get("close") or []
     volumes = quote.get("volume") or []
     triples: list[tuple] = []
@@ -185,7 +203,7 @@ def _historical_snapshot(quote: dict, timestamps: list, end_epoch: float):
         if ts is None:
             continue
         triples.append((
-            _utc_date(ts),
+            day_of(ts),
             closes[index] if index < len(closes) else None,
             volumes[index] if index < len(volumes) else None,
         ))
@@ -209,10 +227,10 @@ def _fetch_regular_session(
     """One Yahoo regular-session fetch for a symbol.
 
     range=10d&interval=1d&includePrePost=false returns ONLY regular-session
-    daily bars. The last bar is the current session (in-progress while the
-    market is open: its volume is today's cumulative regular volume); the bar
-    before it is the previous completed session (its close = prev close, its
-    volume = previous day's total). Returns None when the price cannot be
+    daily bars. Live data must have a usable timestamp-aligned bar ON the
+    market-local current date (in-progress while open); a missing/null current
+    bar never falls back to an older session. The nearest earlier usable bar
+    supplies the previous close and volume. Returns None when the price cannot be
     reliably obtained. Volume Change % stays None when the previous-day
     volume is missing - never estimated.
 
@@ -224,7 +242,12 @@ def _fetch_regular_session(
     unavailable rather than ranked against a different day's close.
     """
     suffix = _yahoo_suffix(exchange)
-    if start is not None and end is not None:
+    historical = start is not None and end is not None
+    market = "us" if str(exchange).lower() == "us" else "in"
+    # Anchor the expected session before I/O, including near local midnight.
+    snapshot_epoch = end if historical else local_now(market).timestamp()
+    expected_day = session_date(snapshot_epoch, market)
+    if historical:
         url = (
             f"https://query1.finance.yahoo.com/v8/finance/chart/{symbol}{suffix}"
             f"?period1={int(start)}&period2={int(end)}&interval=1d&includePrePost=false"
@@ -243,18 +266,12 @@ def _fetch_regular_session(
         name = (meta.get("longName") or meta.get("shortName") or "").strip()
         quotes = (result.get("indicators") or {}).get("quote") or [{}]
         quotes3 = quotes[0] or {}
-        if start is not None and end is not None:
-            snapshot = _historical_snapshot(quotes3, result.get("timestamp") or [], end)
-            if snapshot is None:
-                return None  # no usable bar ON the date - never rank another day
-            last_close, today_volume, prev_close, prev_volume = snapshot
-        else:
-            rows = _session_rows(quotes3)
-            if not rows:
-                return None
-            last_close, today_volume = rows[-1][1], rows[-1][2]
-            prev_close = rows[-2][1] if len(rows) >= 2 else None
-            prev_volume = rows[-2][2] if len(rows) >= 2 else None
+        snapshot = _historical_snapshot(
+            quotes3, result.get("timestamp") or [], snapshot_epoch, market,
+        )
+        if snapshot is None:
+            return None  # no usable bar ON the date - never rank another day
+        last_close, today_volume, prev_close, prev_volume = snapshot
         price = last_close  # historical: the completed close, never meta's live price
         change = price - prev_close
         change_pct = (change / prev_close) * 100.0
@@ -264,6 +281,7 @@ def _fetch_regular_session(
         row = {
             "symbol": symbol,
             "name": name or symbol,
+            "session_date": expected_day.isoformat(),
             "price": price,
             "prev_close": prev_close,
             "change": change,
@@ -362,7 +380,7 @@ def get_index_levels(
         rows = _session_rows(quotes[0] or {})
         if start is not None and end is not None:
             snapshot = _historical_snapshot(
-                quotes[0] or {}, result.get("timestamp") or [], end,
+                quotes[0] or {}, result.get("timestamp") or [], end, market,
             )
             if snapshot is None:
                 out.append({"label": label, "level": None, "change": None, "change_pct": None})
@@ -557,7 +575,7 @@ def latest_session_date(market: str):
         timestamps = [t for t in result.get("timestamp") or [] if t is not None]
         if not timestamps:
             return None
-        return _utc_date(timestamps[-1])
+        return session_date(timestamps[-1], market)
     except Exception as error:
         log.info("latest session date failed for %s - %s", market, error)
         return None
@@ -571,13 +589,8 @@ def has_session_on(market: str, target_date) -> bool | None:
     reports for holidays/weekends instead of silently reporting a different
     session's data.
     """
-    import time as _time
-
     ticker = "^NSEI" if market == "in" else "^GSPC"
-    end_epoch = _time.mktime(
-        (target_date.year, target_date.month, target_date.day, 0, 0, 0, 0, 0, -1)
-    ) + 2 * 86400  # the day after target, 00:00 local
-    start_epoch = end_epoch - 370 * 86400
+    start_epoch, end_epoch = session_window(market, target_date, days=370)
     url = (
         f"https://query1.finance.yahoo.com/v8/finance/chart/{ticker}"
         f"?period1={int(start_epoch)}&period2={int(end_epoch)}&interval=1d&includePrePost=false"
@@ -588,7 +601,7 @@ def has_session_on(market: str, target_date) -> bool | None:
         response.raise_for_status()
         result = response.json()["chart"]["result"][0]
         timestamps = [t for t in result.get("timestamp") or [] if t is not None]
-        return any(_utc_date(t) == target_date for t in timestamps)
+        return any(session_date(t, market) == target_date for t in timestamps)
     except Exception as error:
         log.info("session probe failed for %s %s - %s", market, target_date, error)
         return None

@@ -14,10 +14,13 @@ raises - every failure degrades to a skip so the poll cycle is unaffected.
 from __future__ import annotations
 
 import logging
+from datetime import date
 
 from .. import config, storage
 from ..core.dates import now_ist, today_ist
 from ..core.text import escape
+from ..opening_report.report import select_report_sections
+from ..storage.settings import patch_user_settings
 from .client import is_configured as email_configured
 from .client import send_email
 from .tables import actions_table, esc, index_table, kv_table, muted
@@ -415,12 +418,12 @@ def build_watchlist_block(chat_id) -> list[str]:
             else _chat_watchlist(chat_id)
     except Exception:
         watchlist = []
-    actions = fetch_watchlist_actions(watchlist)
+    actions = fetch_watchlist_actions(chat_id)
     if actions:
         lines.extend(build_watchlist_actions_lines(actions))
     else:
         try:
-            snapshot = storage.load_snapshots() or {}
+            snapshot = storage.load_snapshots("in") or {}
         except Exception:
             snapshot = {}
         if snapshot.get("corporate_actions"):
@@ -693,7 +696,7 @@ def build_wk52_lines(session_label: str = "", snapshot: dict | None = None,
     doc = snapshot if isinstance(snapshot, dict) and snapshot else {}
     if not doc:
         try:
-            doc = storage.load_snapshots() or {}
+            doc = storage.load_snapshots("in") or {}
         except Exception as error:
             log.debug("52w mail: snapshot unavailable: %s", error)
             doc = {}
@@ -933,7 +936,7 @@ def build_gaps_lines() -> list[str]:
     if not downs and not ups:
         # Pre-open fallback: yesterday's recorded gap-downs, honestly labeled.
         try:
-            snapshot = storage.load_snapshots() or {}
+            snapshot = storage.load_snapshots("in") or {}
         except Exception:
             snapshot = {}
         recorded = (snapshot.get("gap_downs") or [])[:8]
@@ -971,9 +974,9 @@ def _latest_recorded_before(today_iso: str) -> tuple[dict, str]:
             doc = storage.load_openclose(day) or {}
         except Exception:
             continue
-        report = _as_report(doc)
-        if report.get("sections"):
-            return report, _session_label(report, day)
+        report = _select_india(doc, day, require_finalized=True)
+        if report:
+            return report, day
     return {}, today_iso
 
 
@@ -989,17 +992,9 @@ def _latest_us_report() -> tuple[dict, str]:
             doc = storage.load_openclose(day) or {}
         except Exception:
             continue
-        report = _as_report(doc)
-        us_sections = [s for s in report.get("sections") or []
-                       if s.get("market") == "us" and s.get("universes")]
-        if us_sections:
-            sub = dict(report)
-            sub["sections"] = us_sections
-            sub["total_verified"] = sum(
-                u.get("verified", 0) for s in us_sections for u in s.get("universes", []))
-            sub["total_target"] = sum(
-                u.get("target", 0) for s in us_sections for u in s.get("universes", []))
-            return sub, _session_label(report, day)
+        report = select_report_sections(doc, ("us",), day, require_finalized=True)
+        if report and any(s.get("universes") for s in report.get("sections") or []):
+            return report, day
     return {}, ""
 
 
@@ -1119,10 +1114,7 @@ def _recorded_openclose() -> tuple[dict, str]:
 
 def _mark_sent(chat_id, key: str, today: str) -> None:
     try:
-        settings = storage.get_user_settings(chat_id) or {}
-        settings[key] = today
-        settings[_LAST_SENT_KEY] = today  # legacy readers see "already mailed today"
-        storage.save_user_settings(chat_id, settings)
+        patch_user_settings(chat_id, {key: today, _LAST_SENT_KEY: today})
     except Exception as error:
         log.debug("_mark_sent: %s", error)
 
@@ -1163,26 +1155,19 @@ def _india_traded_today() -> bool:
         return True
 
 
+def _select_india(doc: dict, today_iso: str, require_finalized: bool = False) -> dict:
+    """Today's usable India tables, never wrapper dates or another market."""
+    report = select_report_sections(
+        doc, ("in",), today_iso, require_finalized=require_finalized)
+    if not report or not any(s.get("universes") for s in report.get("sections") or []):
+        return {}
+    return report
+
+
 def _recorded_doc_is_current(doc: dict, today_iso: str) -> bool:
-    """True when the recorded doc describes today's session (not yesterday's)."""
+    """A capture today is not evidence that its India session is today."""
     try:
-        report = _as_report(doc)
-        if str(report.get("target_date") or "").strip() == today_iso:
-            return True
-        recorded_at = str(doc.get("recorded_at") or "")
-        if recorded_at:
-            from datetime import datetime as _dt
-
-            try:
-                from zoneinfo import ZoneInfo as _ZoneInfo
-
-                day = _dt.fromisoformat(recorded_at.replace("Z", "+00:00"))
-                if day.tzinfo is None:
-                    return recorded_at[:10] == today_iso
-                return day.astimezone(_ZoneInfo("Asia/Kolkata")).date().isoformat() == today_iso
-            except Exception:
-                return recorded_at[:10] == today_iso
-        return False
+        return bool(_select_india(doc, today_iso))
     except Exception:
         return False
 
@@ -1197,51 +1182,52 @@ def _merge_reports(base: dict, india_section: dict) -> dict:
     return storage.merge_sections(_as_report(base), [india_section])
 
 
-def _ensure_fresh_india(today_iso: str) -> tuple[dict, str, bool]:
-    """Recorded report + label + current-flag, building a live India scan first.
+def _ensure_fresh_india(today_iso: str, require_finalized: bool = False) -> tuple[dict, str, bool]:
+    """Return validated India tables, rebuilding a missing open or completed close.
 
-    "Current" means recorded today AND carrying an India section - a US-only
-    doc recorded today must never pass as the morning opening mail. When the
-    record lacks a current India section AND India is OPEN right now, a live
-    India-only scan runs (~30-45s) and is MERGED over the recorded doc (other
-    markets' sections are kept), so the mail always lists India first with
-    the US block alongside. When the market is closed no scan runs (the
-    caller skips the mail instead). Returns (report, label, is_current).
+    US sections are retained deliberately in storage, not in India's mail
+    screener. A closed-market EOD rebuild requests today's completed session;
+    neither a fresh wrapper nor an opening capture can satisfy finality.
     Never raises.
     """
     try:
         doc = storage.load_openclose() or {}
     except Exception as error:
         log.debug("_ensure_fresh_india load: %s", error)
-        return {}, today_iso, False
-    report = _as_report(doc)
-    label = _session_label(report, str(doc.get("recorded_at") or today_iso)[:10])
-    has_india = any(s.get("market") == "in" and s.get("universes")
-                    for s in report.get("sections") or [])
-    if has_india and _recorded_doc_is_current(doc, today_iso):
-        return report, label, True
+        doc = {}
     try:
+        selected = _select_india(doc, today_iso, require_finalized)
+        if selected:
+            return selected, today_iso, True
         from ..market.hours import is_market_open
         from ..opening_report.report import collect, save_openclose_doc
 
-        if not bool(is_market_open("in")):
-            return report, label, False
-        live = collect(("in",))
-        live_sections = (live.get("sections") or []) if isinstance(live, dict) else []
-        india_sections = [s for s in live_sections
-                          if s.get("market") == "in" and s.get("universes")]
-        if not india_sections:
-            return report, label, False
-        merged = _merge_reports(report, india_sections[0])
+        market_open = bool(is_market_open("in"))
+        target = None
+        if require_finalized:
+            # Closed also means pre-open, weekends and holidays. Only build
+            # today's close after the close window and a traded-day probe.
+            if market_open or not in_close_window() or not _india_traded_today():
+                return {}, today_iso, False
+            target = date.fromisoformat(today_iso)
+            live = collect(("in",), target_date=target)
+        elif market_open:
+            live = collect(("in",))
+        else:
+            return {}, today_iso, False
+        selected = _select_india(live, today_iso, require_finalized)
+        if not selected:
+            return {}, today_iso, False
+        merged = _merge_reports(_as_report(doc), selected["sections"][0])
         try:
-            markets = tuple(sorted({*(doc.get("markets") or []), "in"}))
-            save_openclose_doc(merged, markets, None, recorded_by="auto-mail")
+            markets = tuple(s["market"] for s in merged["sections"])
+            save_openclose_doc(merged, markets, target, recorded_by="auto-mail")
         except Exception as error:
             log.debug("_ensure_fresh_india save: %s", error)
-        return merged, _session_label(merged, today_iso), True
+        return selected, today_iso, True
     except Exception as error:
-        log.info("_ensure_fresh_india live build skipped: %s", error)
-        return report, label, False
+        log.info("_ensure_fresh_india build skipped: %s", error)
+        return {}, today_iso, False
 
 
 def maybe_send_open_email(chat_id, report: dict | None = None, force: bool = False) -> bool:
@@ -1273,20 +1259,15 @@ def maybe_send_open_email(chat_id, report: dict | None = None, force: bool = Fal
             log.info("open mail: India market closed - skipping chat %s", chat_id)
             return False
         if report is not None:
-            live, label = _as_report(report), _session_label(_as_report(report), today)
+            live = report
         else:
-            live, label, _current = _ensure_fresh_india(today)
-        live = _as_report(live)
+            live, _label, _current = _ensure_fresh_india(today)
+        live = _select_india(live, today)
+        label = today
         if not live.get("sections"):
             log.info("open mail: no recorded openclose yet - skipping chat %s", chat_id)
             return False
-        # An opening mail without the India list is a broken mail (e.g. a
-        # US-only record). Skip without marking sent so the next cycle retries
-        # instead of delivering a list-less "opening" mail.
-        if not any(s.get("market") == "in" and s.get("universes")
-                   for s in live.get("sections") or []):
-            log.info("open mail: no India section - skipping chat %s (retry next cycle)", chat_id)
-            return False
+
         # Six-section morning digest: (1) live open + last-close pointer,
         # (2) Nifty actions with buy-by dates, (3) US actions with buy-by,
         # (4) U.S. screener tables, (5) overnight gappers, (6) watchlist actions.
@@ -1315,8 +1296,8 @@ def maybe_send_eod_email(chat_id, report: dict | None = None, force: bool = Fals
     """Evening closing-screener + stored-details mail (colorful tables).
 
     Sends only when India actually traded today (never on weekends or
-    holidays). A stale recorded file is never mailed as today's session -
-    the snapshot digest fills in instead.
+    holidays). Only today's finalized India tables or finalized India
+    snapshot can supply the close; force never relaxes data integrity.
     """
     try:
         # Single sender (see maybe_send_open_email): cron hosts never mail.
@@ -1336,18 +1317,24 @@ def maybe_send_eod_email(chat_id, report: dict | None = None, force: bool = Fals
         if not force and not _india_traded_today():
             log.info("eod mail: no India session today - skipping chat %s", chat_id)
             return False
-        if report is not None:
-            live, label, current = _as_report(report), _session_label(_as_report(report), today), True
-        else:
-            live, label, current = _ensure_fresh_india(today)
-        live = _as_report(live)
+        live = _select_india(report, today, require_finalized=True) if report is not None else {}
+        if not live:
+            live, _label, _current = _ensure_fresh_india(today, require_finalized=True)
+        # Revalidate even injected reports/helper results; force only bypasses
+        # scheduling, never session identity or close finality.
+        live = _select_india(live, today, require_finalized=True)
+        label = today
         lines: list[str] = []
-        if live.get("sections") and current:
+        if live:
             lines = build_close_digest_lines(chat_id, live, label)
         else:
-            # No current session recorded - degrade to the legacy snapshot
-            # digest so the EOD mail is never empty (and never stale).
-            snapshot = storage.load_snapshots() or {}
+            # A snapshot fallback must also be a completed India session,
+            # never a provisional morning capture under an EOD subject.
+            from ..snapshots import is_snapshot_finalized
+
+            snapshot = storage.load_snapshots("in") or {}
+            if snapshot.get("session") != today or not is_snapshot_finalized(snapshot, "in"):
+                return False
             if not snapshot.get("gap_downs") and not snapshot.get("top_gainers") \
                     and not snapshot.get("corporate_actions"):
                 log.info("eod mail: nothing recorded yet - skipping chat %s", chat_id)

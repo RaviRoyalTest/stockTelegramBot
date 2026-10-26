@@ -17,15 +17,20 @@ import time
 
 from . import config, storage
 from .core.dates import next_at_in_tz_after
+from .storage.schedule import (
+    schedule_at_times,
+    schedule_defaults_enabled,
+    schedule_identity,
+)
 from .formatting.schedule import format_interval
 from .market.hours import (
     entry_in_window,
     entry_market,
     entry_paused,
+    is_session_day,
     market_label,
     market_open_close,
     market_tz_name,
-    market_tz_tag,
 )
 
 log = logging.getLogger(__name__)
@@ -34,7 +39,7 @@ log = logging.getLogger(__name__)
 def _run_at_timezone(entry: dict) -> str:
     """Wall-clock timezone of an entry's run_at: its market's, IST by default."""
     market = entry_market(entry, default=config.SCHEDULED_REPORTS_MARKET)
-    return market_tz_name(market)
+    return entry.get("timezone") or market_tz_name(market)
 
 
 def schedule_source_label(entry: dict, chat, command: str) -> str:
@@ -46,8 +51,8 @@ def schedule_source_label(entry: dict, chat, command: str) -> str:
     chat's watchlist location.
     """
     when = format_interval(entry.get("interval_min") or config.SCHEDULED_REPORTS_INTERVAL_MIN)
-    if entry.get("run_at"):
-        pretty_times = str(entry["run_at"]).replace(",", ", ")
+    if _run_at_times(entry):
+        pretty_times = ", ".join(_run_at_times(entry))
         when += f" at {pretty_times} {_tz_tag(entry)}"
     gate_bits = []
     market = entry_market(entry, default=config.SCHEDULED_REPORTS_MARKET)
@@ -71,8 +76,12 @@ def schedule_source_label(entry: dict, chat, command: str) -> str:
 
 
 def _tz_tag(entry: dict) -> str:
-    market = entry_market(entry, default=config.SCHEDULED_REPORTS_MARKET)
-    return market_tz_tag(market)
+    timezone = _run_at_timezone(entry)
+    if timezone in ("Asia/Kolkata", "Asia/Calcutta", "IST"):
+        return "IST"
+    if timezone == "America/New_York":
+        return "ET"
+    return timezone
 
 
 def schedule_entries_with_defaults(default_chat: str) -> list[dict]:
@@ -85,7 +94,8 @@ def schedule_entries_with_defaults(default_chat: str) -> list[dict]:
     """
     entries = storage.load_schedule()
     commands = [command for command in config.SCHEDULED_COMMANDS if command.strip()]
-    if commands:
+    if (commands and schedule_defaults_enabled(default_chat)
+            and schedule_defaults_enabled(config.TELEGRAM_CHAT_ID or default_chat)):
         owner_has_entries = any(
             str(entry.get("chat") or default_chat) == str(default_chat)
             for entry in entries
@@ -109,8 +119,7 @@ def _run_at_times(entry: dict) -> list[str]:
     run_at may hold a comma-separated list, e.g. '09:15,15:30' - the open +
     close reports - each of which becomes a daily anchor.
     """
-    raw = (entry or {}).get("run_at") or ""
-    return [item.strip() for item in raw.split(",") if item.strip()]
+    return list(schedule_at_times(entry or {}))
 
 
 def _add_minutes_hhmm(hhmm: str, minutes: int) -> str:
@@ -156,14 +165,22 @@ def _window_anchor_times(entry: dict, interval_min: int) -> list[str]:
     return times
 
 
-def _next_clock_after(times: list[str], tz_name: str, after_ts: float) -> float | None:
-    """Epoch of the next occurrence of ANY of `times` (daily) after `after_ts`."""
-    candidates = [
-        next_at_in_tz_after(hhmm, tz_name, after_ts)
-        for hhmm in times if hhmm
-    ]
-    candidates = [ts for ts in candidates if ts is not None]
-    return min(candidates) if candidates else None
+def _next_clock_after(times: list[str], tz_name: str, after_ts: float,
+                      market: str = "any") -> float | None:
+    """Next clock anchor on an eligible session day (any = every day)."""
+    for _ in range(14 * max(1, len(times))):
+        candidates = [
+            next_at_in_tz_after(hhmm, tz_name, after_ts)
+            for hhmm in times if hhmm
+        ]
+        candidates = [ts for ts in candidates if ts is not None]
+        if not candidates:
+            return None
+        candidate = min(candidates)
+        if is_session_day(market, candidate):
+            return candidate
+        after_ts = candidate
+    return None
 
 
 def _hhmm_minutes(hhmm: str) -> int:
@@ -231,7 +248,7 @@ def _first_due(entry: dict, market: str, interval_min: int, after_ts: float) -> 
     """
     anchors = _entry_anchor_times(entry, interval_min)
     if anchors:
-        ts = _next_clock_after(anchors, market_tz_name(market), after_ts)
+        ts = _next_clock_after(anchors, _run_at_timezone(entry), after_ts, market)
         if ts is not None:
             return ts
     return after_ts + min(interval_min * 60, 60)
@@ -253,11 +270,15 @@ def _gate_allows(entry: dict, market: str, now: float, due_ts: float | None,
     end-of-session report (window_end, e.g. 15:30) would be swallowed by the
     half-open "now < close" check.
     """
+    gate_market = entry_market(entry, default=market)
+    if not is_session_day(gate_market, now):
+        return False
     if entry_in_window(entry, default=market, now=now):
         return True
     if due_ts is None or not _entry_anchor_times(entry, interval_min):
         return False
-    return 0 <= now - due_ts <= _GATE_GRACE_SECONDS
+    return (is_session_day(gate_market, due_ts)
+            and 0 <= now - due_ts <= _GATE_GRACE_SECONDS)
 
 
 def start_scheduled_reports(run_command) -> None:
@@ -292,7 +313,7 @@ def start_scheduled_reports(run_command) -> None:
     def _entries():
         return schedule_entries_with_defaults(default_chat)
 
-    # (chat, commands) -> epoch seconds when the next run is due. Uses the
+    # Full schedule identity -> epoch seconds when the next run is due. Uses the
     # wall clock (time.time()) to match the persisted next_due timestamps that
     # storage.set_schedule_next_due writes to schedule.json - comparing
     # monotonic() against those epoch values would never fire.
@@ -314,11 +335,10 @@ def start_scheduled_reports(run_command) -> None:
                     time.sleep(60)
                     continue
                 # Drop due-times for entries that no longer exist so removed
-                # schedules never linger, and (chat, commands) stays stable
+                # schedules never linger, and full identities stay stable
                 # across add/remove in other users' rows.
                 alive = {
-                    (str(entry.get("chat") or default_chat),
-                     tuple(command for command in entry.get("commands") or [] if command.strip()))
+                    schedule_identity(entry, default_chat)
                     for entry in entries
                 }
                 for key in [key for key in next_due if key not in alive]:
@@ -341,7 +361,7 @@ def start_scheduled_reports(run_command) -> None:
                                 chat,
                             )
                         continue
-                    key = (chat, tuple(commands))
+                    key = schedule_identity(entry, default_chat)
                     market = entry_market(entry, default=config.SCHEDULED_REPORTS_MARKET)
                     # Persisted next-due (schedule.json) wins so the cadence
                     # survives redeploys. Otherwise anchored entries (a run
@@ -424,14 +444,21 @@ def start_scheduled_reports(run_command) -> None:
                     # 23:00...).
                     if len(anchors) > 1 or (anchors and interval % (24 * 60) == 0):
                         next_due_ts = _next_clock_after(
-                            anchors, market_tz_name(market), after_ts,
+                            anchors, _run_at_timezone(entry), after_ts, market,
                         )
                         if next_due_ts is None:
                             next_due_ts = after_ts + interval * 60
                     else:
                         next_due_ts = after_ts + interval * 60
                     next_due[key] = next_due_ts
-                    storage.set_schedule_next_due(chat, commands, interval, next_due_ts)
+                    if not entry.get("default"):
+                        storage.set_schedule_next_due(
+                            chat, commands, interval, next_due_ts,
+                            run_at=entry.get("run_at"), at_times=entry.get("at_times"),
+                            timezone=entry.get("timezone"), market=entry.get("market"),
+                            window_start=entry.get("window_start"),
+                            window_end=entry.get("window_end"),
+                        )
             except Exception as error:  # never let a scheduler hiccup kill the thread
                 log.warning(
                     "scheduled reports loop error: %s",

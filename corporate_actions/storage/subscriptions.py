@@ -26,26 +26,32 @@ def load_subscriptions() -> dict:
 
 
 def add_subscription(chat_id, item: dict) -> list:
-    """Append an item to one chat's subscription list (de-duplicated). Returns the new list."""
+    """Append an item to one chat's subscription list (de-duplicated)."""
+    return bulk_add_subscriptions(chat_id, [item])["list"]
+
+
+def bulk_add_subscriptions(chat_id, items: list) -> dict:
+    """Atomically add a batch, de-duplicating on (exchange, symbol)."""
     with _lock, _file_lock(config.SUBSCRIPTIONS_FILE):
         subs = read_json(config.SUBSCRIPTIONS_FILE, {})
         key = str(chat_id)
-        current = subs.get(key, [])
-        before = len(current)
+        current = subs.get(key)
+        current = [item for item in current if isinstance(item, dict)] if isinstance(current, list) else []
         seen = {watchlist_key(item) for item in current}
-        added = item.get("symbol") and watchlist_key(item) not in seen
-        if added:
+        added, duplicates = 0, 0
+        for item in items:
+            if not isinstance(item, dict) or not watchlist_key(item)[1]:
+                continue
+            item_key = watchlist_key(item)
+            if item_key in seen:
+                duplicates += 1
+                continue
             current.append(item)
+            seen.add(item_key)
+            added += 1
         subs[key] = current
         write_json(config.SUBSCRIPTIONS_FILE, subs)
-    log.info(
-        "subscriptions.json: chat %s %d -> %d item(s) | %s %s:%s",
-        key, before, len(current),
-        "added" if added else "skipped (already present)",
-        item.get("exchange", "").upper(),
-        item.get("symbol", "").upper(),
-    )
-    return current
+    return {"list": current, "added": added, "skipped_duplicates": duplicates}
 
 
 def replace_subscriptions(chat_id, items: list) -> dict:

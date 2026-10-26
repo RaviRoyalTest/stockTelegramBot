@@ -268,14 +268,10 @@ def set_alerts_enabled(chat_id: str, enabled: bool) -> dict:
     working - exactly what the user's own /quiet does.
     """
     chat = _clean_chat(chat_id)
-    settings = dict(storage.get_user_settings(chat) or {})
     if enabled:
-        settings.pop("quiet", None)
-        settings.pop("quiet_until", None)
+        storage.patch_user_settings(chat, {}, remove=("quiet", "quiet_until"))
     else:
-        settings["quiet"] = True
-        settings.pop("quiet_until", None)
-    storage.save_user_settings(chat, settings)
+        storage.patch_user_settings(chat, {"quiet": True}, remove=("quiet_until",))
     log.info("admin: chat %s alerts -> %s", chat, "on" if enabled else "off")
     return _user_state(chat)
 
@@ -283,9 +279,7 @@ def set_alerts_enabled(chat_id: str, enabled: bool) -> dict:
 def set_ca_alerts(chat_id: str, enabled: bool) -> dict:
     """Toggle only the corporate-action + reminder pushes for a chat."""
     chat = _clean_chat(chat_id)
-    settings = dict(storage.get_user_settings(chat) or {})
-    settings["ca_alerts"] = bool(enabled)
-    storage.save_user_settings(chat, settings)
+    storage.patch_user_settings(chat, {"ca_alerts": bool(enabled)})
     log.info("admin: chat %s ca_alerts -> %s", chat, bool(enabled))
     return _user_state(chat)
 

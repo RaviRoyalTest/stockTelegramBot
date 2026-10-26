@@ -86,12 +86,11 @@ def render() -> None:
                                  if w_universe in ("nifty100", "nifty500", "mylist") else 0,
                                  key="watcher_universe")
     if w_enabled_new != w_enabled or w_thresh_new != w_thresh or w_uni_new != w_universe:
-        ow_settings["watcher"] = {
+        storage.patch_user_settings(owner_key, {"watcher": {
             "enabled": w_enabled_new,
             "threshold": float(w_thresh_new),
             "universe": w_uni_new,
-        }
-        storage.save_user_settings(owner_key, ow_settings)
+        }})
         st.success("Watcher settings saved - "
                    + ("ON, alerts will arrive here." if w_enabled_new else "OFF."))
     st.caption(f"Scans every {config.MOVERS_WATCH_INTERVAL_SECONDS}s. "

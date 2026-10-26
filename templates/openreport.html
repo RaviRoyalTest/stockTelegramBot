@@ -263,7 +263,9 @@
       // Page open: show the latest recorded session instantly (zero fetch);
       // the user decides when to spend a fresh scan.
       (function () {
-        fetch('/api/openreport/recorded').then(function (res) {
+        fetch('/api/openreport/recorded?market=' +
+              encodeURIComponent((document.querySelector('input[name="market"]:checked') || {}).value || 'all')
+        ).then(function (res) {
           return res.ok ? res.json() : null;
         }).then(function (doc) {
           if (!doc || !doc.report || !doc.report.sections) return;
@@ -275,13 +277,19 @@
       // Picking a past session loads that recorded file straight into this
       // page's tables - the heavy scan only runs via Build report.
       (function () {
+        function marketScope() {
+          return (document.querySelector('input[name="market"]:checked') || {}).value || 'all';
+        }
         function showRecorded(doc) {
           if (!doc || !doc.report) return;
           var rep = doc.report || {};
           var el = document.getElementById('buildMeta');
           el.innerHTML = 'Recorded file: <strong>' + esc(doc.recorded_at || '?') + '</strong>' +
             ' by ' + esc(doc.recorded_by || '?') +
-            ' · verified ' + (rep.total_verified || 0) + '/' + (rep.total_target || 0);
+            ' · verified ' + (rep.total_verified || 0) + '/' + (rep.total_target || 0) +
+            (rep.finalized === false
+              ? ' · <strong>provisional</strong> (that market\u2019s close is not final yet)'
+              : '');
         }
         function renderRecorded(doc) {
           showRecorded(doc);
@@ -301,7 +309,7 @@
         sel.id = 'recordedDate';
         sel.setAttribute('aria-label', 'Recorded session');
         sel.style.marginLeft = '8px';
-        fetch('/api/openreport/recorded').then(function (res) {
+        fetch('/api/openreport/recorded?market=' + encodeURIComponent(marketScope())).then(function (res) {
           return res.ok ? res.json() : {};
         }).then(function (doc) {
           showRecorded(doc);
@@ -315,7 +323,8 @@
           document.getElementById('buildMeta').parentNode.appendChild(sel);
           sel.addEventListener('change', function () {
             if (!sel.value) return;
-            fetch('/api/openreport/recorded?date=' + encodeURIComponent(sel.value)).then(function (res) {
+            fetch('/api/openreport/recorded?date=' + encodeURIComponent(sel.value) +
+                  '&market=' + encodeURIComponent(marketScope())).then(function (res) {
               if (!res.ok) throw new Error('API ' + res.status);
               return res.json();
             }).then(renderRecorded).catch(function (err) {

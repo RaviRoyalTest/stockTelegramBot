@@ -60,7 +60,7 @@ _NAME_RE = re.compile(r"[^a-z0-9_-]+")
 
 # Only files matching the strict snapshot grammar are eligible for retention
 # cleanup - one-off files a developer drops into the tree are never touched.
-_FILENAME_RE = re.compile(r"^.+_\d{4}-\d{2}-\d{2}_\d{2}-\d{2}-\d{2}(-\d{6})?\.json$")
+_FILENAME_RE = re.compile(r"^.+_\d{4}-\d{2}-\d{2}(?:_\d{2}-\d{2}-\d{2}(?:-\d{6})?(?:-\d+)?\.json|\.jsonl)$")
 
 # Manual config override, read at call time (tests can patch the env).
 _RETENTION_DAYS_ENV = "JSON_RETENTION_DAYS"
@@ -72,6 +72,11 @@ def _normalize_name(data_name: str) -> str:
     if not slug:
         raise ValueError("data_name must contain at least one alphanumeric character")
     return slug
+
+
+def _capture_moment(timestamp: datetime | None = None) -> datetime:
+    moment = timestamp if timestamp is not None else now_ist()
+    return moment.replace(tzinfo=IST) if moment.tzinfo is None else moment.astimezone(IST)
 
 
 def generate_snapshot_filename(
@@ -86,11 +91,7 @@ def generate_snapshot_filename(
     to be IST (a bare ``datetime.now()`` on a UTC host would otherwise silently
     misdate files); aware datetimes are converted.
     """
-    moment = timestamp or now_ist()
-    if moment.tzinfo is None:
-        moment = moment.replace(tzinfo=IST)
-    else:
-        moment = moment.astimezone(IST)
+    moment = _capture_moment(timestamp)
     safe_name = _normalize_name(data_name)
     return (
         f"{safe_name}_{moment:%Y-%m-%d_%H-%M-%S-%f}{_SNAPSHOT_SUFFIX}"
@@ -108,15 +109,14 @@ def unique_snapshot_path(
     Microsecond precision makes collisions vanishingly rare; the loop then
     guarantees uniqueness even under concurrency or an injected timestamp.
     """
-    directory = (base_dir or REALTIME_ROOT) / _normalize_name(data_name) / (
-        (timestamp or now_ist()).strftime("%Y/%m/%d")
-    )
-    candidate = directory / generate_snapshot_filename(data_name, timestamp=timestamp)
+    moment = _capture_moment(timestamp)
+    directory = (base_dir or REALTIME_ROOT) / _normalize_name(data_name) / moment.strftime("%Y/%m/%d")
+    candidate = directory / generate_snapshot_filename(data_name, timestamp=moment)
     counter = 1
     while candidate.exists():
         candidate = directory / (
             f"{_normalize_name(data_name)}_"
-            f"{(timestamp or now_ist()):%Y-%m-%d_%H-%M-%S-%f}-{counter}{_SNAPSHOT_SUFFIX}"
+            f"{moment:%Y-%m-%d_%H-%M-%S-%f}-{counter}{_SNAPSHOT_SUFFIX}"
         )
         counter += 1
     return candidate
@@ -143,13 +143,13 @@ def _json_default(value):
 
 
 def _dump(data) -> str:
-    return json.dumps(data, ensure_ascii=False, indent=2, default=_json_default)
+    return json.dumps(data, ensure_ascii=False, indent=2, default=_json_default, allow_nan=False)
 
 
 def _dump_line(data) -> str:
     """Compact single-line dump (JSONL records must never span lines)."""
     return json.dumps(
-        data, ensure_ascii=False, separators=(",", ":"), default=_json_default
+        data, ensure_ascii=False, separators=(",", ":"), default=_json_default, allow_nan=False
     )
 
 
@@ -176,25 +176,22 @@ def save_json_snapshot(
     record_count = len(data) if isinstance(data, (list, dict)) else None
     path: Path | None = None
     try:
-        path = unique_snapshot_path(
-            safe_name, timestamp=timestamp, base_dir=base_dir
-        )
-
+        moment = _capture_moment(timestamp)
         envelope = dict(metadata or {})
-        moment = timestamp or now_ist()
-        if moment.tzinfo is None:
-            moment = moment.replace(tzinfo=IST)
-        envelope.setdefault(
-            "captured_at", moment.isoformat(timespec="microseconds")
-        )
-        envelope.setdefault("timezone", "Asia/Kolkata")
+        # The writer owns these fields: caller context must not mislabel a capture.
+        envelope["captured_at"] = moment.isoformat(timespec="microseconds")
+        envelope["timezone"] = "Asia/Kolkata"
         if source:
             envelope.setdefault("source", source)
 
         payload = {"metadata": envelope, "data": data} if envelope else data
         body = _dump(payload)
 
-        with _write_lock, _file_lock(path):
+        # Lock the series before choosing a name, not the candidate afterwards.
+        # Otherwise concurrent writers can both select and replace the same file.
+        series_lock = (base_dir or REALTIME_ROOT) / safe_name / ".capture"
+        with _write_lock, _file_lock(series_lock):
+            path = unique_snapshot_path(safe_name, timestamp=moment, base_dir=base_dir)
             path.parent.mkdir(parents=True, exist_ok=True)
             temp_path = path.with_suffix(path.suffix + ".tmp")
             try:
@@ -243,11 +240,7 @@ def append_snapshot(
     that is fatal.
     """
     safe_name = _normalize_name(data_name)
-    moment = timestamp or now_ist()
-    if moment.tzinfo is None:
-        moment = moment.replace(tzinfo=IST)
-    else:
-        moment = moment.astimezone(IST)
+    moment = _capture_moment(timestamp)
     started = time.perf_counter()
     path: Path | None = None
     try:
@@ -337,7 +330,7 @@ def cleanup_expired_snapshots(
         return (0, 0)
 
     root = base_dir or REALTIME_ROOT
-    moment = now or now_ist()
+    moment = _capture_moment(now)
     cutoff = moment.timestamp() - retention_days * 86400
     removed = 0
     reclaimed = 0

@@ -22,6 +22,21 @@ from corporate_actions.opening_report import report as openreport
 from corporate_actions.storage import snapshots as snapshots_store
 
 IST = ZoneInfo("Asia/Kolkata")
+ET = ZoneInfo("America/New_York")
+NOW = dt.datetime(2026, 9, 29, 17, 10, tzinfo=dt.timezone.utc)
+
+
+class _ReportClockTests(unittest.TestCase):
+    def setUp(self):
+        clock = patch.object(openreport, "datetime", wraps=dt.datetime)
+        clock.start().now.return_value = NOW
+        self.addCleanup(clock.stop)
+        local = patch.object(
+            openreport, "local_now",
+            side_effect=lambda market, now=None: (now or NOW).astimezone(
+                IST if market == "in" else ET))
+        local.start()
+        self.addCleanup(local.stop)
 
 
 def _doc(report=None, **overrides):
@@ -34,27 +49,31 @@ def _doc(report=None, **overrides):
         "report": report if report is not None else {"sections": []},
     }
     doc.update(overrides)
+    if report is None:
+        doc["report"] = {"sections": [
+            _sections(market, captured_at=doc["recorded_at"], mode=doc["mode"])[0]
+            for market in doc["markets"]]}
     return doc
 
 
-class RecordedCoversTests(unittest.TestCase):
+class RecordedCoversTests(_ReportClockTests):
     def test_today_live_doc_covers_the_ask(self):
-        doc = _doc(recorded_at=dt.datetime.now(IST).isoformat())
+        doc = _doc(recorded_at=NOW.isoformat())
         self.assertTrue(openreport.recorded_covers(doc, ("in", "us")))
         # A recorded India+US file also answers an India-only ask.
         self.assertTrue(openreport.recorded_covers(doc, ("in",)))
 
     def test_yesterday_doc_is_stale(self):
-        yesterday = dt.datetime.now(IST) - dt.timedelta(days=1)
+        yesterday = NOW - dt.timedelta(days=1)
         doc = _doc(recorded_at=yesterday.isoformat())
         self.assertFalse(openreport.recorded_covers(doc, ("in",)))
 
     def test_historical_doc_never_covers_a_live_ask(self):
-        doc = _doc(recorded_at=dt.datetime.now(IST).isoformat(), mode="historical")
+        doc = _doc(recorded_at=NOW.isoformat(), mode="historical")
         self.assertFalse(openreport.recorded_covers(doc, ("in",)))
 
     def test_partial_coverage_is_rejected(self):
-        doc = _doc(recorded_at=dt.datetime.now(IST).isoformat(), markets=["in"])
+        doc = _doc(recorded_at=NOW.isoformat(), markets=["in"])
         self.assertFalse(openreport.recorded_covers(doc, ("in", "us")))
 
     def test_empty_or_broken_docs_are_rejected(self):
@@ -63,8 +82,14 @@ class RecordedCoversTests(unittest.TestCase):
         self.assertFalse(openreport.recorded_covers({"report": {}}, ("in",)))
 
 
-def _sections(market="in"):
-    return [{"market": market, "universes": [
+def _sections(market="in", *, captured_at="2026-09-29T17:00:00+00:00",
+              mode="live"):
+    captured = dt.datetime.fromisoformat(captured_at)
+    local = captured.astimezone(IST if market == "in" else ET)
+    day = local.date().isoformat()
+    close = dt.time(15, 30) if market == "in" else dt.time(16)
+    return [{"market": market, "session_date": day, "captured_at": captured_at,
+             "mode": mode, "finalized": local.time() >= close, "universes": [
         {"key": "in100", "title": "NIFTY 100", "verified": 7, "target": 20,
          "gainers": [], "losers": []},
     ], "volume_computed": 3}]
@@ -98,7 +123,7 @@ class OpenmarketCommandTests(unittest.TestCase):
     def test_now_delegates_to_the_full_scan(self):
         with patch.object(orc, "handle_opening_report") as handler:
             orc.handle_openmarket(1, ["/openmarket", "now"])
-        handler.assert_called_once_with(1, ["/openreport"])
+        handler.assert_called_once_with(1, ["/openreport", "now"])
 
     def test_market_slice_filters_sections_and_recomputes_totals(self):
         sent = []
@@ -118,12 +143,12 @@ class OpenmarketCommandTests(unittest.TestCase):
         self.assertEqual(shown["total_target"], 20)
 
 
-class RecentRecordTests(unittest.TestCase):
+class RecentRecordTests(_ReportClockTests):
     def _fresh_doc(self, markets=("in",)):
-        recorded_at = (dt.datetime.now(dt.timezone.utc)
-                       - dt.timedelta(minutes=10)).isoformat()
+        recorded_at = (NOW - dt.timedelta(minutes=10)).isoformat()
         return _doc(recorded_at=recorded_at, markets=list(markets),
-                    report={"sections": _sections("in"),
+                    report={"sections": [s for market in markets
+                                         for s in _sections(market, captured_at=recorded_at)],
                             "total_verified": 7, "total_target": 20,
                             "volume_computed": 3})
 
@@ -132,17 +157,31 @@ class RecentRecordTests(unittest.TestCase):
 
     def test_stale_doc_rebuilds(self):
         doc = self._fresh_doc()
-        doc["recorded_at"] = "2020-01-01T00:00:00+00:00"
+        doc["report"]["sections"][0]["captured_at"] = (
+            NOW - dt.timedelta(minutes=46)).isoformat()
         self.assertIsNone(openreport.recent_record(doc, ("in",)))
+
+    def test_fresh_wrapper_does_not_refresh_retained_market(self):
+        doc = self._fresh_doc(("in", "us"))
+        doc["recorded_at"] = NOW.isoformat()
+        doc["report"]["sections"][0]["captured_at"] = (
+            NOW - dt.timedelta(minutes=46)).isoformat()
+        self.assertIsNone(openreport.recent_record(doc, ("in", "us")))
+        self.assertIsNone(openreport.recent_record(doc, ("in",)))
+        self.assertIsNotNone(openreport.recent_record(doc, ("us",)))
+
+    def test_old_wrapper_does_not_stale_fresh_section(self):
+        doc = self._fresh_doc()
+        doc["recorded_at"] = "2020-01-01T00:00:00+00:00"
+        self.assertIsNotNone(openreport.recent_record(doc, ("in",)))
 
     def test_partial_coverage_rebuilds(self):
         self.assertIsNone(openreport.recent_record(self._fresh_doc(("in",)), ("in", "us")))
 
 
-class OpenreportReuseWindowTests(unittest.TestCase):
+class OpenreportReuseWindowTests(_ReportClockTests):
     def _fresh_doc(self):
-        recorded_at = (dt.datetime.now(dt.timezone.utc)
-                       - dt.timedelta(minutes=10)).isoformat()
+        recorded_at = (NOW - dt.timedelta(minutes=10)).isoformat()
         return _doc(recorded_at=recorded_at,
                     report={"sections": _sections("in"),
                             "total_verified": 7, "total_target": 20,

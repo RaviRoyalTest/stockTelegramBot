@@ -226,8 +226,15 @@ class MorningMailSectionsTests(unittest.TestCase):
         self.assertEqual(parts.count("S&amp;P 500"), 1)  # no duplication
 
     def test_buy_by_rule_explained_in_nifty_block(self):
+        # A hard-coded ex-date silently leaves the reminder window as the
+        # clock advances, so anchor it inside the window instead.
+        from datetime import timedelta
+
+        from corporate_actions.core.dates import today_ist
+
+        ex_date = (today_ist() + timedelta(days=3)).isoformat()
         lines = daily.build_nifty_actions_lines([
-            {"symbol": "RELIANCE", "subject": "Dividend", "ex_date": "2026-10-13"}])
+            {"symbol": "RELIANCE", "subject": "Dividend", "ex_date": ex_date}])
         joined = " ".join(lines)
         self.assertIn("Buy by", joined)
         self.assertIn("T+1 settlement", joined)

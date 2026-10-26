@@ -9,12 +9,68 @@ belong to it.
 from __future__ import annotations
 
 import logging
-from datetime import datetime
+from datetime import datetime, timezone as datetime_timezone
 
 from .. import config
+from ..core.dates import parse_utc_timestamp
+from ..market.hours import market_tz_name, normalise_market
 from .json_file import _file_lock, _lock, read_json, write_json
 
 log = logging.getLogger(__name__)
+_UNSET = object()
+
+
+def schedule_at_times(entry: dict) -> tuple[str, ...]:
+    """Canonical clock times, accepting legacy run_at and explicit at_times."""
+    raw = entry.get("at_times") or entry.get("run_at") or []
+    if isinstance(raw, str):
+        raw = raw.split(",")
+    times = set()
+    for value in raw:
+        value = str(value).strip()
+        if not value:
+            continue
+        try:
+            hour, minute = (int(part) for part in value.split(":"))
+            if 0 <= hour < 24 and 0 <= minute < 60:
+                value = f"{hour:02d}:{minute:02d}"
+        except ValueError:
+            pass
+        times.add(value)
+    return tuple(sorted(times))
+
+
+def schedule_identity(entry: dict, default_chat="", default_market=None) -> tuple:
+    """Shared runtime/persistence identity; mutable due/pause state is excluded."""
+    market = normalise_market(entry.get("market") or default_market
+                              or config.SCHEDULED_REPORTS_MARKET)
+    return (
+        str(entry.get("chat") or default_chat or config.SCHEDULED_REPORTS_CHAT
+                    or config.TELEGRAM_CHAT_ID or ""),
+        tuple(str(command).strip() for command in entry.get("commands") or []
+              if str(command).strip()),
+        int(entry.get("interval_min") or config.SCHEDULED_REPORTS_INTERVAL_MIN),
+        schedule_at_times(entry),
+        str(entry.get("timezone") or market_tz_name(market)),
+        market,
+        str(entry.get("window_start") or "").strip(),
+        str(entry.get("window_end") or "").strip(),
+    )
+
+
+def schedule_defaults_enabled(chat_id) -> bool:
+    """Explicit clears must not resurrect the owner's environment defaults."""
+    from .settings import get_user_settings
+
+    return not get_user_settings(chat_id).get("schedule_defaults_disabled", False)
+
+
+def _disable_schedule_defaults(chat_id) -> None:
+    from .settings import patch_user_settings
+
+    # The settings patch shares the reentrant state lock with schedule writes,
+    # so defaults are disabled before the last row disappears.
+    patch_user_settings(chat_id, {"schedule_defaults_disabled": True})
 
 
 def load_schedule() -> list[dict]:
@@ -37,6 +93,8 @@ def load_schedule() -> list[dict]:
                 "next_due": item.get("next_due"),
                 # Optional wall-clock "HH:MM" (IST) - first run at that time.
                 "run_at": item.get("run_at"),
+                "at_times": item.get("at_times"),
+                "timezone": item.get("timezone"),
                 # Optional market-hours gate: 'in' / 'us' / 'any'.
                 "market": item.get("market"),
                 # Optional explicit run window "HH:MM" (in the market's tz).
@@ -90,6 +148,7 @@ def add_schedule_entry(
     interval_min: int, commands: list[str], chat: str, run_at: str | None = None,
     market: str | None = None, window_start: str | None = None,
     window_end: str | None = None,
+    at_times: list[str] | None = None, timezone: str | None = None,
 ) -> list[dict]:
     """Append a schedule entry, then return the new full schedule.
 
@@ -115,6 +174,10 @@ def add_schedule_entry(
         }
         if run_at:
             entry["run_at"] = run_at
+        if at_times:
+            entry["at_times"] = list(at_times)
+        if timezone:
+            entry["timezone"] = timezone
         if market:
             entry["market"] = str(market).strip().lower()
         if window_start:
@@ -152,6 +215,8 @@ def remove_schedule_entry(chat_id, index: int) -> list[dict]:
         ]
         removed = None
         if 0 <= index < len(own_entries):
+            if len(own_entries) == 1:
+                _disable_schedule_defaults(chat_id)
             removed = current.pop(own_entries[index])
             write_json(config.SCHEDULE_FILE, current)
     log.info(
@@ -167,6 +232,7 @@ def clear_schedule(chat_id) -> list[dict]:
     Other users' rows stay untouched. Returns the new full schedule.
     """
     with _lock, _file_lock(config.SCHEDULE_FILE):
+        _disable_schedule_defaults(chat_id)
         current = read_json(config.SCHEDULE_FILE, [])
         if not isinstance(current, list):
             current = []
@@ -185,33 +251,52 @@ def clear_schedule(chat_id) -> list[dict]:
     return kept
 
 
-def set_schedule_next_due(chat_id, commands: list[str], interval_min: int, due_ts: float) -> None:
-    """Persist the next-run timestamp on the matching schedule entry.
+def set_schedule_next_due(
+    chat_id, commands: list[str], interval_min: int, due_ts: float,
+    run_at=_UNSET, market=_UNSET, window_start=_UNSET, window_end=_UNSET,
+    at_times=_UNSET, timezone=_UNSET,
+) -> None:
+    """Persist an aware UTC due time using the shared schedule identity.
 
-    Stored in schedule.json so the next-run time survives redeploys - after
-    a restart the scheduler resumes the same cadence instead of resetting to
-    "boot + 1 minute". Entries are matched by (chat, commands, interval),
-    the same identity the scheduler keys its in-memory due-times on.
+    Optional identity fields preserve old four-argument callers. Such callers
+    update a unique legacy match only: ambiguity must never advance another
+    schedule's timer. Explicit None means an unset field, not a wildcard.
     """
-    key = str(chat_id)
+    target = {"chat": str(chat_id), "commands": commands, "interval_min": interval_min}
+    optional = {"run_at": run_at, "at_times": at_times, "timezone": timezone,
+                "market": market, "window_start": window_start, "window_end": window_end}
+    target.update({name: value for name, value in optional.items() if value is not _UNSET})
+    identity = schedule_identity(target)
+    positions = [0, 1, 2]
+    if run_at is not _UNSET or at_times is not _UNSET:
+        positions.append(3)
+    if timezone is not _UNSET:
+        positions.append(4)
+    if market is not _UNSET:
+        positions.append(5)
+    if window_start is not _UNSET:
+        positions.append(6)
+    if window_end is not _UNSET:
+        positions.append(7)
     with _lock, _file_lock(config.SCHEDULE_FILE):
         current = read_json(config.SCHEDULE_FILE, [])
         if not isinstance(current, list):
             current = []
+        matches = []
         for entry in current:
             if not isinstance(entry, dict):
                 continue
-            if (str(entry.get("chat") or "") == key
-                    and [command for command in entry.get("commands") or [] if command.strip()] == [command for command in commands if command.strip()]
-                    and int(entry.get("interval_min") or 0) == int(interval_min)):
-                entry["next_due"] = datetime.fromtimestamp(due_ts).isoformat(timespec="seconds")
-                write_json(config.SCHEDULE_FILE, current)
-                log.info(
-                    "schedule.json: next_due for chat %s set to %s",
-                    chat_id, entry["next_due"],
-                )
-                return
-    log.info("schedule.json: no entry matched for next_due update (chat %s)", chat_id)
+            candidate = schedule_identity(entry)
+            if all(candidate[index] == identity[index] for index in positions):
+                matches.append(entry)
+        if len(matches) == 1:
+            matches[0]["next_due"] = datetime.fromtimestamp(
+                due_ts, datetime_timezone.utc,
+            ).isoformat(timespec="seconds")
+            write_json(config.SCHEDULE_FILE, current)
+            return
+    log.info("schedule.json: %d entries matched next_due update (chat %s)",
+             len(matches), chat_id)
 
 
 def schedule_next_due_ts(entry: dict) -> float | None:
@@ -224,8 +309,9 @@ def schedule_next_due_ts(entry: dict) -> float | None:
     if not raw:
         return None
     try:
-        return datetime.fromisoformat(str(raw)).timestamp()
-    except (TypeError, ValueError):
+        parsed = parse_utc_timestamp(raw)
+        return parsed.timestamp() if parsed is not None else None
+    except (TypeError, ValueError, OverflowError, OSError):
         return None
 
 
@@ -243,7 +329,7 @@ def pause_schedule(chat_id, until_ts: float) -> list[dict]:
             current = []
         key = str(chat_id)
         owner = str(config.TELEGRAM_CHAT_ID or "")
-        until_iso = datetime.fromtimestamp(until_ts).isoformat(timespec="seconds")
+        until_iso = datetime.fromtimestamp(until_ts, datetime_timezone.utc).isoformat(timespec="seconds")
         changed = 0
         for entry in current:
             if not isinstance(entry, dict):

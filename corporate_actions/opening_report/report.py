@@ -13,8 +13,7 @@ notice with the next session instead of substituting old data.
 from __future__ import annotations
 
 import logging
-import time as _time
-from datetime import datetime
+from datetime import datetime, timezone
 
 from ..market.hours import is_market_open, local_now, next_open_after
 from . import data as _data
@@ -144,7 +143,7 @@ def _collect_india(start: float | None = None, end: float | None = None) -> dict
         "market": INDIA_MARKET,
         "snapshot": _snapshot(
             INDIA_MARKET,
-            session_date=datetime.fromtimestamp(end).date() if historical else None,
+            session_date=_data.session_date(end, INDIA_MARKET) if historical else None,
         ),
         "universes": universes,
         "indices": _data.get_index_levels(INDIA_MARKET, start, end),
@@ -163,7 +162,8 @@ def _collect_us(start: float | None = None, end: float | None = None) -> dict:
     if not symbols:
         return {
             "market": US_MARKET,
-            "snapshot": _snapshot(US_MARKET),
+            "snapshot": _snapshot(US_MARKET, _data.session_date(end, US_MARKET)
+                                  if start is not None and end is not None else None),
             "unavailable": True,
             "universes": [],
             "indices": [],
@@ -186,7 +186,7 @@ def _collect_us(start: float | None = None, end: float | None = None) -> dict:
         "market": US_MARKET,
         "snapshot": _snapshot(
             US_MARKET,
-            session_date=datetime.fromtimestamp(end).date() if historical else None,
+            session_date=_data.session_date(end, US_MARKET) if historical else None,
         ),
         "universes": universes,
         "indices": _data.get_index_levels(US_MARKET, start, end),
@@ -216,6 +216,14 @@ def _collect_from_rows(title: str, rows: list[dict], key: str) -> dict:
     }
 
 
+def _stamp_section(section: dict, day, captured_at: str, historical: bool) -> dict:
+    from ..storage.openclose import section_metadata
+
+    stamped = {**section, "session_date": day.isoformat(), "captured_at": captured_at,
+               "mode": "historical" if historical else "live"}
+    return section_metadata(stamped)
+
+
 def collect(
     markets: tuple[str, ...] = (INDIA_MARKET, US_MARKET),
     target_date=None,
@@ -233,12 +241,6 @@ def collect(
     than ranked against a different session.
     """
     historical = target_date is not None
-    window_start = window_end = None
-    if historical:
-        window_end = _time.mktime(
-            (target_date.year, target_date.month, target_date.day, 0, 0, 0, 0, 0, -1)
-        ) + 86400 - 1  # target date 23:59:59 local
-        window_start = window_end - HISTORY_WINDOW_DAYS * 86400
     report: dict = {
         "sections": [], "total_verified": 0, "total_target": 0,
         "mode": "historical" if historical else "live",
@@ -247,6 +249,10 @@ def collect(
         report["target_date"] = target_date.strftime("%d-%b-%Y")
     volume_total = 0
     for market in markets:
+        captured_at = datetime.now(timezone.utc).isoformat()
+        day = target_date if historical else local_now(market).date()
+        window_start, window_end = (_data.session_window(market, target_date, HISTORY_WINDOW_DAYS)
+                                    if historical else (None, None))
         if historical:
             traded = _data.has_session_on(market, target_date)
             if traded is False:
@@ -257,19 +263,21 @@ def collect(
                     next_session="",
                 )
                 block["no_report"] = True
-                report["sections"].append(block)
+                report["sections"].append(_stamp_section(block, day, captured_at, historical))
                 continue
             # traded True or None (probe down): attempt the real build; the
             # per-stock date verification keeps phantom data out either way.
         else:
             trading, reason = _market_status(market)
             if not trading:
-                report["sections"].append(_closed_block(market, reason))
+                report["sections"].append(_stamp_section(
+                    _closed_block(market, reason), day, captured_at, historical))
                 continue
         section = (
             _collect_india(window_start, window_end)
             if market == INDIA_MARKET else _collect_us(window_start, window_end)
         )
+        section = _stamp_section(section, day, captured_at, historical)
         for universe in section.get("universes", []):
             report["total_verified"] += universe["verified"]
             report["total_target"] += universe["target"]
@@ -470,36 +478,79 @@ def _json_safe(value):
     return value
 
 
-def recorded_covers(doc: dict, markets: tuple[str, ...]) -> bool:
-    """True when a recorded LIVE doc already answers this request (pure).
+def select_report_sections(
+    doc: dict, markets: tuple[str, ...], target_date=None, *,
+    require_finalized: bool = False, mode: str | None = None,
+    max_age_min: float | None = None, now: datetime | None = None,
+) -> dict:
+    """Return a reconciled report subset, or {} if ANY requested section fails.
 
-    The doc must be today's live record and cover every requested market
-    (a recorded India+US file also answers an India-only ask). Used by the
-    web API to serve the saved file instantly instead of re-scanning 60-90s
-    of universes on every page load.
+    Accepts a stored document or raw report. target_date is an ISO/date value,
+    a per-market mapping, or None for each market's local today. Finality and
+    freshness are checked PER SECTION, never against wrapper metadata. With
+    mode=None accepts live or historical sections; require_finalized=True
+    enforces close-only data. Unknown legacy identity/capture time is not trusted. No I/O or
+    mutation; callers must render the returned subset, not the original doc.
     """
-    if not isinstance(doc, dict) or not doc.get("report"):
-        return False
-    if doc.get("mode") != "live":
-        return False
-    try:
-        from datetime import datetime as _dt
+    from ..storage.openclose import (_aware_datetime, _iso_date, merge_sections,
+                                    section_has_data, section_metadata)
 
-        try:
-            from zoneinfo import ZoneInfo as _ZoneInfo
-            recorded_day = _dt.fromisoformat(
-                str(doc.get("recorded_at") or "").replace("Z", "+00:00")
-            ).astimezone(_ZoneInfo("Asia/Kolkata")).date().isoformat()
-        except Exception:
-            recorded_day = str(doc.get("recorded_at") or "")[:10]
-        from ..core.dates import today_ist
+    if not isinstance(doc, dict) or not markets:
+        return {}
+    report = doc.get("report", doc)
+    if not isinstance(report, dict):
+        return {}
+    now = now or datetime.now(timezone.utc)
+    if now.utcoffset() is None:
+        return {}
+    selected = []
+    for market in dict.fromkeys(markets):
+        if market not in ("in", "us"):
+            return {}
+        requested = target_date.get(market) if isinstance(target_date, dict) else target_date
+        day = _iso_date(requested) if target_date is not None else local_now(market, now).date().isoformat()
+        if not day:
+            return {}
+        candidates = [section_metadata(s, doc, now=now) for s in (report.get("sections") or [])
+                      if isinstance(s, dict) and s.get("market") == market]
+        if len(candidates) != 1:
+            return {}
+        section = candidates[0]
+        captured = _aware_datetime(section.get("captured_at"))
+        usable = section_has_data(section) or (section.get("closed") and
+                  not section.get("error") and not section.get("unavailable"))
+        if (section.get("session_date") != day or not usable or not captured
+                or captured > now or section.get("mode") not in ("live", "historical")
+                or (mode is not None and section.get("mode") != mode)
+                or (require_finalized and not section.get("finalized"))):
+            return {}
+        if max_age_min is not None and (now - captured).total_seconds() > max_age_min * 60:
+            return {}
+        selected.append(section)
+    return merge_sections({**report, "sections": []}, selected, now=now)
 
-        if recorded_day != today_ist().isoformat():
+
+def validate_report_sections(
+    doc: dict, markets: tuple[str, ...], target_date=None, **criteria,
+) -> bool:
+    """Boolean companion to select_report_sections, with identical criteria."""
+    return bool(select_report_sections(doc, markets, target_date, **criteria))
+
+
+def recorded_covers(doc: dict, markets: tuple[str, ...]) -> bool:
+    """Today's live sections cover the ask, including after-close finality."""
+    from ..storage.openclose import section_has_data
+
+    report = select_report_sections(doc, markets, mode="live")
+    if not report:
+        return False
+    for section in report["sections"]:
+        local = local_now(section["market"])
+        close = (15, 30) if section["market"] == "in" else (16, 0)
+        if (section_has_data(section) and (local.hour, local.minute) >= close
+                and not section.get("finalized")):
             return False
-    except Exception as error:
-        log.warning("recorded_covers: %s", error)
-        return False
-    return set(doc.get("markets") or []) >= set(markets)
+    return True
 
 
 def recent_record(doc: dict, markets: tuple[str, ...], max_age_min: int = 45) -> dict | None:
@@ -512,46 +563,14 @@ def recent_record(doc: dict, markets: tuple[str, ...], max_age_min: int = 45) ->
     """
     if not recorded_covers(doc, markets):
         return None
-    try:
-        from datetime import datetime as _dt
-        from datetime import timezone as _tz
-
-        recorded = _dt.fromisoformat(
-            str(doc.get("recorded_at") or "").replace("Z", "+00:00"))
-        if recorded.tzinfo is None:
-            return None
-        age_min = (_dt.now(_tz.utc) - recorded).total_seconds() / 60.0
-        return doc if 0 <= age_min <= max_age_min else None
-    except Exception as error:
-        log.debug("recent_record: %s", error)
-        return None
+    return doc if select_report_sections(doc, markets, mode="live", max_age_min=max_age_min) else None
 
 
 def _record_is_current(doc: dict, markets: tuple[str, ...], target_date=None) -> bool:
     """True when the recorded file already covers this exact request."""
-    if not isinstance(doc, dict) or not doc.get("report"):
-        return False
     if target_date is not None:
-        return doc.get("target_date") == target_date.isoformat()
-    try:
-        from ..core.dates import today_ist
-        from datetime import datetime as _dt
-
-        try:
-            from zoneinfo import ZoneInfo as _ZoneInfo
-            recorded_day = _dt.fromisoformat(
-                str(doc.get("recorded_at") or "").replace("Z", "+00:00")
-            ).astimezone(_ZoneInfo("Asia/Kolkata")).date().isoformat()
-        except Exception:
-            recorded_day = str(doc.get("recorded_at") or "")[:10]
-    except Exception as error:
-        log.warning("_record_is_current: %s", error)
-        return False
-    return (
-        doc.get("mode") == "live"
-        and recorded_day == today_ist().isoformat()
-        and sorted(doc.get("markets") or []) == sorted(markets)
-    )
+        return validate_report_sections(doc, markets, target_date, require_finalized=True)
+    return recent_record(doc, markets) is not None
 
 
 def save_openclose_doc(
@@ -568,16 +587,24 @@ def save_openclose_doc(
     record with partial-session data).
     """
     from .. import storage
-    from datetime import datetime, timezone
+    from ..storage.openclose import merge_sections, section_metadata
 
+    recorded_at = datetime.now(timezone.utc).isoformat(timespec="seconds")
+    # Collection stamps new data. A save is not a new capture, especially
+    # when another caller has merged in retained/legacy market sections.
+    sections = [section_metadata(s) for s in report.get("sections") or []
+                if isinstance(s, dict)]
+    report = merge_sections({**report, "sections": []}, sections)
     doc = {
-        "recorded_at": datetime.now(timezone.utc).isoformat(timespec="seconds"),
+        "recorded_at": recorded_at,
         "recorded_by": recorded_by,
         "mode": "historical" if target_date is not None else "live",
         "markets": sorted(markets),
         "target_date": target_date.isoformat() if target_date is not None else None,
         "report": _json_safe(report),
     }
+    for key in ("mode", "markets", "target_date", "session_date", "finalized"):
+        doc[key] = report.get(key)
     storage.save_openclose(doc)
     log.info(
         "openclose: recorded %s %s",

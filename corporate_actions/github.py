@@ -7,13 +7,18 @@ re-runs. This module is the only place that talks to git.
 """
 from __future__ import annotations
 
+import json
 import logging
 import os
 import subprocess
+import tempfile
 import threading
+import uuid
 from pathlib import Path
 
 from . import config
+from .storage.json_file import state_lock
+from .state_merge import MISSING, StateConflict, merge_state, strict_json_loads
 
 log = logging.getLogger(__name__)
 
@@ -55,7 +60,11 @@ STATE_FILES = (
 )
 
 
-def _git(*args: str, timeout: int = 30) -> subprocess.CompletedProcess:
+# Supply identity on every commit-producing command, including reconciliation.
+_BOT_IDENTITY = ("-c", "user.email=actions@github.com", "-c", "user.name=github-actions")
+
+
+def _git(*args: str, timeout: int = 30, input_text=None, extra_env=None) -> subprocess.CompletedProcess:
     """Run one git command; returns a CompletedProcess (never raises).
 
     Pins HTTP/1.1 for all HTTP transports: git's default HTTP/2 stalls
@@ -64,17 +73,27 @@ def _git(*args: str, timeout: int = 30) -> subprocess.CompletedProcess:
     alerts re-fire after every redeploy (fresh container = stale
     seen_actions.json). Set GIT_HTTP_VERSION in the environment to override.
     """
+    command = list(args[1:] if args and args[0] == "git" else args)
     http_version = os.getenv("GIT_HTTP_VERSION", "HTTP/1.1").strip()
-    if http_version and args and args[0] in ("push", "fetch", "ls-remote", "pull"):
-        args = ("-c", f"http.version={http_version}", *args)
+    prefix = ["git", "--no-pager"]
+    if http_version and command and command[0] in ("push", "fetch", "ls-remote", "pull"):
+        prefix += ["-c", f"http.version={http_version}"]
+    command = prefix + command
+    env = dict(os.environ, GIT_TERMINAL_PROMPT="0", GIT_EDITOR="true",
+               GIT_SEQUENCE_EDITOR="true", GIT_OPTIONAL_LOCKS="0")
+    if extra_env:
+        env.update(extra_env)
     try:
         return subprocess.run(
-            list(args), capture_output=True, text=True, check=False, timeout=timeout
+            command, cwd=config.BASE_DIR, env=env, input=input_text,
+            capture_output=True, text=True, check=False, timeout=timeout
         )
     except subprocess.TimeoutExpired:
         return subprocess.CompletedProcess(
-            list(args), 124, stdout="", stderr=f"command timed out after {timeout}s"
+            command, 124, stdout="", stderr=f"command timed out after {timeout}s"
         )
+    except OSError as error:
+        return subprocess.CompletedProcess(command, 127, stdout="", stderr=str(error))
 
 
 def _remote_default_branch(remote_url) -> str:
@@ -120,6 +139,34 @@ def _push_branch(remote_url: str) -> str:
     return branch or "main"
 
 
+def _state_paths() -> list[str]:
+    """Root-relative pathspecs, including missing (deleted) state files."""
+    root = config.BASE_DIR.resolve()
+    paths = []
+    for path in STATE_FILES:
+        path = Path(path)
+        absolute = (path if path.is_absolute() else root / path).resolve()
+        try:
+            paths.append(absolute.relative_to(root).as_posix())
+        except ValueError as error:
+            raise ValueError(f"State path outside repository: {path}") from error
+    return paths
+
+
+def _failure(label: str, detail: str) -> bool:
+    global push_error
+    push_error = label + ": " + (_tail(detail, 300) or "unknown error")
+    log.warning("%s (local state kept)", push_error)
+    return False
+
+
+def _fetch_state(remote_url: str, branch: str):
+    # Fetch the same authenticated remote/branch we push, not an unchecked
+    # origin URL which can have different credentials or a stale refspec.
+    return _git("git", "fetch", remote_url,
+                f"refs/heads/{branch}:refs/remotes/origin/{branch}")
+
+
 def pending_state_changes() -> str:
     """Comma-separated repo-relative paths of state files with changes.
 
@@ -128,16 +175,15 @@ def pending_state_changes() -> str:
     Paths stay repo-relative (data/settings.json) so the label is accurate
     after the state-file reorganization - never bare basenames.
     """
-    with _state_git_lock:
-        # Only existing paths: a missing dir (e.g. data/openclose/ before
-        # the first recording) as a pathspec aborts the whole status call.
-        existing = [str(state_file) for state_file in STATE_FILES if state_file.exists()]
+    with state_lock(), _state_git_lock:
+        # Status accepts missing pathspecs, so include tracked deletions as
+        # well as new/untracked files. Do not confuse a failed status with clean.
         result = _git(
-            "git", "status", "--porcelain", "--untracked-files=no",
-            *existing,
+            "git", "status", "--porcelain", "--untracked-files=all",
+            "--", *_state_paths(),
         )
         if result.returncode != 0:
-            return ""
+            raise RuntimeError("git status failed: " + _tail(result.stderr, 200))
         names = []
         for line in result.stdout.splitlines():
             path = line[3:].strip().strip('"')
@@ -146,7 +192,7 @@ def pending_state_changes() -> str:
                 # git prints repo-relative paths when run from the repo root;
                 # absolutize-then-relativize only for absolute output.
                 try:
-                    candidate = candidate.relative_to(Path.cwd())
+                    candidate = candidate.relative_to(config.BASE_DIR)
                 except ValueError:
                     candidate = Path(candidate.name)
             names.append(str(candidate).replace("\\", "/"))
@@ -213,6 +259,140 @@ def _tail(text, limit: int) -> str:
     return cut.strip()
 
 
+def _checked(*args, **kwargs) -> str:
+    result = _git("git", *args, **kwargs)
+    if result.returncode:
+        raise RuntimeError(f"git {args[0]} failed: " + _tail(result.stderr, 300))
+    return result.stdout.strip()
+
+
+def _guard_git_operation() -> None:
+    """Never stage, sync, or recover somebody else's interrupted operation."""
+    for marker in ("rebase-merge", "rebase-apply", "MERGE_HEAD", "CHERRY_PICK_HEAD",
+                   "REVERT_HEAD", "sequencer", "STATE_CONFLICT"):
+        path = Path(_checked("rev-parse", "--git-path", marker))
+        if not path.is_absolute():
+            path = config.BASE_DIR / path
+        if path.exists():
+            raise RuntimeError(f"Git operation in progress ({marker}); manual recovery required")
+    if _checked("ls-files", "--unmerged"):
+        raise RuntimeError("Unmerged index; manual recovery required")
+
+
+def _is_state(name: str) -> bool:
+    return any(name == path or name.startswith(path + "/") for path in _state_paths())
+
+
+def _kind(name: str) -> str:
+    root = config.BASE_DIR.resolve()
+    for attribute, kind in (("SETTINGS_FILE", "settings"), ("WATCHLIST_FILE", "stocks"),
+                            ("SUBSCRIPTIONS_FILE", "subscriptions"), ("SEEN_FILE", "seen"),
+                            ("SCHEDULE_FILE", "schedule")):
+        path = Path(getattr(config, attribute)).resolve()
+        if path == root / name:
+            return kind
+    # Conventional names also support legacy state locations.
+    return {"settings.json": "settings", "watchlist.json": "stocks",
+            "subscriptions.json": "subscriptions", "seen_actions.json": "seen",
+            "seen.json": "seen", "schedule.json": "schedule"}.get(Path(name).name,
+                "report" if "openclose" in Path(name).parts else "atomic")
+
+
+def _load_state(name: str, raw: str):
+    value = strict_json_loads(raw)
+    # stocks, seen, and schedule are list-rooted; every other kind is dict-rooted.
+    expected = list if _kind(name) in ("stocks", "seen", "schedule") else dict
+    if type(value) is not expected:
+        raise StateConflict(f"{name}: expected {expected.__name__} root")
+    return value
+
+
+def _worktree_json_files():
+    files = set()
+    for name in _state_paths():
+        path = config.BASE_DIR / name
+        if path.is_dir():
+            files.update(path.rglob("*.json"))
+        elif path.exists() and path.suffix == ".json":
+            files.add(path)
+    return sorted(files)
+
+
+def _validate_worktree():
+    for path in _worktree_json_files():
+        if path.is_symlink():
+            raise StateConflict(f"State symlink refused: {path}")
+        _load_state(path.relative_to(config.BASE_DIR).as_posix(), path.read_text(encoding="utf-8"))
+
+
+def _tree_state(ref):
+    entries = _checked("ls-tree", "-r", "-z", ref, "--", *_state_paths())
+    result = {}
+    for entry in entries.split("\0"):
+        if not entry:
+            continue
+        metadata, name = entry.split("\t", 1)
+        mode, kind, oid = metadata.split()
+        if not name.endswith(".json"):
+            continue
+        if kind != "blob" or mode != "100644":
+            raise StateConflict(f"Unsupported state file mode: {name}")
+        result[name] = (oid, _load_state(name, _checked("cat-file", "blob", oid)))
+    return result
+
+
+def _validate_tree(ref):
+    _tree_state(ref)
+
+
+def _reconcile_state(branch):
+    """Prepare a semantic tree off-index, then fast-forward to a merge commit.
+
+    Both original tips remain parents. Until the final fast-forward, failures
+    only create unreachable objects/a recovery ref: HEAD, index, and disk stay
+    untouched. No reset/abort is needed, even if building the merge fails.
+    """
+    _guard_git_operation()
+    local = _checked("rev-parse", "HEAD")
+    remote = _checked("rev-parse", f"origin/{branch}")
+    bases = _checked("merge-base", "--all", local, remote).splitlines()
+    if len(bases) != 1:
+        raise StateConflict("ambiguous merge base")
+    base = bases[0]
+    changed = _checked("diff", "--name-only", "--no-renames", base, local).splitlines()
+    if any(not _is_state(name) or not name.endswith(".json") for name in changed):
+        raise StateConflict("local non-state commits require manual reconciliation")
+    trees = [_tree_state(ref) for ref in (base, local, remote)]
+    merged = {}
+    for name in sorted(set().union(*(tree.keys() for tree in trees))):
+        values = [tree[name][1] if name in tree else MISSING for tree in trees]
+        value = merge_state(_kind(name), *values, label=name, session=Path(name).stem)
+        if value is not MISSING:
+            payload = json.dumps(value, ensure_ascii=False, indent=2, allow_nan=False) + "\n"
+            _load_state(name, payload)
+            merged[name] = payload
+
+    backup = f"refs/state-backups/{uuid.uuid4().hex}"
+    _checked("update-ref", backup, local)
+    log.info("State recovery tip retained at %s (%s)", backup, local)
+    with tempfile.TemporaryDirectory(prefix="state-merge-") as directory:
+        env = {"GIT_INDEX_FILE": str(Path(directory) / "index")}
+        _checked("read-tree", remote, extra_env=env)
+        for name in sorted(set(trees[2]) | set(merged)):
+            if name not in merged:
+                _checked("update-index", "--force-remove", "--", name, extra_env=env)
+            else:
+                oid = _checked("hash-object", "-w", "--stdin", input_text=merged[name])
+                _checked("update-index", "--add", "--cacheinfo", "100644", oid, name, extra_env=env)
+        tree = _checked("write-tree", extra_env=env)
+        _validate_tree(tree)
+        commit = _checked(*_BOT_IDENTITY, "commit-tree", tree, "-p", local, "-p", remote,
+                          "-m", "Reconcile bot state semantically")
+    # merge --ff-only never invokes Git's text/content merge machinery.
+    _guard_git_operation()
+    _checked("merge", "--ff-only", commit)
+
+
 def push_state() -> bool:
     """Commit and push watchlist/seen state back to the repo, if changed.
 
@@ -220,15 +400,17 @@ def push_state() -> bool:
     Returns False when credentials are missing or the push failed - callers
     should NOT discard local state in that case.
 
-    Handles the expected race with the hourly cron (both push to the same
-    branch): on a rejected push it fetches, rebases onto the remote and
-    retries once.
+    Handles concurrent writers with a strict semantic three-way merge commit.
+    No Git text merge or rebase is allowed to decide domain state.
 
     On failure, sets the module-global `push_error` to a short reason.
     """
     global push_error
-    with _state_git_lock:
-        return _push_state_locked()
+    try:
+        with state_lock(), _state_git_lock:
+            return _push_state_locked()
+    except Exception as error:
+        return _failure("State push failed", str(error))
 
 
 def _push_state_locked() -> bool:
@@ -249,108 +431,81 @@ def _push_state_locked() -> bool:
     remote_url = f"https://x-access-token:{token}@github.com/{repo}.git"
     branch = _push_branch(remote_url)
 
-    _git("git", "config", "user.email", "actions@github.com")
-    _git("git", "config", "user.name", "github-actions")
-    # Only stage state files that actually exist on disk. A brand-new state
-    # file (e.g. schedule.json before the first /sched write) is not in a
-    # fresh checkout; "git add" with a nonexistent pathspec aborts with
-    # "pathspec did not match any files" and would fail the ENTIRE push,
-    # leaving every state change stranded on the ephemeral disk.
-    existing = [str(state_file) for state_file in STATE_FILES if state_file.exists()]
-    missing = [state_file.name for state_file in STATE_FILES if not state_file.exists()]
-    if missing:
-        log.info(
-            "Skipping git add for missing state file(s): %s",
-            ", ".join(sorted(missing)),
-        )
-    if not existing:
-        log.info("No state files on disk - nothing to stage")
-        staged = ""
-    else:
-        add_result = _git("git", "add", *existing)
-        if add_result.returncode != 0:
-            push_error = "git add failed: " + (_tail(add_result.stderr, 200) or "unknown error")
-            log.warning(
-                "git add failed - state NOT pushed (local changes kept): %s",
-                _redact_gh(add_result.stderr.strip()[-300:]),
-            )
-            return False
-        staged = _git("git", "diff", "--cached", "--name-only").stdout.strip()
-    if not staged:
-        # Nothing staged. But there may be local commits from a previous run
-        # that failed to push. If we are ahead of origin, retry the push
-        # instead of claiming "in sync" - otherwise a later sync_state()'s
-        # reset --hard would silently destroy those commits.
-        if _ahead_of_origin(branch):
-            push_result = _git("git", "push", remote_url, f"HEAD:{branch}")
-            if push_result.returncode == 0:
-                log.info("Pushed previously-unpushed state to %s", branch)
-                push_error = ""
-                return True
-            push_error = "git push failed: " + (_tail(push_result.stderr, 200) or "unknown error")
-            log.warning(
-                "Retry push of existing local commits failed: %s",
-                _redact_gh(push_result.stderr.strip()[-300:]),
-            )
-            return False
-        log.info("No state change to push")
-        push_error = ""
-        return True
-    log.info(
-        "Staged state files: %s", ", ".join(staged.splitlines())
-    )
+    _guard_git_operation()
+    paths = _state_paths()
+    _validate_worktree()
+    _validate_tree("HEAD")
+    staged_result = _git("git", "diff", "--cached", "--name-only")
+    if staged_result.returncode:
+        return _failure("git diff failed", staged_result.stderr)
+    # Never accidentally include somebody else's staged code in a state commit.
+    for name in staged_result.stdout.splitlines():
+        if not name.endswith(".json") or not any(name == path or name.startswith(path + "/") for path in paths):
+            return _failure("State push refused", "unrelated staged changes present")
 
-    commit_result = _git("git", "commit", "-m", "chore: update watchlist from Telegram")
-    if commit_result.returncode != 0:
-        # Keep the changes in the worktree instead of the index so a later
-        # sync (reset --hard) refuses to wipe them.
-        push_error = "git commit failed: " + (_tail(commit_result.stderr, 200) or "unknown error")
-        log.warning("State commit failed: %s", _redact_gh(commit_result.stderr.strip()[-300:]))
-        _git("git", "reset")
-        return False
+    tracked = _git("git", "ls-files", "--", *paths)
+    if tracked.returncode:
+        return _failure("git ls-files failed", tracked.stderr)
+    candidates = [path.relative_to(config.BASE_DIR).as_posix()
+                  for path in _worktree_json_files()]
+    candidates += [name for name in tracked.stdout.splitlines() if name.endswith(".json")]
+    # Includes explicit tracked deletions, but never lock/quarantine artifacts.
+    if candidates:
+        # Exclude runtime locks/backups even if a directory is a state path.
+        result = _git("git", "add", "-A", "--", *sorted(set(candidates)),
+                      ":(exclude,glob)**/*.lock", ":(exclude,glob)**/*.bak",
+                      ":(exclude,glob)**/*.tmp")
+        if result.returncode:
+            return _failure("git add failed", result.stderr)
+    staged_result = _git("git", "diff", "--cached", "--name-only")
+    if staged_result.returncode:
+        return _failure("git diff failed", staged_result.stderr)
+    if staged_result.stdout.strip():
+        result = _git("git", *_BOT_IDENTITY, "commit", "-m", "Update bot state")
+        if result.returncode:
+            # Leave both index and worktree intact for the next retry.
+            return _failure("git commit failed", result.stderr)
 
+    _validate_tree("HEAD")
     push_result = _git("git", "push", remote_url, f"HEAD:{branch}")
     if push_result.returncode == 0:
         log.info("Pushed state to %s", branch)
         push_error = ""
         return True
 
-    # Expected race with the cron: retry once after rebasing onto remote.
-    _git("git", "fetch", "origin")
-    rebase_result = _git("git", "rebase", f"origin/{branch}")
-    if rebase_result.returncode != 0:
-        _git("git", "rebase", "--abort")
-        push_error = (
-            "git push failed after rebase conflict: "
-            + (_tail(push_result.stderr, 200) or "unknown error")
-        )
-        log.warning(
-            "Push failed and rebase aborted (conflict): %s",
-            _redact_gh(push_result.stderr.strip()[-300:]),
-        )
-        return False
+    # Reconcile newly committed AND ahead+clean retries against a fresh ref.
+    fetched = _fetch_state(remote_url, branch)
+    if fetched.returncode:
+        return _failure("git fetch failed after rejected push", fetched.stderr)
+    dirty = _git("git", "status", "--porcelain", "--untracked-files=all")
+    if dirty.returncode:
+        return _failure("git status failed", dirty.stderr)
+    if dirty.stdout.strip():
+        return _failure("Reconciliation skipped", "uncommitted changes present; retry after saving them")
+    try:
+        _reconcile_state(branch)
+    except Exception as error:
+        return _failure("State reconciliation failed; original local commits preserved", str(error))
+    _validate_tree("HEAD")
     retry_push_result = _git("git", "push", remote_url, f"HEAD:{branch}")
     if retry_push_result.returncode == 0:
-        log.info("Pushed state to %s (after rebase)", branch)
+        log.info("Pushed state to %s (after semantic reconciliation)", branch)
         push_error = ""
         return True
     push_error = (
-        "git push failed after rebase: "
+        "git push failed after semantic reconciliation: "
         + (_tail(retry_push_result.stderr, 200) or "unknown error")
     )
-    log.warning("Push failed after rebase: %s", _redact_gh(retry_push_result.stderr.strip()[-500:]))
+    log.warning("Push failed after reconciliation: %s", _redact_gh(retry_push_result.stderr.strip()[-500:]))
     return False
 
 
 def sync_state() -> bool:
-    """Pull the latest committed state from GitHub before handling commands.
+    """Fast-forward a clean checkout while holding the storage transaction lock.
 
-    GitHub is the source of truth; an always-on server's local copy is just a
-    working checkout whose disk is ephemeral. Sync before serving commands so
-    the server never answers with stale data or overwrites newer state.
-    Never resets when the working tree has uncommitted changes (a failed push
-    from a previous run) - that would wipe data.
-    Returns True when synced or skipped safely (no credentials / dirty tree).
+    Dirty or locally-ahead checkouts are left intact for push_state to save.
+    No hard reset, autostash, or conflict-side selection is ever used.
+    Returns True when synced or skipped safely; False on a Git failure.
     """
     token = os.getenv("GH_TOKEN")
     repo = os.getenv("GITHUB_REPOSITORY")
@@ -358,10 +513,15 @@ def sync_state() -> bool:
         log.info("GH_TOKEN/GITHUB_REPOSITORY not set - skipping state sync")
         return True
     try:
-        with _state_git_lock:
+        with state_lock(), _state_git_lock:
+            _guard_git_operation()
+            _validate_worktree()
             remote_url = f"https://x-access-token:{token}@github.com/{repo}.git"
             branch = _push_branch(remote_url)
-            dirty = _git("git", "status", "--porcelain").stdout.strip()
+            status = _git("git", "status", "--porcelain", "--untracked-files=all")
+            if status.returncode:
+                return _failure("git status failed", status.stderr)
+            dirty = status.stdout.strip()
             if dirty:
                 log.warning(
                     "State sync skipped: uncommitted changes present - push them "
@@ -369,8 +529,13 @@ def sync_state() -> bool:
                     dirty[:200],
                 )
                 return True
-            _git("git", "fetch", "origin")
-            if _ahead_of_origin(branch):
+            fetched = _fetch_state(remote_url, branch)
+            if fetched.returncode:
+                return _failure("git fetch failed during sync", fetched.stderr)
+            ahead = _git("git", "rev-list", "--count", f"origin/{branch}..HEAD")
+            if ahead.returncode:
+                return _failure("git rev-list failed", ahead.stderr)
+            if int(ahead.stdout.strip()):
                 # Local commits exist that were never pushed. A hard reset here
                 # would silently destroy them - push them first instead.
                 log.warning(
@@ -379,15 +544,14 @@ def sync_state() -> bool:
                     branch,
                 )
                 return True
-            result = _git("git", "reset", "--hard", f"origin/{branch}")
+            _validate_tree(f"origin/{branch}")
+            result = _git("git", "merge", "--ff-only", f"origin/{branch}")
         if result.returncode == 0:
             log.info("State synced from origin/%s", branch)
             return True
-        log.warning("State sync failed: %s", _redact_gh(result.stderr.strip()[-300:]))
-        return False
+        return _failure("State sync failed", result.stderr)
     except Exception as error:
-        log.warning("State sync failed: %s", _redact_gh(error))
-        return False
+        return _failure("State sync failed", str(error))
 
 
 def main_check() -> int:

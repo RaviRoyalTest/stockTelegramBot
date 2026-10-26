@@ -186,21 +186,22 @@ def flush_pending_state() -> None:
         # logged the missing-GH_TOKEN warning once. Skipping avoids log spam
         # every cycle while the problem is unconfigured.
         return
-    branch = _push_branch("")
-    pending = pending_state_changes()
-    ahead = _ahead_of_origin(branch)
-    if not pending and not ahead:
-        return
-    log.info(
-        "Flushing state to GitHub (branch %s): %s%s",
-        branch,
-        pending or "no uncommitted changes",
-        " | unpushed local commits" if ahead else "",
-    )
     try:
+        branch = _push_branch("")
+        pending = pending_state_changes()
+        ahead = _ahead_of_origin(branch)
+        if not pending and not ahead:
+            return
+        log.info(
+            "Flushing state to GitHub (branch %s): %s%s",
+            branch,
+            pending or "no uncommitted changes",
+            " | unpushed local commits" if ahead else "",
+        )
         if push_state():
             log.info("State flushed to GitHub")
-            sync_state()
+            if not sync_state():
+                log.warning("Post-flush sync failed: %s", last_push_error())
         else:
             log.warning(
                 "Flush push failed - will retry in %ss", PUSH_FLUSH_SECONDS
@@ -222,6 +223,11 @@ def _deployed_commit() -> str:
 
 
 def main():
+    # Reconcile before delegating to the dashboard or starting any background
+    # storage writers. Git sync also shares their storage transaction lock.
+    if not sync_state():
+        raise RuntimeError("Initial state sync failed: " + last_push_error())
+    flush_pending_state()
     # When SERVE_DASHBOARD is enabled (default), run the Streamlit dashboard
     # as the main process and the Telegram bot in a background thread. This
     # means the existing Render start command (`python bot_server.py`) serves
@@ -265,7 +271,8 @@ def main():
     start_scheduled_reports()
     # The always-on server runs the background poller (corporate-action alerts,
     # ex-date reminders, price alerts AND the sudden-move watcher). The GitHub
-    # Actions cron runs with PROCESS_COMMANDS=false so it never double-polls.
+    # Actions cron uses maintenance mode as well as PROCESS_COMMANDS=false:
+    # command polling and automatic notification ownership are separate gates.
     if config.PROCESS_COMMANDS:
         # The poller's post-alert push: dedup keys reach GitHub right after
         # alerts are sent, not at the next periodic flush - a redeploy in
@@ -277,10 +284,6 @@ def main():
         poller.start()
         log.info("Background poller + sudden-move watcher started")
     log.info("Starting long-polling bot (instant responses)...")
-    sync_state()
-    # Push anything a previous run left behind (failed push, crash before
-    # push) before serving commands.
-    flush_pending_state()
     last_flush = time.monotonic()
     offset = None
     while True:
