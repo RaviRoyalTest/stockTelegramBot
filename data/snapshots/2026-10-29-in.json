@@ -1,0 +1,1122 @@
+{
+  "session": "2026-10-29",
+  "market": "in",
+  "universe": "nifty500",
+  "recorded_at": "2026-10-29T10:28:09+00:00",
+  "recorded_by": "auto-refresh",
+  "status": "finalized",
+  "finalized": true,
+  "gap_downs": [
+    {
+      "symbol": "MEESHO",
+      "name": "Meesho Limited",
+      "price": 224.78,
+      "prev_close": 227.84,
+      "open": 222.0,
+      "gap_pct": -2.56,
+      "move_from_open_pct": 1.25,
+      "date": "2026-10-29"
+    },
+    {
+      "symbol": "HEXT",
+      "name": "Hexaware Technologies Limited",
+      "price": 538.45,
+      "prev_close": 572.25,
+      "open": 558.0,
+      "gap_pct": -2.49,
+      "move_from_open_pct": -3.5,
+      "date": "2026-10-29"
+    },
+    {
+      "symbol": "TTML",
+      "name": "Tata Teleservices (Maharashtra) Limited",
+      "price": 35.97,
+      "prev_close": 39.23,
+      "open": 38.3,
+      "gap_pct": -2.37,
+      "move_from_open_pct": -6.08,
+      "date": "2026-10-29"
+    },
+    {
+      "symbol": "TENNIND",
+      "name": "Tenneco Clean Air India Limited",
+      "price": 428.05,
+      "prev_close": 438.35,
+      "open": 430.0,
+      "gap_pct": -1.9,
+      "move_from_open_pct": -0.45,
+      "date": "2026-10-29"
+    },
+    {
+      "symbol": "OLAELEC",
+      "name": "Ola Electric Mobility Limited",
+      "price": 35.16,
+      "prev_close": 36.66,
+      "open": 36.0,
+      "gap_pct": -1.8,
+      "move_from_open_pct": -2.33,
+      "date": "2026-10-29"
+    },
+    {
+      "symbol": "ECLERX",
+      "name": "eClerx Services Limited",
+      "price": 1660.6,
+      "prev_close": 1866.2,
+      "open": 1833.3,
+      "gap_pct": -1.76,
+      "move_from_open_pct": -9.42,
+      "date": "2026-10-29"
+    },
+    {
+      "symbol": "FORCEMOT",
+      "name": "Force Motors Limited",
+      "price": 16856.0,
+      "prev_close": 17094.0,
+      "open": 16860.0,
+      "gap_pct": -1.37,
+      "move_from_open_pct": -0.02,
+      "date": "2026-10-29"
+    },
+    {
+      "symbol": "ULTRACEMCO",
+      "name": "UltraTech Cement Limited",
+      "price": 11175.0,
+      "prev_close": 11104.0,
+      "open": 10967.0,
+      "gap_pct": -1.23,
+      "move_from_open_pct": 1.9,
+      "date": "2026-10-29"
+    },
+    {
+      "symbol": "INDIAMART",
+      "name": "IndiaMART InterMESH Limited",
+      "price": 1544.2,
+      "prev_close": 1572.7,
+      "open": 1554.1,
+      "gap_pct": -1.18,
+      "move_from_open_pct": -0.64,
+      "date": "2026-10-29"
+    },
+    {
+      "symbol": "LTFOODS",
+      "name": "LT Foods Limited",
+      "price": 381.1,
+      "prev_close": 385.8,
+      "open": 381.35,
+      "gap_pct": -1.15,
+      "move_from_open_pct": -0.07,
+      "date": "2026-10-29"
+    },
+    {
+      "symbol": "MTARTECH",
+      "name": "MTAR Technologies Limited",
+      "price": 7158.5,
+      "prev_close": 6976.5,
+      "open": 6900.0,
+      "gap_pct": -1.1,
+      "move_from_open_pct": 3.75,
+      "date": "2026-10-29"
+    },
+    {
+      "symbol": "SUNTV",
+      "name": "Sun TV Network Limited",
+      "price": 619.9,
+      "prev_close": 630.85,
+      "open": 624.05,
+      "gap_pct": -1.08,
+      "move_from_open_pct": -0.67,
+      "date": "2026-10-29"
+    },
+    {
+      "symbol": "IPCALAB",
+      "name": "Ipca Laboratories Limited",
+      "price": 1926.2,
+      "prev_close": 1930.5,
+      "open": 1910.5,
+      "gap_pct": -1.04,
+      "move_from_open_pct": 0.82,
+      "date": "2026-10-29"
+    },
+    {
+      "symbol": "DEEPAKFERT",
+      "name": "Deepak Fertilisers And Petrochemicals Corporation Limited",
+      "price": 1182.3,
+      "prev_close": 1161.6,
+      "open": 1150.0,
+      "gap_pct": -1.0,
+      "move_from_open_pct": 2.81,
+      "date": "2026-10-29"
+    },
+    {
+      "symbol": "SBILIFE",
+      "name": "SBI Life Insurance Company Limited",
+      "price": 1652.0,
+      "prev_close": 1666.7,
+      "open": 1650.1,
+      "gap_pct": -1.0,
+      "move_from_open_pct": 0.12,
+      "date": "2026-10-29"
+    },
+    {
+      "symbol": "CUMMINSIND",
+      "name": "Cummins India Limited",
+      "price": 4515.2,
+      "prev_close": 4620.0,
+      "open": 4575.0,
+      "gap_pct": -0.97,
+      "move_from_open_pct": -1.31,
+      "date": "2026-10-29"
+    },
+    {
+      "symbol": "NUVOCO",
+      "name": "Nuvoco Vistas Corporation Limited",
+      "price": 332.1,
+      "prev_close": 334.05,
+      "open": 330.9,
+      "gap_pct": -0.94,
+      "move_from_open_pct": 0.36,
+      "date": "2026-10-29"
+    },
+    {
+      "symbol": "BEML",
+      "name": "BEML Limited",
+      "price": 1975.9,
+      "prev_close": 1964.6,
+      "open": 1946.2,
+      "gap_pct": -0.94,
+      "move_from_open_pct": 1.53,
+      "date": "2026-10-29"
+    },
+    {
+      "symbol": "TATACONSUM",
+      "name": "Tata Consumer Products Limited",
+      "price": 1021.0,
+      "prev_close": 1000.2,
+      "open": 991.1,
+      "gap_pct": -0.91,
+      "move_from_open_pct": 3.02,
+      "date": "2026-10-29"
+    },
+    {
+      "symbol": "ANURAS",
+      "name": "Anupam Rasayan India Ltd",
+      "price": 1182.0,
+      "prev_close": 1151.4,
+      "open": 1141.0,
+      "gap_pct": -0.9,
+      "move_from_open_pct": 3.59,
+      "date": "2026-10-29"
+    }
+  ],
+  "top_gainers": [
+    {
+      "symbol": "BSOFT",
+      "name": "Birlasoft Limited",
+      "price": 342.5,
+      "prev_close": 306.1,
+      "change": 36.4,
+      "change_pct": 11.89,
+      "volume": 63391505,
+      "volume_change_pct": 6871.5,
+      "date": "2026-10-29"
+    },
+    {
+      "symbol": "POONAWALLA",
+      "name": "Poonawalla Fincorp Limited",
+      "price": 441.5,
+      "prev_close": 403.25,
+      "change": 38.25,
+      "change_pct": 9.49,
+      "volume": 21234754,
+      "volume_change_pct": 4350.2,
+      "date": "2026-10-29"
+    },
+    {
+      "symbol": "AEROFLEX",
+      "name": "Aeroflex Industries Limited",
+      "price": 538.35,
+      "prev_close": 492.25,
+      "change": 46.1,
+      "change_pct": 9.37,
+      "volume": 35956420,
+      "volume_change_pct": 1434.0,
+      "date": "2026-10-29"
+    },
+    {
+      "symbol": "RPOWER",
+      "name": "Reliance Power Limited",
+      "price": 18.98,
+      "prev_close": 17.39,
+      "change": 1.59,
+      "change_pct": 9.14,
+      "volume": 161876344,
+      "volume_change_pct": 480.2,
+      "date": "2026-10-29"
+    },
+    {
+      "symbol": "AURIONPRO",
+      "name": "Aurionpro Solutions Limited",
+      "price": 582.65,
+      "prev_close": 537.6,
+      "change": 45.05,
+      "change_pct": 8.38,
+      "volume": 1055904,
+      "volume_change_pct": 932.0,
+      "date": "2026-10-29"
+    },
+    {
+      "symbol": "ZENSARTECH",
+      "name": "Zensar Technologies Limited",
+      "price": 537.3,
+      "prev_close": 497.0,
+      "change": 40.3,
+      "change_pct": 8.11,
+      "volume": 8680834,
+      "volume_change_pct": 1787.5,
+      "date": "2026-10-29"
+    },
+    {
+      "symbol": "VGUARD",
+      "name": "V-Guard Industries Limited",
+      "price": 284.85,
+      "prev_close": 264.0,
+      "change": 20.85,
+      "change_pct": 7.9,
+      "volume": 27364754,
+      "volume_change_pct": 9745.1,
+      "date": "2026-10-29"
+    },
+    {
+      "symbol": "SGMART",
+      "name": "SG Mart Limited",
+      "price": 864.55,
+      "prev_close": 802.95,
+      "change": 61.6,
+      "change_pct": 7.67,
+      "volume": 7432882,
+      "volume_change_pct": 378.9,
+      "date": "2026-10-29"
+    },
+    {
+      "symbol": "ACUTAAS",
+      "name": "Acutaas Chemicals Limited",
+      "price": 3976.7,
+      "prev_close": 3710.0,
+      "change": 266.7,
+      "change_pct": 7.19,
+      "volume": 2936329,
+      "volume_change_pct": 29.2,
+      "date": "2026-10-29"
+    },
+    {
+      "symbol": "SYRMA",
+      "name": "Syrma SGS Technology Limited",
+      "price": 1669.0,
+      "prev_close": 1563.0,
+      "change": 106.0,
+      "change_pct": 6.78,
+      "volume": 2941659,
+      "volume_change_pct": 40.8,
+      "date": "2026-10-29"
+    }
+  ],
+  "top_losers": [
+    {
+      "symbol": "VAIBHAVGBL",
+      "name": "Vaibhav Global Limited",
+      "price": 158.3,
+      "prev_close": 187.83,
+      "change": -29.53,
+      "change_pct": -15.72,
+      "volume": 4434449,
+      "volume_change_pct": 2247.6,
+      "date": "2026-10-29"
+    },
+    {
+      "symbol": "EQUITASBNK",
+      "name": "Equitas Small Finance Bank Limited",
+      "price": 57.17,
+      "prev_close": 65.13,
+      "change": -7.96,
+      "change_pct": -12.22,
+      "volume": 65513329,
+      "volume_change_pct": 6152.3,
+      "date": "2026-10-29"
+    },
+    {
+      "symbol": "ECLERX",
+      "name": "eClerx Services Limited",
+      "price": 1660.6,
+      "prev_close": 1866.2,
+      "change": -205.6,
+      "change_pct": -11.02,
+      "volume": 1231244,
+      "volume_change_pct": 1127.7,
+      "date": "2026-10-29"
+    },
+    {
+      "symbol": "TTML",
+      "name": "Tata Teleservices (Maharashtra) Limited",
+      "price": 35.97,
+      "prev_close": 39.23,
+      "change": -3.26,
+      "change_pct": -8.31,
+      "volume": 20292611,
+      "volume_change_pct": -18.8,
+      "date": "2026-10-29"
+    },
+    {
+      "symbol": "SENORES",
+      "name": "Senores Pharmaceuticals Limited",
+      "price": 1219.2,
+      "prev_close": 1324.3,
+      "change": -105.1,
+      "change_pct": -7.94,
+      "volume": 1073717,
+      "volume_change_pct": 474.6,
+      "date": "2026-10-29"
+    },
+    {
+      "symbol": "HEXT",
+      "name": "Hexaware Technologies Limited",
+      "price": 538.45,
+      "prev_close": 572.25,
+      "change": -33.8,
+      "change_pct": -5.91,
+      "volume": 874880,
+      "volume_change_pct": 132.9,
+      "date": "2026-10-29"
+    },
+    {
+      "symbol": "CARTRADE",
+      "name": "CarTrade Tech Limited",
+      "price": 2325.0,
+      "prev_close": 2464.5,
+      "change": -139.5,
+      "change_pct": -5.66,
+      "volume": 1457765,
+      "volume_change_pct": -70.0,
+      "date": "2026-10-29"
+    },
+    {
+      "symbol": "BLUESTONE",
+      "name": "BlueStone Jewellery and Lifestyle Limited",
+      "price": 690.35,
+      "prev_close": 730.35,
+      "change": -40.0,
+      "change_pct": -5.48,
+      "volume": 1197837,
+      "volume_change_pct": 395.9,
+      "date": "2026-10-29"
+    },
+    {
+      "symbol": "PRIVISCL",
+      "name": "Privi Speciality Chemicals Limited",
+      "price": 3296.3,
+      "prev_close": 3475.9,
+      "change": -179.6,
+      "change_pct": -5.17,
+      "volume": 584489,
+      "volume_change_pct": 584.6,
+      "date": "2026-10-29"
+    },
+    {
+      "symbol": "VISL",
+      "name": "Vedanta Iron and Steel Limited",
+      "price": 25.29,
+      "prev_close": 26.56,
+      "change": -1.27,
+      "change_pct": -4.78,
+      "volume": 23395411,
+      "volume_change_pct": -47.7,
+      "date": "2026-10-29"
+    }
+  ],
+  "universes": [
+    {
+      "key": "in100",
+      "title": "NIFTY 100",
+      "gainers": [
+        {
+          "symbol": "ADANIPORTS",
+          "name": "Adani Ports and Special Economic Zone Limited",
+          "price": 1872.0,
+          "prev_close": 1761.3,
+          "change": 110.7,
+          "change_pct": 6.29,
+          "volume": 7792103,
+          "volume_change_pct": 212.8,
+          "date": "2026-10-29"
+        },
+        {
+          "symbol": "TATACAP",
+          "name": "Tata Capital Limited",
+          "price": 326.35,
+          "prev_close": 309.3,
+          "change": 17.05,
+          "change_pct": 5.51,
+          "volume": 14500270,
+          "volume_change_pct": 102.2,
+          "date": "2026-10-29"
+        },
+        {
+          "symbol": "ADANIENSOL",
+          "name": "Adani Energy Solutions Limited",
+          "price": 1365.0,
+          "prev_close": 1294.0,
+          "change": 71.0,
+          "change_pct": 5.49,
+          "volume": 1750588,
+          "volume_change_pct": 43.3,
+          "date": "2026-10-29"
+        },
+        {
+          "symbol": "ADANIENT",
+          "name": "Adani Enterprises Limited",
+          "price": 2607.9,
+          "prev_close": 2479.8,
+          "change": 128.1,
+          "change_pct": 5.17,
+          "volume": 2239613,
+          "volume_change_pct": 20.2,
+          "date": "2026-10-29"
+        },
+        {
+          "symbol": "MUTHOOTFIN",
+          "name": "Muthoot Finance Limited",
+          "price": 2497.1,
+          "prev_close": 2392.7,
+          "change": 104.4,
+          "change_pct": 4.36,
+          "volume": 674839,
+          "volume_change_pct": 256.5,
+          "date": "2026-10-29"
+        },
+        {
+          "symbol": "KOTAKBANK",
+          "name": "Kotak Mahindra Bank Limited",
+          "price": 459.0,
+          "prev_close": 440.0,
+          "change": 19.0,
+          "change_pct": 4.32,
+          "volume": 46297204,
+          "volume_change_pct": 175.0,
+          "date": "2026-10-29"
+        },
+        {
+          "symbol": "DLF",
+          "name": "DLF Limited",
+          "price": 694.35,
+          "prev_close": 666.3,
+          "change": 28.05,
+          "change_pct": 4.21,
+          "volume": 2908593,
+          "volume_change_pct": 73.3,
+          "date": "2026-10-29"
+        },
+        {
+          "symbol": "BANKBARODA",
+          "name": "Bank of Baroda Limited",
+          "price": 241.31,
+          "prev_close": 231.82,
+          "change": 9.49,
+          "change_pct": 4.09,
+          "volume": 8072517,
+          "volume_change_pct": 66.2,
+          "date": "2026-10-29"
+        },
+        {
+          "symbol": "CHOLAFIN",
+          "name": "Cholamandalam Investment and Finance Company Limited",
+          "price": 1604.2,
+          "prev_close": 1545.2,
+          "change": 59.0,
+          "change_pct": 3.82,
+          "volume": 4681472,
+          "volume_change_pct": 46.9,
+          "date": "2026-10-29"
+        },
+        {
+          "symbol": "ETERNAL",
+          "name": "Eternal Limited",
+          "price": 337.85,
+          "prev_close": 326.0,
+          "change": 11.85,
+          "change_pct": 3.63,
+          "volume": 29672726,
+          "volume_change_pct": 36.5,
+          "date": "2026-10-29"
+        }
+      ],
+      "losers": [
+        {
+          "symbol": "BAJAJHLDNG",
+          "name": "Bajaj Holdings & Investment Limited",
+          "price": 10160.0,
+          "prev_close": 10461.0,
+          "change": -301.0,
+          "change_pct": -2.88,
+          "volume": 60647,
+          "volume_change_pct": 120.5,
+          "date": "2026-10-29"
+        },
+        {
+          "symbol": "VAML",
+          "name": "Vedanta Aluminium Metal Limited",
+          "price": 348.95,
+          "prev_close": 359.2,
+          "change": -10.25,
+          "change_pct": -2.85,
+          "volume": 6211585,
+          "volume_change_pct": 10.6,
+          "date": "2026-10-29"
+        },
+        {
+          "symbol": "CUMMINSIND",
+          "name": "Cummins India Limited",
+          "price": 4515.2,
+          "prev_close": 4620.0,
+          "change": -104.8,
+          "change_pct": -2.27,
+          "volume": 549718,
+          "volume_change_pct": -28.8,
+          "date": "2026-10-29"
+        },
+        {
+          "symbol": "TRENT",
+          "name": "Trent Limited",
+          "price": 2861.7,
+          "prev_close": 2913.9,
+          "change": -52.2,
+          "change_pct": -1.79,
+          "volume": 760058,
+          "volume_change_pct": -9.7,
+          "date": "2026-10-29"
+        },
+        {
+          "symbol": "MARUTI",
+          "name": "Maruti Suzuki India Limited",
+          "price": 11426.0,
+          "prev_close": 11579.0,
+          "change": -153.0,
+          "change_pct": -1.32,
+          "volume": 316943,
+          "volume_change_pct": -66.2,
+          "date": "2026-10-29"
+        },
+        {
+          "symbol": "POWERINDIA",
+          "name": "Hitachi Energy India Limited",
+          "price": 28125.0,
+          "prev_close": 28435.0,
+          "change": -310.0,
+          "change_pct": -1.09,
+          "volume": 72889,
+          "volume_change_pct": -41.9,
+          "date": "2026-10-29"
+        },
+        {
+          "symbol": "ENRIN",
+          "name": "Siemens Energy India Limited",
+          "price": 2812.3,
+          "prev_close": 2840.0,
+          "change": -27.7,
+          "change_pct": -0.98,
+          "volume": 290765,
+          "volume_change_pct": 53.2,
+          "date": "2026-10-29"
+        },
+        {
+          "symbol": "BAJAJ-AUTO",
+          "name": "Bajaj Auto Limited",
+          "price": 10383.0,
+          "prev_close": 10485.0,
+          "change": -102.0,
+          "change_pct": -0.97,
+          "volume": 275464,
+          "volume_change_pct": -71.5,
+          "date": "2026-10-29"
+        },
+        {
+          "symbol": "SBILIFE",
+          "name": "SBI Life Insurance Company Limited",
+          "price": 1652.0,
+          "prev_close": 1666.7,
+          "change": -14.7,
+          "change_pct": -0.88,
+          "volume": 1492705,
+          "volume_change_pct": 6.7,
+          "date": "2026-10-29"
+        },
+        {
+          "symbol": "EICHERMOT",
+          "name": "Eicher Motors Limited",
+          "price": 7238.0,
+          "prev_close": 7300.0,
+          "change": -62.0,
+          "change_pct": -0.85,
+          "volume": 303665,
+          "volume_change_pct": -19.5,
+          "date": "2026-10-29"
+        }
+      ]
+    },
+    {
+      "key": "in500x",
+      "title": "NIFTY 500 EX-NIFTY 100",
+      "gainers": [
+        {
+          "symbol": "BSOFT",
+          "name": "Birlasoft Limited",
+          "price": 342.5,
+          "prev_close": 306.1,
+          "change": 36.4,
+          "change_pct": 11.89,
+          "volume": 63391505,
+          "volume_change_pct": 6871.5,
+          "date": "2026-10-29"
+        },
+        {
+          "symbol": "POONAWALLA",
+          "name": "Poonawalla Fincorp Limited",
+          "price": 441.5,
+          "prev_close": 403.25,
+          "change": 38.25,
+          "change_pct": 9.49,
+          "volume": 21234754,
+          "volume_change_pct": 4350.2,
+          "date": "2026-10-29"
+        },
+        {
+          "symbol": "RPOWER",
+          "name": "Reliance Power Limited",
+          "price": 18.98,
+          "prev_close": 17.39,
+          "change": 1.59,
+          "change_pct": 9.14,
+          "volume": 161876344,
+          "volume_change_pct": 480.2,
+          "date": "2026-10-29"
+        },
+        {
+          "symbol": "ZENSARTECH",
+          "name": "Zensar Technologies Limited",
+          "price": 537.3,
+          "prev_close": 497.0,
+          "change": 40.3,
+          "change_pct": 8.11,
+          "volume": 8680834,
+          "volume_change_pct": 1787.5,
+          "date": "2026-10-29"
+        },
+        {
+          "symbol": "ACUTAAS",
+          "name": "Acutaas Chemicals Limited",
+          "price": 3976.7,
+          "prev_close": 3710.0,
+          "change": 266.7,
+          "change_pct": 7.19,
+          "volume": 2936329,
+          "volume_change_pct": 29.2,
+          "date": "2026-10-29"
+        },
+        {
+          "symbol": "SYRMA",
+          "name": "Syrma SGS Technology Limited",
+          "price": 1669.0,
+          "prev_close": 1563.0,
+          "change": 106.0,
+          "change_pct": 6.78,
+          "volume": 2941659,
+          "volume_change_pct": 40.8,
+          "date": "2026-10-29"
+        },
+        {
+          "symbol": "JWL",
+          "name": "Jupiter Wagons Limited",
+          "price": 193.11,
+          "prev_close": 181.05,
+          "change": 12.06,
+          "change_pct": 6.66,
+          "volume": 30868135,
+          "volume_change_pct": 1223.3,
+          "date": "2026-10-29"
+        },
+        {
+          "symbol": "GALLANTT",
+          "name": "Gallantt Ispat Limited",
+          "price": 572.0,
+          "prev_close": 537.2,
+          "change": 34.8,
+          "change_pct": 6.48,
+          "volume": 2889347,
+          "volume_change_pct": 1249.3,
+          "date": "2026-10-29"
+        },
+        {
+          "symbol": "HEGAM",
+          "name": "HEG Advanced Materials Limited",
+          "price": 243.37,
+          "prev_close": 228.74,
+          "change": 14.63,
+          "change_pct": 6.4,
+          "volume": 1819788,
+          "volume_change_pct": -57.3,
+          "date": "2026-10-29"
+        },
+        {
+          "symbol": "JSWENERGY",
+          "name": "JSW Energy Limited",
+          "price": 510.0,
+          "prev_close": 483.0,
+          "change": 27.0,
+          "change_pct": 5.59,
+          "volume": 14893206,
+          "volume_change_pct": 939.6,
+          "date": "2026-10-29"
+        }
+      ],
+      "losers": [
+        {
+          "symbol": "ECLERX",
+          "name": "eClerx Services Limited",
+          "price": 1660.6,
+          "prev_close": 1866.2,
+          "change": -205.6,
+          "change_pct": -11.02,
+          "volume": 1231244,
+          "volume_change_pct": 1127.7,
+          "date": "2026-10-29"
+        },
+        {
+          "symbol": "TTML",
+          "name": "Tata Teleservices (Maharashtra) Limited",
+          "price": 35.97,
+          "prev_close": 39.23,
+          "change": -3.26,
+          "change_pct": -8.31,
+          "volume": 20292611,
+          "volume_change_pct": -18.8,
+          "date": "2026-10-29"
+        },
+        {
+          "symbol": "HEXT",
+          "name": "Hexaware Technologies Limited",
+          "price": 538.45,
+          "prev_close": 572.25,
+          "change": -33.8,
+          "change_pct": -5.91,
+          "volume": 874880,
+          "volume_change_pct": 132.9,
+          "date": "2026-10-29"
+        },
+        {
+          "symbol": "CARTRADE",
+          "name": "CarTrade Tech Limited",
+          "price": 2325.0,
+          "prev_close": 2464.5,
+          "change": -139.5,
+          "change_pct": -5.66,
+          "volume": 1457765,
+          "volume_change_pct": -70.0,
+          "date": "2026-10-29"
+        },
+        {
+          "symbol": "PRIVISCL",
+          "name": "Privi Speciality Chemicals Limited",
+          "price": 3296.3,
+          "prev_close": 3475.9,
+          "change": -179.6,
+          "change_pct": -5.17,
+          "volume": 584489,
+          "volume_change_pct": 584.6,
+          "date": "2026-10-29"
+        },
+        {
+          "symbol": "VISL",
+          "name": "Vedanta Iron and Steel Limited",
+          "price": 25.29,
+          "prev_close": 26.56,
+          "change": -1.27,
+          "change_pct": -4.78,
+          "volume": 23395411,
+          "volume_change_pct": -47.7,
+          "date": "2026-10-29"
+        },
+        {
+          "symbol": "DALBHARAT",
+          "name": "Dalmia Bharat Limited",
+          "price": 1407.9,
+          "prev_close": 1474.4,
+          "change": -66.5,
+          "change_pct": -4.51,
+          "volume": 1271166,
+          "volume_change_pct": 497.6,
+          "date": "2026-10-29"
+        },
+        {
+          "symbol": "JUBLINGREA",
+          "name": "Jubilant Ingrevia Limited",
+          "price": 567.85,
+          "prev_close": 593.6,
+          "change": -25.75,
+          "change_pct": -4.34,
+          "volume": 1089739,
+          "volume_change_pct": -48.1,
+          "date": "2026-10-29"
+        },
+        {
+          "symbol": "OLAELEC",
+          "name": "Ola Electric Mobility Limited",
+          "price": 35.16,
+          "prev_close": 36.66,
+          "change": -1.5,
+          "change_pct": -4.09,
+          "volume": 72369426,
+          "volume_change_pct": -79.9,
+          "date": "2026-10-29"
+        },
+        {
+          "symbol": "HEROMOTOCO",
+          "name": "Hero MotoCorp Limited",
+          "price": 5105.0,
+          "prev_close": 5322.5,
+          "change": -217.5,
+          "change_pct": -4.09,
+          "volume": 1084073,
+          "volume_change_pct": 161.4,
+          "date": "2026-10-29"
+        }
+      ]
+    },
+    {
+      "key": "inmicro",
+      "title": "NIFTY MICROCAP 250",
+      "gainers": [
+        {
+          "symbol": "AEROFLEX",
+          "name": "Aeroflex Industries Limited",
+          "price": 538.35,
+          "prev_close": 492.25,
+          "change": 46.1,
+          "change_pct": 9.37,
+          "volume": 35956420,
+          "volume_change_pct": 1434.0,
+          "date": "2026-10-29"
+        },
+        {
+          "symbol": "AURIONPRO",
+          "name": "Aurionpro Solutions Limited",
+          "price": 582.65,
+          "prev_close": 537.6,
+          "change": 45.05,
+          "change_pct": 8.38,
+          "volume": 1055904,
+          "volume_change_pct": 932.0,
+          "date": "2026-10-29"
+        },
+        {
+          "symbol": "VGUARD",
+          "name": "V-Guard Industries Limited",
+          "price": 284.85,
+          "prev_close": 264.0,
+          "change": 20.85,
+          "change_pct": 7.9,
+          "volume": 27364754,
+          "volume_change_pct": 9745.1,
+          "date": "2026-10-29"
+        },
+        {
+          "symbol": "SGMART",
+          "name": "SG Mart Limited",
+          "price": 864.55,
+          "prev_close": 802.95,
+          "change": 61.6,
+          "change_pct": 7.67,
+          "volume": 7432882,
+          "volume_change_pct": 378.9,
+          "date": "2026-10-29"
+        },
+        {
+          "symbol": "THELEELA",
+          "name": "Leela Palaces Hotels & Resorts Limited",
+          "price": 639.9,
+          "prev_close": 605.2,
+          "change": 34.7,
+          "change_pct": 5.73,
+          "volume": 1373406,
+          "volume_change_pct": 36.5,
+          "date": "2026-10-29"
+        },
+        {
+          "symbol": "GRINDWELL",
+          "name": "Grindwell Norton Limited",
+          "price": 1955.2,
+          "prev_close": 1851.2,
+          "change": 104.0,
+          "change_pct": 5.62,
+          "volume": 255498,
+          "volume_change_pct": 895.5,
+          "date": "2026-10-29"
+        },
+        {
+          "symbol": "AARTIPHARM",
+          "name": "Aarti Pharmalabs Limited",
+          "price": 927.65,
+          "prev_close": 881.95,
+          "change": 45.7,
+          "change_pct": 5.18,
+          "volume": 3482225,
+          "volume_change_pct": 645.7,
+          "date": "2026-10-29"
+        },
+        {
+          "symbol": "QPOWER",
+          "name": "Quality Power Electrical Equipments Limited",
+          "price": 1430.8,
+          "prev_close": 1360.7,
+          "change": 70.1,
+          "change_pct": 5.15,
+          "volume": 305945,
+          "volume_change_pct": 21.7,
+          "date": "2026-10-29"
+        },
+        {
+          "symbol": "DIACABS",
+          "name": "Diamond Power Infrastructure Limited",
+          "price": 341.65,
+          "prev_close": 325.4,
+          "change": 16.25,
+          "change_pct": 4.99,
+          "volume": 2969793,
+          "volume_change_pct": 727.7,
+          "date": "2026-10-29"
+        },
+        {
+          "symbol": "ICIL",
+          "name": "Indo Count Industries Limited",
+          "price": 449.3,
+          "prev_close": 428.1,
+          "change": 21.2,
+          "change_pct": 4.95,
+          "volume": 540826,
+          "volume_change_pct": 90.8,
+          "date": "2026-10-29"
+        }
+      ],
+      "losers": [
+        {
+          "symbol": "VAIBHAVGBL",
+          "name": "Vaibhav Global Limited",
+          "price": 158.3,
+          "prev_close": 187.83,
+          "change": -29.53,
+          "change_pct": -15.72,
+          "volume": 4434449,
+          "volume_change_pct": 2247.6,
+          "date": "2026-10-29"
+        },
+        {
+          "symbol": "EQUITASBNK",
+          "name": "Equitas Small Finance Bank Limited",
+          "price": 57.17,
+          "prev_close": 65.13,
+          "change": -7.96,
+          "change_pct": -12.22,
+          "volume": 65513329,
+          "volume_change_pct": 6152.3,
+          "date": "2026-10-29"
+        },
+        {
+          "symbol": "SENORES",
+          "name": "Senores Pharmaceuticals Limited",
+          "price": 1219.2,
+          "prev_close": 1324.3,
+          "change": -105.1,
+          "change_pct": -7.94,
+          "volume": 1073717,
+          "volume_change_pct": 474.6,
+          "date": "2026-10-29"
+        },
+        {
+          "symbol": "BLUESTONE",
+          "name": "BlueStone Jewellery and Lifestyle Limited",
+          "price": 690.35,
+          "prev_close": 730.35,
+          "change": -40.0,
+          "change_pct": -5.48,
+          "volume": 1197837,
+          "volume_change_pct": 395.9,
+          "date": "2026-10-29"
+        },
+        {
+          "symbol": "EBGNG",
+          "name": "GNG Electronics Limited",
+          "price": 690.1,
+          "prev_close": 723.25,
+          "change": -33.15,
+          "change_pct": -4.58,
+          "volume": 559145,
+          "volume_change_pct": 97.8,
+          "date": "2026-10-29"
+        },
+        {
+          "symbol": "SHILCTECH",
+          "name": "Shilchar Technologies Limited",
+          "price": 3650.9,
+          "prev_close": 3797.6,
+          "change": -146.7,
+          "change_pct": -3.86,
+          "volume": 26335,
+          "volume_change_pct": -25.3,
+          "date": "2026-10-29"
+        },
+        {
+          "symbol": "SBFC",
+          "name": "SBFC Finance Limited",
+          "price": 87.05,
+          "prev_close": 90.49,
+          "change": -3.44,
+          "change_pct": -3.8,
+          "volume": 1740380,
+          "volume_change_pct": -87.5,
+          "date": "2026-10-29"
+        },
+        {
+          "symbol": "RBA",
+          "name": "Restaurant Brands Asia Limited",
+          "price": 92.23,
+          "prev_close": 94.95,
+          "change": -2.72,
+          "change_pct": -2.86,
+          "volume": 2837236,
+          "volume_change_pct": -26.0,
+          "date": "2026-10-29"
+        },
+        {
+          "symbol": "WEBELSOLAR",
+          "name": "Websol Energy System Limited",
+          "price": 66.96,
+          "prev_close": 68.89,
+          "change": -1.93,
+          "change_pct": -2.8,
+          "volume": 1234712,
+          "volume_change_pct": -57.5,
+          "date": "2026-10-29"
+        },
+        {
+          "symbol": "BLUEJET",
+          "name": "Blue Jet Healthcare Limited",
+          "price": 503.55,
+          "prev_close": 517.85,
+          "change": -14.3,
+          "change_pct": -2.76,
+          "volume": 194027,
+          "volume_change_pct": -48.8,
+          "date": "2026-10-29"
+        }
+      ]
+    }
+  ],
+  "corporate_actions": []
+}
