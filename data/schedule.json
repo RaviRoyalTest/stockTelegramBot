@@ -23,7 +23,7 @@
     "window_start": null,
     "window_end": null,
     "paused_until": null,
-    "next_due": "2026-10-30T03:55:00+00:00"
+    "next_due": "2026-11-02T03:55:00+00:00"
   },
   {
     "interval_min": 1440,
@@ -70,7 +70,7 @@
       "/emailclose"
     ],
     "chat": "862087765",
-    "next_due": "2026-10-29T10:20:00+00:00",
+    "next_due": "2026-10-30T10:20:00+00:00",
     "run_at": "15:50",
     "market": "in",
     "window_start": null,
