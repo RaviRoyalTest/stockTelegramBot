@@ -1,0 +1,894 @@
+{
+  "session": "2026-10-30",
+  "market": "us",
+  "universe": "us",
+  "recorded_at": "2026-10-30T21:15:33+00:00",
+  "recorded_by": "auto-refresh",
+  "status": "finalized",
+  "finalized": true,
+  "gap_downs": [
+    {
+      "symbol": "INTC",
+      "name": "Intel Corporation",
+      "price": 65.76,
+      "prev_close": 92.07,
+      "open": 68.35,
+      "gap_pct": -25.76,
+      "move_from_open_pct": -3.79,
+      "date": "2026-10-30"
+    },
+    {
+      "symbol": "TWLO",
+      "name": "Twilio Inc.",
+      "price": 205.03,
+      "prev_close": 241.9,
+      "open": 186.59,
+      "gap_pct": -22.86,
+      "move_from_open_pct": 9.88,
+      "date": "2026-10-30"
+    },
+    {
+      "symbol": "RDDT",
+      "name": "Reddit, Inc.",
+      "price": 91.73,
+      "prev_close": 129.6,
+      "open": 100.25,
+      "gap_pct": -22.65,
+      "move_from_open_pct": -8.5,
+      "date": "2026-10-30"
+    },
+    {
+      "symbol": "HPQ",
+      "name": "HP Inc.",
+      "price": 28.78,
+      "prev_close": 31.83,
+      "open": 27.3,
+      "gap_pct": -14.23,
+      "move_from_open_pct": 5.42,
+      "date": "2026-10-30"
+    },
+    {
+      "symbol": "ILMN",
+      "name": "Illumina, Inc.",
+      "price": 235.99,
+      "prev_close": 290.06,
+      "open": 253.84,
+      "gap_pct": -12.49,
+      "move_from_open_pct": -7.03,
+      "date": "2026-10-30"
+    },
+    {
+      "symbol": "DELL",
+      "name": "Dell Technologies Inc.",
+      "price": 424.3,
+      "prev_close": 475.51,
+      "open": 419.03,
+      "gap_pct": -11.88,
+      "move_from_open_pct": 1.26,
+      "date": "2026-10-30"
+    },
+    {
+      "symbol": "AMD",
+      "name": "Advanced Micro Devices, Inc.",
+      "price": 504.8,
+      "prev_close": 566.42,
+      "open": 508.51,
+      "gap_pct": -10.22,
+      "move_from_open_pct": -0.73,
+      "date": "2026-10-30"
+    },
+    {
+      "symbol": "ARM",
+      "name": "Arm Holdings plc",
+      "price": 205.97,
+      "prev_close": 228.77,
+      "open": 206.8,
+      "gap_pct": -9.61,
+      "move_from_open_pct": -0.4,
+      "date": "2026-10-30"
+    },
+    {
+      "symbol": "DVA",
+      "name": "DaVita Inc.",
+      "price": 187.5,
+      "prev_close": 193.31,
+      "open": 175.0,
+      "gap_pct": -9.47,
+      "move_from_open_pct": 7.14,
+      "date": "2026-10-30"
+    },
+    {
+      "symbol": "NBIS",
+      "name": "Nebius Group N.V.",
+      "price": 154.14,
+      "prev_close": 171.99,
+      "open": 157.05,
+      "gap_pct": -8.69,
+      "move_from_open_pct": -1.85,
+      "date": "2026-10-30"
+    },
+    {
+      "symbol": "SNDK",
+      "name": "Sandisk Corporation",
+      "price": 1150.89,
+      "prev_close": 1330.05,
+      "open": 1215.09,
+      "gap_pct": -8.64,
+      "move_from_open_pct": -5.28,
+      "date": "2026-10-30"
+    },
+    {
+      "symbol": "BE",
+      "name": "Bloom Energy Corporation",
+      "price": 203.17,
+      "prev_close": 222.3,
+      "open": 203.48,
+      "gap_pct": -8.47,
+      "move_from_open_pct": -0.15,
+      "date": "2026-10-30"
+    },
+    {
+      "symbol": "COHR",
+      "name": "Coherent Corp.",
+      "price": 210.32,
+      "prev_close": 237.22,
+      "open": 217.14,
+      "gap_pct": -8.46,
+      "move_from_open_pct": -3.14,
+      "date": "2026-10-30"
+    },
+    {
+      "symbol": "COIN",
+      "name": "Coinbase Global, Inc.",
+      "price": 143.54,
+      "prev_close": 160.59,
+      "open": 148.23,
+      "gap_pct": -7.7,
+      "move_from_open_pct": -3.16,
+      "date": "2026-10-30"
+    },
+    {
+      "symbol": "SYK",
+      "name": "Stryker Corporation",
+      "price": 291.86,
+      "prev_close": 311.75,
+      "open": 287.97,
+      "gap_pct": -7.63,
+      "move_from_open_pct": 1.35,
+      "date": "2026-10-30"
+    },
+    {
+      "symbol": "CRWV",
+      "name": "CoreWeave, Inc.",
+      "price": 54.87,
+      "prev_close": 60.74,
+      "open": 56.12,
+      "gap_pct": -7.61,
+      "move_from_open_pct": -2.23,
+      "date": "2026-10-30"
+    },
+    {
+      "symbol": "WDC",
+      "name": "Western Digital Corporation",
+      "price": 366.11,
+      "prev_close": 395.41,
+      "open": 366.44,
+      "gap_pct": -7.33,
+      "move_from_open_pct": -0.09,
+      "date": "2026-10-30"
+    },
+    {
+      "symbol": "MSTR",
+      "name": "Strategy Inc",
+      "price": 130.51,
+      "prev_close": 141.62,
+      "open": 131.52,
+      "gap_pct": -7.13,
+      "move_from_open_pct": -0.77,
+      "date": "2026-10-30"
+    },
+    {
+      "symbol": "STX",
+      "name": "Seagate Technology Holdings plc",
+      "price": 644.58,
+      "prev_close": 700.47,
+      "open": 651.0,
+      "gap_pct": -7.06,
+      "move_from_open_pct": -0.99,
+      "date": "2026-10-30"
+    },
+    {
+      "symbol": "HOOD",
+      "name": "Robinhood Markets, Inc.",
+      "price": 84.99,
+      "prev_close": 91.59,
+      "open": 85.21,
+      "gap_pct": -6.97,
+      "move_from_open_pct": -0.26,
+      "date": "2026-10-30"
+    }
+  ],
+  "top_gainers": [
+    {
+      "symbol": "FDXF",
+      "name": "FedEx Freight Holding Company, Inc.",
+      "price": 126.04,
+      "prev_close": 109.69,
+      "change": 16.35,
+      "change_pct": 14.91,
+      "volume": 3596222,
+      "volume_change_pct": 68.9,
+      "date": "2026-10-30"
+    },
+    {
+      "symbol": "REGN",
+      "name": "Regeneron Pharmaceuticals, Inc.",
+      "price": 927.89,
+      "prev_close": 818.77,
+      "change": 109.12,
+      "change_pct": 13.33,
+      "volume": 2851725,
+      "volume_change_pct": 262.3,
+      "date": "2026-10-30"
+    },
+    {
+      "symbol": "GPN",
+      "name": "Global Payments Inc.",
+      "price": 96.84,
+      "prev_close": 85.72,
+      "change": 11.12,
+      "change_pct": 12.97,
+      "volume": 16725396,
+      "volume_change_pct": 620.0,
+      "date": "2026-10-30"
+    },
+    {
+      "symbol": "GDDY",
+      "name": "GoDaddy Inc.",
+      "price": 117.24,
+      "prev_close": 105.89,
+      "change": 11.35,
+      "change_pct": 10.72,
+      "volume": 3574679,
+      "volume_change_pct": 65.1,
+      "date": "2026-10-30"
+    },
+    {
+      "symbol": "CSGP",
+      "name": "CoStar Group, Inc.",
+      "price": 30.17,
+      "prev_close": 28.14,
+      "change": 2.03,
+      "change_pct": 7.21,
+      "volume": 9593053,
+      "volume_change_pct": 34.1,
+      "date": "2026-10-30"
+    },
+    {
+      "symbol": "CBOE",
+      "name": "Cboe Global Markets, Inc.",
+      "price": 335.53,
+      "prev_close": 314.25,
+      "change": 21.28,
+      "change_pct": 6.77,
+      "volume": 2458367,
+      "volume_change_pct": 103.9,
+      "date": "2026-10-30"
+    },
+    {
+      "symbol": "VLTO",
+      "name": "Veralto Corporation",
+      "price": 111.1,
+      "prev_close": 104.06,
+      "change": 7.04,
+      "change_pct": 6.77,
+      "volume": 4161289,
+      "volume_change_pct": 111.3,
+      "date": "2026-10-30"
+    },
+    {
+      "symbol": "TMUS",
+      "name": "T-Mobile US, Inc.",
+      "price": 156.44,
+      "prev_close": 147.29,
+      "change": 9.15,
+      "change_pct": 6.21,
+      "volume": 11483182,
+      "volume_change_pct": 58.8,
+      "date": "2026-10-30"
+    },
+    {
+      "symbol": "TYL",
+      "name": "Tyler Technologies, Inc.",
+      "price": 394.3,
+      "prev_close": 373.93,
+      "change": 20.37,
+      "change_pct": 5.45,
+      "volume": 1315387,
+      "volume_change_pct": -26.8,
+      "date": "2026-10-30"
+    },
+    {
+      "symbol": "LYB",
+      "name": "LyondellBasell Industries N.V.",
+      "price": 68.64,
+      "prev_close": 65.37,
+      "change": 3.27,
+      "change_pct": 5.0,
+      "volume": 4652431,
+      "volume_change_pct": 22.0,
+      "date": "2026-10-30"
+    }
+  ],
+  "top_losers": [
+    {
+      "symbol": "RDDT",
+      "name": "Reddit, Inc.",
+      "price": 91.73,
+      "prev_close": 129.6,
+      "change": -37.87,
+      "change_pct": -29.22,
+      "volume": 33255690,
+      "volume_change_pct": 86.1,
+      "date": "2026-10-30"
+    },
+    {
+      "symbol": "INTC",
+      "name": "Intel Corporation",
+      "price": 65.76,
+      "prev_close": 92.07,
+      "change": -26.31,
+      "change_pct": -28.58,
+      "volume": 450884426,
+      "volume_change_pct": 236.1,
+      "date": "2026-10-30"
+    },
+    {
+      "symbol": "ILMN",
+      "name": "Illumina, Inc.",
+      "price": 235.99,
+      "prev_close": 290.06,
+      "change": -54.07,
+      "change_pct": -18.64,
+      "volume": 5387505,
+      "volume_change_pct": 165.9,
+      "date": "2026-10-30"
+    },
+    {
+      "symbol": "TWLO",
+      "name": "Twilio Inc.",
+      "price": 205.03,
+      "prev_close": 241.9,
+      "change": -36.87,
+      "change_pct": -15.24,
+      "volume": 7339001,
+      "volume_change_pct": 45.7,
+      "date": "2026-10-30"
+    },
+    {
+      "symbol": "SNDK",
+      "name": "Sandisk Corporation",
+      "price": 1150.89,
+      "prev_close": 1330.05,
+      "change": -179.16,
+      "change_pct": -13.47,
+      "volume": 17340103,
+      "volume_change_pct": 104.4,
+      "date": "2026-10-30"
+    },
+    {
+      "symbol": "DDOG",
+      "name": "Datadog, Inc.",
+      "price": 235.27,
+      "prev_close": 265.84,
+      "change": -30.57,
+      "change_pct": -11.5,
+      "volume": 5862536,
+      "volume_change_pct": 57.2,
+      "date": "2026-10-30"
+    },
+    {
+      "symbol": "COHR",
+      "name": "Coherent Corp.",
+      "price": 210.32,
+      "prev_close": 237.22,
+      "change": -26.9,
+      "change_pct": -11.34,
+      "volume": 11906618,
+      "volume_change_pct": 57.7,
+      "date": "2026-10-30"
+    },
+    {
+      "symbol": "QCOM",
+      "name": "QUALCOMM Incorporated",
+      "price": 164.79,
+      "prev_close": 185.41,
+      "change": -20.62,
+      "change_pct": -11.12,
+      "volume": 24064521,
+      "volume_change_pct": 192.6,
+      "date": "2026-10-30"
+    },
+    {
+      "symbol": "ALAB",
+      "name": "Astera Labs, Inc.",
+      "price": 258.7,
+      "prev_close": 290.43,
+      "change": -31.73,
+      "change_pct": -10.93,
+      "volume": 7274122,
+      "volume_change_pct": 134.9,
+      "date": "2026-10-30"
+    },
+    {
+      "symbol": "AMD",
+      "name": "Advanced Micro Devices, Inc.",
+      "price": 504.8,
+      "prev_close": 566.42,
+      "change": -61.62,
+      "change_pct": -10.88,
+      "volume": 39527010,
+      "volume_change_pct": 134.3,
+      "date": "2026-10-30"
+    }
+  ],
+  "universes": [
+    {
+      "key": "usmega",
+      "title": "MEGA CAP ($200B+)",
+      "gainers": [
+        {
+          "symbol": "LLY",
+          "name": "Eli Lilly and Company",
+          "price": 1417.54,
+          "prev_close": 1373.7,
+          "change": 43.84,
+          "change_pct": 3.19,
+          "volume": 5032743,
+          "volume_change_pct": 15.1,
+          "date": "2026-10-30"
+        },
+        {
+          "symbol": "LIN",
+          "name": "Linde plc",
+          "price": 514.24,
+          "prev_close": 503.15,
+          "change": 11.09,
+          "change_pct": 2.2,
+          "volume": 3116425,
+          "volume_change_pct": 9.7,
+          "date": "2026-10-30"
+        },
+        {
+          "symbol": "MRK",
+          "name": "Merck & Co., Inc.",
+          "price": 149.52,
+          "prev_close": 146.33,
+          "change": 3.19,
+          "change_pct": 2.18,
+          "volume": 12302857,
+          "volume_change_pct": -8.5,
+          "date": "2026-10-30"
+        },
+        {
+          "symbol": "XOM",
+          "name": "ExxonMobil Holdings Corporation",
+          "price": 187.25,
+          "prev_close": 183.29,
+          "change": 3.96,
+          "change_pct": 2.16,
+          "volume": 21162779,
+          "volume_change_pct": 93.1,
+          "date": "2026-10-30"
+        },
+        {
+          "symbol": "WMT",
+          "name": "Walmart Inc.",
+          "price": 123.51,
+          "prev_close": 121.25,
+          "change": 2.26,
+          "change_pct": 1.86,
+          "volume": 29601109,
+          "volume_change_pct": 84.5,
+          "date": "2026-10-30"
+        },
+        {
+          "symbol": "CVX",
+          "name": "Chevron Corporation",
+          "price": 235.52,
+          "prev_close": 231.46,
+          "change": 4.06,
+          "change_pct": 1.75,
+          "volume": 11009664,
+          "volume_change_pct": 94.9,
+          "date": "2026-10-30"
+        },
+        {
+          "symbol": "COST",
+          "name": "Costco Wholesale Corporation",
+          "price": 1012.28,
+          "prev_close": 996.08,
+          "change": 16.2,
+          "change_pct": 1.63,
+          "volume": 3378310,
+          "volume_change_pct": 111.2,
+          "date": "2026-10-30"
+        },
+        {
+          "symbol": "ABBV",
+          "name": "AbbVie Inc.",
+          "price": 294.89,
+          "prev_close": 290.79,
+          "change": 4.1,
+          "change_pct": 1.41,
+          "volume": 6896546,
+          "volume_change_pct": 59.5,
+          "date": "2026-10-30"
+        },
+        {
+          "symbol": "KO",
+          "name": "The Coca-Cola Company",
+          "price": 94.08,
+          "prev_close": 92.82,
+          "change": 1.26,
+          "change_pct": 1.36,
+          "volume": 18358783,
+          "volume_change_pct": 15.7,
+          "date": "2026-10-30"
+        },
+        {
+          "symbol": "AMGN",
+          "name": "Amgen Inc.",
+          "price": 466.01,
+          "prev_close": 460.73,
+          "change": 5.28,
+          "change_pct": 1.15,
+          "volume": 3290355,
+          "volume_change_pct": 10.5,
+          "date": "2026-10-30"
+        }
+      ],
+      "losers": [
+        {
+          "symbol": "INTC",
+          "name": "Intel Corporation",
+          "price": 65.76,
+          "prev_close": 92.07,
+          "change": -26.31,
+          "change_pct": -28.58,
+          "volume": 450884426,
+          "volume_change_pct": 236.1,
+          "date": "2026-10-30"
+        },
+        {
+          "symbol": "SNDK",
+          "name": "Sandisk Corporation",
+          "price": 1150.89,
+          "prev_close": 1330.05,
+          "change": -179.16,
+          "change_pct": -13.47,
+          "volume": 17340103,
+          "volume_change_pct": 104.4,
+          "date": "2026-10-30"
+        },
+        {
+          "symbol": "AMD",
+          "name": "Advanced Micro Devices, Inc.",
+          "price": 504.8,
+          "prev_close": 566.42,
+          "change": -61.62,
+          "change_pct": -10.88,
+          "volume": 39527010,
+          "volume_change_pct": 134.3,
+          "date": "2026-10-30"
+        },
+        {
+          "symbol": "DELL",
+          "name": "Dell Technologies Inc.",
+          "price": 424.3,
+          "prev_close": 475.51,
+          "change": -51.21,
+          "change_pct": -10.77,
+          "volume": 10469758,
+          "volume_change_pct": 208.1,
+          "date": "2026-10-30"
+        },
+        {
+          "symbol": "MRVL",
+          "name": "Marvell Technology, Inc.",
+          "price": 196.4,
+          "prev_close": 218.34,
+          "change": -21.94,
+          "change_pct": -10.05,
+          "volume": 42670557,
+          "volume_change_pct": 1.5,
+          "date": "2026-10-30"
+        },
+        {
+          "symbol": "ARM",
+          "name": "Arm Holdings plc",
+          "price": 205.97,
+          "prev_close": 228.77,
+          "change": -22.8,
+          "change_pct": -9.97,
+          "volume": 10408040,
+          "volume_change_pct": 123.2,
+          "date": "2026-10-30"
+        },
+        {
+          "symbol": "ANET",
+          "name": "Arista Networks, Inc.",
+          "price": 168.86,
+          "prev_close": 184.22,
+          "change": -15.36,
+          "change_pct": -8.34,
+          "volume": 8336775,
+          "volume_change_pct": 55.3,
+          "date": "2026-10-30"
+        },
+        {
+          "symbol": "AMAT",
+          "name": "Applied Materials, Inc.",
+          "price": 390.09,
+          "prev_close": 421.66,
+          "change": -31.57,
+          "change_pct": -7.49,
+          "volume": 10250544,
+          "volume_change_pct": 53.0,
+          "date": "2026-10-30"
+        },
+        {
+          "symbol": "ASML",
+          "name": "ASML Holding N.V.",
+          "price": 1565.9,
+          "prev_close": 1675.7,
+          "change": -109.8,
+          "change_pct": -6.55,
+          "volume": 2162081,
+          "volume_change_pct": 69.9,
+          "date": "2026-10-30"
+        },
+        {
+          "symbol": "SPCX",
+          "name": "Space Exploration Technologies Corp.",
+          "price": 134.72,
+          "prev_close": 143.89,
+          "change": -9.17,
+          "change_pct": -6.37,
+          "volume": 121658895,
+          "volume_change_pct": 78.0,
+          "date": "2026-10-30"
+        }
+      ]
+    },
+    {
+      "key": "uslarge",
+      "title": "LARGE CAP ($10B-$200B)",
+      "gainers": [
+        {
+          "symbol": "FDXF",
+          "name": "FedEx Freight Holding Company, Inc.",
+          "price": 126.04,
+          "prev_close": 109.69,
+          "change": 16.35,
+          "change_pct": 14.91,
+          "volume": 3596222,
+          "volume_change_pct": 68.9,
+          "date": "2026-10-30"
+        },
+        {
+          "symbol": "REGN",
+          "name": "Regeneron Pharmaceuticals, Inc.",
+          "price": 927.89,
+          "prev_close": 818.77,
+          "change": 109.12,
+          "change_pct": 13.33,
+          "volume": 2851725,
+          "volume_change_pct": 262.3,
+          "date": "2026-10-30"
+        },
+        {
+          "symbol": "GPN",
+          "name": "Global Payments Inc.",
+          "price": 96.84,
+          "prev_close": 85.72,
+          "change": 11.12,
+          "change_pct": 12.97,
+          "volume": 16725396,
+          "volume_change_pct": 620.0,
+          "date": "2026-10-30"
+        },
+        {
+          "symbol": "GDDY",
+          "name": "GoDaddy Inc.",
+          "price": 117.24,
+          "prev_close": 105.89,
+          "change": 11.35,
+          "change_pct": 10.72,
+          "volume": 3574679,
+          "volume_change_pct": 65.1,
+          "date": "2026-10-30"
+        },
+        {
+          "symbol": "CSGP",
+          "name": "CoStar Group, Inc.",
+          "price": 30.17,
+          "prev_close": 28.14,
+          "change": 2.03,
+          "change_pct": 7.21,
+          "volume": 9593053,
+          "volume_change_pct": 34.1,
+          "date": "2026-10-30"
+        },
+        {
+          "symbol": "CBOE",
+          "name": "Cboe Global Markets, Inc.",
+          "price": 335.53,
+          "prev_close": 314.25,
+          "change": 21.28,
+          "change_pct": 6.77,
+          "volume": 2458367,
+          "volume_change_pct": 103.9,
+          "date": "2026-10-30"
+        },
+        {
+          "symbol": "VLTO",
+          "name": "Veralto Corporation",
+          "price": 111.1,
+          "prev_close": 104.06,
+          "change": 7.04,
+          "change_pct": 6.77,
+          "volume": 4161289,
+          "volume_change_pct": 111.3,
+          "date": "2026-10-30"
+        },
+        {
+          "symbol": "TMUS",
+          "name": "T-Mobile US, Inc.",
+          "price": 156.44,
+          "prev_close": 147.29,
+          "change": 9.15,
+          "change_pct": 6.21,
+          "volume": 11483182,
+          "volume_change_pct": 58.8,
+          "date": "2026-10-30"
+        },
+        {
+          "symbol": "TYL",
+          "name": "Tyler Technologies, Inc.",
+          "price": 394.3,
+          "prev_close": 373.93,
+          "change": 20.37,
+          "change_pct": 5.45,
+          "volume": 1315387,
+          "volume_change_pct": -26.8,
+          "date": "2026-10-30"
+        },
+        {
+          "symbol": "LYB",
+          "name": "LyondellBasell Industries N.V.",
+          "price": 68.64,
+          "prev_close": 65.37,
+          "change": 3.27,
+          "change_pct": 5.0,
+          "volume": 4652431,
+          "volume_change_pct": 22.0,
+          "date": "2026-10-30"
+        }
+      ],
+      "losers": [
+        {
+          "symbol": "RDDT",
+          "name": "Reddit, Inc.",
+          "price": 91.73,
+          "prev_close": 129.6,
+          "change": -37.87,
+          "change_pct": -29.22,
+          "volume": 33255690,
+          "volume_change_pct": 86.1,
+          "date": "2026-10-30"
+        },
+        {
+          "symbol": "ILMN",
+          "name": "Illumina, Inc.",
+          "price": 235.99,
+          "prev_close": 290.06,
+          "change": -54.07,
+          "change_pct": -18.64,
+          "volume": 5387505,
+          "volume_change_pct": 165.9,
+          "date": "2026-10-30"
+        },
+        {
+          "symbol": "TWLO",
+          "name": "Twilio Inc.",
+          "price": 205.03,
+          "prev_close": 241.9,
+          "change": -36.87,
+          "change_pct": -15.24,
+          "volume": 7339001,
+          "volume_change_pct": 45.7,
+          "date": "2026-10-30"
+        },
+        {
+          "symbol": "DDOG",
+          "name": "Datadog, Inc.",
+          "price": 235.27,
+          "prev_close": 265.84,
+          "change": -30.57,
+          "change_pct": -11.5,
+          "volume": 5862536,
+          "volume_change_pct": 57.2,
+          "date": "2026-10-30"
+        },
+        {
+          "symbol": "COHR",
+          "name": "Coherent Corp.",
+          "price": 210.32,
+          "prev_close": 237.22,
+          "change": -26.9,
+          "change_pct": -11.34,
+          "volume": 11906618,
+          "volume_change_pct": 57.7,
+          "date": "2026-10-30"
+        },
+        {
+          "symbol": "QCOM",
+          "name": "QUALCOMM Incorporated",
+          "price": 164.79,
+          "prev_close": 185.41,
+          "change": -20.62,
+          "change_pct": -11.12,
+          "volume": 24064521,
+          "volume_change_pct": 192.6,
+          "date": "2026-10-30"
+        },
+        {
+          "symbol": "ALAB",
+          "name": "Astera Labs, Inc.",
+          "price": 258.7,
+          "prev_close": 290.43,
+          "change": -31.73,
+          "change_pct": -10.93,
+          "volume": 7274122,
+          "volume_change_pct": 134.9,
+          "date": "2026-10-30"
+        },
+        {
+          "symbol": "COIN",
+          "name": "Coinbase Global, Inc.",
+          "price": 143.54,
+          "prev_close": 160.59,
+          "change": -17.05,
+          "change_pct": -10.62,
+          "volume": 20781511,
+          "volume_change_pct": 145.6,
+          "date": "2026-10-30"
+        },
+        {
+          "symbol": "NBIS",
+          "name": "Nebius Group N.V.",
+          "price": 154.14,
+          "prev_close": 171.99,
+          "change": -17.85,
+          "change_pct": -10.38,
+          "volume": 21396419,
+          "volume_change_pct": 20.9,
+          "date": "2026-10-30"
+        },
+        {
+          "symbol": "APP",
+          "name": "AppLovin Corporation",
+          "price": 228.5,
+          "prev_close": 254.91,
+          "change": -26.41,
+          "change_pct": -10.36,
+          "volume": 9119795,
+          "volume_change_pct": 133.0,
+          "date": "2026-10-30"
+        }
+      ]
+    }
+  ],
+  "corporate_actions": []
+}
