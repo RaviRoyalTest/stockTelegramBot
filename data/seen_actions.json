@@ -24,6 +24,7 @@
   "862087765|NSE|TAJGVK|Dividend - Rs 2 Per Share|2026-09-01|2026-09-01",
   "862087765|NSE|TEXRAIL|Dividend - Re 0.75 Per Share|2026-09-11|2026-09-11",
   "862087765|NSE|VBL|Interim Dividend - Re 0.50 Per Share|2026-07-31|2026-08-01",
+  "862087765|NSE|VBL|Interim Dividend - Re 0.50 Per Share|2026-11-05|2026-11-05",
   "@StockVigilBot|NSE|COALINDIA|Dividend - Rs 5.25 Per Share|2026-09-04|2026-09-04",
   "@StockVigilBot|NSE|GRSE|Dividend - Rs 6.70 Per Share|2026-09-18|2026-09-18",
   "@StockVigilBot|NSE|IRCTC|Dividend - Re 0.50 Per Share|2026-09-22|2026-09-22",
@@ -47,6 +48,7 @@
   "NSE|TAJGVK|Dividend - Rs 2 Per Share|2026-09-01|2026-09-01",
   "NSE|TECHNOE|Dividend - Rs 7 Per Share|2026-09-11|2026-09-11",
   "NSE|TEXRAIL|Dividend - Re 0.75 Per Share|2026-09-11|2026-09-11",
+  "NSE|VBL|Interim Dividend - Re 0.50 Per Share|2026-11-05|2026-11-05",
   "hilo|717069122|2026-10-23|BEL|low",
   "hilo|717069122|2026-10-23|BRITANNIA|low",
   "hilo|717069122|2026-10-23|CANBK|low",
@@ -1505,5 +1507,6 @@
   "remind|862087765|NSE|SHRIRAMFIN|Interim Dividend - Rs 6.50 Per Share|2026-10-29|2026-10-29",
   "remind|862087765|NSE|SOUTHBANK|Dividend - Re 0.45 Per Share|2026-08-13|2026-08-13",
   "remind|862087765|NSE|TAJGVK|Dividend - Rs 2 Per Share|2026-09-01|2026-09-01",
-  "remind|862087765|NSE|TEXRAIL|Dividend - Re 0.75 Per Share|2026-09-11|2026-09-11"
+  "remind|862087765|NSE|TEXRAIL|Dividend - Re 0.75 Per Share|2026-09-11|2026-09-11",
+  "remind|862087765|NSE|VBL|Interim Dividend - Re 0.50 Per Share|2026-11-05|2026-11-05"
 ]
