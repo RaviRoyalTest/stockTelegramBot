@@ -1,0 +1,894 @@
+{
+  "session": "2026-11-03",
+  "market": "us",
+  "universe": "us",
+  "recorded_at": "2026-11-03T22:14:33+00:00",
+  "recorded_by": "auto-refresh",
+  "status": "finalized",
+  "finalized": true,
+  "gap_downs": [
+    {
+      "symbol": "ZBRA",
+      "name": "Zebra Technologies Corporation",
+      "price": 329.5,
+      "prev_close": 361.13,
+      "open": 311.61,
+      "gap_pct": -13.71,
+      "move_from_open_pct": 5.74,
+      "date": "2026-11-03"
+    },
+    {
+      "symbol": "SHOP",
+      "name": "Shopify Inc.",
+      "price": 142.57,
+      "prev_close": 156.22,
+      "open": 136.43,
+      "gap_pct": -12.67,
+      "move_from_open_pct": 4.5,
+      "date": "2026-11-03"
+    },
+    {
+      "symbol": "IT",
+      "name": "Gartner, Inc.",
+      "price": 204.22,
+      "prev_close": 235.26,
+      "open": 208.0,
+      "gap_pct": -11.59,
+      "move_from_open_pct": -1.82,
+      "date": "2026-11-03"
+    },
+    {
+      "symbol": "LDOS",
+      "name": "Leidos Holdings, Inc.",
+      "price": 134.72,
+      "prev_close": 144.16,
+      "open": 133.77,
+      "gap_pct": -7.21,
+      "move_from_open_pct": 0.71,
+      "date": "2026-11-03"
+    },
+    {
+      "symbol": "PLTR",
+      "name": "Palantir Technologies Inc.",
+      "price": 175.4,
+      "prev_close": 178.34,
+      "open": 168.18,
+      "gap_pct": -5.7,
+      "move_from_open_pct": 4.29,
+      "date": "2026-11-03"
+    },
+    {
+      "symbol": "SYY",
+      "name": "Sysco Corporation",
+      "price": 74.11,
+      "prev_close": 81.74,
+      "open": 77.61,
+      "gap_pct": -5.05,
+      "move_from_open_pct": -4.51,
+      "date": "2026-11-03"
+    },
+    {
+      "symbol": "TRI",
+      "name": "Thomson Reuters Corporation",
+      "price": 110.18,
+      "prev_close": 122.24,
+      "open": 116.1,
+      "gap_pct": -5.02,
+      "move_from_open_pct": -5.1,
+      "date": "2026-11-03"
+    },
+    {
+      "symbol": "HSIC",
+      "name": "Henry Schein, Inc.",
+      "price": 82.5,
+      "prev_close": 86.62,
+      "open": 82.37,
+      "gap_pct": -4.91,
+      "move_from_open_pct": 0.16,
+      "date": "2026-11-03"
+    },
+    {
+      "symbol": "KDP",
+      "name": "Keurig Dr Pepper Inc.",
+      "price": 34.74,
+      "prev_close": 36.82,
+      "open": 35.31,
+      "gap_pct": -4.1,
+      "move_from_open_pct": -1.62,
+      "date": "2026-11-03"
+    },
+    {
+      "symbol": "AAPL",
+      "name": "Apple Inc.",
+      "price": 331.9,
+      "prev_close": 338.32,
+      "open": 325.58,
+      "gap_pct": -3.77,
+      "move_from_open_pct": 1.94,
+      "date": "2026-11-03"
+    },
+    {
+      "symbol": "WMB",
+      "name": "The Williams Companies, Inc.",
+      "price": 72.47,
+      "prev_close": 71.19,
+      "open": 69.3,
+      "gap_pct": -2.65,
+      "move_from_open_pct": 4.57,
+      "date": "2026-11-03"
+    },
+    {
+      "symbol": "RMD",
+      "name": "ResMed Inc.",
+      "price": 227.08,
+      "prev_close": 232.94,
+      "open": 227.01,
+      "gap_pct": -2.55,
+      "move_from_open_pct": 0.03,
+      "date": "2026-11-03"
+    },
+    {
+      "symbol": "CTSH",
+      "name": "Cognizant Technology Solutions Corporation",
+      "price": 63.83,
+      "prev_close": 65.09,
+      "open": 63.44,
+      "gap_pct": -2.53,
+      "move_from_open_pct": 0.61,
+      "date": "2026-11-03"
+    },
+    {
+      "symbol": "SBAC",
+      "name": "SBA Communications Corporation",
+      "price": 184.69,
+      "prev_close": 184.86,
+      "open": 180.31,
+      "gap_pct": -2.46,
+      "move_from_open_pct": 2.43,
+      "date": "2026-11-03"
+    },
+    {
+      "symbol": "ACN",
+      "name": "Accenture plc",
+      "price": 254.56,
+      "prev_close": 260.94,
+      "open": 254.56,
+      "gap_pct": -2.45,
+      "move_from_open_pct": 0.0,
+      "date": "2026-11-03"
+    },
+    {
+      "symbol": "CCEP",
+      "name": "Coca-Cola Europacific Partners PLC",
+      "price": 111.56,
+      "prev_close": 115.58,
+      "open": 113.17,
+      "gap_pct": -2.09,
+      "move_from_open_pct": -1.42,
+      "date": "2026-11-03"
+    },
+    {
+      "symbol": "BR",
+      "name": "Broadridge Financial Solutions, Inc.",
+      "price": 183.76,
+      "prev_close": 184.22,
+      "open": 180.42,
+      "gap_pct": -2.06,
+      "move_from_open_pct": 1.85,
+      "date": "2026-11-03"
+    },
+    {
+      "symbol": "CDNS",
+      "name": "Cadence Design Systems, Inc.",
+      "price": 323.75,
+      "prev_close": 329.51,
+      "open": 322.79,
+      "gap_pct": -2.04,
+      "move_from_open_pct": 0.3,
+      "date": "2026-11-03"
+    },
+    {
+      "symbol": "FDS",
+      "name": "FactSet Research Systems Inc.",
+      "price": 332.59,
+      "prev_close": 343.74,
+      "open": 337.0,
+      "gap_pct": -1.96,
+      "move_from_open_pct": -1.31,
+      "date": "2026-11-03"
+    },
+    {
+      "symbol": "ADM",
+      "name": "Archer-Daniels-Midland Company",
+      "price": 70.6,
+      "prev_close": 75.77,
+      "open": 74.31,
+      "gap_pct": -1.93,
+      "move_from_open_pct": -4.99,
+      "date": "2026-11-03"
+    }
+  ],
+  "top_gainers": [
+    {
+      "symbol": "FISV",
+      "name": "Fiserv, Inc.",
+      "price": 58.4,
+      "prev_close": 51.93,
+      "change": 6.47,
+      "change_pct": 12.46,
+      "volume": 19220273,
+      "volume_change_pct": 92.6,
+      "date": "2026-11-03"
+    },
+    {
+      "symbol": "BE",
+      "name": "Bloom Energy Corporation",
+      "price": 214.01,
+      "prev_close": 196.25,
+      "change": 17.76,
+      "change_pct": 9.05,
+      "volume": 13964496,
+      "volume_change_pct": -9.8,
+      "date": "2026-11-03"
+    },
+    {
+      "symbol": "DD",
+      "name": "DuPont de Nemours, Inc.",
+      "price": 153.46,
+      "prev_close": 141.3,
+      "change": 12.16,
+      "change_pct": 8.61,
+      "volume": 2886683,
+      "volume_change_pct": 74.5,
+      "date": "2026-11-03"
+    },
+    {
+      "symbol": "RVTY",
+      "name": "Revvity, Inc.",
+      "price": 163.48,
+      "prev_close": 151.6,
+      "change": 11.88,
+      "change_pct": 7.84,
+      "volume": 3372215,
+      "volume_change_pct": 20.5,
+      "date": "2026-11-03"
+    },
+    {
+      "symbol": "APP",
+      "name": "AppLovin Corporation",
+      "price": 245.51,
+      "prev_close": 228.85,
+      "change": 16.66,
+      "change_pct": 7.28,
+      "volume": 4739203,
+      "volume_change_pct": -9.1,
+      "date": "2026-11-03"
+    },
+    {
+      "symbol": "NBIS",
+      "name": "Nebius Group N.V.",
+      "price": 151.64,
+      "prev_close": 141.39,
+      "change": 10.25,
+      "change_pct": 7.25,
+      "volume": 15703918,
+      "volume_change_pct": -23.2,
+      "date": "2026-11-03"
+    },
+    {
+      "symbol": "CRWV",
+      "name": "CoreWeave, Inc.",
+      "price": 53.74,
+      "prev_close": 50.15,
+      "change": 3.59,
+      "change_pct": 7.16,
+      "volume": 36691372,
+      "volume_change_pct": -24.3,
+      "date": "2026-11-03"
+    },
+    {
+      "symbol": "FIX",
+      "name": "Comfort Systems USA, Inc.",
+      "price": 1285.13,
+      "prev_close": 1200.14,
+      "change": 84.99,
+      "change_pct": 7.08,
+      "volume": 667890,
+      "volume_change_pct": 25.3,
+      "date": "2026-11-03"
+    },
+    {
+      "symbol": "ETN",
+      "name": "Eaton Corporation plc",
+      "price": 391.7,
+      "prev_close": 366.07,
+      "change": 25.63,
+      "change_pct": 7.0,
+      "volume": 3305528,
+      "volume_change_pct": 3.7,
+      "date": "2026-11-03"
+    },
+    {
+      "symbol": "FOXA",
+      "name": "Fox Corporation",
+      "price": 67.1,
+      "prev_close": 62.76,
+      "change": 4.34,
+      "change_pct": 6.92,
+      "volume": 9369690,
+      "volume_change_pct": -4.6,
+      "date": "2026-11-03"
+    }
+  ],
+  "top_losers": [
+    {
+      "symbol": "IT",
+      "name": "Gartner, Inc.",
+      "price": 204.22,
+      "prev_close": 235.26,
+      "change": -31.04,
+      "change_pct": -13.19,
+      "volume": 3218973,
+      "volume_change_pct": 120.8,
+      "date": "2026-11-03"
+    },
+    {
+      "symbol": "TRI",
+      "name": "Thomson Reuters Corporation",
+      "price": 110.18,
+      "prev_close": 122.24,
+      "change": -12.06,
+      "change_pct": -9.87,
+      "volume": 3021115,
+      "volume_change_pct": 19.5,
+      "date": "2026-11-03"
+    },
+    {
+      "symbol": "SYY",
+      "name": "Sysco Corporation",
+      "price": 74.11,
+      "prev_close": 81.74,
+      "change": -7.63,
+      "change_pct": -9.33,
+      "volume": 9407116,
+      "volume_change_pct": 97.9,
+      "date": "2026-11-03"
+    },
+    {
+      "symbol": "ZBRA",
+      "name": "Zebra Technologies Corporation",
+      "price": 329.5,
+      "prev_close": 361.13,
+      "change": -31.63,
+      "change_pct": -8.76,
+      "volume": 2062946,
+      "volume_change_pct": 104.2,
+      "date": "2026-11-03"
+    },
+    {
+      "symbol": "SHOP",
+      "name": "Shopify Inc.",
+      "price": 142.57,
+      "prev_close": 156.22,
+      "change": -13.65,
+      "change_pct": -8.74,
+      "volume": 24747760,
+      "volume_change_pct": 77.6,
+      "date": "2026-11-03"
+    },
+    {
+      "symbol": "BALL",
+      "name": "Ball Corporation",
+      "price": 63.21,
+      "prev_close": 68.07,
+      "change": -4.86,
+      "change_pct": -7.14,
+      "volume": 4162340,
+      "volume_change_pct": 36.7,
+      "date": "2026-11-03"
+    },
+    {
+      "symbol": "ADM",
+      "name": "Archer-Daniels-Midland Company",
+      "price": 70.6,
+      "prev_close": 75.77,
+      "change": -5.17,
+      "change_pct": -6.82,
+      "volume": 7044433,
+      "volume_change_pct": 88.2,
+      "date": "2026-11-03"
+    },
+    {
+      "symbol": "LDOS",
+      "name": "Leidos Holdings, Inc.",
+      "price": 134.72,
+      "prev_close": 144.16,
+      "change": -9.44,
+      "change_pct": -6.55,
+      "volume": 2387748,
+      "volume_change_pct": 131.0,
+      "date": "2026-11-03"
+    },
+    {
+      "symbol": "APTV",
+      "name": "Aptiv PLC",
+      "price": 41.34,
+      "prev_close": 44.23,
+      "change": -2.89,
+      "change_pct": -6.53,
+      "volume": 6786230,
+      "volume_change_pct": 83.5,
+      "date": "2026-11-03"
+    },
+    {
+      "symbol": "KDP",
+      "name": "Keurig Dr Pepper Inc.",
+      "price": 34.74,
+      "prev_close": 36.82,
+      "change": -2.08,
+      "change_pct": -5.65,
+      "volume": 33282045,
+      "volume_change_pct": 3.8,
+      "date": "2026-11-03"
+    }
+  ],
+  "universes": [
+    {
+      "key": "usmega",
+      "title": "MEGA CAP ($200B+)",
+      "gainers": [
+        {
+          "symbol": "GEV",
+          "name": "GE Vernova Inc.",
+          "price": 918.2,
+          "prev_close": 862.25,
+          "change": 55.95,
+          "change_pct": 6.49,
+          "volume": 3106323,
+          "volume_change_pct": -11.2,
+          "date": "2026-11-03"
+        },
+        {
+          "symbol": "ORCL",
+          "name": "Oracle Corporation",
+          "price": 126.19,
+          "prev_close": 119.22,
+          "change": 6.97,
+          "change_pct": 5.85,
+          "volume": 83790427,
+          "volume_change_pct": 42.6,
+          "date": "2026-11-03"
+        },
+        {
+          "symbol": "APH",
+          "name": "Amphenol Corporation",
+          "price": 84.19,
+          "prev_close": 79.84,
+          "change": 4.35,
+          "change_pct": 5.45,
+          "volume": 15386562,
+          "volume_change_pct": -11.7,
+          "date": "2026-11-03"
+        },
+        {
+          "symbol": "SNDK",
+          "name": "Sandisk Corporation",
+          "price": 1126.52,
+          "prev_close": 1075.08,
+          "change": 51.44,
+          "change_pct": 4.78,
+          "volume": 8360384,
+          "volume_change_pct": -20.9,
+          "date": "2026-11-03"
+        },
+        {
+          "symbol": "DELL",
+          "name": "Dell Technologies Inc.",
+          "price": 408.4,
+          "prev_close": 392.78,
+          "change": 15.62,
+          "change_pct": 3.98,
+          "volume": 4503308,
+          "volume_change_pct": -31.9,
+          "date": "2026-11-03"
+        },
+        {
+          "symbol": "AMD",
+          "name": "Advanced Micro Devices, Inc.",
+          "price": 483.9,
+          "prev_close": 466.84,
+          "change": 17.06,
+          "change_pct": 3.65,
+          "volume": 32065405,
+          "volume_change_pct": -0.2,
+          "date": "2026-11-03"
+        },
+        {
+          "symbol": "SPCX",
+          "name": "Space Exploration Technologies Corp.",
+          "price": 141.31,
+          "prev_close": 136.37,
+          "change": 4.94,
+          "change_pct": 3.62,
+          "volume": 71608414,
+          "volume_change_pct": -21.3,
+          "date": "2026-11-03"
+        },
+        {
+          "symbol": "ANET",
+          "name": "Arista Networks, Inc.",
+          "price": 169.91,
+          "prev_close": 164.14,
+          "change": 5.77,
+          "change_pct": 3.52,
+          "volume": 12233896,
+          "volume_change_pct": 65.2,
+          "date": "2026-11-03"
+        },
+        {
+          "symbol": "TXN",
+          "name": "Texas Instruments Incorporated",
+          "price": 312.49,
+          "prev_close": 302.02,
+          "change": 10.47,
+          "change_pct": 3.47,
+          "volume": 9700727,
+          "volume_change_pct": -12.4,
+          "date": "2026-11-03"
+        },
+        {
+          "symbol": "AVGO",
+          "name": "Broadcom Inc.",
+          "price": 332.13,
+          "prev_close": 322.23,
+          "change": 9.9,
+          "change_pct": 3.07,
+          "volume": 16950972,
+          "volume_change_pct": -16.6,
+          "date": "2026-11-03"
+        }
+      ],
+      "losers": [
+        {
+          "symbol": "SHOP",
+          "name": "Shopify Inc.",
+          "price": 142.57,
+          "prev_close": 156.22,
+          "change": -13.65,
+          "change_pct": -8.74,
+          "volume": 24747760,
+          "volume_change_pct": 77.6,
+          "date": "2026-11-03"
+        },
+        {
+          "symbol": "MRK",
+          "name": "Merck & Co., Inc.",
+          "price": 144.67,
+          "prev_close": 148.36,
+          "change": -3.69,
+          "change_pct": -2.49,
+          "volume": 8862415,
+          "volume_change_pct": -2.6,
+          "date": "2026-11-03"
+        },
+        {
+          "symbol": "WMT",
+          "name": "Walmart Inc.",
+          "price": 124.86,
+          "prev_close": 127.69,
+          "change": -2.83,
+          "change_pct": -2.22,
+          "volume": 20996994,
+          "volume_change_pct": -24.2,
+          "date": "2026-11-03"
+        },
+        {
+          "symbol": "HD",
+          "name": "The Home Depot, Inc.",
+          "price": 333.66,
+          "prev_close": 341.15,
+          "change": -7.49,
+          "change_pct": -2.2,
+          "volume": 3798839,
+          "volume_change_pct": -20.4,
+          "date": "2026-11-03"
+        },
+        {
+          "symbol": "COST",
+          "name": "Costco Wholesale Corporation",
+          "price": 1019.26,
+          "prev_close": 1040.55,
+          "change": -21.29,
+          "change_pct": -2.05,
+          "volume": 1909936,
+          "volume_change_pct": -38.6,
+          "date": "2026-11-03"
+        },
+        {
+          "symbol": "AAPL",
+          "name": "Apple Inc.",
+          "price": 331.9,
+          "prev_close": 338.32,
+          "change": -6.42,
+          "change_pct": -1.9,
+          "volume": 61365001,
+          "volume_change_pct": -5.2,
+          "date": "2026-11-03"
+        },
+        {
+          "symbol": "MA",
+          "name": "Mastercard Incorporated",
+          "price": 647.18,
+          "prev_close": 658.1,
+          "change": -10.92,
+          "change_pct": -1.66,
+          "volume": 3198978,
+          "volume_change_pct": -19.5,
+          "date": "2026-11-03"
+        },
+        {
+          "symbol": "PLTR",
+          "name": "Palantir Technologies Inc.",
+          "price": 175.4,
+          "prev_close": 178.34,
+          "change": -2.94,
+          "change_pct": -1.65,
+          "volume": 52575776,
+          "volume_change_pct": 41.4,
+          "date": "2026-11-03"
+        },
+        {
+          "symbol": "JNJ",
+          "name": "Johnson & Johnson",
+          "price": 266.17,
+          "prev_close": 270.56,
+          "change": -4.39,
+          "change_pct": -1.62,
+          "volume": 6471685,
+          "volume_change_pct": -21.7,
+          "date": "2026-11-03"
+        },
+        {
+          "symbol": "LIN",
+          "name": "Linde plc",
+          "price": 511.55,
+          "prev_close": 519.72,
+          "change": -8.17,
+          "change_pct": -1.57,
+          "volume": 2038754,
+          "volume_change_pct": -23.0,
+          "date": "2026-11-03"
+        }
+      ]
+    },
+    {
+      "key": "uslarge",
+      "title": "LARGE CAP ($10B-$200B)",
+      "gainers": [
+        {
+          "symbol": "FISV",
+          "name": "Fiserv, Inc.",
+          "price": 58.4,
+          "prev_close": 51.93,
+          "change": 6.47,
+          "change_pct": 12.46,
+          "volume": 19220273,
+          "volume_change_pct": 92.6,
+          "date": "2026-11-03"
+        },
+        {
+          "symbol": "BE",
+          "name": "Bloom Energy Corporation",
+          "price": 214.01,
+          "prev_close": 196.25,
+          "change": 17.76,
+          "change_pct": 9.05,
+          "volume": 13964496,
+          "volume_change_pct": -9.8,
+          "date": "2026-11-03"
+        },
+        {
+          "symbol": "DD",
+          "name": "DuPont de Nemours, Inc.",
+          "price": 153.46,
+          "prev_close": 141.3,
+          "change": 12.16,
+          "change_pct": 8.61,
+          "volume": 2886683,
+          "volume_change_pct": 74.5,
+          "date": "2026-11-03"
+        },
+        {
+          "symbol": "RVTY",
+          "name": "Revvity, Inc.",
+          "price": 163.48,
+          "prev_close": 151.6,
+          "change": 11.88,
+          "change_pct": 7.84,
+          "volume": 3372215,
+          "volume_change_pct": 20.5,
+          "date": "2026-11-03"
+        },
+        {
+          "symbol": "APP",
+          "name": "AppLovin Corporation",
+          "price": 245.51,
+          "prev_close": 228.85,
+          "change": 16.66,
+          "change_pct": 7.28,
+          "volume": 4739203,
+          "volume_change_pct": -9.1,
+          "date": "2026-11-03"
+        },
+        {
+          "symbol": "NBIS",
+          "name": "Nebius Group N.V.",
+          "price": 151.64,
+          "prev_close": 141.39,
+          "change": 10.25,
+          "change_pct": 7.25,
+          "volume": 15703918,
+          "volume_change_pct": -23.2,
+          "date": "2026-11-03"
+        },
+        {
+          "symbol": "CRWV",
+          "name": "CoreWeave, Inc.",
+          "price": 53.74,
+          "prev_close": 50.15,
+          "change": 3.59,
+          "change_pct": 7.16,
+          "volume": 36691372,
+          "volume_change_pct": -24.3,
+          "date": "2026-11-03"
+        },
+        {
+          "symbol": "FIX",
+          "name": "Comfort Systems USA, Inc.",
+          "price": 1285.13,
+          "prev_close": 1200.14,
+          "change": 84.99,
+          "change_pct": 7.08,
+          "volume": 667890,
+          "volume_change_pct": 25.3,
+          "date": "2026-11-03"
+        },
+        {
+          "symbol": "ETN",
+          "name": "Eaton Corporation plc",
+          "price": 391.7,
+          "prev_close": 366.07,
+          "change": 25.63,
+          "change_pct": 7.0,
+          "volume": 3305528,
+          "volume_change_pct": 3.7,
+          "date": "2026-11-03"
+        },
+        {
+          "symbol": "FOXA",
+          "name": "Fox Corporation",
+          "price": 67.1,
+          "prev_close": 62.76,
+          "change": 4.34,
+          "change_pct": 6.92,
+          "volume": 9369690,
+          "volume_change_pct": -4.6,
+          "date": "2026-11-03"
+        }
+      ],
+      "losers": [
+        {
+          "symbol": "IT",
+          "name": "Gartner, Inc.",
+          "price": 204.22,
+          "prev_close": 235.26,
+          "change": -31.04,
+          "change_pct": -13.19,
+          "volume": 3218973,
+          "volume_change_pct": 120.8,
+          "date": "2026-11-03"
+        },
+        {
+          "symbol": "TRI",
+          "name": "Thomson Reuters Corporation",
+          "price": 110.18,
+          "prev_close": 122.24,
+          "change": -12.06,
+          "change_pct": -9.87,
+          "volume": 3021115,
+          "volume_change_pct": 19.5,
+          "date": "2026-11-03"
+        },
+        {
+          "symbol": "SYY",
+          "name": "Sysco Corporation",
+          "price": 74.11,
+          "prev_close": 81.74,
+          "change": -7.63,
+          "change_pct": -9.33,
+          "volume": 9407116,
+          "volume_change_pct": 97.9,
+          "date": "2026-11-03"
+        },
+        {
+          "symbol": "ZBRA",
+          "name": "Zebra Technologies Corporation",
+          "price": 329.5,
+          "prev_close": 361.13,
+          "change": -31.63,
+          "change_pct": -8.76,
+          "volume": 2062946,
+          "volume_change_pct": 104.2,
+          "date": "2026-11-03"
+        },
+        {
+          "symbol": "BALL",
+          "name": "Ball Corporation",
+          "price": 63.21,
+          "prev_close": 68.07,
+          "change": -4.86,
+          "change_pct": -7.14,
+          "volume": 4162340,
+          "volume_change_pct": 36.7,
+          "date": "2026-11-03"
+        },
+        {
+          "symbol": "ADM",
+          "name": "Archer-Daniels-Midland Company",
+          "price": 70.6,
+          "prev_close": 75.77,
+          "change": -5.17,
+          "change_pct": -6.82,
+          "volume": 7044433,
+          "volume_change_pct": 88.2,
+          "date": "2026-11-03"
+        },
+        {
+          "symbol": "LDOS",
+          "name": "Leidos Holdings, Inc.",
+          "price": 134.72,
+          "prev_close": 144.16,
+          "change": -9.44,
+          "change_pct": -6.55,
+          "volume": 2387748,
+          "volume_change_pct": 131.0,
+          "date": "2026-11-03"
+        },
+        {
+          "symbol": "KDP",
+          "name": "Keurig Dr Pepper Inc.",
+          "price": 34.74,
+          "prev_close": 36.82,
+          "change": -2.08,
+          "change_pct": -5.65,
+          "volume": 33282045,
+          "volume_change_pct": 3.8,
+          "date": "2026-11-03"
+        },
+        {
+          "symbol": "LEN",
+          "name": "Lennar Corporation",
+          "price": 86.09,
+          "prev_close": 91.02,
+          "change": -4.93,
+          "change_pct": -5.42,
+          "volume": 3981158,
+          "volume_change_pct": -5.7,
+          "date": "2026-11-03"
+        },
+        {
+          "symbol": "DHI",
+          "name": "D.R. Horton, Inc.",
+          "price": 145.23,
+          "prev_close": 152.93,
+          "change": -7.7,
+          "change_pct": -5.03,
+          "volume": 3772058,
+          "volume_change_pct": 6.9,
+          "date": "2026-11-03"
+        }
+      ]
+    }
+  ],
+  "corporate_actions": []
+}
