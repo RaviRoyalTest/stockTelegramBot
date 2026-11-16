@@ -5,7 +5,7 @@
       "/corpactionsformylist"
     ],
     "chat": "862087765",
-    "next_due": "2026-11-05T03:30:00+00:00",
+    "next_due": "2026-11-17T03:30:00+00:00",
     "run_at": "09:00",
     "market": "in",
     "window_start": null,
@@ -23,7 +23,7 @@
     "window_start": null,
     "window_end": null,
     "paused_until": null,
-    "next_due": "2026-11-05T03:55:00+00:00"
+    "next_due": "2026-11-17T03:55:00+00:00"
   },
   {
     "interval_min": 1440,
@@ -36,7 +36,7 @@
     "window_start": null,
     "window_end": null,
     "paused_until": null,
-    "next_due": "2026-11-05T04:05:00+00:00"
+    "next_due": "2026-11-16T10:05:00+00:00"
   },
   {
     "interval_min": 1440,
@@ -57,7 +57,7 @@
       "/corpactionssummary"
     ],
     "chat": "862087765",
-    "next_due": "2026-11-05T03:45:00+00:00",
+    "next_due": "2026-11-17T03:45:00+00:00",
     "run_at": "09:15",
     "market": "in",
     "window_start": null,
