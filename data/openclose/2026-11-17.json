@@ -1,9 +1,10 @@
 {
-  "recorded_at": "2026-11-17T10:09:54+00:00",
+  "recorded_at": "2026-11-17T14:40:44+00:00",
   "recorded_by": "telegram",
   "mode": "live",
   "markets": [
-    "in"
+    "in",
+    "us"
   ],
   "target_date": null,
   "report": {
@@ -3272,20 +3273,636 @@
         "captured_at": "2026-11-17T10:08:26.097899+00:00",
         "mode": "live",
         "finalized": true
+      },
+      {
+        "market": "us",
+        "snapshot": {
+          "market": "us",
+          "mode": "live",
+          "date": "17-Nov-2026",
+          "time_local": "09:40",
+          "tz_label": "ET",
+          "state": "OPEN",
+          "time_ist": "20:10"
+        },
+        "universes": [
+          {
+            "key": "usmega",
+            "title": "MEGA CAP ($200B+)",
+            "unavailable": false,
+            "gainers": [
+              {
+                "symbol": "ARM",
+                "name": "Arm Holdings plc",
+                "session_date": "2026-11-17",
+                "price": 182.67999267578125,
+                "prev_close": 175.0500030517578,
+                "change": 7.6299896240234375,
+                "change_pct": 4.358748638106247,
+                "volume": 702033,
+                "volume_change_pct": -86.31060975371956,
+                "wk52_high": 452.7,
+                "wk52_low": 100.02
+              },
+              {
+                "symbol": "GEV",
+                "name": "GE Vernova Inc.",
+                "session_date": "2026-11-17",
+                "price": 788.469970703125,
+                "prev_close": 763.5700073242188,
+                "change": 24.89996337890625,
+                "change_pct": 3.2609928546255094,
+                "volume": 320238,
+                "volume_change_pct": -90.90388002045106,
+                "wk52_high": 1195.94,
+                "wk52_low": 530.16
+              },
+              {
+                "symbol": "MRVL",
+                "name": "Marvell Technology, Inc.",
+                "session_date": "2026-11-17",
+                "price": 148.92999267578125,
+                "prev_close": 145.36000061035156,
+                "change": 3.5699920654296875,
+                "change_pct": 2.4559659125204054,
+                "volume": 3319765,
+                "volume_change_pct": -84.46406592943752,
+                "wk52_high": 329.88,
+                "wk52_low": 70.69
+              },
+              {
+                "symbol": "SPCX",
+                "name": "Space Exploration Technologies Corp.",
+                "session_date": "2026-11-17",
+                "price": 140.17999267578125,
+                "prev_close": 137.36000061035156,
+                "change": 2.8199920654296875,
+                "change_pct": 2.052993631988358,
+                "volume": 11680186,
+                "volume_change_pct": -88.44943444663981,
+                "wk52_high": 225.64,
+                "wk52_low": 104.83
+              },
+              {
+                "symbol": "AVGO",
+                "name": "Broadcom Inc.",
+                "session_date": "2026-11-17",
+                "price": 338.69000244140625,
+                "prev_close": 333.3999938964844,
+                "change": 5.290008544921875,
+                "change_pct": 1.5866852554785416,
+                "volume": 1913188,
+                "volume_change_pct": -92.65762488102914,
+                "wk52_high": 495.0,
+                "wk52_low": 289.77
+              },
+              {
+                "symbol": "CSCO",
+                "name": "Cisco Systems, Inc.",
+                "session_date": "2026-11-17",
+                "price": 95.98500061035156,
+                "prev_close": 94.5199966430664,
+                "change": 1.4650039672851562,
+                "change_pct": 1.5499407737152335,
+                "volume": 1075595,
+                "volume_change_pct": -94.66999504459861,
+                "wk52_high": 130.37,
+                "wk52_low": 72.8
+              },
+              {
+                "symbol": "ANET",
+                "name": "Arista Networks, Inc.",
+                "session_date": "2026-11-17",
+                "price": 189.52000427246094,
+                "prev_close": 187.02000427246094,
+                "change": 2.5,
+                "change_pct": 1.3367553966889358,
+                "volume": 266261,
+                "volume_change_pct": -96.34412544108964,
+                "wk52_high": 217.41,
+                "wk52_low": 114.52
+              },
+              {
+                "symbol": "CAT",
+                "name": "Caterpillar Inc.",
+                "session_date": "2026-11-17",
+                "price": 578.0800170898438,
+                "prev_close": 570.489990234375,
+                "change": 7.59002685546875,
+                "change_pct": 1.3304399700949234,
+                "volume": 187172,
+                "volume_change_pct": -94.36110023197662,
+                "wk52_high": 1073.46,
+                "wk52_low": 537.08
+              },
+              {
+                "symbol": "XOM",
+                "name": "ExxonMobil Holdings Corporation",
+                "session_date": "2026-11-17",
+                "price": 168.68499755859375,
+                "prev_close": 166.8699951171875,
+                "change": 1.81500244140625,
+                "change_pct": 1.0876745337780058,
+                "volume": 451237,
+                "volume_change_pct": -96.84144839075472,
+                "wk52_high": 188.5,
+                "wk52_low": 114.19
+              },
+              {
+                "symbol": "GE",
+                "name": "GE Aerospace",
+                "session_date": "2026-11-17",
+                "price": 328.5849914550781,
+                "prev_close": 325.17999267578125,
+                "change": 3.404998779296875,
+                "change_pct": 1.047112016726013,
+                "volume": 124730,
+                "volume_change_pct": -96.49319613135403,
+                "wk52_high": 388.84,
+                "wk52_low": 268.91
+              }
+            ],
+            "losers": [
+              {
+                "symbol": "UNH",
+                "name": "UnitedHealth Group Incorporated",
+                "session_date": "2026-11-17",
+                "price": 392.24969482421875,
+                "prev_close": 412.0199890136719,
+                "change": -19.770294189453125,
+                "change_pct": -4.798382291301186,
+                "volume": 622589,
+                "volume_change_pct": -85.92319345211178,
+                "wk52_high": 461.62,
+                "wk52_low": 255.97
+              },
+              {
+                "symbol": "HD",
+                "name": "The Home Depot, Inc.",
+                "session_date": "2026-11-17",
+                "price": 338.4700012207031,
+                "prev_close": 347.510009765625,
+                "change": -9.040008544921875,
+                "change_pct": -2.6013663753222036,
+                "volume": 813899,
+                "volume_change_pct": -86.88148351116986,
+                "wk52_high": 397.63,
+                "wk52_low": 277.15
+              },
+              {
+                "symbol": "INTC",
+                "name": "Intel Corporation",
+                "session_date": "2026-11-17",
+                "price": 54.27000045776367,
+                "prev_close": 55.470001220703125,
+                "change": -1.2000007629394531,
+                "change_pct": -2.163332858358719,
+                "volume": 9523233,
+                "volume_change_pct": -90.76319120395652,
+                "wk52_high": 142.35,
+                "wk52_low": 32.89
+              },
+              {
+                "symbol": "IBM",
+                "name": "International Business Machines Corporation",
+                "session_date": "2026-11-17",
+                "price": 238.2449951171875,
+                "prev_close": 242.50999450683594,
+                "change": -4.2649993896484375,
+                "change_pct": -1.7586901514395996,
+                "volume": 152081,
+                "volume_change_pct": -97.04622526074543,
+                "wk52_high": 332.46,
+                "wk52_low": 199.19
+              },
+              {
+                "symbol": "PANW",
+                "name": "Palo Alto Networks, Inc.",
+                "session_date": "2026-11-17",
+                "price": 310.6300048828125,
+                "prev_close": 316.0899963378906,
+                "change": -5.459991455078125,
+                "change_pct": -1.7273534494402536,
+                "volume": 399502,
+                "volume_change_pct": -92.29771728233207,
+                "wk52_high": 432.33,
+                "wk52_low": 139.57
+              },
+              {
+                "symbol": "JPM",
+                "name": "JPMorgan Chase & Co.",
+                "session_date": "2026-11-17",
+                "price": 333.6650085449219,
+                "prev_close": 338.2099914550781,
+                "change": -4.54498291015625,
+                "change_pct": -1.3438346071925333,
+                "volume": 517753,
+                "volume_change_pct": -92.8378337252732,
+                "wk52_high": 366.5,
+                "wk52_low": 279.1
+              },
+              {
+                "symbol": "MSFT",
+                "name": "Microsoft Corporation",
+                "session_date": "2026-11-17",
+                "price": 511.8299865722656,
+                "prev_close": 517.989990234375,
+                "change": -6.160003662109375,
+                "change_pct": -1.1892128763573515,
+                "volume": 1332654,
+                "volume_change_pct": -95.58706306210843,
+                "wk52_high": 559.15,
+                "wk52_low": 349.2
+              },
+              {
+                "symbol": "JNJ",
+                "name": "Johnson & Johnson",
+                "session_date": "2026-11-17",
+                "price": 279.5249938964844,
+                "prev_close": 282.54998779296875,
+                "change": -3.024993896484375,
+                "change_pct": -1.0706048583165615,
+                "volume": 456277,
+                "volume_change_pct": -94.36813261414271,
+                "wk52_high": 290.25,
+                "wk52_low": 198.53
+              },
+              {
+                "symbol": "CRWD",
+                "name": "CrowdStrike Holdings, Inc.",
+                "session_date": "2026-11-17",
+                "price": 221.0,
+                "prev_close": 223.2100067138672,
+                "change": -2.2100067138671875,
+                "change_pct": -0.9901019879902581,
+                "volume": 372575,
+                "volume_change_pct": -94.06982666687888,
+                "wk52_high": 286.99,
+                "wk52_low": 85.68
+              },
+              {
+                "symbol": "MA",
+                "name": "Mastercard Incorporated",
+                "session_date": "2026-11-17",
+                "price": 656.3699951171875,
+                "prev_close": 661.7100219726562,
+                "change": -5.34002685546875,
+                "change_pct": -0.8070040770350333,
+                "volume": 85028,
+                "volume_change_pct": -96.45628073685087,
+                "wk52_high": 681.99,
+                "wk52_low": 464.52
+              }
+            ],
+            "verified": 20,
+            "target": 20
+          },
+          {
+            "key": "uslarge",
+            "title": "LARGE CAP ($10B-$200B)",
+            "unavailable": false,
+            "gainers": [
+              {
+                "symbol": "COHR",
+                "name": "Coherent Corp.",
+                "session_date": "2026-11-17",
+                "price": 213.9199981689453,
+                "prev_close": 203.42999267578125,
+                "change": 10.490005493164062,
+                "change_pct": 5.156567797690787,
+                "volume": 1779104,
+                "volume_change_pct": -75.6523928781596,
+                "wk52_high": 440.0,
+                "wk52_low": 130.42
+              },
+              {
+                "symbol": "VRT",
+                "name": "Vertiv Holdings Co",
+                "session_date": "2026-11-17",
+                "price": 196.39999389648438,
+                "prev_close": 188.6699981689453,
+                "change": 7.7299957275390625,
+                "change_pct": 4.09709853318449,
+                "volume": 471219,
+                "volume_change_pct": -93.47034614638471,
+                "wk52_high": 379.935,
+                "wk52_low": 147.82
+              },
+              {
+                "symbol": "FIX",
+                "name": "Comfort Systems USA, Inc.",
+                "session_date": "2026-11-17",
+                "price": 1101.0050048828125,
+                "prev_close": 1057.6800537109375,
+                "change": 43.324951171875,
+                "change_pct": 4.096224658852804,
+                "volume": 32362,
+                "volume_change_pct": -94.78200580457917,
+                "wk52_high": 2073.99,
+                "wk52_low": 850.0
+              },
+              {
+                "symbol": "LITE",
+                "name": "Lumentum Holdings Inc.",
+                "session_date": "2026-11-17",
+                "price": 567.0700073242188,
+                "prev_close": 546.0,
+                "change": 21.07000732421875,
+                "change_pct": 3.858975700406365,
+                "volume": 696662,
+                "volume_change_pct": -84.8158932891611,
+                "wk52_high": 1143.0,
+                "wk52_low": 229.585
+              },
+              {
+                "symbol": "NKE",
+                "name": "NIKE, Inc.",
+                "session_date": "2026-11-17",
+                "price": 39.72999954223633,
+                "prev_close": 38.2599983215332,
+                "change": 1.470001220703125,
+                "change_pct": 3.8421361348460645,
+                "volume": 8793129,
+                "volume_change_pct": -53.357791887462,
+                "wk52_high": 69.14,
+                "wk52_low": 31.97
+              },
+              {
+                "symbol": "NBIS",
+                "name": "Nebius Group N.V.",
+                "session_date": "2026-11-17",
+                "price": 110.83000183105469,
+                "prev_close": 107.12999725341797,
+                "change": 3.7000045776367188,
+                "change_pct": 3.453752144587748,
+                "volume": 3522944,
+                "volume_change_pct": -88.233437874704,
+                "wk52_high": 299.86,
+                "wk52_low": 73.52
+              },
+              {
+                "symbol": "ALB",
+                "name": "Albemarle Corporation",
+                "session_date": "2026-11-17",
+                "price": 91.02999877929688,
+                "prev_close": 88.16000366210938,
+                "change": 2.8699951171875,
+                "change_pct": 3.2554389722887525,
+                "volume": 137347,
+                "volume_change_pct": -93.31156561967373,
+                "wk52_high": 221.0,
+                "wk52_low": 87.78
+              },
+              {
+                "symbol": "EME",
+                "name": "EMCOR Group, Inc.",
+                "session_date": "2026-11-17",
+                "price": 656.5599975585938,
+                "prev_close": 638.719970703125,
+                "change": 17.84002685546875,
+                "change_pct": 2.793090505034598,
+                "volume": 35165,
+                "volume_change_pct": -92.4392603741131,
+                "wk52_high": 951.96,
+                "wk52_low": 564.92
+              },
+              {
+                "symbol": "PWR",
+                "name": "Quanta Services, Inc.",
+                "session_date": "2026-11-17",
+                "price": 599.530029296875,
+                "prev_close": 585.9000244140625,
+                "change": 13.6300048828125,
+                "change_pct": 2.3263362885917913,
+                "volume": 50471,
+                "volume_change_pct": -96.16802065143118,
+                "wk52_high": 788.75,
+                "wk52_low": 408.36
+              },
+              {
+                "symbol": "CIEN",
+                "name": "Ciena Corporation",
+                "session_date": "2026-11-17",
+                "price": 263.5398864746094,
+                "prev_close": 257.55999755859375,
+                "change": 5.979888916015625,
+                "change_pct": 2.3217459903319138,
+                "volume": 132973,
+                "volume_change_pct": -96.0974085052681,
+                "wk52_high": 637.51,
+                "wk52_low": 168.22
+              }
+            ],
+            "losers": [
+              {
+                "symbol": "HUM",
+                "name": "Humana Inc.",
+                "session_date": "2026-11-17",
+                "price": 438.1000061035156,
+                "prev_close": 461.25,
+                "change": -23.149993896484375,
+                "change_pct": -5.018968866446477,
+                "volume": 132706,
+                "volume_change_pct": -89.82706017631277,
+                "wk52_high": 462.87,
+                "wk52_low": 163.11
+              },
+              {
+                "symbol": "CRM",
+                "name": "Salesforce, Inc.",
+                "session_date": "2026-11-17",
+                "price": 205.42010498046875,
+                "prev_close": 214.8300018310547,
+                "change": -9.409896850585938,
+                "change_pct": -4.3801595542442024,
+                "volume": 617335,
+                "volume_change_pct": -88.34293213489936,
+                "wk52_high": 269.11,
+                "wk52_low": 146.32
+              },
+              {
+                "symbol": "CVS",
+                "name": "CVS Health Corporation",
+                "session_date": "2026-11-17",
+                "price": 84.73999786376953,
+                "prev_close": 88.58999633789062,
+                "change": -3.8499984741210938,
+                "change_pct": -4.345861421459862,
+                "volume": 968354,
+                "volume_change_pct": -91.76660743285181,
+                "wk52_high": 110.68,
+                "wk52_low": 69.51
+              },
+              {
+                "symbol": "WDAY",
+                "name": "Workday, Inc.",
+                "session_date": "2026-11-17",
+                "price": 186.65499877929688,
+                "prev_close": 194.05999755859375,
+                "change": -7.404998779296875,
+                "change_pct": -3.815829574593825,
+                "volume": 63948,
+                "volume_change_pct": -97.16492285866288,
+                "wk52_high": 236.8,
+                "wk52_low": 110.36
+              },
+              {
+                "symbol": "INTU",
+                "name": "Intuit Inc.",
+                "session_date": "2026-11-17",
+                "price": 332.5450134277344,
+                "prev_close": 345.55999755859375,
+                "change": -13.014984130859375,
+                "change_pct": -3.766345706334985,
+                "volume": 167453,
+                "volume_change_pct": -92.56128115143709,
+                "wk52_high": 682.27,
+                "wk52_low": 252.84
+              },
+              {
+                "symbol": "MRNA",
+                "name": "Moderna, Inc.",
+                "session_date": "2026-11-17",
+                "price": 207.78030395507812,
+                "prev_close": 215.27000427246094,
+                "change": -7.4897003173828125,
+                "change_pct": -3.4792122305638635,
+                "volume": 1020604,
+                "volume_change_pct": -85.43055773650626,
+                "wk52_high": 280.8,
+                "wk52_low": 22.28
+              },
+              {
+                "symbol": "GDDY",
+                "name": "GoDaddy Inc.",
+                "session_date": "2026-11-17",
+                "price": 108.59500122070312,
+                "prev_close": 112.22000122070312,
+                "change": -3.625,
+                "change_pct": -3.230261950247809,
+                "volume": 51142,
+                "volume_change_pct": -95.10368597415031,
+                "wk52_high": 131.74,
+                "wk52_low": 71.59
+              },
+              {
+                "symbol": "ADBE",
+                "name": "Adobe Inc.",
+                "session_date": "2026-11-17",
+                "price": 238.9199981689453,
+                "prev_close": 246.0,
+                "change": -7.0800018310546875,
+                "change_pct": -2.878049524818979,
+                "volume": 248713,
+                "volume_change_pct": -93.49667921765506,
+                "wk52_high": 362.71,
+                "wk52_low": 190.12
+              },
+              {
+                "symbol": "NOW",
+                "name": "ServiceNow, Inc.",
+                "session_date": "2026-11-17",
+                "price": 96.66519927978516,
+                "prev_close": 99.37000274658203,
+                "change": -2.704803466796875,
+                "change_pct": -2.721951687668551,
+                "volume": 1346802,
+                "volume_change_pct": -89.2147987987988,
+                "wk52_high": 175.0,
+                "wk52_low": 81.24
+              },
+              {
+                "symbol": "TRI",
+                "name": "Thomson Reuters Corporation",
+                "session_date": "2026-11-17",
+                "price": 105.51000213623047,
+                "prev_close": 108.29000091552734,
+                "change": -2.779998779296875,
+                "change_pct": -2.5671795694834647,
+                "volume": 42367,
+                "volume_change_pct": -96.69627261384903,
+                "wk52_high": 138.25,
+                "wk52_low": 76.28
+              }
+            ],
+            "verified": 20,
+            "target": 20
+          }
+        ],
+        "indices": [
+          {
+            "label": "S&P 500",
+            "level": 7400.69,
+            "change": -15.8998437500004,
+            "change_pct": -0.21438213633182485
+          },
+          {
+            "label": "Nasdaq Composite",
+            "level": 24494.104,
+            "change": -15.65576562500064,
+            "change_pct": -0.06387563882595818
+          },
+          {
+            "label": "Dow Jones",
+            "level": 51278.06,
+            "change": -330.1118750000023,
+            "change_pct": -0.6396503945141969
+          },
+          {
+            "label": "Russell 2000",
+            "level": 2742.941,
+            "change": -47.5489902343752,
+            "change_pct": -1.7039656261365599
+          }
+        ],
+        "volume_buckets": [],
+        "catalysts": [
+          {
+            "symbol": "COHR",
+            "change_pct": 5.156567797690787,
+            "headline": "Meesho Limited (MEESHO.NS) stock price, news, quote and history - Yahoo Finance UK",
+            "publisher": "Yahoo Finance UK"
+          },
+          {
+            "symbol": "ARM",
+            "change_pct": 4.358748638106247,
+            "headline": "Pricol shares crash 20% after Warburg Pincus acquisition deal; what does the demerger mean for investors? - Moneycontrol.com",
+            "publisher": "Moneycontrol.com"
+          },
+          {
+            "symbol": "VRT",
+            "change_pct": 4.09709853318449,
+            "headline": "Gravity (India) Ltd Share Price Today,, Gravity (India) Ltd Stock Price NSE, BSE - Business Today",
+            "publisher": "Business Today"
+          },
+          {
+            "symbol": "FIX",
+            "change_pct": 4.096224658852804,
+            "headline": "Crystal Crop Protection IPO: Dates, Price Band, GMP, Lot Size, and Financials - India Infoline",
+            "publisher": "India Infoline"
+          }
+        ],
+        "volume_computed": 504,
+        "unclassified": 14,
+        "session_date": "2026-11-17",
+        "captured_at": "2026-11-17T14:40:10.737483+00:00",
+        "mode": "live",
+        "finalized": false
       }
     ],
-    "total_verified": 60,
-    "total_target": 60,
+    "total_verified": 100,
+    "total_target": 100,
     "mode": "live",
-    "volume_computed": 747,
+    "volume_computed": 1251,
     "source": "Yahoo Finance regular-session bars (includePrePost=false); Indian universes: official NSE index constituent CSVs.",
     "session_date": "2026-11-17",
     "target_date": null,
     "markets": [
-      "in"
+      "in",
+      "us"
     ],
-    "finalized": true
+    "finalized": false
   },
   "session_date": "2026-11-17",
-  "finalized": true
+  "finalized": false
 }
