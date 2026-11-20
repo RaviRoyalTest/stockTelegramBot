@@ -1,0 +1,1303 @@
+{
+  "session": "2026-11-20",
+  "market": "in",
+  "universe": "nifty500",
+  "recorded_at": "2026-11-20T10:26:16+00:00",
+  "recorded_by": "auto-refresh",
+  "status": "finalized",
+  "finalized": true,
+  "gap_downs": [
+    {
+      "symbol": "STLTECH",
+      "name": "Sterlite Technologies Limited",
+      "price": 621.85,
+      "prev_close": 654.55,
+      "open": 625.15,
+      "gap_pct": -4.49,
+      "move_from_open_pct": -0.53,
+      "date": "2026-11-20"
+    },
+    {
+      "symbol": "HINDZINC",
+      "name": "Hindustan Zinc Limited",
+      "price": 521.6,
+      "prev_close": 529.0,
+      "open": 507.6,
+      "gap_pct": -4.05,
+      "move_from_open_pct": 2.76,
+      "date": "2026-11-20"
+    },
+    {
+      "symbol": "MUTHOOTFIN",
+      "name": "Muthoot Finance Limited",
+      "price": 2550.5,
+      "prev_close": 2618.0,
+      "open": 2519.0,
+      "gap_pct": -3.78,
+      "move_from_open_pct": 1.25,
+      "date": "2026-11-20"
+    },
+    {
+      "symbol": "MANAPPURAM",
+      "name": "Manappuram Finance Limited",
+      "price": 280.5,
+      "prev_close": 282.85,
+      "open": 273.0,
+      "gap_pct": -3.48,
+      "move_from_open_pct": 2.75,
+      "date": "2026-11-20"
+    },
+    {
+      "symbol": "HFCL",
+      "name": "HFCL Limited",
+      "price": 188.0,
+      "prev_close": 194.44,
+      "open": 188.0,
+      "gap_pct": -3.31,
+      "move_from_open_pct": 0.0,
+      "date": "2026-11-20"
+    },
+    {
+      "symbol": "VAML",
+      "name": "Vedanta Aluminium Metal Limited",
+      "price": 365.55,
+      "prev_close": 371.0,
+      "open": 360.0,
+      "gap_pct": -2.96,
+      "move_from_open_pct": 1.54,
+      "date": "2026-11-20"
+    },
+    {
+      "symbol": "VEDL",
+      "name": "Vedanta Limited",
+      "price": 238.04,
+      "prev_close": 243.7,
+      "open": 236.8,
+      "gap_pct": -2.83,
+      "move_from_open_pct": 0.52,
+      "date": "2026-11-20"
+    },
+    {
+      "symbol": "CGPOWER",
+      "name": "CG Power and Industrial Solutions Limited",
+      "price": 792.0,
+      "prev_close": 812.9,
+      "open": 790.0,
+      "gap_pct": -2.82,
+      "move_from_open_pct": 0.25,
+      "date": "2026-11-20"
+    },
+    {
+      "symbol": "HINDCOPPER",
+      "name": "Hindustan Copper Limited",
+      "price": 419.05,
+      "prev_close": 425.45,
+      "open": 414.0,
+      "gap_pct": -2.69,
+      "move_from_open_pct": 1.22,
+      "date": "2026-11-20"
+    },
+    {
+      "symbol": "TDPOWERSYS",
+      "name": "TD Power Systems Limited",
+      "price": 619.0,
+      "prev_close": 637.85,
+      "open": 621.0,
+      "gap_pct": -2.64,
+      "move_from_open_pct": -0.32,
+      "date": "2026-11-20"
+    },
+    {
+      "symbol": "NETWEB",
+      "name": "Netweb Technologies India Limited",
+      "price": 4095.5,
+      "prev_close": 4205.4,
+      "open": 4095.0,
+      "gap_pct": -2.63,
+      "move_from_open_pct": 0.01,
+      "date": "2026-11-20"
+    },
+    {
+      "symbol": "MTARTECH",
+      "name": "MTAR Technologies Limited",
+      "price": 5614.5,
+      "prev_close": 5954.0,
+      "open": 5800.0,
+      "gap_pct": -2.59,
+      "move_from_open_pct": -3.2,
+      "date": "2026-11-20"
+    },
+    {
+      "symbol": "NATIONALUM",
+      "name": "National Aluminium Company Limited",
+      "price": 303.2,
+      "prev_close": 307.0,
+      "open": 299.1,
+      "gap_pct": -2.57,
+      "move_from_open_pct": 1.37,
+      "date": "2026-11-20"
+    },
+    {
+      "symbol": "GMRAIRPORT",
+      "name": "GMR Airports Limited",
+      "price": 105.0,
+      "prev_close": 104.0,
+      "open": 101.41,
+      "gap_pct": -2.49,
+      "move_from_open_pct": 3.54,
+      "date": "2026-11-20"
+    },
+    {
+      "symbol": "KIRLOSENG",
+      "name": "Kirloskar Oil Engines Limited",
+      "price": 1706.2,
+      "prev_close": 1723.7,
+      "open": 1681.5,
+      "gap_pct": -2.45,
+      "move_from_open_pct": 1.47,
+      "date": "2026-11-20"
+    },
+    {
+      "symbol": "CUMMINSIND",
+      "name": "Cummins India Limited",
+      "price": 4100.0,
+      "prev_close": 4141.5,
+      "open": 4041.0,
+      "gap_pct": -2.43,
+      "move_from_open_pct": 1.46,
+      "date": "2026-11-20"
+    },
+    {
+      "symbol": "GVT&D",
+      "name": "GE Vernova T&D India Limited",
+      "price": 4235.0,
+      "prev_close": 4349.4,
+      "open": 4248.0,
+      "gap_pct": -2.33,
+      "move_from_open_pct": -0.31,
+      "date": "2026-11-20"
+    },
+    {
+      "symbol": "POONAWALLA",
+      "name": "Poonawalla Fincorp Limited",
+      "price": 518.4,
+      "prev_close": 504.75,
+      "open": 493.25,
+      "gap_pct": -2.28,
+      "move_from_open_pct": 5.1,
+      "date": "2026-11-20"
+    },
+    {
+      "symbol": "RBLBANK",
+      "name": "RBL Bank Limited",
+      "price": 398.3,
+      "prev_close": 388.9,
+      "open": 380.2,
+      "gap_pct": -2.24,
+      "move_from_open_pct": 4.76,
+      "date": "2026-11-20"
+    },
+    {
+      "symbol": "TITAN",
+      "name": "Titan Company Limited",
+      "price": 4620.0,
+      "prev_close": 4700.0,
+      "open": 4595.0,
+      "gap_pct": -2.23,
+      "move_from_open_pct": 0.54,
+      "date": "2026-11-20"
+    }
+  ],
+  "top_gainers": [
+    {
+      "symbol": "INDUSINDBK",
+      "name": "IndusInd Bank Limited",
+      "price": 1003.0,
+      "prev_close": 923.65,
+      "change": 79.35,
+      "change_pct": 8.59,
+      "volume": 19128829,
+      "volume_change_pct": 353.8,
+      "date": "2026-11-20"
+    },
+    {
+      "symbol": "SGMART",
+      "name": "SG Mart Limited",
+      "price": 1097.05,
+      "prev_close": 1010.5,
+      "change": 86.55,
+      "change_pct": 8.57,
+      "volume": 1874053,
+      "volume_change_pct": 307.2,
+      "date": "2026-11-20"
+    },
+    {
+      "symbol": "EIHOTEL",
+      "name": "EIH Limited",
+      "price": 334.15,
+      "prev_close": 310.0,
+      "change": 24.15,
+      "change_pct": 7.79,
+      "volume": 5105584,
+      "volume_change_pct": 467.2,
+      "date": "2026-11-20"
+    },
+    {
+      "symbol": "NAVA",
+      "name": "Nava Limited",
+      "price": 563.95,
+      "prev_close": 530.55,
+      "change": 33.4,
+      "change_pct": 6.3,
+      "volume": 1690910,
+      "volume_change_pct": 859.2,
+      "date": "2026-11-20"
+    },
+    {
+      "symbol": "CUB",
+      "name": "City Union Bank Limited",
+      "price": 248.8,
+      "prev_close": 234.16,
+      "change": 14.64,
+      "change_pct": 6.25,
+      "volume": 20136106,
+      "volume_change_pct": 696.7,
+      "date": "2026-11-20"
+    },
+    {
+      "symbol": "WELSPUNLIV",
+      "name": "Welspun Living Limited",
+      "price": 268.78,
+      "prev_close": 253.14,
+      "change": 15.64,
+      "change_pct": 6.18,
+      "volume": 21257796,
+      "volume_change_pct": 647.6,
+      "date": "2026-11-20"
+    },
+    {
+      "symbol": "ASTERDM",
+      "name": "Aster DM Quality Care Limited",
+      "price": 779.3,
+      "prev_close": 739.3,
+      "change": 40.0,
+      "change_pct": 5.41,
+      "volume": 2664992,
+      "volume_change_pct": 612.7,
+      "date": "2026-11-20"
+    },
+    {
+      "symbol": "APOLLOHOSP",
+      "name": "Apollo Hospitals Enterprise Limited",
+      "price": 9200.0,
+      "prev_close": 8738.0,
+      "change": 462.0,
+      "change_pct": 5.29,
+      "volume": 1412462,
+      "volume_change_pct": 345.1,
+      "date": "2026-11-20"
+    },
+    {
+      "symbol": "AXISBANK",
+      "name": "Axis Bank Limited",
+      "price": 1446.0,
+      "prev_close": 1380.8,
+      "change": 65.2,
+      "change_pct": 4.72,
+      "volume": 21476210,
+      "volume_change_pct": 157.3,
+      "date": "2026-11-20"
+    },
+    {
+      "symbol": "THYROCARE",
+      "name": "Thyrocare Technologies Limited",
+      "price": 528.45,
+      "prev_close": 504.85,
+      "change": 23.6,
+      "change_pct": 4.67,
+      "volume": 9096591,
+      "volume_change_pct": 5761.6,
+      "date": "2026-11-20"
+    }
+  ],
+  "top_losers": [
+    {
+      "symbol": "EBGNG",
+      "name": "GNG Electronics Limited",
+      "price": 470.35,
+      "prev_close": 515.45,
+      "change": -45.1,
+      "change_pct": -8.75,
+      "volume": 1433711,
+      "volume_change_pct": 298.4,
+      "date": "2026-11-20"
+    },
+    {
+      "symbol": "IIFLCAPS",
+      "name": "IIFL Capital Services Limited",
+      "price": 311.45,
+      "prev_close": 333.45,
+      "change": -22.0,
+      "change_pct": -6.6,
+      "volume": 3853853,
+      "volume_change_pct": -11.7,
+      "date": "2026-11-20"
+    },
+    {
+      "symbol": "SHILPAMED",
+      "name": "Shilpa Medicare Limited",
+      "price": 849.15,
+      "prev_close": 900.7,
+      "change": -51.55,
+      "change_pct": -5.72,
+      "volume": 1538742,
+      "volume_change_pct": 311.8,
+      "date": "2026-11-20"
+    },
+    {
+      "symbol": "MTARTECH",
+      "name": "MTAR Technologies Limited",
+      "price": 5614.5,
+      "prev_close": 5954.0,
+      "change": -339.5,
+      "change_pct": -5.7,
+      "volume": 320496,
+      "volume_change_pct": 214.4,
+      "date": "2026-11-20"
+    },
+    {
+      "symbol": "SKYGOLD",
+      "name": "Sky Gold and Diamonds Limited",
+      "price": 874.9,
+      "prev_close": 926.3,
+      "change": -51.4,
+      "change_pct": -5.55,
+      "volume": 1952588,
+      "volume_change_pct": 41.0,
+      "date": "2026-11-20"
+    },
+    {
+      "symbol": "PFOCUS",
+      "name": "Prime Focus Limited",
+      "price": 252.7,
+      "prev_close": 267.15,
+      "change": -14.45,
+      "change_pct": -5.41,
+      "volume": 4936599,
+      "volume_change_pct": 27.9,
+      "date": "2026-11-20"
+    },
+    {
+      "symbol": "IIFL",
+      "name": "IIFL Finance Limited",
+      "price": 611.95,
+      "prev_close": 644.45,
+      "change": -32.5,
+      "change_pct": -5.04,
+      "volume": 13150389,
+      "volume_change_pct": 18.6,
+      "date": "2026-11-20"
+    },
+    {
+      "symbol": "STLTECH",
+      "name": "Sterlite Technologies Limited",
+      "price": 621.85,
+      "prev_close": 654.55,
+      "change": -32.7,
+      "change_pct": -5.0,
+      "volume": 2816442,
+      "volume_change_pct": 6.6,
+      "date": "2026-11-20"
+    },
+    {
+      "symbol": "SHILCTECH",
+      "name": "Shilchar Technologies Limited",
+      "price": 3144.1,
+      "prev_close": 3309.1,
+      "change": -165.0,
+      "change_pct": -4.99,
+      "volume": 47326,
+      "volume_change_pct": 254.6,
+      "date": "2026-11-20"
+    },
+    {
+      "symbol": "QPOWER",
+      "name": "Quality Power Electrical Equipments Limited",
+      "price": 1539.6,
+      "prev_close": 1619.1,
+      "change": -79.5,
+      "change_pct": -4.91,
+      "volume": 310895,
+      "volume_change_pct": -21.7,
+      "date": "2026-11-20"
+    }
+  ],
+  "universes": [
+    {
+      "key": "in100",
+      "title": "NIFTY 100",
+      "gainers": [
+        {
+          "symbol": "APOLLOHOSP",
+          "name": "Apollo Hospitals Enterprise Limited",
+          "price": 9200.0,
+          "prev_close": 8738.0,
+          "change": 462.0,
+          "change_pct": 5.29,
+          "volume": 1412462,
+          "volume_change_pct": 345.1,
+          "date": "2026-11-20"
+        },
+        {
+          "symbol": "AXISBANK",
+          "name": "Axis Bank Limited",
+          "price": 1446.0,
+          "prev_close": 1380.8,
+          "change": 65.2,
+          "change_pct": 4.72,
+          "volume": 21476210,
+          "volume_change_pct": 157.3,
+          "date": "2026-11-20"
+        },
+        {
+          "symbol": "UNIONBANK",
+          "name": "Union Bank of India",
+          "price": 218.85,
+          "prev_close": 210.0,
+          "change": 8.85,
+          "change_pct": 4.21,
+          "volume": 23605142,
+          "volume_change_pct": 97.2,
+          "date": "2026-11-20"
+        },
+        {
+          "symbol": "MAXHEALTH",
+          "name": "Max Healthcare Institute Limited",
+          "price": 1081.0,
+          "prev_close": 1040.65,
+          "change": 40.35,
+          "change_pct": 3.88,
+          "volume": 9531608,
+          "volume_change_pct": 249.1,
+          "date": "2026-11-20"
+        },
+        {
+          "symbol": "BAJAJHLDNG",
+          "name": "Bajaj Holdings & Investment Limited",
+          "price": 11669.0,
+          "prev_close": 11312.0,
+          "change": 357.0,
+          "change_pct": 3.16,
+          "volume": 58687,
+          "volume_change_pct": 53.5,
+          "date": "2026-11-20"
+        },
+        {
+          "symbol": "MARUTI",
+          "name": "Maruti Suzuki India Limited",
+          "price": 14011.0,
+          "prev_close": 13589.0,
+          "change": 422.0,
+          "change_pct": 3.11,
+          "volume": 1647972,
+          "volume_change_pct": 20.1,
+          "date": "2026-11-20"
+        },
+        {
+          "symbol": "ULTRACEMCO",
+          "name": "UltraTech Cement Limited",
+          "price": 12939.0,
+          "prev_close": 12560.0,
+          "change": 379.0,
+          "change_pct": 3.02,
+          "volume": 495168,
+          "volume_change_pct": 141.8,
+          "date": "2026-11-20"
+        },
+        {
+          "symbol": "HDFCBANK",
+          "name": "HDFC Bank Limited",
+          "price": 846.0,
+          "prev_close": 821.8,
+          "change": 24.2,
+          "change_pct": 2.94,
+          "volume": 70096849,
+          "volume_change_pct": 191.0,
+          "date": "2026-11-20"
+        },
+        {
+          "symbol": "BAJFINANCE",
+          "name": "Bajaj Finance Limited",
+          "price": 1122.0,
+          "prev_close": 1092.85,
+          "change": 29.15,
+          "change_pct": 2.67,
+          "volume": 9240694,
+          "volume_change_pct": 19.3,
+          "date": "2026-11-20"
+        },
+        {
+          "symbol": "KOTAKBANK",
+          "name": "Kotak Mahindra Bank Limited",
+          "price": 515.8,
+          "prev_close": 503.0,
+          "change": 12.8,
+          "change_pct": 2.54,
+          "volume": 18942554,
+          "volume_change_pct": 40.0,
+          "date": "2026-11-20"
+        }
+      ],
+      "losers": [
+        {
+          "symbol": "MUTHOOTFIN",
+          "name": "Muthoot Finance Limited",
+          "price": 2550.5,
+          "prev_close": 2618.0,
+          "change": -67.5,
+          "change_pct": -2.58,
+          "volume": 1724549,
+          "volume_change_pct": -6.4,
+          "date": "2026-11-20"
+        },
+        {
+          "symbol": "CGPOWER",
+          "name": "CG Power and Industrial Solutions Limited",
+          "price": 792.0,
+          "prev_close": 812.9,
+          "change": -20.9,
+          "change_pct": -2.57,
+          "volume": 4330556,
+          "volume_change_pct": 104.9,
+          "date": "2026-11-20"
+        },
+        {
+          "symbol": "VEDL",
+          "name": "Vedanta Limited",
+          "price": 238.04,
+          "prev_close": 243.7,
+          "change": -5.66,
+          "change_pct": -2.32,
+          "volume": 18626231,
+          "volume_change_pct": 107.4,
+          "date": "2026-11-20"
+        },
+        {
+          "symbol": "ENRIN",
+          "name": "Siemens Energy India Limited",
+          "price": 2944.0,
+          "prev_close": 3010.0,
+          "change": -66.0,
+          "change_pct": -2.19,
+          "volume": 563548,
+          "volume_change_pct": 12.2,
+          "date": "2026-11-20"
+        },
+        {
+          "symbol": "POWERINDIA",
+          "name": "Hitachi Energy India Limited",
+          "price": 30150.0,
+          "prev_close": 30750.0,
+          "change": -600.0,
+          "change_pct": -1.95,
+          "volume": 155303,
+          "volume_change_pct": 31.6,
+          "date": "2026-11-20"
+        },
+        {
+          "symbol": "TITAN",
+          "name": "Titan Company Limited",
+          "price": 4620.0,
+          "prev_close": 4700.0,
+          "change": -80.0,
+          "change_pct": -1.7,
+          "volume": 1478789,
+          "volume_change_pct": 29.2,
+          "date": "2026-11-20"
+        },
+        {
+          "symbol": "TATASTEEL",
+          "name": "Tata Steel Limited",
+          "price": 178.0,
+          "prev_close": 180.89,
+          "change": -2.89,
+          "change_pct": -1.6,
+          "volume": 46159049,
+          "volume_change_pct": 245.3,
+          "date": "2026-11-20"
+        },
+        {
+          "symbol": "VAML",
+          "name": "Vedanta Aluminium Metal Limited",
+          "price": 365.55,
+          "prev_close": 371.0,
+          "change": -5.45,
+          "change_pct": -1.47,
+          "volume": 11883176,
+          "volume_change_pct": 16.4,
+          "date": "2026-11-20"
+        },
+        {
+          "symbol": "HINDZINC",
+          "name": "Hindustan Zinc Limited",
+          "price": 521.6,
+          "prev_close": 529.0,
+          "change": -7.4,
+          "change_pct": -1.4,
+          "volume": 8849599,
+          "volume_change_pct": 39.6,
+          "date": "2026-11-20"
+        },
+        {
+          "symbol": "NTPC",
+          "name": "NTPC Limited",
+          "price": 321.5,
+          "prev_close": 325.0,
+          "change": -3.5,
+          "change_pct": -1.08,
+          "volume": 9508566,
+          "volume_change_pct": 17.2,
+          "date": "2026-11-20"
+        }
+      ]
+    },
+    {
+      "key": "in500x",
+      "title": "NIFTY 500 EX-NIFTY 100",
+      "gainers": [
+        {
+          "symbol": "INDUSINDBK",
+          "name": "IndusInd Bank Limited",
+          "price": 1003.0,
+          "prev_close": 923.65,
+          "change": 79.35,
+          "change_pct": 8.59,
+          "volume": 19128829,
+          "volume_change_pct": 353.8,
+          "date": "2026-11-20"
+        },
+        {
+          "symbol": "EIHOTEL",
+          "name": "EIH Limited",
+          "price": 334.15,
+          "prev_close": 310.0,
+          "change": 24.15,
+          "change_pct": 7.79,
+          "volume": 5105584,
+          "volume_change_pct": 467.2,
+          "date": "2026-11-20"
+        },
+        {
+          "symbol": "NAVA",
+          "name": "Nava Limited",
+          "price": 563.95,
+          "prev_close": 530.55,
+          "change": 33.4,
+          "change_pct": 6.3,
+          "volume": 1690910,
+          "volume_change_pct": 859.2,
+          "date": "2026-11-20"
+        },
+        {
+          "symbol": "CUB",
+          "name": "City Union Bank Limited",
+          "price": 248.8,
+          "prev_close": 234.16,
+          "change": 14.64,
+          "change_pct": 6.25,
+          "volume": 20136106,
+          "volume_change_pct": 696.7,
+          "date": "2026-11-20"
+        },
+        {
+          "symbol": "WELSPUNLIV",
+          "name": "Welspun Living Limited",
+          "price": 268.78,
+          "prev_close": 253.14,
+          "change": 15.64,
+          "change_pct": 6.18,
+          "volume": 21257796,
+          "volume_change_pct": 647.6,
+          "date": "2026-11-20"
+        },
+        {
+          "symbol": "ASTERDM",
+          "name": "Aster DM Quality Care Limited",
+          "price": 779.3,
+          "prev_close": 739.3,
+          "change": 40.0,
+          "change_pct": 5.41,
+          "volume": 2664992,
+          "volume_change_pct": 612.7,
+          "date": "2026-11-20"
+        },
+        {
+          "symbol": "TENNIND",
+          "name": "Tenneco Clean Air India Limited",
+          "price": 454.95,
+          "prev_close": 436.0,
+          "change": 18.95,
+          "change_pct": 4.35,
+          "volume": 1408942,
+          "volume_change_pct": -5.9,
+          "date": "2026-11-20"
+        },
+        {
+          "symbol": "PERSISTENT",
+          "name": "Persistent Systems Limited",
+          "price": 6124.0,
+          "prev_close": 5880.0,
+          "change": 244.0,
+          "change_pct": 4.15,
+          "volume": 1791121,
+          "volume_change_pct": 307.0,
+          "date": "2026-11-20"
+        },
+        {
+          "symbol": "VIJAYA",
+          "name": "Vijaya Diagnostic Centre Limited",
+          "price": 1572.3,
+          "prev_close": 1510.6,
+          "change": 61.7,
+          "change_pct": 4.08,
+          "volume": 538483,
+          "volume_change_pct": 304.5,
+          "date": "2026-11-20"
+        },
+        {
+          "symbol": "CYIENT",
+          "name": "Cyient Limited",
+          "price": 1155.5,
+          "prev_close": 1111.0,
+          "change": 44.5,
+          "change_pct": 4.01,
+          "volume": 1426629,
+          "volume_change_pct": 170.1,
+          "date": "2026-11-20"
+        }
+      ],
+      "losers": [
+        {
+          "symbol": "MTARTECH",
+          "name": "MTAR Technologies Limited",
+          "price": 5614.5,
+          "prev_close": 5954.0,
+          "change": -339.5,
+          "change_pct": -5.7,
+          "volume": 320496,
+          "volume_change_pct": 214.4,
+          "date": "2026-11-20"
+        },
+        {
+          "symbol": "PFOCUS",
+          "name": "Prime Focus Limited",
+          "price": 252.7,
+          "prev_close": 267.15,
+          "change": -14.45,
+          "change_pct": -5.41,
+          "volume": 4936599,
+          "volume_change_pct": 27.9,
+          "date": "2026-11-20"
+        },
+        {
+          "symbol": "IIFL",
+          "name": "IIFL Finance Limited",
+          "price": 611.95,
+          "prev_close": 644.45,
+          "change": -32.5,
+          "change_pct": -5.04,
+          "volume": 13150389,
+          "volume_change_pct": 18.6,
+          "date": "2026-11-20"
+        },
+        {
+          "symbol": "STLTECH",
+          "name": "Sterlite Technologies Limited",
+          "price": 621.85,
+          "prev_close": 654.55,
+          "change": -32.7,
+          "change_pct": -5.0,
+          "volume": 2816442,
+          "volume_change_pct": 6.6,
+          "date": "2026-11-20"
+        },
+        {
+          "symbol": "AETHER",
+          "name": "Aether Industries Limited",
+          "price": 1620.3,
+          "prev_close": 1696.5,
+          "change": -76.2,
+          "change_pct": -4.49,
+          "volume": 184532,
+          "volume_change_pct": -21.6,
+          "date": "2026-11-20"
+        },
+        {
+          "symbol": "THANGAMAYL",
+          "name": "Thangamayil Jewellery Limited",
+          "price": 3813.0,
+          "prev_close": 3978.9,
+          "change": -165.9,
+          "change_pct": -4.17,
+          "volume": 143777,
+          "volume_change_pct": 69.9,
+          "date": "2026-11-20"
+        },
+        {
+          "symbol": "URBANCO",
+          "name": "Urban Company Limited",
+          "price": 168.95,
+          "prev_close": 176.05,
+          "change": -7.1,
+          "change_pct": -4.03,
+          "volume": 9263321,
+          "volume_change_pct": -63.5,
+          "date": "2026-11-20"
+        },
+        {
+          "symbol": "ACUTAAS",
+          "name": "Acutaas Chemicals Limited",
+          "price": 3833.5,
+          "prev_close": 3977.1,
+          "change": -143.6,
+          "change_pct": -3.61,
+          "volume": 488977,
+          "volume_change_pct": 69.8,
+          "date": "2026-11-20"
+        },
+        {
+          "symbol": "ENGINERSIN",
+          "name": "Engineers India Limited",
+          "price": 296.55,
+          "prev_close": 307.5,
+          "change": -10.95,
+          "change_pct": -3.56,
+          "volume": 1782231,
+          "volume_change_pct": 19.3,
+          "date": "2026-11-20"
+        },
+        {
+          "symbol": "IGIL",
+          "name": "International Gemological Institute Limited",
+          "price": 422.2,
+          "prev_close": 437.3,
+          "change": -15.1,
+          "change_pct": -3.45,
+          "volume": 1090794,
+          "volume_change_pct": 152.1,
+          "date": "2026-11-20"
+        }
+      ]
+    },
+    {
+      "key": "inmicro",
+      "title": "NIFTY MICROCAP 250",
+      "gainers": [
+        {
+          "symbol": "SGMART",
+          "name": "SG Mart Limited",
+          "price": 1097.05,
+          "prev_close": 1010.5,
+          "change": 86.55,
+          "change_pct": 8.57,
+          "volume": 1874053,
+          "volume_change_pct": 307.2,
+          "date": "2026-11-20"
+        },
+        {
+          "symbol": "THYROCARE",
+          "name": "Thyrocare Technologies Limited",
+          "price": 528.45,
+          "prev_close": 504.85,
+          "change": 23.6,
+          "change_pct": 4.67,
+          "volume": 9096591,
+          "volume_change_pct": 5761.6,
+          "date": "2026-11-20"
+        },
+        {
+          "symbol": "DBL",
+          "name": "Dilip Buildcon Limited",
+          "price": 402.45,
+          "prev_close": 386.15,
+          "change": 16.3,
+          "change_pct": 4.22,
+          "volume": 5228698,
+          "volume_change_pct": 6565.5,
+          "date": "2026-11-20"
+        },
+        {
+          "symbol": "VESUVIUS",
+          "name": "Vesuvius India Limited",
+          "price": 383.2,
+          "prev_close": 371.0,
+          "change": 12.2,
+          "change_pct": 3.29,
+          "volume": 526378,
+          "volume_change_pct": -50.7,
+          "date": "2026-11-20"
+        },
+        {
+          "symbol": "ABFRL",
+          "name": "Aditya Birla Fashion and Retail Limited",
+          "price": 37.75,
+          "prev_close": 36.62,
+          "change": 1.13,
+          "change_pct": 3.09,
+          "volume": 11399412,
+          "volume_change_pct": 180.6,
+          "date": "2026-11-20"
+        },
+        {
+          "symbol": "POWERMECH",
+          "name": "Power Mech Projects Limited",
+          "price": 2421.0,
+          "prev_close": 2348.9,
+          "change": 72.1,
+          "change_pct": 3.07,
+          "volume": 117092,
+          "volume_change_pct": 64.8,
+          "date": "2026-11-20"
+        },
+        {
+          "symbol": "V2RETAIL",
+          "name": "V2 Retail Limited",
+          "price": 162.06,
+          "prev_close": 157.36,
+          "change": 4.7,
+          "change_pct": 2.99,
+          "volume": 103024297,
+          "volume_change_pct": 16.6,
+          "date": "2026-11-20"
+        },
+        {
+          "symbol": "EQUITASBNK",
+          "name": "Equitas Small Finance Bank Limited",
+          "price": 57.71,
+          "prev_close": 56.05,
+          "change": 1.66,
+          "change_pct": 2.96,
+          "volume": 7593388,
+          "volume_change_pct": 13.2,
+          "date": "2026-11-20"
+        },
+        {
+          "symbol": "RATEGAIN",
+          "name": "RateGain Travel Technologies Limited",
+          "price": 679.05,
+          "prev_close": 661.75,
+          "change": 17.3,
+          "change_pct": 2.61,
+          "volume": 629206,
+          "volume_change_pct": 387.9,
+          "date": "2026-11-20"
+        },
+        {
+          "symbol": "GOKEX",
+          "name": "Gokaldas Exports Limited",
+          "price": 757.6,
+          "prev_close": 738.65,
+          "change": 18.95,
+          "change_pct": 2.57,
+          "volume": 777501,
+          "volume_change_pct": -14.6,
+          "date": "2026-11-20"
+        }
+      ],
+      "losers": [
+        {
+          "symbol": "EBGNG",
+          "name": "GNG Electronics Limited",
+          "price": 470.35,
+          "prev_close": 515.45,
+          "change": -45.1,
+          "change_pct": -8.75,
+          "volume": 1433711,
+          "volume_change_pct": 298.4,
+          "date": "2026-11-20"
+        },
+        {
+          "symbol": "IIFLCAPS",
+          "name": "IIFL Capital Services Limited",
+          "price": 311.45,
+          "prev_close": 333.45,
+          "change": -22.0,
+          "change_pct": -6.6,
+          "volume": 3853853,
+          "volume_change_pct": -11.7,
+          "date": "2026-11-20"
+        },
+        {
+          "symbol": "SHILPAMED",
+          "name": "Shilpa Medicare Limited",
+          "price": 849.15,
+          "prev_close": 900.7,
+          "change": -51.55,
+          "change_pct": -5.72,
+          "volume": 1538742,
+          "volume_change_pct": 311.8,
+          "date": "2026-11-20"
+        },
+        {
+          "symbol": "SKYGOLD",
+          "name": "Sky Gold and Diamonds Limited",
+          "price": 874.9,
+          "prev_close": 926.3,
+          "change": -51.4,
+          "change_pct": -5.55,
+          "volume": 1952588,
+          "volume_change_pct": 41.0,
+          "date": "2026-11-20"
+        },
+        {
+          "symbol": "SHILCTECH",
+          "name": "Shilchar Technologies Limited",
+          "price": 3144.1,
+          "prev_close": 3309.1,
+          "change": -165.0,
+          "change_pct": -4.99,
+          "volume": 47326,
+          "volume_change_pct": 254.6,
+          "date": "2026-11-20"
+        },
+        {
+          "symbol": "QPOWER",
+          "name": "Quality Power Electrical Equipments Limited",
+          "price": 1539.6,
+          "prev_close": 1619.1,
+          "change": -79.5,
+          "change_pct": -4.91,
+          "volume": 310895,
+          "volume_change_pct": -21.7,
+          "date": "2026-11-20"
+        },
+        {
+          "symbol": "E2E",
+          "name": "E2E Networks Limited",
+          "price": 476.25,
+          "prev_close": 500.25,
+          "change": -24.0,
+          "change_pct": -4.8,
+          "volume": 2032164,
+          "volume_change_pct": 8.6,
+          "date": "2026-11-20"
+        },
+        {
+          "symbol": "APOLLO",
+          "name": "Apollo Micro Systems Limited",
+          "price": 427.7,
+          "prev_close": 449.25,
+          "change": -21.55,
+          "change_pct": -4.8,
+          "volume": 10008210,
+          "volume_change_pct": 10.9,
+          "date": "2026-11-20"
+        },
+        {
+          "symbol": "UTLSOLAR",
+          "name": "Fujiyama Power Systems Limited",
+          "price": 298.6,
+          "prev_close": 313.25,
+          "change": -14.65,
+          "change_pct": -4.68,
+          "volume": 240134,
+          "volume_change_pct": 24.7,
+          "date": "2026-11-20"
+        },
+        {
+          "symbol": "LLOYDSENT",
+          "name": "Lloyds Enterprises Limited",
+          "price": 60.99,
+          "prev_close": 63.95,
+          "change": -2.96,
+          "change_pct": -4.63,
+          "volume": 2840646,
+          "volume_change_pct": 17.4,
+          "date": "2026-11-20"
+        }
+      ]
+    }
+  ],
+  "corporate_actions": [
+    {
+      "symbol": "OIL",
+      "company": "Oil India Limited",
+      "exchange": "NSE",
+      "action": "Interim Dividend - Rs 7 Per Share",
+      "ex_date": "2026-11-20",
+      "record_date": "2026-11-20",
+      "announcement_date": "-"
+    },
+    {
+      "symbol": "SMLMAH",
+      "company": "SML Mahindra Limited",
+      "exchange": "NSE",
+      "action": "Rights 2:7 @ Premium Rs 3496/-",
+      "ex_date": "2026-11-20",
+      "record_date": "2026-11-20",
+      "announcement_date": "-"
+    },
+    {
+      "symbol": "ALUFLUOR",
+      "company": "Alufluoride Limited",
+      "exchange": "NSE",
+      "action": "Interim Dividend - Rs 2.50 Per Share",
+      "ex_date": "2026-11-20",
+      "record_date": "2026-11-20",
+      "announcement_date": "-"
+    },
+    {
+      "symbol": "SKYWAYS",
+      "company": "Skyways Air Services Limited",
+      "exchange": "NSE",
+      "action": "Interim Dividend - Re 0.40 Per Share",
+      "ex_date": "2026-11-20",
+      "record_date": "2026-11-20",
+      "announcement_date": "-"
+    },
+    {
+      "symbol": "MARSONS",
+      "company": "Marsons Limited",
+      "exchange": "NSE",
+      "action": "Interim Dividend - Re 0.05 Per Share",
+      "ex_date": "2026-11-20",
+      "record_date": "2026-11-20",
+      "announcement_date": "-"
+    },
+    {
+      "symbol": "MEDIASSIST",
+      "company": "Medi Assist Healthcare Services Limited",
+      "exchange": "NSE",
+      "action": "Buy Back",
+      "ex_date": "2026-11-20",
+      "record_date": "2026-11-20",
+      "announcement_date": "-"
+    },
+    {
+      "symbol": "RAMAPHO",
+      "company": "Rama Phosphates Limited",
+      "exchange": "NSE",
+      "action": "Interim Dividend - Re 0.50 Per Share",
+      "ex_date": "2026-11-20",
+      "record_date": "2026-11-20",
+      "announcement_date": "-"
+    },
+    {
+      "symbol": "VENUSPIPES",
+      "company": "Venus Pipes & Tubes Limited",
+      "exchange": "NSE",
+      "action": "Interim Dividend - Re 0.50 Per Share",
+      "ex_date": "2026-11-20",
+      "record_date": "2026-11-20",
+      "announcement_date": "-"
+    },
+    {
+      "symbol": "STEELCAS",
+      "company": "Steelcast Limited",
+      "exchange": "NSE",
+      "action": "Interim Dividend - Re 0.45 Per Share",
+      "ex_date": "2026-11-20",
+      "record_date": "2026-11-20",
+      "announcement_date": "-"
+    },
+    {
+      "symbol": "POLYPLEX",
+      "company": "Polyplex Corporation Limited",
+      "exchange": "NSE",
+      "action": "Interim Dividend - Rs 12 Per Share",
+      "ex_date": "2026-11-20",
+      "record_date": "2026-11-20",
+      "announcement_date": "-"
+    },
+    {
+      "symbol": "ASHOKLEY",
+      "company": "Ashok Leyland Limited",
+      "exchange": "NSE",
+      "action": "Interim Dividend - Re 1 Per Share",
+      "ex_date": "2026-11-20",
+      "record_date": "2026-11-20",
+      "announcement_date": "-"
+    },
+    {
+      "symbol": "TALBROAUTO",
+      "company": "Talbros Automotive Components Limited",
+      "exchange": "NSE",
+      "action": "Interim Dividend - Re 0.30 Per Share",
+      "ex_date": "2026-11-20",
+      "record_date": "2026-11-20",
+      "announcement_date": "-"
+    },
+    {
+      "symbol": "JAMNAAUTO",
+      "company": "Jamna Auto Industries Limited",
+      "exchange": "NSE",
+      "action": "Interim Dividend - Re 1 Per Share",
+      "ex_date": "2026-11-20",
+      "record_date": "2026-11-20",
+      "announcement_date": "-"
+    },
+    {
+      "symbol": "BFINVEST",
+      "company": "BF Investment Limited",
+      "exchange": "NSE",
+      "action": "Interim Dividend - Rs 20 Per Share",
+      "ex_date": "2026-11-20",
+      "record_date": "2026-11-20",
+      "announcement_date": "-"
+    },
+    {
+      "symbol": "815GS2026",
+      "company": "GOVERNMENT OF INDIA",
+      "exchange": "NSE",
+      "action": "Interest Payment",
+      "ex_date": "2026-11-23",
+      "record_date": "2026-11-23",
+      "announcement_date": "-"
+    },
+    {
+      "symbol": "PASHUPATI",
+      "company": "Pashupati Cotspin Limited",
+      "exchange": "NSE",
+      "action": "Interim Dividend - Re 0.02 Per Share",
+      "ex_date": "2026-11-23",
+      "record_date": "2026-11-23",
+      "announcement_date": "-"
+    },
+    {
+      "symbol": "ZEEL",
+      "company": "Zee Entertainment Enterprises Limited",
+      "exchange": "NSE",
+      "action": "Buy Back",
+      "ex_date": "2026-11-25",
+      "record_date": "2026-11-25",
+      "announcement_date": "-"
+    },
+    {
+      "symbol": "VRAJ",
+      "company": "Vraj Iron and Steel Limited",
+      "exchange": "NSE",
+      "action": "Interim Dividend - Re 0.60 Per Share",
+      "ex_date": "2026-11-25",
+      "record_date": "2026-11-25",
+      "announcement_date": "-"
+    },
+    {
+      "symbol": "VGL",
+      "company": "VARVEE GLOBAL LIMITED",
+      "exchange": "NSE",
+      "action": "Face Value Split (Sub-Division) - From Rs 5/- Per Share To Rs 2/- Per Share",
+      "ex_date": "2026-11-27",
+      "record_date": "2026-11-27",
+      "announcement_date": "-"
+    },
+    {
+      "symbol": "INTERARCH",
+      "company": "Interarch Building Solutions Limited",
+      "exchange": "NSE",
+      "action": "Face Value Split (Sub-Division) - From Rs 10/- Per Share To Rs 2/- Per Share",
+      "ex_date": "2026-11-30",
+      "record_date": "2026-11-30",
+      "announcement_date": "-"
+    }
+  ]
+}
