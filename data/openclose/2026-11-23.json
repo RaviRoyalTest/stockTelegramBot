@@ -1,0 +1,997 @@
+{
+  "recorded_at": "2026-11-23T04:06:09+00:00",
+  "recorded_by": "telegram",
+  "mode": "live",
+  "markets": [
+    "in"
+  ],
+  "target_date": null,
+  "report": {
+    "sections": [
+      {
+        "market": "in",
+        "snapshot": {
+          "market": "in",
+          "mode": "live",
+          "date": "23-Nov-2026",
+          "time_local": "09:36",
+          "tz_label": "IST",
+          "state": "OPEN"
+        },
+        "universes": [
+          {
+            "key": "in100",
+            "title": "NIFTY 100",
+            "unavailable": false,
+            "gainers": [
+              {
+                "symbol": "SHRIRAMFIN",
+                "name": "Shriram Finance Limited",
+                "session_date": "2026-11-23",
+                "price": 988.7999877929688,
+                "prev_close": 972.0,
+                "change": 16.79998779296875,
+                "change_pct": 1.7283938058609825,
+                "volume": 2591349,
+                "volume_change_pct": -45.84723453724638,
+                "wk52_high": 1153.7,
+                "wk52_low": 810.1
+              },
+              {
+                "symbol": "TECHM",
+                "name": "Tech Mahindra Limited",
+                "session_date": "2026-11-23",
+                "price": 1776.199951171875,
+                "prev_close": 1746.199951171875,
+                "change": 30.0,
+                "change_pct": 1.7180163119273368,
+                "volume": 369141,
+                "volume_change_pct": -88.58671555911461,
+                "wk52_high": 1860.0,
+                "wk52_low": 1304.1
+              },
+              {
+                "symbol": "TCS",
+                "name": "Tata Consultancy Services Limited",
+                "session_date": "2026-11-23",
+                "price": 2410.5,
+                "prev_close": 2376.199951171875,
+                "change": 34.300048828125,
+                "change_pct": 1.443483272996836,
+                "volume": 604810,
+                "volume_change_pct": -79.57010095878417,
+                "wk52_high": 3350.0,
+                "wk52_low": 1976.8
+              },
+              {
+                "symbol": "INFY",
+                "name": "Infosys Limited",
+                "session_date": "2026-11-23",
+                "price": 1111.0,
+                "prev_close": 1098.0,
+                "change": 13.0,
+                "change_pct": 1.1839708561020037,
+                "volume": 1581044,
+                "volume_change_pct": -88.50128409663482,
+                "wk52_high": 1728.0,
+                "wk52_low": 980.4
+              },
+              {
+                "symbol": "DIVISLAB",
+                "name": "Divi's Laboratories Limited",
+                "session_date": "2026-11-23",
+                "price": 11293.0,
+                "prev_close": 11180.5,
+                "change": 112.5,
+                "change_pct": 1.0062161799561737,
+                "volume": 93218,
+                "volume_change_pct": -76.97326005063917,
+                "wk52_high": 11824.0,
+                "wk52_low": 5647.5
+              },
+              {
+                "symbol": "APOLLOHOSP",
+                "name": "Apollo Hospitals Enterprise Limited",
+                "session_date": "2026-11-23",
+                "price": 9289.5,
+                "prev_close": 9200.0,
+                "change": 89.5,
+                "change_pct": 0.9728260869565217,
+                "volume": 212688,
+                "volume_change_pct": -84.94310338236481,
+                "wk52_high": 9410.0,
+                "wk52_low": 6696.5
+              },
+              {
+                "symbol": "GODREJCP",
+                "name": "Godrej Consumer Products Limited",
+                "session_date": "2026-11-23",
+                "price": 926.7000122070312,
+                "prev_close": 919.5,
+                "change": 7.20001220703125,
+                "change_pct": 0.7830355853215062,
+                "volume": 91490,
+                "volume_change_pct": -93.90654887814964,
+                "wk52_high": 1273.9,
+                "wk52_low": 777.2
+              },
+              {
+                "symbol": "WIPRO",
+                "name": "Wipro Limited",
+                "session_date": "2026-11-23",
+                "price": 187.08999633789062,
+                "prev_close": 185.6999969482422,
+                "change": 1.3899993896484375,
+                "change_pct": 0.7485188004800315,
+                "volume": 1436483,
+                "volume_change_pct": -90.22786919516486,
+                "wk52_high": 273.1,
+                "wk52_low": 156.79
+              },
+              {
+                "symbol": "LTM",
+                "name": "LTM Limited",
+                "session_date": "2026-11-23",
+                "price": 4194.7998046875,
+                "prev_close": 4166.39990234375,
+                "change": 28.39990234375,
+                "change_pct": 0.6816412972689931,
+                "volume": 65637,
+                "volume_change_pct": -92.1203608665118,
+                "wk52_high": 6429.5,
+                "wk52_low": 3528.0
+              },
+              {
+                "symbol": "MUTHOOTFIN",
+                "name": "Muthoot Finance Limited",
+                "session_date": "2026-11-23",
+                "price": 2563.0,
+                "prev_close": 2550.5,
+                "change": 12.5,
+                "change_pct": 0.4900999803960008,
+                "volume": 233167,
+                "volume_change_pct": -86.48336238585027,
+                "wk52_high": 4149.5,
+                "wk52_low": 2305.0
+              }
+            ],
+            "losers": [
+              {
+                "symbol": "TATASTEEL",
+                "name": "Tata Steel Limited",
+                "session_date": "2026-11-23",
+                "price": 170.5,
+                "prev_close": 178.0,
+                "change": -7.5,
+                "change_pct": -4.213483146067416,
+                "volume": 33736592,
+                "volume_change_pct": -26.93282050325761,
+                "wk52_high": 224.4,
+                "wk52_low": 160.06
+              },
+              {
+                "symbol": "UNIONBANK",
+                "name": "Union Bank of India",
+                "session_date": "2026-11-23",
+                "price": 210.86000061035156,
+                "prev_close": 218.85000610351562,
+                "change": -7.9900054931640625,
+                "change_pct": -3.650904852789817,
+                "volume": 4176874,
+                "volume_change_pct": -82.31915884236565,
+                "wk52_high": 219.72,
+                "wk52_low": 145.87
+              },
+              {
+                "symbol": "CANBK",
+                "name": "Canara Bank",
+                "session_date": "2026-11-23",
+                "price": 134.39999389648438,
+                "prev_close": 138.9199981689453,
+                "change": -4.5200042724609375,
+                "change_pct": -3.2536742960246854,
+                "volume": 8988847,
+                "volume_change_pct": -80.35589328424547,
+                "wk52_high": 162.89,
+                "wk52_low": 114.63
+              },
+              {
+                "symbol": "AXISBANK",
+                "name": "Axis Bank Limited",
+                "session_date": "2026-11-23",
+                "price": 1401.0,
+                "prev_close": 1446.0,
+                "change": -45.0,
+                "change_pct": -3.112033195020747,
+                "volume": 2288978,
+                "volume_change_pct": -89.34219775493031,
+                "wk52_high": 1458.9,
+                "wk52_low": 1150.3
+              },
+              {
+                "symbol": "PNB",
+                "name": "Punjab National Bank",
+                "session_date": "2026-11-23",
+                "price": 150.85000610351562,
+                "prev_close": 155.3300018310547,
+                "change": -4.4799957275390625,
+                "change_pct": -2.884179279423268,
+                "volume": 6384742,
+                "volume_change_pct": -83.57821810165018,
+                "wk52_high": 156.49,
+                "wk52_low": 98.5
+              },
+              {
+                "symbol": "BANKBARODA",
+                "name": "Bank of Baroda Limited",
+                "session_date": "2026-11-23",
+                "price": 279.4100036621094,
+                "prev_close": 287.0,
+                "change": -7.589996337890625,
+                "change_pct": -2.644598027139591,
+                "volume": 2935666,
+                "volume_change_pct": -86.95312554858883,
+                "wk52_high": 325.5,
+                "wk52_low": 223.82
+              },
+              {
+                "symbol": "PFC",
+                "name": "Power Finance Corporation Limited",
+                "session_date": "2026-11-23",
+                "price": 325.45001220703125,
+                "prev_close": 332.8999938964844,
+                "change": -7.449981689453125,
+                "change_pct": -2.237903822782798,
+                "volume": 1047016,
+                "volume_change_pct": -85.08830309903622,
+                "wk52_high": 486.5,
+                "wk52_low": 310.3
+              },
+              {
+                "symbol": "HINDALCO",
+                "name": "Hindalco Industries Limited",
+                "session_date": "2026-11-23",
+                "price": 909.5499877929688,
+                "prev_close": 929.5,
+                "change": -19.95001220703125,
+                "change_pct": -2.146316536528375,
+                "volume": 1711976,
+                "volume_change_pct": -80.73330822175959,
+                "wk52_high": 1176.0,
+                "wk52_low": 771.85
+              },
+              {
+                "symbol": "TMCV",
+                "name": "Tata Motors Limited",
+                "session_date": "2026-11-23",
+                "price": 447.04998779296875,
+                "prev_close": 456.75,
+                "change": -9.70001220703125,
+                "change_pct": -2.123702727319376,
+                "volume": 611377,
+                "volume_change_pct": -87.81691607324872,
+                "wk52_high": 509.0,
+                "wk52_low": 310.05
+              },
+              {
+                "symbol": "BPCL",
+                "name": "Bharat Petroleum Corporation Limited",
+                "session_date": "2026-11-23",
+                "price": 307.5,
+                "prev_close": 314.1000061035156,
+                "change": -6.600006103515625,
+                "change_pct": -2.101243545134001,
+                "volume": 721184,
+                "volume_change_pct": -82.1381053290654,
+                "wk52_high": 391.65,
+                "wk52_low": 266.6
+              }
+            ],
+            "verified": 20,
+            "target": 20
+          },
+          {
+            "key": "in500x",
+            "title": "NIFTY 500 EX-NIFTY 100",
+            "unavailable": false,
+            "gainers": [
+              {
+                "symbol": "ITI",
+                "name": "ITI Limited",
+                "session_date": "2026-11-23",
+                "price": 267.1000061035156,
+                "prev_close": 245.72000122070312,
+                "change": 21.3800048828125,
+                "change_pct": 8.700962386700137,
+                "volume": 5579474,
+                "volume_change_pct": 3980.442016425693,
+                "wk52_high": 332.95,
+                "wk52_low": 210.76
+              },
+              {
+                "symbol": "ECLERX",
+                "name": "eClerx Services Limited",
+                "session_date": "2026-11-23",
+                "price": 1507.699951171875,
+                "prev_close": 1454.0999755859375,
+                "change": 53.5999755859375,
+                "change_pct": 3.6861272598769625,
+                "volume": 76106,
+                "volume_change_pct": -63.76853681178739,
+                "wk52_high": 2497.5,
+                "wk52_low": 1320.0
+              },
+              {
+                "symbol": "GALLANTT",
+                "name": "Gallantt Ispat Limited",
+                "session_date": "2026-11-23",
+                "price": 556.4000244140625,
+                "prev_close": 538.0999755859375,
+                "change": 18.300048828125,
+                "change_pct": 3.4008640881646692,
+                "volume": 214863,
+                "volume_change_pct": -5.802743545565741,
+                "wk52_high": 948.0,
+                "wk52_low": 496.25
+              },
+              {
+                "symbol": "KALYANKJIL",
+                "name": "Kalyan Jewellers India Limited",
+                "session_date": "2026-11-23",
+                "price": 658.2000122070312,
+                "prev_close": 638.7000122070312,
+                "change": 19.5,
+                "change_pct": 3.053076503414748,
+                "volume": 5897165,
+                "volume_change_pct": -70.72669625783773,
+                "wk52_high": 729.35,
+                "wk52_low": 327.05
+              },
+              {
+                "symbol": "PVRINOX",
+                "name": "PVR INOX Limited",
+                "session_date": "2026-11-23",
+                "price": 1698.0,
+                "prev_close": 1652.199951171875,
+                "change": 45.800048828125,
+                "change_pct": 2.7720645310296654,
+                "volume": 204151,
+                "volume_change_pct": -72.03824639642355,
+                "wk52_high": 1747.0,
+                "wk52_low": 907.4
+              },
+              {
+                "symbol": "INTELLECT",
+                "name": "Intellect Design Arena Limited",
+                "session_date": "2026-11-23",
+                "price": 563.0499877929688,
+                "prev_close": 549.0,
+                "change": 14.04998779296875,
+                "change_pct": 2.5591963193021403,
+                "volume": 292355,
+                "volume_change_pct": -55.734907580125494,
+                "wk52_high": 1146.5,
+                "wk52_low": 478.0
+              },
+              {
+                "symbol": "LALPATHLAB",
+                "name": "Dr. Lal PathLabs Limited",
+                "session_date": "2026-11-23",
+                "price": 2052.699951171875,
+                "prev_close": 2006.0,
+                "change": 46.699951171875,
+                "change_pct": 2.328013518039631,
+                "volume": 77222,
+                "volume_change_pct": -70.85423342429354,
+                "wk52_high": 2079.0,
+                "wk52_low": 1272.6
+              },
+              {
+                "symbol": "CANFINHOME",
+                "name": "Can Fin Homes Limited",
+                "session_date": "2026-11-23",
+                "price": 788.5,
+                "prev_close": 770.9500122070312,
+                "change": 17.54998779296875,
+                "change_pct": 2.276410599271885,
+                "volume": 320694,
+                "volume_change_pct": 236.2312458717328,
+                "wk52_high": 971.5,
+                "wk52_low": 693.0
+              },
+              {
+                "symbol": "BSOFT",
+                "name": "Birlasoft Limited",
+                "session_date": "2026-11-23",
+                "price": 310.0,
+                "prev_close": 303.1499938964844,
+                "change": 6.850006103515625,
+                "change_pct": 2.2596095139143144,
+                "volume": 889649,
+                "volume_change_pct": -82.80870833186795,
+                "wk52_high": 474.0,
+                "wk52_low": 267.05
+              },
+              {
+                "symbol": "MEDANTA",
+                "name": "Global Health Limited",
+                "session_date": "2026-11-23",
+                "price": 1510.800048828125,
+                "prev_close": 1480.199951171875,
+                "change": 30.60009765625,
+                "change_pct": 2.06729486999536,
+                "volume": 74251,
+                "volume_change_pct": -72.01929417971473,
+                "wk52_high": 1544.0,
+                "wk52_low": 956.0
+              }
+            ],
+            "losers": [
+              {
+                "symbol": "APLAPOLLO",
+                "name": "APL Apollo Tubes Limited",
+                "session_date": "2026-11-23",
+                "price": 1837.9000244140625,
+                "prev_close": 2121.60009765625,
+                "change": -283.7000732421875,
+                "change_pct": -13.371986245456599,
+                "volume": 6247122,
+                "volume_change_pct": 120.78778739049625,
+                "wk52_high": 2312.3,
+                "wk52_low": 1690.0
+              },
+              {
+                "symbol": "HFCL",
+                "name": "HFCL Limited",
+                "session_date": "2026-11-23",
+                "price": 178.60000610351562,
+                "prev_close": 188.0,
+                "change": -9.399993896484375,
+                "change_pct": -4.999996753449135,
+                "volume": 3851582,
+                "volume_change_pct": -56.57229361172477,
+                "wk52_high": 282.25,
+                "wk52_low": 59.82
+              },
+              {
+                "symbol": "STLTECH",
+                "name": "Sterlite Technologies Limited",
+                "session_date": "2026-11-23",
+                "price": 590.7999877929688,
+                "prev_close": 621.8499755859375,
+                "change": -31.04998779296875,
+                "change_pct": -4.993163787409002,
+                "volume": 373214,
+                "volume_change_pct": -86.75104688363085,
+                "wk52_high": 1051.1,
+                "wk52_low": 84.6
+              },
+              {
+                "symbol": "GROWW",
+                "name": "Billionbrains Garage Ventures Limited",
+                "session_date": "2026-11-23",
+                "price": 215.24000549316406,
+                "prev_close": 224.57000732421875,
+                "change": -9.330001831054688,
+                "change_pct": -4.154607261327054,
+                "volume": 42675970,
+                "volume_change_pct": 5.625918157329862,
+                "wk52_high": 233.4,
+                "wk52_low": 142.11
+              },
+              {
+                "symbol": "GPIL",
+                "name": "Godawari Power & Ispat Limited",
+                "session_date": "2026-11-23",
+                "price": 218.5,
+                "prev_close": 226.69000244140625,
+                "change": -8.19000244140625,
+                "change_pct": -3.612864419781001,
+                "volume": 241972,
+                "volume_change_pct": -71.71248138302225,
+                "wk52_high": 320.0,
+                "wk52_low": 189.15
+              },
+              {
+                "symbol": "AETHER",
+                "name": "Aether Industries Limited",
+                "session_date": "2026-11-23",
+                "price": 1569.5,
+                "prev_close": 1620.300048828125,
+                "change": -50.800048828125,
+                "change_pct": -3.135224791535735,
+                "volume": 41892,
+                "volume_change_pct": -77.29959955132408,
+                "wk52_high": 1814.1,
+                "wk52_low": 800.45
+              },
+              {
+                "symbol": "IREDA",
+                "name": "Indian Renewable Energy Development Agency Limited",
+                "session_date": "2026-11-23",
+                "price": 127.7699966430664,
+                "prev_close": 131.6999969482422,
+                "change": -3.9300003051757812,
+                "change_pct": -2.9840549705709276,
+                "volume": 3916244,
+                "volume_change_pct": -89.9816162856844,
+                "wk52_high": 149.48,
+                "wk52_low": 98.78
+              },
+              {
+                "symbol": "CRAFTSMAN",
+                "name": "Craftsman Automation Limited",
+                "session_date": "2026-11-23",
+                "price": 11374.0,
+                "prev_close": 11723.0,
+                "change": -349.0,
+                "change_pct": -2.9770536552077114,
+                "volume": 3953,
+                "volume_change_pct": -84.94267321829886,
+                "wk52_high": 12210.0,
+                "wk52_low": 6451.5
+              },
+              {
+                "symbol": "TTML",
+                "name": "Tata Teleservices (Maharashtra) Limited",
+                "session_date": "2026-11-23",
+                "price": 34.95000076293945,
+                "prev_close": 36.02000045776367,
+                "change": -1.0699996948242188,
+                "change_pct": -2.970571019505896,
+                "volume": 1234711,
+                "volume_change_pct": -64.15099708234048,
+                "wk52_high": 54.78,
+                "wk52_low": 31.22
+              },
+              {
+                "symbol": "INDUSINDBK",
+                "name": "IndusInd Bank Limited",
+                "session_date": "2026-11-23",
+                "price": 973.5,
+                "prev_close": 1003.0,
+                "change": -29.5,
+                "change_pct": -2.941176470588235,
+                "volume": 1018369,
+                "volume_change_pct": -94.67653169245914,
+                "wk52_high": 1077.85,
+                "wk52_low": 750.5
+              }
+            ],
+            "verified": 20,
+            "target": 20
+          },
+          {
+            "key": "inmicro",
+            "title": "NIFTY MICROCAP 250",
+            "unavailable": false,
+            "gainers": [
+              {
+                "symbol": "SGMART",
+                "name": "SG Mart Limited",
+                "session_date": "2026-11-23",
+                "price": 1226.25,
+                "prev_close": 1097.050048828125,
+                "change": 129.199951171875,
+                "change_pct": 11.777033446184804,
+                "volume": 1329368,
+                "volume_change_pct": -29.06594667278519,
+                "wk52_high": 1229.45,
+                "wk52_low": 313.1
+              },
+              {
+                "symbol": "THOMASCOOK",
+                "name": "Thomas Cook (India) Limited",
+                "session_date": "2026-11-23",
+                "price": 122.19999694824219,
+                "prev_close": 114.66000366210938,
+                "change": 7.5399932861328125,
+                "change_pct": 6.575957653335123,
+                "volume": 2157910,
+                "volume_change_pct": 70.72761638325596,
+                "wk52_high": 159.54,
+                "wk52_low": 85.25
+              },
+              {
+                "symbol": "ASHOKA",
+                "name": "Ashoka Buildcon Limited",
+                "session_date": "2026-11-23",
+                "price": 117.25,
+                "prev_close": 110.94000244140625,
+                "change": 6.30999755859375,
+                "change_pct": 5.6877568232670805,
+                "volume": 6239703,
+                "volume_change_pct": 52.93981972831301,
+                "wk52_high": 187.4,
+                "wk52_low": 95.31
+              },
+              {
+                "symbol": "PGIL",
+                "name": "Pearl Global Industries Limited",
+                "session_date": "2026-11-23",
+                "price": 1516.0,
+                "prev_close": 1435.5,
+                "change": 80.5,
+                "change_pct": 5.6078021595262975,
+                "volume": 113972,
+                "volume_change_pct": -67.39511664831,
+                "wk52_high": 1535.0,
+                "wk52_low": 675.0
+              },
+              {
+                "symbol": "THYROCARE",
+                "name": "Thyrocare Technologies Limited",
+                "session_date": "2026-11-23",
+                "price": 553.2999877929688,
+                "prev_close": 528.4500122070312,
+                "change": 24.8499755859375,
+                "change_pct": 4.702426911138382,
+                "volume": 1182292,
+                "volume_change_pct": -87.00306276003256,
+                "wk52_high": 662.0,
+                "wk52_low": 342.55
+              },
+              {
+                "symbol": "SUDEEPPHRM",
+                "name": "Sudeep Pharma Limited",
+                "session_date": "2026-11-23",
+                "price": 1239.800048828125,
+                "prev_close": 1191.5,
+                "change": 48.300048828125,
+                "change_pct": 4.053717904164919,
+                "volume": 58365,
+                "volume_change_pct": -48.99100689558735,
+                "wk52_high": 1378.0,
+                "wk52_low": 524.05
+              },
+              {
+                "symbol": "SIGMAADV",
+                "name": "Sigma Advanced Systems Limited",
+                "session_date": "2026-11-23",
+                "price": 947.9000244140625,
+                "prev_close": 919.8499755859375,
+                "change": 28.050048828125,
+                "change_pct": 3.0494156191347757,
+                "volume": 32882,
+                "volume_change_pct": -66.15476460053111,
+                "wk52_high": 1165.0,
+                "wk52_low": 140.1
+              },
+              {
+                "symbol": "PDSL",
+                "name": "PDS Limited",
+                "session_date": "2026-11-23",
+                "price": 419.3500061035156,
+                "prev_close": 408.29998779296875,
+                "change": 11.050018310546875,
+                "change_pct": 2.70634794046329,
+                "volume": 69038,
+                "volume_change_pct": -54.514428778495194,
+                "wk52_high": 424.9,
+                "wk52_low": 246.05
+              },
+              {
+                "symbol": "CHALET",
+                "name": "Chalet Hotels Limited",
+                "session_date": "2026-11-23",
+                "price": 841.9500122070312,
+                "prev_close": 824.0,
+                "change": 17.95001220703125,
+                "change_pct": 2.1783995396882587,
+                "volume": 58608,
+                "volume_change_pct": -52.71832519866081,
+                "wk52_high": 939.95,
+                "wk52_low": 691.35
+              },
+              {
+                "symbol": "SHILPAMED",
+                "name": "Shilpa Medicare Limited",
+                "session_date": "2026-11-23",
+                "price": 865.2000122070312,
+                "prev_close": 849.1500244140625,
+                "change": 16.04998779296875,
+                "change_pct": 1.890123927635013,
+                "volume": 228504,
+                "volume_change_pct": -85.1513270972165,
+                "wk52_high": 1095.0,
+                "wk52_low": 259.5
+              }
+            ],
+            "losers": [
+              {
+                "symbol": "E2E",
+                "name": "E2E Networks Limited",
+                "session_date": "2026-11-23",
+                "price": 452.45001220703125,
+                "prev_close": 476.25,
+                "change": -23.79998779296875,
+                "change_pct": -4.997372764927822,
+                "volume": 866874,
+                "volume_change_pct": -57.34779881176427,
+                "wk52_high": 765.0,
+                "wk52_low": 183.36
+              },
+              {
+                "symbol": "QPOWER",
+                "name": "Quality Power Electrical Equipments Limited",
+                "session_date": "2026-11-23",
+                "price": 1470.0,
+                "prev_close": 1539.5999755859375,
+                "change": -69.5999755859375,
+                "change_pct": -4.520653201455742,
+                "volume": 103047,
+                "volume_change_pct": -66.85771075153656,
+                "wk52_high": 1681.0,
+                "wk52_low": 581.0
+              },
+              {
+                "symbol": "FEDFINA",
+                "name": "Fedbank Financial Services Limited",
+                "session_date": "2026-11-23",
+                "price": 135.7899932861328,
+                "prev_close": 141.88999938964844,
+                "change": -6.100006103515625,
+                "change_pct": -4.299109260522451,
+                "volume": 376646,
+                "volume_change_pct": -68.94166347133061,
+                "wk52_high": 178.48,
+                "wk52_low": 119.07
+              },
+              {
+                "symbol": "GOKULAGRO",
+                "name": "Gokul Agro Resources Limited",
+                "session_date": "2026-11-23",
+                "price": 206.5500030517578,
+                "prev_close": 213.4499969482422,
+                "change": -6.899993896484375,
+                "change_pct": -3.2326043547133434,
+                "volume": 105405,
+                "volume_change_pct": -45.0489010301539,
+                "wk52_high": 259.8,
+                "wk52_low": 151.0
+              },
+              {
+                "symbol": "TMB",
+                "name": "Tamilnad Mercantile Bank Limited",
+                "session_date": "2026-11-23",
+                "price": 852.0999755859375,
+                "prev_close": 880.3499755859375,
+                "change": -28.25,
+                "change_pct": -3.2089510743948795,
+                "volume": 32207,
+                "volume_change_pct": -85.19939707544829,
+                "wk52_high": 954.2,
+                "wk52_low": 491.5
+              },
+              {
+                "symbol": "GREAVESCOT",
+                "name": "Greaves Cotton Limited",
+                "session_date": "2026-11-23",
+                "price": 259.95001220703125,
+                "prev_close": 268.30999755859375,
+                "change": -8.3599853515625,
+                "change_pct": -3.1157934581758697,
+                "volume": 673370,
+                "volume_change_pct": -96.0111325991413,
+                "wk52_high": 281.01,
+                "wk52_low": 119.99
+              },
+              {
+                "symbol": "KPIGREEN",
+                "name": "KPI Green Energy Limited",
+                "session_date": "2026-11-23",
+                "price": 316.3500061035156,
+                "prev_close": 326.3999938964844,
+                "change": -10.04998779296875,
+                "change_pct": -3.0790404353242846,
+                "volume": 215723,
+                "volume_change_pct": -94.85048668096377,
+                "wk52_high": 514.0,
+                "wk52_low": 271.9
+              },
+              {
+                "symbol": "STAR",
+                "name": "Strides Pharma Science Limited",
+                "session_date": "2026-11-23",
+                "price": 938.9000244140625,
+                "prev_close": 967.2999877929688,
+                "change": -28.39996337890625,
+                "change_pct": -2.9360036945420385,
+                "volume": 41857,
+                "volume_change_pct": -82.00650838481147,
+                "wk52_high": 1260.9,
+                "wk52_low": 768.65
+              },
+              {
+                "symbol": "AEROFLEX",
+                "name": "Aeroflex Industries Limited",
+                "session_date": "2026-11-23",
+                "price": 460.0,
+                "prev_close": 473.04998779296875,
+                "change": -13.04998779296875,
+                "change_pct": -2.7586910748806748,
+                "volume": 509829,
+                "volume_change_pct": -53.1586268485579,
+                "wk52_high": 613.7,
+                "wk52_low": 158.0
+              },
+              {
+                "symbol": "GUJALKALI",
+                "name": "Gujarat Alkalies and Chemicals Limited",
+                "session_date": "2026-11-23",
+                "price": 576.6500244140625,
+                "prev_close": 593.0,
+                "change": -16.3499755859375,
+                "change_pct": -2.75716283068086,
+                "volume": 7103,
+                "volume_change_pct": -81.53530206925237,
+                "wk52_high": 815.0,
+                "wk52_low": 409.15
+              }
+            ],
+            "verified": 20,
+            "target": 20
+          }
+        ],
+        "indices": [
+          {
+            "label": "Nifty 50",
+            "level": 25580.15,
+            "change": -220.44960937499854,
+            "change_pct": -0.8544359926228038
+          },
+          {
+            "label": "Sensex",
+            "level": 84147.8,
+            "change": 228.0890625000029,
+            "change_pct": 0.2717943853141658
+          },
+          {
+            "label": "Nifty Bank",
+            "level": 63304.55,
+            "change": -1330.649218749997,
+            "change_pct": -2.0587067647870567
+          },
+          {
+            "label": "Nifty Midcap 150",
+            "level": 22581.85,
+            "change": -168.95078125000146,
+            "change_pct": -0.7426146572794119
+          },
+          {
+            "label": "Nifty Smallcap 100",
+            "level": 19289.65,
+            "change": null,
+            "change_pct": null
+          },
+          {
+            "label": "Nifty Microcap 250",
+            "level": 24930.4,
+            "change": null,
+            "change_pct": null
+          }
+        ],
+        "volume_buckets": [
+          {
+            "label": "+200% or more",
+            "rows": [
+              {
+                "symbol": "ITI",
+                "name": "ITI Limited",
+                "session_date": "2026-11-23",
+                "price": 267.1000061035156,
+                "prev_close": 245.72000122070312,
+                "change": 21.3800048828125,
+                "change_pct": 8.700962386700137,
+                "volume": 5579474,
+                "volume_change_pct": 3980.442016425693,
+                "wk52_high": 332.95,
+                "wk52_low": 210.76
+              },
+              {
+                "symbol": "CANFINHOME",
+                "name": "Can Fin Homes Limited",
+                "session_date": "2026-11-23",
+                "price": 788.5,
+                "prev_close": 770.9500122070312,
+                "change": 17.54998779296875,
+                "change_pct": 2.276410599271885,
+                "volume": 320694,
+                "volume_change_pct": 236.2312458717328,
+                "wk52_high": 971.5,
+                "wk52_low": 693.0
+              }
+            ]
+          },
+          {
+            "label": "+100% to +200%",
+            "rows": [
+              {
+                "symbol": "APLAPOLLO",
+                "name": "APL Apollo Tubes Limited",
+                "session_date": "2026-11-23",
+                "price": 1837.9000244140625,
+                "prev_close": 2121.60009765625,
+                "change": -283.7000732421875,
+                "change_pct": -13.371986245456599,
+                "volume": 6247122,
+                "volume_change_pct": 120.78778739049625,
+                "wk52_high": 2312.3,
+                "wk52_low": 1690.0
+              }
+            ]
+          },
+          {
+            "label": "+50% to +100%",
+            "rows": [
+              {
+                "symbol": "THOMASCOOK",
+                "name": "Thomas Cook (India) Limited",
+                "session_date": "2026-11-23",
+                "price": 122.19999694824219,
+                "prev_close": 114.66000366210938,
+                "change": 7.5399932861328125,
+                "change_pct": 6.575957653335123,
+                "volume": 2157910,
+                "volume_change_pct": 70.72761638325596,
+                "wk52_high": 159.54,
+                "wk52_low": 85.25
+              },
+              {
+                "symbol": "ASHOKA",
+                "name": "Ashoka Buildcon Limited",
+                "session_date": "2026-11-23",
+                "price": 117.25,
+                "prev_close": 110.94000244140625,
+                "change": 6.30999755859375,
+                "change_pct": 5.6877568232670805,
+                "volume": 6239703,
+                "volume_change_pct": 52.93981972831301,
+                "wk52_high": 187.4,
+                "wk52_low": 95.31
+              }
+            ]
+          }
+        ],
+        "catalysts": [
+          {
+            "symbol": "ITI",
+            "change_pct": 8.700962386700137,
+            "headline": "ITI Ltd. Share Price Today - ITI Ltd. Stock Price Live NSE/BSE - CNBC TV18",
+            "publisher": "CNBC TV18"
+          },
+          {
+            "symbol": "THOMASCOOK",
+            "change_pct": 6.575957653335123,
+            "headline": "THOMAS COOK (INDIA) Share Price - Live NSE: THOMASCOOK Stock Price & Chart - Upstox",
+            "publisher": "Upstox"
+          },
+          {
+            "symbol": "ASHOKA",
+            "change_pct": 5.6877568232670805,
+            "headline": "Stocks to Watch Today: Coal India, Ashoka Buildcon, Paytm, Dilip Buildcon on 20 November 2026 - Kotak Neo",
+            "publisher": "Kotak Neo"
+          }
+        ],
+        "volume_computed": 747,
+        "session_date": "2026-11-23",
+        "captured_at": "2026-11-23T04:05:17.257277+00:00",
+        "mode": "live",
+        "finalized": false
+      }
+    ],
+    "total_verified": 60,
+    "total_target": 60,
+    "mode": "live",
+    "volume_computed": 747,
+    "source": "Yahoo Finance regular-session bars (includePrePost=false); Indian universes: official NSE index constituent CSVs.",
+    "session_date": "2026-11-23",
+    "target_date": null,
+    "markets": [
+      "in"
+    ],
+    "finalized": false
+  },
+  "session_date": "2026-11-23",
+  "finalized": false
+}
