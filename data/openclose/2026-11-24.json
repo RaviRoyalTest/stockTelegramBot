@@ -1,0 +1,37 @@
+{
+  "recorded_at": "2026-11-24T04:07:41+00:00",
+  "recorded_by": "telegram",
+  "mode": "live",
+  "markets": [
+    "in"
+  ],
+  "target_date": null,
+  "report": {
+    "sections": [
+      {
+        "market": "in",
+        "closed": true,
+        "reason": "No regular session today (exchange holiday). Last completed session: 23-Nov-2026.",
+        "next_session": "Wed 25-Nov-2026 09:15 IST",
+        "label": "Indian",
+        "session_date": "2026-11-24",
+        "captured_at": "2026-11-24T04:07:41.660123+00:00",
+        "mode": "live",
+        "finalized": false
+      }
+    ],
+    "total_verified": 0,
+    "total_target": 0,
+    "mode": "live",
+    "volume_computed": 0,
+    "source": "Yahoo Finance regular-session bars (includePrePost=false); Indian universes: official NSE index constituent CSVs.",
+    "session_date": "2026-11-24",
+    "target_date": null,
+    "markets": [
+      "in"
+    ],
+    "finalized": false
+  },
+  "session_date": "2026-11-24",
+  "finalized": false
+}

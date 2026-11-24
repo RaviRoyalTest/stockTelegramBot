@@ -7,16 +7,16 @@
       "universe": "nifty500"
     },
     "recent_commands": [
+      "/openreport in",
+      "/gappers today",
       "/emailclose",
       "/corpactionssummary",
       "/corpactionsformylist",
       "/openreport us",
-      "/openreport in",
       "/emailopen watchlist",
       "/emailopen gappers",
       "/emailopen nifty",
-      "/emailopen screener",
-      "/gappers today"
+      "/emailopen screener"
     ],
     "movers_fund": "button",
     "email": "raviroyalmechai@gmail.com",
