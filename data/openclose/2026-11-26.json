@@ -1,9 +1,10 @@
 {
-  "recorded_at": "2026-11-26T10:09:06+00:00",
+  "recorded_at": "2026-11-26T14:40:06+00:00",
   "recorded_by": "telegram",
   "mode": "live",
   "markets": [
-    "in"
+    "in",
+    "us"
   ],
   "target_date": null,
   "report": {
@@ -2310,6 +2311,17 @@
         "captured_at": "2026-11-26T10:07:52.206103+00:00",
         "mode": "live",
         "finalized": true
+      },
+      {
+        "market": "us",
+        "closed": true,
+        "reason": "No regular session today (exchange holiday). Last completed session: 25-Nov-2026.",
+        "next_session": "Fri 27-Nov-2026 09:30 ET",
+        "label": "U.S.",
+        "session_date": "2026-11-26",
+        "captured_at": "2026-11-26T14:40:06.084510+00:00",
+        "mode": "live",
+        "finalized": false
       }
     ],
     "total_verified": 60,
@@ -2320,10 +2332,11 @@
     "session_date": "2026-11-26",
     "target_date": null,
     "markets": [
-      "in"
+      "in",
+      "us"
     ],
-    "finalized": true
+    "finalized": false
   },
   "session_date": "2026-11-26",
-  "finalized": true
+  "finalized": false
 }
