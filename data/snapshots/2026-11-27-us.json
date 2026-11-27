@@ -1,0 +1,839 @@
+{
+  "session": "2026-11-27",
+  "market": "us",
+  "universe": "us",
+  "recorded_at": "2026-11-27T22:14:55+00:00",
+  "recorded_by": "auto-refresh",
+  "status": "finalized",
+  "finalized": true,
+  "gap_downs": [
+    {
+      "symbol": "SNDK",
+      "name": "Sandisk Corporation",
+      "price": 85.36,
+      "prev_close": 94.39,
+      "open": 79.92,
+      "gap_pct": -15.33,
+      "move_from_open_pct": 6.81,
+      "date": "2026-11-27"
+    },
+    {
+      "symbol": "VRTX",
+      "name": "Vertex Pharmaceuticals Incorporated",
+      "price": 534.57,
+      "prev_close": 564.12,
+      "open": 517.37,
+      "gap_pct": -8.29,
+      "move_from_open_pct": 3.32,
+      "date": "2026-11-27"
+    },
+    {
+      "symbol": "PANW",
+      "name": "Palo Alto Networks, Inc.",
+      "price": 366.76,
+      "prev_close": 356.14,
+      "open": 343.44,
+      "gap_pct": -3.57,
+      "move_from_open_pct": 6.79,
+      "date": "2026-11-27"
+    },
+    {
+      "symbol": "MO",
+      "name": "Altria Group, Inc.",
+      "price": 76.89,
+      "prev_close": 76.28,
+      "open": 74.95,
+      "gap_pct": -1.74,
+      "move_from_open_pct": 2.59,
+      "date": "2026-11-27"
+    },
+    {
+      "symbol": "WTW",
+      "name": "Willis Towers Watson Public Limited Company",
+      "price": 359.85,
+      "prev_close": 352.56,
+      "open": 347.04,
+      "gap_pct": -1.57,
+      "move_from_open_pct": 3.69,
+      "date": "2026-11-27"
+    },
+    {
+      "symbol": "GILD",
+      "name": "Gilead Sciences, Inc.",
+      "price": 177.0,
+      "prev_close": 176.74,
+      "open": 174.12,
+      "gap_pct": -1.48,
+      "move_from_open_pct": 1.65,
+      "date": "2026-11-27"
+    },
+    {
+      "symbol": "VRSK",
+      "name": "Verisk Analytics, Inc.",
+      "price": 203.76,
+      "prev_close": 204.76,
+      "open": 201.88,
+      "gap_pct": -1.41,
+      "move_from_open_pct": 0.93,
+      "date": "2026-11-27"
+    },
+    {
+      "symbol": "FDS",
+      "name": "FactSet Research Systems Inc.",
+      "price": 323.12,
+      "prev_close": 324.55,
+      "open": 319.99,
+      "gap_pct": -1.41,
+      "move_from_open_pct": 0.98,
+      "date": "2026-11-27"
+    },
+    {
+      "symbol": "NEE",
+      "name": "NextEra Energy, Inc.",
+      "price": 84.95,
+      "prev_close": 85.41,
+      "open": 84.32,
+      "gap_pct": -1.27,
+      "move_from_open_pct": 0.74,
+      "date": "2026-11-27"
+    },
+    {
+      "symbol": "AWK",
+      "name": "American Water Works Company, Inc.",
+      "price": 153.76,
+      "prev_close": 152.84,
+      "open": 151.07,
+      "gap_pct": -1.16,
+      "move_from_open_pct": 1.78,
+      "date": "2026-11-27"
+    },
+    {
+      "symbol": "PHM",
+      "name": "PulteGroup, Inc.",
+      "price": 134.49,
+      "prev_close": 134.84,
+      "open": 133.39,
+      "gap_pct": -1.08,
+      "move_from_open_pct": 0.82,
+      "date": "2026-11-27"
+    },
+    {
+      "symbol": "TSCO",
+      "name": "Tractor Supply Company",
+      "price": 40.01,
+      "prev_close": 40.37,
+      "open": 39.95,
+      "gap_pct": -1.04,
+      "move_from_open_pct": 0.15,
+      "date": "2026-11-27"
+    },
+    {
+      "symbol": "YUM",
+      "name": "Yum! Brands, Inc.",
+      "price": 166.97,
+      "prev_close": 167.12,
+      "open": 165.4,
+      "gap_pct": -1.03,
+      "move_from_open_pct": 0.95,
+      "date": "2026-11-27"
+    },
+    {
+      "symbol": "DHI",
+      "name": "D.R. Horton, Inc.",
+      "price": 156.8,
+      "prev_close": 156.87,
+      "open": 155.32,
+      "gap_pct": -0.99,
+      "move_from_open_pct": 0.95,
+      "date": "2026-11-27"
+    },
+    {
+      "symbol": "RSG",
+      "name": "Republic Services, Inc.",
+      "price": 253.26,
+      "prev_close": 254.16,
+      "open": 251.66,
+      "gap_pct": -0.98,
+      "move_from_open_pct": 0.64,
+      "date": "2026-11-27"
+    },
+    {
+      "symbol": "CL",
+      "name": "Colgate-Palmolive Company",
+      "price": 99.76,
+      "prev_close": 99.66,
+      "open": 98.7,
+      "gap_pct": -0.96,
+      "move_from_open_pct": 1.07,
+      "date": "2026-11-27"
+    },
+    {
+      "symbol": "KHC",
+      "name": "The Kraft Heinz Company",
+      "price": 26.49,
+      "prev_close": 26.51,
+      "open": 26.27,
+      "gap_pct": -0.91,
+      "move_from_open_pct": 0.84,
+      "date": "2026-11-27"
+    },
+    {
+      "symbol": "GIS",
+      "name": "General Mills, Inc.",
+      "price": 35.85,
+      "prev_close": 36.25,
+      "open": 35.93,
+      "gap_pct": -0.88,
+      "move_from_open_pct": -0.22,
+      "date": "2026-11-27"
+    },
+    {
+      "symbol": "HSY",
+      "name": "The Hershey Company",
+      "price": 182.77,
+      "prev_close": 182.57,
+      "open": 181.0,
+      "gap_pct": -0.86,
+      "move_from_open_pct": 0.98,
+      "date": "2026-11-27"
+    },
+    {
+      "symbol": "CLX",
+      "name": "The Clorox Company",
+      "price": 111.26,
+      "prev_close": 110.94,
+      "open": 110.0,
+      "gap_pct": -0.85,
+      "move_from_open_pct": 1.15,
+      "date": "2026-11-27"
+    }
+  ],
+  "top_gainers": [
+    {
+      "symbol": "COHR",
+      "name": "Coherent Corp.",
+      "price": 223.79,
+      "prev_close": 196.19,
+      "change": 27.6,
+      "change_pct": 14.07,
+      "volume": 7074515,
+      "volume_change_pct": -24.6,
+      "date": "2026-11-27"
+    },
+    {
+      "symbol": "ALAB",
+      "name": "Astera Labs, Inc.",
+      "price": 206.84,
+      "prev_close": 190.34,
+      "change": 16.5,
+      "change_pct": 8.67,
+      "volume": 3291516,
+      "volume_change_pct": -45.4,
+      "date": "2026-11-27"
+    },
+    {
+      "symbol": "RKLB",
+      "name": "Rocket Lab Corporation",
+      "price": 50.88,
+      "prev_close": 47.02,
+      "change": 3.86,
+      "change_pct": 8.21,
+      "volume": 10313324,
+      "volume_change_pct": -48.5,
+      "date": "2026-11-27"
+    },
+    {
+      "symbol": "LITE",
+      "name": "Lumentum Holdings Inc.",
+      "price": 514.63,
+      "prev_close": 476.58,
+      "change": 38.05,
+      "change_pct": 7.98,
+      "volume": 2568579,
+      "volume_change_pct": -52.7,
+      "date": "2026-11-27"
+    },
+    {
+      "symbol": "STX",
+      "name": "Seagate Technology Holdings plc",
+      "price": 509.66,
+      "prev_close": 472.33,
+      "change": 37.33,
+      "change_pct": 7.9,
+      "volume": 2544281,
+      "volume_change_pct": -31.4,
+      "date": "2026-11-27"
+    },
+    {
+      "symbol": "MU",
+      "name": "Micron Technology, Inc.",
+      "price": 646.95,
+      "prev_close": 601.25,
+      "change": 45.7,
+      "change_pct": 7.6,
+      "volume": 26547049,
+      "volume_change_pct": -49.9,
+      "date": "2026-11-27"
+    },
+    {
+      "symbol": "GNRC",
+      "name": "Generac Holdings Inc.",
+      "price": 219.17,
+      "prev_close": 203.99,
+      "change": 15.18,
+      "change_pct": 7.44,
+      "volume": 810226,
+      "volume_change_pct": -29.8,
+      "date": "2026-11-27"
+    },
+    {
+      "symbol": "MRVL",
+      "name": "Marvell Technology, Inc.",
+      "price": 140.54,
+      "prev_close": 130.93,
+      "change": 9.61,
+      "change_pct": 7.34,
+      "volume": 18237847,
+      "volume_change_pct": -36.5,
+      "date": "2026-11-27"
+    },
+    {
+      "symbol": "WDC",
+      "name": "Western Digital Corporation",
+      "price": 292.11,
+      "prev_close": 272.45,
+      "change": 19.66,
+      "change_pct": 7.22,
+      "volume": 3708625,
+      "volume_change_pct": -43.1,
+      "date": "2026-11-27"
+    },
+    {
+      "symbol": "P",
+      "name": "Everpure, Inc.",
+      "price": 101.46,
+      "prev_close": 94.69,
+      "change": 6.77,
+      "change_pct": 7.15,
+      "volume": 1619455,
+      "volume_change_pct": -52.5,
+      "date": "2026-11-27"
+    }
+  ],
+  "top_losers": [
+    {
+      "symbol": "SNDK",
+      "name": "Sandisk Corporation",
+      "price": 85.36,
+      "prev_close": 94.39,
+      "change": -9.03,
+      "change_pct": -9.57,
+      "volume": 96234051,
+      "volume_change_pct": -19.7,
+      "date": "2026-11-27"
+    },
+    {
+      "symbol": "VRTX",
+      "name": "Vertex Pharmaceuticals Incorporated",
+      "price": 534.57,
+      "prev_close": 564.12,
+      "change": -29.55,
+      "change_pct": -5.24,
+      "volume": 2128236,
+      "volume_change_pct": 31.6,
+      "date": "2026-11-27"
+    },
+    {
+      "symbol": "PODD",
+      "name": "Insulet Corporation",
+      "price": 138.9,
+      "prev_close": 142.68,
+      "change": -3.78,
+      "change_pct": -2.65,
+      "volume": 605388,
+      "volume_change_pct": -59.3,
+      "date": "2026-11-27"
+    },
+    {
+      "symbol": "SJM",
+      "name": "The J. M. Smucker Company",
+      "price": 126.86,
+      "prev_close": 130.06,
+      "change": -3.2,
+      "change_pct": -2.46,
+      "volume": 934440,
+      "volume_change_pct": -52.8,
+      "date": "2026-11-27"
+    },
+    {
+      "symbol": "DLTR",
+      "name": "Dollar Tree, Inc.",
+      "price": 148.53,
+      "prev_close": 152.21,
+      "change": -3.68,
+      "change_pct": -2.42,
+      "volume": 1461652,
+      "volume_change_pct": -57.7,
+      "date": "2026-11-27"
+    },
+    {
+      "symbol": "GDDY",
+      "name": "GoDaddy Inc.",
+      "price": 103.07,
+      "prev_close": 105.14,
+      "change": -2.07,
+      "change_pct": -1.97,
+      "volume": 1071135,
+      "volume_change_pct": -12.4,
+      "date": "2026-11-27"
+    },
+    {
+      "symbol": "EBAY",
+      "name": "eBay Inc.",
+      "price": 113.33,
+      "prev_close": 115.54,
+      "change": -2.21,
+      "change_pct": -1.91,
+      "volume": 3185327,
+      "volume_change_pct": -29.9,
+      "date": "2026-11-27"
+    },
+    {
+      "symbol": "WST",
+      "name": "West Pharmaceutical Services, Inc.",
+      "price": 366.17,
+      "prev_close": 372.94,
+      "change": -6.77,
+      "change_pct": -1.82,
+      "volume": 478256,
+      "volume_change_pct": -57.9,
+      "date": "2026-11-27"
+    },
+    {
+      "symbol": "TRGP",
+      "name": "Targa Resources Corp.",
+      "price": 280.55,
+      "prev_close": 285.53,
+      "change": -4.98,
+      "change_pct": -1.74,
+      "volume": 1003801,
+      "volume_change_pct": -19.1,
+      "date": "2026-11-27"
+    },
+    {
+      "symbol": "BAX",
+      "name": "Baxter International Inc.",
+      "price": 26.79,
+      "prev_close": 27.26,
+      "change": -0.47,
+      "change_pct": -1.72,
+      "volume": 2738423,
+      "volume_change_pct": -72.7,
+      "date": "2026-11-27"
+    }
+  ],
+  "universes": [
+    {
+      "key": "usmega",
+      "title": "MEGA CAP ($200B+)",
+      "gainers": [
+        {
+          "symbol": "MU",
+          "name": "Micron Technology, Inc.",
+          "price": 646.95,
+          "prev_close": 601.25,
+          "change": 45.7,
+          "change_pct": 7.6,
+          "volume": 26547049,
+          "volume_change_pct": -49.9,
+          "date": "2026-11-27"
+        },
+        {
+          "symbol": "MRVL",
+          "name": "Marvell Technology, Inc.",
+          "price": 140.54,
+          "prev_close": 130.93,
+          "change": 9.61,
+          "change_pct": 7.34,
+          "volume": 18237847,
+          "volume_change_pct": -36.5,
+          "date": "2026-11-27"
+        },
+        {
+          "symbol": "DELL",
+          "name": "Dell Technologies Inc.",
+          "price": 316.96,
+          "prev_close": 297.06,
+          "change": 19.9,
+          "change_pct": 6.7,
+          "volume": 9205215,
+          "volume_change_pct": -65.5,
+          "date": "2026-11-27"
+        },
+        {
+          "symbol": "ANET",
+          "name": "Arista Networks, Inc.",
+          "price": 174.73,
+          "prev_close": 163.99,
+          "change": 10.74,
+          "change_pct": 6.55,
+          "volume": 4395590,
+          "volume_change_pct": -46.8,
+          "date": "2026-11-27"
+        },
+        {
+          "symbol": "SHOP",
+          "name": "Shopify Inc.",
+          "price": 141.78,
+          "prev_close": 133.4,
+          "change": 8.38,
+          "change_pct": 6.28,
+          "volume": 6207390,
+          "volume_change_pct": -15.4,
+          "date": "2026-11-27"
+        },
+        {
+          "symbol": "ARM",
+          "name": "Arm Holdings plc",
+          "price": 171.55,
+          "prev_close": 161.51,
+          "change": 10.04,
+          "change_pct": 6.22,
+          "volume": 2928441,
+          "volume_change_pct": -64.2,
+          "date": "2026-11-27"
+        },
+        {
+          "symbol": "INTC",
+          "name": "Intel Corporation",
+          "price": 57.4,
+          "prev_close": 54.47,
+          "change": 2.93,
+          "change_pct": 5.38,
+          "volume": 76206386,
+          "volume_change_pct": -41.1,
+          "date": "2026-11-27"
+        },
+        {
+          "symbol": "PLTR",
+          "name": "Palantir Technologies Inc.",
+          "price": 172.17,
+          "prev_close": 163.59,
+          "change": 8.58,
+          "change_pct": 5.24,
+          "volume": 14987597,
+          "volume_change_pct": -30.2,
+          "date": "2026-11-27"
+        },
+        {
+          "symbol": "TSLA",
+          "name": "Tesla, Inc.",
+          "price": 400.0,
+          "prev_close": 380.14,
+          "change": 19.86,
+          "change_pct": 5.22,
+          "volume": 25702955,
+          "volume_change_pct": -26.4,
+          "date": "2026-11-27"
+        },
+        {
+          "symbol": "KLAC",
+          "name": "KLA Corporation",
+          "price": 140.86,
+          "prev_close": 134.2,
+          "change": 6.66,
+          "change_pct": 4.96,
+          "volume": 8579555,
+          "volume_change_pct": -39.5,
+          "date": "2026-11-27"
+        }
+      ],
+      "losers": [
+        {
+          "symbol": "SNDK",
+          "name": "Sandisk Corporation",
+          "price": 85.36,
+          "prev_close": 94.39,
+          "change": -9.03,
+          "change_pct": -9.57,
+          "volume": 96234051,
+          "volume_change_pct": -19.7,
+          "date": "2026-11-27"
+        },
+        {
+          "symbol": "ABBV",
+          "name": "AbbVie Inc.",
+          "price": 291.88,
+          "prev_close": 294.48,
+          "change": -2.6,
+          "change_pct": -0.88,
+          "volume": 4132734,
+          "volume_change_pct": -32.9,
+          "date": "2026-11-27"
+        },
+        {
+          "symbol": "TMO",
+          "name": "Thermo Fisher Scientific Inc.",
+          "price": 683.04,
+          "prev_close": 685.52,
+          "change": -2.48,
+          "change_pct": -0.36,
+          "volume": 1001087,
+          "volume_change_pct": -39.1,
+          "date": "2026-11-27"
+        },
+        {
+          "symbol": "PG",
+          "name": "The Procter & Gamble Company",
+          "price": 172.86,
+          "prev_close": 173.23,
+          "change": -0.37,
+          "change_pct": -0.21,
+          "volume": 3947179,
+          "volume_change_pct": -60.1,
+          "date": "2026-11-27"
+        },
+        {
+          "symbol": "KO",
+          "name": "The Coca-Cola Company",
+          "price": 97.4,
+          "prev_close": 97.59,
+          "change": -0.19,
+          "change_pct": -0.19,
+          "volume": 9201516,
+          "volume_change_pct": -63.1,
+          "date": "2026-11-27"
+        }
+      ]
+    },
+    {
+      "key": "uslarge",
+      "title": "LARGE CAP ($10B-$200B)",
+      "gainers": [
+        {
+          "symbol": "COHR",
+          "name": "Coherent Corp.",
+          "price": 223.79,
+          "prev_close": 196.19,
+          "change": 27.6,
+          "change_pct": 14.07,
+          "volume": 7074515,
+          "volume_change_pct": -24.6,
+          "date": "2026-11-27"
+        },
+        {
+          "symbol": "ALAB",
+          "name": "Astera Labs, Inc.",
+          "price": 206.84,
+          "prev_close": 190.34,
+          "change": 16.5,
+          "change_pct": 8.67,
+          "volume": 3291516,
+          "volume_change_pct": -45.4,
+          "date": "2026-11-27"
+        },
+        {
+          "symbol": "RKLB",
+          "name": "Rocket Lab Corporation",
+          "price": 50.88,
+          "prev_close": 47.02,
+          "change": 3.86,
+          "change_pct": 8.21,
+          "volume": 10313324,
+          "volume_change_pct": -48.5,
+          "date": "2026-11-27"
+        },
+        {
+          "symbol": "LITE",
+          "name": "Lumentum Holdings Inc.",
+          "price": 514.63,
+          "prev_close": 476.58,
+          "change": 38.05,
+          "change_pct": 7.98,
+          "volume": 2568579,
+          "volume_change_pct": -52.7,
+          "date": "2026-11-27"
+        },
+        {
+          "symbol": "STX",
+          "name": "Seagate Technology Holdings plc",
+          "price": 509.66,
+          "prev_close": 472.33,
+          "change": 37.33,
+          "change_pct": 7.9,
+          "volume": 2544281,
+          "volume_change_pct": -31.4,
+          "date": "2026-11-27"
+        },
+        {
+          "symbol": "GNRC",
+          "name": "Generac Holdings Inc.",
+          "price": 219.17,
+          "prev_close": 203.99,
+          "change": 15.18,
+          "change_pct": 7.44,
+          "volume": 810226,
+          "volume_change_pct": -29.8,
+          "date": "2026-11-27"
+        },
+        {
+          "symbol": "WDC",
+          "name": "Western Digital Corporation",
+          "price": 292.11,
+          "prev_close": 272.45,
+          "change": 19.66,
+          "change_pct": 7.22,
+          "volume": 3708625,
+          "volume_change_pct": -43.1,
+          "date": "2026-11-27"
+        },
+        {
+          "symbol": "P",
+          "name": "Everpure, Inc.",
+          "price": 101.46,
+          "prev_close": 94.69,
+          "change": 6.77,
+          "change_pct": 7.15,
+          "volume": 1619455,
+          "volume_change_pct": -52.5,
+          "date": "2026-11-27"
+        },
+        {
+          "symbol": "IP",
+          "name": "International Paper Company",
+          "price": 34.29,
+          "prev_close": 32.08,
+          "change": 2.21,
+          "change_pct": 6.89,
+          "volume": 4742957,
+          "volume_change_pct": -27.6,
+          "date": "2026-11-27"
+        },
+        {
+          "symbol": "BE",
+          "name": "Bloom Energy Corporation",
+          "price": 163.02,
+          "prev_close": 152.89,
+          "change": 10.13,
+          "change_pct": 6.63,
+          "volume": 10027529,
+          "volume_change_pct": -46.2,
+          "date": "2026-11-27"
+        }
+      ],
+      "losers": [
+        {
+          "symbol": "VRTX",
+          "name": "Vertex Pharmaceuticals Incorporated",
+          "price": 534.57,
+          "prev_close": 564.12,
+          "change": -29.55,
+          "change_pct": -5.24,
+          "volume": 2128236,
+          "volume_change_pct": 31.6,
+          "date": "2026-11-27"
+        },
+        {
+          "symbol": "SJM",
+          "name": "The J. M. Smucker Company",
+          "price": 126.86,
+          "prev_close": 130.06,
+          "change": -3.2,
+          "change_pct": -2.46,
+          "volume": 934440,
+          "volume_change_pct": -52.8,
+          "date": "2026-11-27"
+        },
+        {
+          "symbol": "DLTR",
+          "name": "Dollar Tree, Inc.",
+          "price": 148.53,
+          "prev_close": 152.21,
+          "change": -3.68,
+          "change_pct": -2.42,
+          "volume": 1461652,
+          "volume_change_pct": -57.7,
+          "date": "2026-11-27"
+        },
+        {
+          "symbol": "GDDY",
+          "name": "GoDaddy Inc.",
+          "price": 103.07,
+          "prev_close": 105.14,
+          "change": -2.07,
+          "change_pct": -1.97,
+          "volume": 1071135,
+          "volume_change_pct": -12.4,
+          "date": "2026-11-27"
+        },
+        {
+          "symbol": "EBAY",
+          "name": "eBay Inc.",
+          "price": 113.33,
+          "prev_close": 115.54,
+          "change": -2.21,
+          "change_pct": -1.91,
+          "volume": 3185327,
+          "volume_change_pct": -29.9,
+          "date": "2026-11-27"
+        },
+        {
+          "symbol": "WST",
+          "name": "West Pharmaceutical Services, Inc.",
+          "price": 366.17,
+          "prev_close": 372.94,
+          "change": -6.77,
+          "change_pct": -1.82,
+          "volume": 478256,
+          "volume_change_pct": -57.9,
+          "date": "2026-11-27"
+        },
+        {
+          "symbol": "TRGP",
+          "name": "Targa Resources Corp.",
+          "price": 280.55,
+          "prev_close": 285.53,
+          "change": -4.98,
+          "change_pct": -1.74,
+          "volume": 1003801,
+          "volume_change_pct": -19.1,
+          "date": "2026-11-27"
+        },
+        {
+          "symbol": "BAX",
+          "name": "Baxter International Inc.",
+          "price": 26.79,
+          "prev_close": 27.26,
+          "change": -0.47,
+          "change_pct": -1.72,
+          "volume": 2738423,
+          "volume_change_pct": -72.7,
+          "date": "2026-11-27"
+        },
+        {
+          "symbol": "HRL",
+          "name": "Hormel Foods Corporation",
+          "price": 22.72,
+          "prev_close": 23.09,
+          "change": -0.37,
+          "change_pct": -1.6,
+          "volume": 3326402,
+          "volume_change_pct": -51.4,
+          "date": "2026-11-27"
+        },
+        {
+          "symbol": "TJX",
+          "name": "The TJX Companies, Inc.",
+          "price": 143.77,
+          "prev_close": 146.09,
+          "change": -2.32,
+          "change_pct": -1.59,
+          "volume": 3687540,
+          "volume_change_pct": -60.4,
+          "date": "2026-11-27"
+        }
+      ]
+    }
+  ],
+  "corporate_actions": []
+}
