@@ -7,12 +7,12 @@
       "universe": "nifty500"
     },
     "recent_commands": [
+      "/emailclose",
       "/openreport in",
       "/emailopen watchlist",
       "/emailopen gappers",
       "/emailopen nifty",
       "/emailopen screener",
-      "/emailclose",
       "/gappers today",
       "/corpactionssummary",
       "/corpactionsformylist",
